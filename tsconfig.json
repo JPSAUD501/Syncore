@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/devtools-protocol" },
+    { "path": "./packages/core" },
+    { "path": "./packages/react" },
+    { "path": "./packages/platform-node" },
+    { "path": "./packages/platform-web" },
+    { "path": "./packages/platform-expo" },
+    { "path": "./packages/next" },
+    { "path": "./packages/testing" },
+    { "path": "./packages/cli" },
+    { "path": "./apps/dashboard" }
+  ]
+}

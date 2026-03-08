@@ -1,0 +1,27 @@
+{
+  "name": "@syncore/platform-expo",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/schema build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/schema": "workspace:*",
+    "expo-file-system": "^55.0.10",
+    "expo-sqlite": "^55.0.10",
+    "syncore": "workspace:*"
+  }
+}

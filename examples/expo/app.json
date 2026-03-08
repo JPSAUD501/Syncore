@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Syncore Expo Example",
+    "slug": "syncore-expo-example",
+    "scheme": "syncore-expo-example",
+    "android": {
+      "package": "dev.syncore.expoexample"
+    }
+  }
+}

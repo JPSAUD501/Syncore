@@ -1,0 +1,31 @@
+{
+  "name": "@syncore/platform-node",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./ipc": {
+      "types": "./dist/ipc.d.ts",
+      "import": "./dist/ipc.mjs"
+    }
+  },
+  "scripts": {
+    "build": "pnpm run build:deps && tsdown --config tsdown.config.ts && tsc -p tsconfig.types.json",
+    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/schema build && pnpm --filter @syncore/devtools-protocol build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/devtools-protocol": "workspace:*",
+    "@syncore/schema": "workspace:*",
+    "syncore": "workspace:*",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@syncore/next",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js",
+      "default": "./dist/config.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "build:deps": "pnpm --filter @syncore/platform-web build && pnpm --filter @syncore/react build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/platform-web": "workspace:*",
+    "@syncore/react": "workspace:*",
+    "react": "^19.0.0"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0",
+    "react": "^18.3.0 || ^19.0.0"
+  }
+}

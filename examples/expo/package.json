@@ -1,0 +1,24 @@
+{
+  "name": "syncore-example-expo",
+  "private": true,
+  "scripts": {
+    "android:smoke": "expo run:android --variant release --no-bundler --app-id dev.syncore.expoexample",
+    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/react build && pnpm --filter @syncore/platform-expo build",
+    "clean": "node -e \"require('node:fs').rmSync('.expo',{recursive:true,force:true});require('node:fs').rmSync('android',{recursive:true,force:true})\"",
+    "lint": "eslint App.tsx lib syncore --ext .ts,.tsx",
+    "prelint": "pnpm run syncore:codegen",
+    "prestart": "pnpm run syncore:codegen",
+    "pretypecheck": "pnpm run syncore:codegen",
+    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
+    "start": "expo start",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/platform-expo": "workspace:*",
+    "@syncore/react": "workspace:*",
+    "expo": "^55.0.0",
+    "react": "^19.0.0",
+    "react-native": "^0.82.0",
+    "syncore": "workspace:*"
+  }
+}

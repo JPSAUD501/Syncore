@@ -1,0 +1,66 @@
+# Development
+
+## Standards
+
+Syncore is being built as an open-source project from the start. That means:
+
+- explicit public APIs
+- narrow modules
+- low coupling
+- automated tests
+- deterministic tooling
+- documentation that contributors can follow
+
+Package builds use `tsdown`. Static type-checking stays explicit via `tsc --noEmit`.
+
+## Commands
+
+```bash
+pnpm install
+pnpm api:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm test:smoke
+```
+
+Use these companion commands during normal development:
+
+- `pnpm api:update`: refresh checked-in API Extractor reports after intentional public API changes
+- `pnpm changeset`: create the release note/version entry for a user-facing change
+- `pnpm clean`: remove generated build output from the workspace and examples
+
+## Dev dashboard
+
+The current dashboard is intentionally a shell. The protocol, connection model, and placeholder routes are already in place so a later UI/UX pass can focus on actual tooling workflows instead of wiring.
+
+`syncore dev` is the main development loop inside an app project. It bootstraps codegen and migrations first, then starts the local hub/dashboard and watches `syncore.config.ts`, schema files, functions, and SQL migrations for changes.
+
+## Reference material
+
+The `reference/Convex` directory stays available while Syncore is under active development. It is used to study how Convex solved problems such as developer ergonomics, scheduling, and dashboard workflows, then adapt those ideas to a fully local architecture.
+
+## Smoke tests
+
+Smoke coverage is currently split by target:
+
+- Next static/PWA: `pnpm --filter @syncore/testing test:smoke:web`
+- Electron: `pnpm --filter @syncore/testing test:smoke:electron`
+- Expo Android: `pnpm --filter @syncore/testing test:smoke:expo`
+
+Expo smoke is environment-aware. If `adb` or an Android device/emulator is not available, the
+runner exits successfully with a skip message instead of failing the whole workspace.
+
+## CI
+
+The repository CI runs:
+
+- `pnpm api:check`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+- `pnpm test:smoke`
+
+Electron and browser smoke jobs run under `xvfb` on Linux. Expo smoke keeps its skip behavior when Android tooling is unavailable.

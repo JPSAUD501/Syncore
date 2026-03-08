@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "syncore": ["../core/dist/index.d.ts"],
+      "@syncore/schema": ["../schema/dist/index.d.ts"],
+      "@syncore/devtools-protocol": ["../devtools-protocol/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/index.ts", "src/ipc.ts"]
+}

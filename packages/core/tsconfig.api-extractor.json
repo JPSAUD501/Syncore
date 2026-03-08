@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@syncore/schema": [
+        "../schema/dist/index.d.ts"
+      ],
+      "@syncore/devtools-protocol": [
+        "../devtools-protocol/dist/index.d.ts"
+      ]
+    }
+  }
+}

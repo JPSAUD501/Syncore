@@ -1,0 +1,31 @@
+{
+  "name": "@syncore/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "syncore": "./dist/index.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "pnpm run build:deps && pnpm run clean && tsdown --config tsdown.config.ts",
+    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/schema build",
+    "clean": "node -e \"const fs=require('node:fs');for (const target of ['dist','node_modules/.unrun','node_modules/.vite','node_modules/.vite-temp']) { fs.rmSync(target,{recursive:true,force:true}); }\"",
+    "lint": "eslint src --ext .ts",
+    "test": "pnpm run build:deps && pnpm run build && vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/devtools-protocol": "workspace:*",
+    "commander": "^13.1.0",
+    "syncore": "workspace:*",
+    "tsx": "^4.19.3",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "syncore-example-electron",
+  "private": true,
+  "type": "module",
+  "main": "./dist/src/main.js",
+  "scripts": {
+    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/react build && pnpm --filter @syncore/platform-node build",
+    "dev": "pnpm run build && electron ./dist/src/main.js",
+    "build": "pnpm run build:deps && pnpm run build:main && pnpm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json && node ./scripts/copy-preload.mjs",
+    "build:renderer": "vite build --config vite.renderer.config.ts && node ./scripts/fix-renderer-html.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"syncore/**/*.ts\"",
+    "prebuild": "pnpm run syncore:codegen",
+    "predev": "pnpm run syncore:codegen",
+    "prelint": "pnpm run syncore:codegen",
+    "pretypecheck": "pnpm run syncore:codegen",
+    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/platform-node": "workspace:*",
+    "@syncore/react": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "syncore": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^36.3.2",
+    "typescript": "^5.8.2",
+    "vite": "^6.4.1"
+  }
+}

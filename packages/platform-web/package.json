@@ -1,0 +1,30 @@
+{
+  "name": "@syncore/platform-web",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/schema build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/schema": "workspace:*",
+    "sql.js": "^1.14.1",
+    "syncore": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.9",
+    "fake-indexeddb": "^6.2.5"
+  }
+}
