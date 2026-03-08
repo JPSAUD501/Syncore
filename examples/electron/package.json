@@ -15,7 +15,7 @@
     "predev": "pnpm run syncore:codegen",
     "prelint": "pnpm run syncore:codegen",
     "pretypecheck": "pnpm run syncore:codegen",
-    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
+    "syncore:codegen": "pnpm exec syncore codegen",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "dependencies": {

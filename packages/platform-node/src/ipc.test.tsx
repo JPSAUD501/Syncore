@@ -1,6 +1,8 @@
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFunctionReference,
@@ -10,12 +12,15 @@ import {
   query,
   v,
   type MutationCtx,
-  type QueryCtx,
+  type QueryCtx
 } from "syncore";
 import { createNodeSyncoreRuntime } from "./index.js";
 import {
   attachNodeIpcRuntime,
   createRendererSyncoreClient,
+  createRendererSyncoreWindowClient,
+  installSyncoreWindowBridge,
+  SyncoreElectronProvider,
   type SyncoreIpcMessageEndpoint
 } from "./ipc.js";
 
@@ -145,7 +150,9 @@ describe("Node IPC bridge", () => {
       Array<{ _id: string; text: string; done: boolean }>
     >("query", "tasks/fail");
 
-    await expect(rendererClient.query(failingQuery)).rejects.toThrow("IPC query failed");
+    await expect(rendererClient.query(failingQuery)).rejects.toThrow(
+      "IPC query failed"
+    );
 
     const watch = rendererClient.watchQuery(failingQuery);
     await waitFor(
@@ -156,6 +163,47 @@ describe("Node IPC bridge", () => {
     watch.dispose();
     rendererClient.dispose();
     await attachedRuntime.dispose();
+  });
+
+  it("creates a renderer client from window.syncoreBridge", () => {
+    const dispose = () => undefined;
+    const windowObject = {
+      syncoreBridge: {
+        postMessage() {},
+        onMessage() {
+          return dispose;
+        }
+      }
+    } as unknown as Window & typeof globalThis;
+
+    const client = createRendererSyncoreWindowClient(windowObject);
+    expect(client).toBeDefined();
+    client.dispose();
+  });
+
+  it("renders a preload bridge installer snippet", () => {
+    expect(installSyncoreWindowBridge()).toContain(
+      "contextBridge.exposeInMainWorld"
+    );
+  });
+
+  it("renders the short-form Electron provider", () => {
+    const windowObject = {
+      syncoreBridge: {
+        postMessage() {},
+        onMessage() {
+          return () => undefined;
+        }
+      }
+    } as unknown as Window & typeof globalThis;
+
+    const html = renderToStaticMarkup(
+      <SyncoreElectronProvider windowObject={windowObject}>
+        <div>renderer</div>
+      </SyncoreElectronProvider>
+    );
+
+    expect(html).toContain("renderer");
   });
 });
 

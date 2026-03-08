@@ -12,9 +12,13 @@ import {
   query,
   v,
   type MutationCtx,
-  type QueryCtx,
+  type QueryCtx
 } from "syncore";
-import { createNodeSyncoreRuntime } from "./index.js";
+import {
+  bindElectronWindowToSyncoreRuntime,
+  createManagedNodeSyncoreClient,
+  createNodeSyncoreRuntime
+} from "./index.js";
 
 describe("Node Syncore runtime", () => {
   let rootDir: string;
@@ -165,11 +169,91 @@ describe("Node Syncore runtime", () => {
     await runtime.stop();
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(messages.some((message) => message.includes('"type":"hello"'))).toBe(true);
-    expect(messages.some((message) => message.includes('"type":"event"'))).toBe(true);
-    expect(messages.some((message) => message.includes('"type":"snapshot"'))).toBe(true);
+    expect(messages.some((message) => message.includes('"type":"hello"'))).toBe(
+      true
+    );
+    expect(messages.some((message) => message.includes('"type":"event"'))).toBe(
+      true
+    );
+    expect(
+      messages.some((message) => message.includes('"type":"snapshot"'))
+    ).toBe(true);
 
     websocketServer.close();
     httpServer.close();
+  });
+
+  it("binds an electron-style window with one helper", async () => {
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: v.string(),
+        done: v.boolean()
+      })
+    });
+    const runtime = createNodeSyncoreRuntime({
+      databasePath: path.join(rootDir, "electron.db"),
+      storageDirectory: path.join(rootDir, "electron-storage"),
+      schema,
+      functions: {
+        "tasks/list": query({
+          args: {},
+          handler: async (ctx: QueryCtx<typeof schema>) =>
+            ctx.db.query("tasks").collect()
+        })
+      }
+    });
+
+    const listeners = new Set<(message: unknown) => void>();
+    const sentMessages: unknown[] = [];
+    const binding = bindElectronWindowToSyncoreRuntime({
+      runtime,
+      window: {
+        isDestroyed: () => false,
+        webContents: {
+          send(_channel: string, message: unknown) {
+            sentMessages.push(message);
+          }
+        }
+      },
+      onRendererMessage(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+    });
+
+    await binding.ready;
+    expect(sentMessages).toContainEqual({ type: "runtime.ready" });
+    await binding.dispose();
+  });
+
+  it("creates a managed node client for scripts", async () => {
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: v.string(),
+        done: v.boolean()
+      })
+    });
+    const managed = await createManagedNodeSyncoreClient({
+      databasePath: path.join(rootDir, "managed.db"),
+      storageDirectory: path.join(rootDir, "managed-storage"),
+      schema,
+      functions: {
+        "tasks/list": query({
+          args: {},
+          handler: async (ctx: QueryCtx<typeof schema>) =>
+            ctx.db.query("tasks").collect()
+        })
+      }
+    });
+
+    const tasks = await managed.client.query(
+      createFunctionReference<
+        "query",
+        Record<never, never>,
+        Array<{ _id: string; text: string; done: boolean }>
+      >("query", "tasks/list")
+    );
+    expect(tasks).toEqual([]);
+    await managed.dispose();
   });
 });

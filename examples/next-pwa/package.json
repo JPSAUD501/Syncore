@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
+    "syncore:codegen": "pnpm exec syncore codegen",
     "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/react build && pnpm --filter @syncore/platform-web build && pnpm --filter @syncore/next build",
     "dev": "pnpm run copy:sqljs-wasm && next dev",
     "build": "pnpm run build:deps && pnpm run clean && pnpm run copy:sqljs-wasm && next build",

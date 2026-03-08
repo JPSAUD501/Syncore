@@ -16,6 +16,4 @@ examples/next-pwa/out/
 examples/next-pwa/public/sql-wasm.wasm
 packages/*/temp/
 .tmp-electron-debug/
-
-reference/
-reference/**
+!references/

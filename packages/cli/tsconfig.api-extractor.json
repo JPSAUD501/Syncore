@@ -1,6 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "paths": {}
+    "paths": {
+      "syncore": ["../core/dist/index.d.mts"],
+      "syncore/cli": ["../core/dist/cli.d.mts"]
+    }
   }
 }

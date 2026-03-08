@@ -4,7 +4,7 @@ import type {
   JsonObject,
   SyncoreClient,
   SyncoreRuntime,
-  SyncoreWatch,
+  SyncoreWatch
 } from "syncore";
 export type WebWorkerSyncoreSchema = AnySyncoreSchema;
 
@@ -103,9 +103,8 @@ export type WorkerQueryWatch<TValue> = SyncoreWatch<TValue> & {
   dispose(): void;
 };
 
-type OptionalArgsTuple<TArgs> = Record<never, never> extends TArgs
-  ? [args?: TArgs]
-  : [args: TArgs];
+type OptionalArgsTuple<TArgs> =
+  Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
 export class SyncoreWebWorkerClient implements SyncoreClient {
   private readonly pendingRequests = new Map<string, PendingRequest>();
@@ -139,7 +138,9 @@ export class SyncoreWebWorkerClient implements SyncoreClient {
         return;
       }
       case "watch.update": {
-        const watchKey = this.watchKeyBySubscriptionId.get(message.subscriptionId);
+        const watchKey = this.watchKeyBySubscriptionId.get(
+          message.subscriptionId
+        );
         if (!watchKey) {
           return;
         }
@@ -168,21 +169,33 @@ export class SyncoreWebWorkerClient implements SyncoreClient {
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult> {
-    return this.invoke("query", reference, normalizeOptionalArgs(args) as JsonObject);
+    return this.invoke(
+      "query",
+      reference,
+      normalizeOptionalArgs(args) as JsonObject
+    );
   }
 
   mutation<TArgs, TResult>(
     reference: FunctionReference<"mutation", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult> {
-    return this.invoke("mutation", reference, normalizeOptionalArgs(args) as JsonObject);
+    return this.invoke(
+      "mutation",
+      reference,
+      normalizeOptionalArgs(args) as JsonObject
+    );
   }
 
   action<TArgs, TResult>(
     reference: FunctionReference<"action", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult> {
-    return this.invoke("action", reference, normalizeOptionalArgs(args) as JsonObject);
+    return this.invoke(
+      "action",
+      reference,
+      normalizeOptionalArgs(args) as JsonObject
+    );
   }
 
   watchQuery<TArgs, TResult>(
@@ -284,7 +297,11 @@ export class SyncoreWebWorkerClient implements SyncoreClient {
   ): Promise<TResult>;
   private invoke<TArgs, TResult>(
     kind: "query" | "mutation" | "action",
-    reference: FunctionReference<"query" | "mutation" | "action", TArgs, TResult>,
+    reference: FunctionReference<
+      "query" | "mutation" | "action",
+      TArgs,
+      TResult
+    >,
     args: JsonObject
   ): Promise<TResult> {
     this.ensureNotDisposed();
@@ -326,18 +343,41 @@ export interface AttachedWebWorkerRuntime {
   dispose(): Promise<void>;
 }
 
+/**
+ * A worker-backed browser client plus the Worker instance it owns.
+ */
 export interface ManagedWebWorkerClient {
   client: SyncoreWebWorkerClient;
   worker: Worker;
   dispose(): void;
 }
 
+/**
+ * Options for creating a worker-backed Syncore client in the browser.
+ */
+export interface CreateWebWorkerClientProviderOptions {
+  /** The worker module URL passed to `new Worker(...)`. */
+  workerUrl: URL | string;
+
+  /** Optional worker type, defaults to `module`. */
+  workerType?: WorkerOptions["type"];
+
+  /** Optional name shown in browser devtools. */
+  workerName?: string;
+}
+
+/**
+ * Create a web worker Syncore client from a low-level message endpoint.
+ */
 export function createWebWorkerClient(
   endpoint: SyncoreWorkerMessageEndpoint
 ): SyncoreWebWorkerClient {
   return new SyncoreWebWorkerClient(endpoint);
 }
 
+/**
+ * Create and manage both a browser Worker and the Syncore client that talks to it.
+ */
 export function createManagedWebWorkerClient(options: {
   createWorker: () => Worker;
 }): ManagedWebWorkerClient {
@@ -353,6 +393,24 @@ export function createManagedWebWorkerClient(options: {
   };
 }
 
+/**
+ * Create a worker-backed Syncore client using the standard Worker constructor.
+ */
+export function createSyncoreWebWorkerClient(
+  options: CreateWebWorkerClientProviderOptions
+): ManagedWebWorkerClient {
+  return createManagedWebWorkerClient({
+    createWorker: () =>
+      new Worker(options.workerUrl, {
+        type: options.workerType ?? "module",
+        ...(options.workerName ? { name: options.workerName } : {})
+      })
+  });
+}
+
+/**
+ * Attach a Syncore runtime implementation to a worker message endpoint.
+ */
 export function attachWebWorkerRuntime(
   options: AttachWebWorkerRuntimeOptions
 ): AttachedWebWorkerRuntime {
@@ -364,22 +422,30 @@ export function attachWebWorkerRuntime(
     }
   >();
 
-  const runtimePromise = Promise.resolve(options.createRuntime()).then(async (runtime) => {
-    await runtime.start();
-    return runtime;
-  });
+  const runtimePromise = Promise.resolve(options.createRuntime()).then(
+    async (runtime) => {
+      await runtime.start();
+      return runtime;
+    }
+  );
 
-  const clientPromise = runtimePromise.then((runtime) => runtime.createClient());
+  const clientPromise = runtimePromise.then((runtime) =>
+    runtime.createClient()
+  );
 
-  const ready = clientPromise.then(() => {
-    options.endpoint.postMessage({ type: "runtime.ready" } satisfies SyncoreWorkerResponse);
-  }).catch((error) => {
-    options.endpoint.postMessage({
-      type: "runtime.error",
-      error: error instanceof Error ? error.message : String(error)
-    } satisfies SyncoreWorkerResponse);
-    throw error;
-  });
+  const ready = clientPromise
+    .then(() => {
+      options.endpoint.postMessage({
+        type: "runtime.ready"
+      } satisfies SyncoreWorkerResponse);
+    })
+    .catch((error) => {
+      options.endpoint.postMessage({
+        type: "runtime.error",
+        error: error instanceof Error ? error.message : String(error)
+      } satisfies SyncoreWorkerResponse);
+      throw error;
+    });
 
   const handleMessage = (event: MessageEvent<unknown>) => {
     void (async () => {
@@ -444,7 +510,8 @@ export function attachWebWorkerRuntime(
           }
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         if (message.type === "invoke") {
           options.endpoint.postMessage({
             type: "invoke.result",
@@ -543,6 +610,8 @@ function sortValue(value: unknown): unknown {
   return value;
 }
 
-function normalizeOptionalArgs<TArgs>(args: [] | [TArgs] | readonly unknown[]): TArgs {
+function normalizeOptionalArgs<TArgs>(
+  args: [] | [TArgs] | readonly unknown[]
+): TArgs {
   return (args[0] ?? {}) as TArgs;
 }

@@ -1,4 +1,11 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile
+} from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import WebSocket from "ws";
@@ -19,6 +26,7 @@ import {
   type SyncoreSqlDriver,
   type SyncoreStorageAdapter
 } from "syncore";
+import { attachNodeIpcRuntime, createNodeIpcMessageEndpoint } from "./ipc.js";
 export * from "./ipc.js";
 export type {
   SyncoreDevtoolsEvent,
@@ -55,7 +63,10 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
     this.database.exec(sql);
   }
 
-  async run(sql: string, params: unknown[] = []): Promise<{ changes: number; lastInsertRowid?: number | string; }> {
+  async run(
+    sql: string,
+    params: unknown[] = []
+  ): Promise<{ changes: number; lastInsertRowid?: number | string }> {
     const statement = this.database.prepare(sql);
     const result = statement.run(...toSqlParameters(params));
     return {
@@ -199,6 +210,59 @@ export interface CreateNodeRuntimeOptions {
   scheduler?: SchedulerOptions;
 }
 
+/**
+ * Options for creating a managed Node Syncore client.
+ */
+export interface WithNodeSyncoreClientOptions extends CreateNodeRuntimeOptions {}
+
+/**
+ * A started local Node runtime paired with its client and a dispose helper.
+ */
+export interface ManagedNodeSyncoreClient {
+  runtime: SyncoreRuntime<NodeSyncoreSchema>;
+  client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>;
+  dispose(): Promise<void>;
+}
+
+export interface SyncoreElectronIpcBinding {
+  ready: Promise<void>;
+  dispose(): Promise<void>;
+}
+
+export interface SyncoreElectronBridgeWindow {
+  isDestroyed(): boolean;
+  webContents: {
+    send(channel: string, message: unknown): void;
+  };
+}
+
+export interface CreateElectronSyncoreBridgeOptions {
+  window: SyncoreElectronBridgeWindow;
+  onRendererMessage(listener: (message: unknown) => void): () => void;
+  channel?: string;
+}
+
+/**
+ * The subset of Electron's `ipcMain` used by Syncore's main-process helper.
+ */
+export interface SyncoreElectronIpcMain {
+  on(
+    channel: string,
+    listener: (event: unknown, message: unknown) => void
+  ): void;
+  off(
+    channel: string,
+    listener: (event: unknown, message: unknown) => void
+  ): void;
+}
+
+export interface CreateSyncoreRendererWindowClientOptions {
+  bridgeName?: string;
+}
+
+/**
+ * Create a Node or Electron runtime backed by SQLite and local file storage.
+ */
 export function createNodeSyncoreRuntime(
   options: CreateNodeRuntimeOptions
 ): SyncoreRuntime<NodeSyncoreSchema> {
@@ -240,8 +304,146 @@ export function createNodeSyncoreRuntime(
   return runtime;
 }
 
-export function createNodeSyncoreClient(runtime: SyncoreRuntime<NodeSyncoreSchema>) {
+/**
+ * Create a same-process Syncore client from a started Node runtime.
+ */
+export function createNodeSyncoreClient(
+  runtime: SyncoreRuntime<NodeSyncoreSchema>
+) {
   return runtime.createClient();
+}
+
+/**
+ * Start a Node Syncore runtime and return its client together with a dispose helper.
+ */
+export async function createManagedNodeSyncoreClient(
+  options: WithNodeSyncoreClientOptions
+): Promise<ManagedNodeSyncoreClient> {
+  const runtime = createNodeSyncoreRuntime(options);
+  await runtime.start();
+  return {
+    runtime,
+    client: runtime.createClient(),
+    async dispose() {
+      await runtime.stop();
+    }
+  };
+}
+
+/**
+ * Run a callback with a started local Node Syncore client and always stop the runtime.
+ *
+ * @example
+ * ```ts
+ * await withNodeSyncoreClient(options, async (client) => {
+ *   console.log(await client.query(api.tasks.list));
+ * });
+ * ```
+ */
+export async function withNodeSyncoreClient<TResult>(
+  options: WithNodeSyncoreClientOptions,
+  callback: (
+    client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>,
+    runtime: SyncoreRuntime<NodeSyncoreSchema>
+  ) => Promise<TResult> | TResult
+): Promise<TResult> {
+  const managed = await createManagedNodeSyncoreClient(options);
+  try {
+    return await callback(managed.client, managed.runtime);
+  } finally {
+    await managed.dispose();
+  }
+}
+
+/**
+ * Create the default Electron main-process bridge used to connect a BrowserWindow
+ * to a Syncore runtime.
+ */
+export function createElectronSyncoreBridge(
+  options: CreateElectronSyncoreBridgeOptions
+) {
+  const channel = options.channel ?? "syncore:message";
+  return createNodeIpcMessageEndpoint({
+    postMessage(message: unknown) {
+      if (!options.window.isDestroyed()) {
+        options.window.webContents.send(channel, message);
+      }
+    },
+    onMessage(listener: (message: unknown) => void) {
+      return options.onRendererMessage(listener);
+    }
+  });
+}
+
+/**
+ * Bind a BrowserWindow to a Syncore runtime with the default Electron IPC transport.
+ */
+export function bindElectronWindowToSyncoreRuntime(options: {
+  runtime: SyncoreRuntime<NodeSyncoreSchema>;
+  window: SyncoreElectronBridgeWindow;
+  onRendererMessage(listener: (message: unknown) => void): () => void;
+  channel?: string;
+}): SyncoreElectronIpcBinding;
+export function bindElectronWindowToSyncoreRuntime(options: {
+  runtime: SyncoreRuntime<NodeSyncoreSchema>;
+  window: SyncoreElectronBridgeWindow;
+  ipcMain: SyncoreElectronIpcMain;
+  channel?: string;
+}): SyncoreElectronIpcBinding;
+export function bindElectronWindowToSyncoreRuntime(options: {
+  runtime: SyncoreRuntime<NodeSyncoreSchema>;
+  window: SyncoreElectronBridgeWindow;
+  onRendererMessage?(listener: (message: unknown) => void): () => void;
+  ipcMain?: SyncoreElectronIpcMain;
+  channel?: string;
+}): SyncoreElectronIpcBinding {
+  const cleanupCallbacks: Array<() => void> = [];
+  const channel = options.channel ?? "syncore:message";
+  let onRendererMessage = options.onRendererMessage;
+
+  if (!onRendererMessage) {
+    if (!options.ipcMain) {
+      throw new Error(
+        "bindElectronWindowToSyncoreRuntime requires either onRendererMessage() or ipcMain."
+      );
+    }
+    const listeners = new Set<(message: unknown) => void>();
+    const handleRendererMessage = (_event: unknown, message: unknown) => {
+      for (const listener of listeners) {
+        listener(message);
+      }
+    };
+    options.ipcMain.on(channel, handleRendererMessage);
+    cleanupCallbacks.push(() => {
+      options.ipcMain?.off(channel, handleRendererMessage);
+      listeners.clear();
+    });
+    onRendererMessage = (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    };
+  }
+
+  const endpoint = createElectronSyncoreBridge({
+    window: options.window,
+    onRendererMessage,
+    channel
+  });
+  const attachedRuntime = attachNodeIpcRuntime({
+    endpoint,
+    createRuntime: () => options.runtime
+  });
+
+  return {
+    ready: attachedRuntime.ready,
+    async dispose() {
+      await attachedRuntime.dispose();
+      endpoint.dispose();
+      for (const cleanup of cleanupCallbacks) {
+        cleanup();
+      }
+    }
+  };
 }
 
 export interface NodeWebSocketDevtoolsSinkOptions {

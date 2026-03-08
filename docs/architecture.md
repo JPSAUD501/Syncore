@@ -92,6 +92,8 @@ The dashboard is a dev-only surface. Runtimes emit protocol events to a local hu
 - starts the dashboard shell when available
 - watches project inputs and reruns bootstrap work on changes
 
+`syncore codegen` is intentionally narrower: it only refreshes generated API files and skips the rest of the local dev bootstrap work.
+
 ## Reference policy
 
 `./reference/Convex` remains in this repository during development and is consulted continuously for architecture and DX decisions. Syncore stays a clean implementation designed for local runtimes.

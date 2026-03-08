@@ -4,13 +4,10 @@
 
 ```ts
 
-import type { FunctionArgs } from 'syncore';
+import type { AnySyncoreSchema } from 'syncore';
 import type { FunctionReference } from 'syncore';
-import type { FunctionResult } from 'syncore';
-import type { JsonObject } from 'syncore';
 import type { SyncoreClient } from 'syncore';
 import type { SyncoreRuntime } from 'syncore';
-import type { SyncoreSchema } from 'syncore';
 import type { SyncoreWatch } from 'syncore';
 
 // @public (undocumented)
@@ -44,7 +41,15 @@ export function createRendererSyncoreBridgeClient(bridge: SyncoreRendererBridge)
 export function createRendererSyncoreClient(endpoint: SyncoreIpcMessageEndpoint): SyncoreRendererClient;
 
 // @public (undocumented)
-export type NodeIpcSyncoreSchema = SyncoreSchema<any>;
+export function createRendererSyncoreWindowClient(windowObject: Window & typeof globalThis, bridgeName?: string): SyncoreRendererClient;
+
+// @public (undocumented)
+export function installSyncoreWindowBridge(options?: {
+    bridgeName?: string;
+}): string;
+
+// @public (undocumented)
+export type NodeIpcSyncoreSchema = AnySyncoreSchema;
 
 // @public (undocumented)
 export type RendererQueryWatch<TValue> = SyncoreWatch<TValue> & {
@@ -81,17 +86,25 @@ export interface SyncoreRendererBridge {
 export class SyncoreRendererClient implements SyncoreClient {
     constructor(endpoint: SyncoreIpcMessageEndpoint);
     // (undocumented)
-    action<TReference extends FunctionReference<"action", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     dispose(): void;
     // (undocumented)
-    mutation<TReference extends FunctionReference<"mutation", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point ipc.d.ts
     //
     // (undocumented)
-    query<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
-    watchQuery<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): RendererQueryWatch<FunctionResult<TReference>>;
+    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): RendererQueryWatch<TResult>;
+}
+
+// @public (undocumented)
+export interface SyncoreWindowBridge {
+    // (undocumented)
+    onMessage(listener: (message: unknown) => void): () => void;
+    // (undocumented)
+    postMessage(message: unknown): void;
 }
 
 // (No @packageDocumentation comment for this package)

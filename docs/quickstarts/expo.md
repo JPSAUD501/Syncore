@@ -1,35 +1,34 @@
 # Expo Quickstart
 
-This quickstart runs Syncore directly inside the Expo app with `expo-sqlite`.
+This quickstart starts from a fresh Expo app and uses `npx syncore dev` as the
+main local loop. If Syncore is missing, `syncore dev` scaffolds the local
+backend automatically.
 
-## 1. Install packages
+## 1. Create the app host
 
 ```bash
-npx create-expo-app my-app
-cd my-app
+npx create-expo-app my-syncore-expo
+cd my-syncore-expo
+```
+
+## 2. Install packages
+
+```bash
 npm install syncore @syncore/react @syncore/platform-expo
 ```
 
-## 2. Create the backend
+## 3. Start the Syncore dev loop
 
-Create:
-
-```text
-syncore/
-  schema.ts
-  functions/
-    notes.ts
-```
-
-Function files should import from `../_generated/server`.
-
-Generate the typed API:
+Run this in one terminal and leave it running:
 
 ```bash
-npx syncore codegen
+npx syncore dev
 ```
 
-## 3. Create the Expo bootstrap
+If this is a fresh app, Syncore scaffolds a minimal local backend for you and
+keeps `syncore/_generated/*` up to date.
+
+## 4. Create the Expo bootstrap
 
 `lib/syncore.ts`
 
@@ -41,57 +40,57 @@ import { functions } from "../syncore/_generated/functions";
 export const syncore = createExpoSyncoreBootstrap({
   schema,
   functions,
-  databaseName: "syncore.db",
-  storageDirectoryName: "syncore-storage"
+  databaseName: "my-syncore-expo.db",
+  storageDirectoryName: "my-syncore-expo-storage"
 });
 ```
 
-## 4. Mount the client
+## 5. Mount the client
 
 `App.tsx`
 
 ```tsx
-import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import { SyncoreProvider, useQuery } from "@syncore/react";
-import type { SyncoreClient } from "syncore";
+import { useQuery } from "@syncore/react";
+import { SyncoreExpoProvider } from "@syncore/platform-expo";
 import { syncore } from "./lib/syncore";
 import { api } from "./syncore/_generated/api";
 
 export default function App() {
-  const [client, setClient] = useState<SyncoreClient | null>(null);
-
-  useEffect(() => {
-    void syncore.getClient().then(setClient);
-  }, []);
-
-  if (!client) {
-    return <Text>Booting Syncore...</Text>;
-  }
-
   return (
-    <SyncoreProvider client={client}>
+    <SyncoreExpoProvider
+      bootstrap={syncore}
+      fallback={<Text>Booting Syncore...</Text>}
+    >
       <NotesScreen />
-    </SyncoreProvider>
+    </SyncoreExpoProvider>
   );
 }
 
 function NotesScreen() {
-  const notes = useQuery(api.notes.list) ?? [];
+  const tasks = useQuery(api.tasks.list) ?? [];
   return (
     <View>
-      {notes.map((note: { _id: string; body: string }) => (
-        <Text key={note._id}>{note.body}</Text>
+      {tasks.map((task) => (
+        <Text key={task._id}>{task.text}</Text>
       ))}
     </View>
   );
 }
 ```
 
-## 5. Run the app
+## 6. Run the app
+
+In a second terminal:
 
 ```bash
 npm start
 ```
 
-See `examples/expo` for a larger app plus the on-device smoke harness.
+Scan the Expo QR code or run on a simulator, then confirm the task list renders from the local Syncore runtime.
+
+To preload sample data from JSONL, use:
+
+```bash
+npx syncore import --table tasks sampleData.jsonl
+```

@@ -26,20 +26,43 @@ export interface TableDocumentSystemFields {
   _creationTime: number;
 }
 
+/**
+ * Describes a Syncore table and its indexes.
+ *
+ * Create tables with {@link defineTable} and then chain index helpers to make
+ * queries faster and more expressive.
+ */
 export class TableDefinition<TValidator extends Validator<unknown>> {
   readonly indexes: IndexDefinition[] = [];
   readonly searchIndexes: SearchIndexDefinition[] = [];
   readonly options: TableDefinitionOptions;
 
-  constructor(public readonly validator: TValidator, options?: TableDefinitionOptions) {
+  constructor(
+    public readonly validator: TValidator,
+    options?: TableDefinitionOptions
+  ) {
     this.options = options ?? {};
   }
 
+  /**
+   * Add a named index for querying a table by one or more fields.
+   *
+   * @param name - The index name used from `ctx.db.query(...).withIndex(...)`.
+   * @param fields - The fields that participate in the index.
+   * @returns The same table definition for chaining.
+   */
   index(name: string, fields: string[]): this {
     this.indexes.push({ name, fields });
     return this;
   }
 
+  /**
+   * Add a search index for text search.
+   *
+   * @param name - The search index name used from `withSearchIndex(...)`.
+   * @param config - The indexed search field and optional filter fields.
+   * @returns The same table definition for chaining.
+   */
   searchIndex(
     name: string,
     config: { searchField: string; filterFields?: string[] }
@@ -65,6 +88,20 @@ export type InferTableInput<TTable extends AnyTableDefinition> = Omit<
   keyof TableDocumentSystemFields
 >;
 
+/**
+ * Define a table in a Syncore schema.
+ *
+ * Pass an object of validators describing the document fields stored in the
+ * table. Chain `.index(...)` or `.searchIndex(...)` to add query helpers.
+ *
+ * @example
+ * ```ts
+ * const tasks = defineTable({
+ *   text: v.string(),
+ *   done: v.boolean()
+ * }).index("by_done", ["done"]);
+ * ```
+ */
 export function defineTable<TShape extends ObjectValidatorShape>(
   validator: TShape
 ): TableDefinition<ObjectValidator<TShape>>;
@@ -99,6 +136,21 @@ export class SyncoreSchema<TTables extends SyncoreSchemaDefinition> {
   }
 }
 
+/**
+ * Define the tables that make up your Syncore app.
+ *
+ * The returned schema is used by runtimes, code generation, and type inference.
+ *
+ * @example
+ * ```ts
+ * export default defineSchema({
+ *   tasks: defineTable({
+ *     text: v.string(),
+ *     done: v.boolean()
+ *   })
+ * });
+ * ```
+ */
 export function defineSchema<TTables extends SyncoreSchemaDefinition>(
   tables: TTables
 ): SyncoreSchema<TTables> {

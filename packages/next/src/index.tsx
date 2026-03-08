@@ -1,19 +1,36 @@
 import {
   createManagedWebWorkerClient,
+  createSyncoreWebWorkerClient,
   type ManagedWebWorkerClient
 } from "@syncore/platform-web";
 import { SyncoreProvider } from "@syncore/react";
 import { useEffect, useState, type ReactNode } from "react";
 
 export interface SyncoreNextOptions {
+  /** Optional service worker URL used to cache the application shell. */
   serviceWorkerUrl?: string;
+
+  /** Optional URL for the `sql.js` wasm asset. */
   wasmAssetUrl?: string;
+
+  /** Optional URL for the worker asset used by the local Syncore runtime. */
+  workerAssetUrl?: string;
 }
+
+/**
+ * The result of registering the Syncore service worker in a Next app.
+ */
 export interface SyncoreServiceWorkerRegistration {
+  /** Unregister the installed service worker. */
   unregister(): Promise<boolean>;
+
+  /** Ask the browser to check for an updated service worker. */
   update(): Promise<ServiceWorkerRegistration>;
 }
 
+/**
+ * Register the Syncore service worker used by the Next integration.
+ */
 export async function registerSyncoreServiceWorker(
   options?: SyncoreNextOptions
 ): Promise<SyncoreServiceWorkerRegistration | null> {
@@ -31,18 +48,41 @@ export async function registerSyncoreServiceWorker(
   };
 }
 
+/**
+ * Resolve the public URL used by SQL.js to load its wasm file in a Next app.
+ */
 export function resolveSqlJsWasmUrl(options?: SyncoreNextOptions): string {
   return options?.wasmAssetUrl ?? "/sql-wasm.wasm";
 }
 
+/**
+ * Create a worker-backed Syncore client for a Next app.
+ */
 export function createNextSyncoreClient(options: {
-  createWorker: () => Worker;
+  /** Optional custom worker factory for tests or advanced setups. */
+  createWorker?: () => Worker;
+
+  /** Optional explicit module URL for the worker. */
+  workerUrl?: URL | string;
+
+  /** Optional public worker asset path for production builds. */
+  workerAssetUrl?: string;
 }): ManagedWebWorkerClient {
-  return createManagedWebWorkerClient({
-    createWorker: options.createWorker
+  if (options.createWorker) {
+    return createManagedWebWorkerClient({
+      createWorker: options.createWorker
+    });
+  }
+
+  return createSyncoreWebWorkerClient({
+    workerUrl:
+      options.workerUrl ?? options.workerAssetUrl ?? "/syncore.worker.js"
   });
 }
 
+/**
+ * Register a service worker while rendering a React subtree.
+ */
 export function SyncoreServiceWorker({
   children,
   serviceWorkerUrl,
@@ -67,36 +107,60 @@ export function SyncoreServiceWorker({
   return children;
 }
 
+/**
+ * Provides a worker-backed Syncore client to a Next React tree.
+ *
+ * This is the shortest recommended integration for App Router pages that run
+ * fully local in the browser.
+ */
 export function SyncoreNextProvider({
   children,
   createWorker,
-  serviceWorkerUrl
+  serviceWorkerUrl,
+  workerUrl,
+  workerAssetUrl
 }: {
+  /** The React subtree that should receive the Syncore client. */
   children: ReactNode;
-  createWorker: () => Worker;
+
+  /** Optional custom worker factory for tests or advanced setups. */
+  createWorker?: () => Worker;
+
+  /** Optional service worker URL used to cache the application shell. */
   serviceWorkerUrl?: string;
+
+  /** Optional explicit module URL for the worker. */
+  workerUrl?: URL | string;
+
+  /** Optional public worker asset path for production builds. */
+  workerAssetUrl?: string;
 }) {
-  const [managedClient, setManagedClient] = useState<ManagedWebWorkerClient | null>(null);
+  const [managedClient, setManagedClient] =
+    useState<ManagedWebWorkerClient | null>(null);
 
   useEffect(() => {
-    const nextClient = createNextSyncoreClient({ createWorker });
+    const nextClient = createNextSyncoreClient({
+      ...(createWorker ? { createWorker } : {}),
+      ...(workerUrl ? { workerUrl } : {}),
+      ...(workerAssetUrl ? { workerAssetUrl } : {})
+    });
     setManagedClient(nextClient);
 
     return () => {
       nextClient.dispose();
       setManagedClient(null);
     };
-  }, [createWorker]);
+  }, [createWorker, workerAssetUrl, workerUrl]);
 
   if (!managedClient) {
     return null;
   }
 
   return (
-    <SyncoreServiceWorker
-      {...(serviceWorkerUrl ? { serviceWorkerUrl } : {})}
-    >
-      <SyncoreProvider client={managedClient.client}>{children}</SyncoreProvider>
+    <SyncoreServiceWorker {...(serviceWorkerUrl ? { serviceWorkerUrl } : {})}>
+      <SyncoreProvider client={managedClient.client}>
+        {children}
+      </SyncoreProvider>
     </SyncoreServiceWorker>
   );
 }

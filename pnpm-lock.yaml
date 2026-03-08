@@ -198,9 +198,6 @@ importers:
       '@syncore/devtools-protocol':
         specifier: workspace:*
         version: link:../devtools-protocol
-      commander:
-        specifier: ^13.1.0
-        version: 13.1.0
       syncore:
         specifier: workspace:*
         version: link:../core
@@ -219,9 +216,18 @@ importers:
       '@syncore/schema':
         specifier: workspace:*
         version: link:../schema
+      commander:
+        specifier: ^13.1.0
+        version: 13.1.0
       date-fns-tz:
         specifier: ^3.2.0
         version: 3.2.0(date-fns@4.1.0)
+      tsx:
+        specifier: ^4.19.3
+        version: 4.21.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
 
   packages/devtools-protocol: {}
 
@@ -242,6 +248,9 @@ importers:
 
   packages/platform-expo:
     dependencies:
+      '@syncore/react':
+        specifier: workspace:*
+        version: link:../react
       '@syncore/schema':
         specifier: workspace:*
         version: link:../schema
@@ -251,30 +260,53 @@ importers:
       expo-sqlite:
         specifier: ^55.0.10
         version: 55.0.10(expo@55.0.5)(react-native@0.84.1(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
       syncore:
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
 
   packages/platform-node:
     dependencies:
       '@syncore/devtools-protocol':
         specifier: workspace:*
         version: link:../devtools-protocol
+      '@syncore/react':
+        specifier: workspace:*
+        version: link:../react
       '@syncore/schema':
         specifier: workspace:*
         version: link:../schema
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
       syncore:
         specifier: workspace:*
         version: link:../core
       ws:
         specifier: ^8.18.0
         version: 8.19.0
+    devDependencies:
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
 
   packages/platform-web:
     dependencies:
+      '@syncore/react':
+        specifier: workspace:*
+        version: link:../react
       '@syncore/schema':
         specifier: workspace:*
         version: link:../schema
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
       sql.js:
         specifier: ^1.14.1
         version: 1.14.1
@@ -282,12 +314,21 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@types/react':
+        specifier: ^19.0.10
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.4
+        version: 19.2.3(@types/react@19.2.14)
       '@types/sql.js':
         specifier: ^1.4.9
         version: 1.4.9
       fake-indexeddb:
         specifier: ^6.2.5
         version: 6.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
 
   packages/react:
     dependencies:
@@ -302,12 +343,24 @@ importers:
 
   packages/testing:
     dependencies:
+      '@syncore/next':
+        specifier: workspace:*
+        version: link:../next
+      '@syncore/platform-expo':
+        specifier: workspace:*
+        version: link:../platform-expo
       '@syncore/platform-node':
         specifier: workspace:*
         version: link:../platform-node
       '@syncore/platform-web':
         specifier: workspace:*
         version: link:../platform-web
+      '@syncore/react':
+        specifier: workspace:*
+        version: link:../react
+      '@syncore/schema':
+        specifier: workspace:*
+        version: link:../schema
       syncore:
         specifier: workspace:*
         version: link:../core

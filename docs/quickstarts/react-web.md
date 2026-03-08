@@ -1,113 +1,86 @@
 # React Web Quickstart
 
-This quickstart uses Vite + React with a dedicated Syncore worker. The app runs fully local in the browser after the first install.
+This quickstart starts from a fresh Vite app and uses `npx syncore dev` as the
+main happy path. If Syncore is missing, `syncore dev` scaffolds the local
+backend automatically.
 
-## 1. Install packages
+## 1. Create the app host
+
+```bash
+npm create vite@latest my-syncore-web -- --template react-ts
+cd my-syncore-web
+```
+
+## 2. Install packages
 
 ```bash
 npm install syncore @syncore/react @syncore/platform-web
 ```
 
-## 2. Create the Syncore backend
+## 3. Start the Syncore dev loop
 
-Project layout:
+Run this in one terminal and leave it running:
+
+```bash
+npx syncore dev
+```
+
+If this is a fresh app, Syncore scaffolds a minimal local backend for you:
 
 ```text
 syncore/
   schema.ts
-  functions/
-    tasks.ts
+  functions/tasks.ts
+  migrations/
+  _generated/
+syncore.config.ts
 ```
 
-`syncore/schema.ts`
+`syncore dev` also regenerates `syncore/_generated/*`, checks schema drift,
+applies local migrations, and watches `syncore/` for changes.
 
-```ts
-import { defineSchema, defineTable, v } from "syncore";
-
-export default defineSchema({
-  tasks: defineTable({
-    text: v.string(),
-    done: v.boolean()
-  }).index("by_done", ["done"])
-});
-```
-
-`syncore/functions/tasks.ts`
-
-```ts
-import { mutation, query, v } from "../_generated/server";
-
-export const list = query({
-  args: {},
-  returns: v.array(v.any()),
-  handler: async (ctx) => ctx.db.query("tasks").withIndex("by_done").collect()
-});
-
-export const create = mutation({
-  args: { text: v.string() },
-  returns: v.string(),
-  handler: async (ctx, args) =>
-    ctx.db.insert("tasks", { text: args.text, done: false })
-});
-```
-
-Generate the typed API:
-
-```bash
-npx syncore codegen
-```
-
-## 3. Create the worker runtime
+## 4. Add the worker runtime
 
 `src/syncore.worker.ts`
 
 ```ts
 /// <reference lib="webworker" />
 
-import { attachWebWorkerRuntime, createWebSyncoreRuntime } from "@syncore/platform-web";
+import { createWebWorkerRuntime } from "@syncore/platform-web";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
-void attachWebWorkerRuntime({
+void createWebWorkerRuntime({
   endpoint: self,
-  createRuntime: () =>
-    createWebSyncoreRuntime({
-      schema,
-      functions,
-      databaseName: "my-syncore-app",
-      persistenceMode: "opfs"
-    })
+  schema,
+  functions,
+  databaseName: "my-syncore-web",
+  persistenceMode: "opfs"
 });
 ```
 
-## 4. Mount the client
+## 5. Wrap the app
 
 `src/main.tsx`
 
 ```tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createManagedWebWorkerClient } from "@syncore/platform-web";
-import { SyncoreProvider } from "@syncore/react";
+import { SyncoreWebProvider } from "@syncore/platform-web";
 import App from "./App";
-
-const syncore = createManagedWebWorkerClient({
-  createWorker: () =>
-    new Worker(new URL("./syncore.worker.ts", import.meta.url), {
-      type: "module"
-    })
-});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <SyncoreProvider client={syncore.client}>
+    <SyncoreWebProvider
+      workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
+    >
       <App />
-    </SyncoreProvider>
+    </SyncoreWebProvider>
   </React.StrictMode>
 );
 ```
 
-## 5. Query from React
+## 6. Query from React
 
 `src/App.tsx`
 
@@ -116,8 +89,8 @@ import { useMutation, useQuery } from "@syncore/react";
 import { api } from "../syncore/_generated/api";
 
 export default function App() {
-  const tasks = useQuery<{ _id: string; text: string }[]>(api.tasks.list) ?? [];
-  const createTask = useMutation<string>(api.tasks.create);
+  const tasks = useQuery(api.tasks.list) ?? [];
+  const createTask = useMutation(api.tasks.create);
 
   return (
     <main>
@@ -132,10 +105,20 @@ export default function App() {
 }
 ```
 
-## 6. Run the app
+## 7. Run the app
+
+In a second terminal:
 
 ```bash
 npm run dev
 ```
 
-If you want a prebuilt example, see `examples/next-pwa` and `examples/electron`.
+Open the Vite URL, click the button, and confirm the task list updates reactively.
+
+To preload sample data from JSONL, use:
+
+```bash
+npx syncore import --table tasks sampleData.jsonl
+```
+
+Use `npx syncore codegen` only when you need a one-off generation pass without the full dev loop.

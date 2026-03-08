@@ -20,14 +20,18 @@
     "types": ["node"],
     "paths": {
       "syncore": ["./packages/core/src/index.ts"],
+      "syncore/cli": ["./packages/core/src/cli.ts"],
       "@syncore/schema": ["./packages/schema/src/index.ts"],
-      "@syncore/devtools-protocol": ["./packages/devtools-protocol/src/index.ts"],
+      "@syncore/devtools-protocol": [
+        "./packages/devtools-protocol/src/index.ts"
+      ],
       "@syncore/react": ["./packages/react/src/index.tsx"],
       "@syncore/platform-node": ["./packages/platform-node/src/index.ts"],
       "@syncore/platform-node/ipc": ["./packages/platform-node/src/ipc.ts"],
       "@syncore/platform-web": ["./packages/platform-web/src/index.ts"],
       "@syncore/platform-expo": ["./packages/platform-expo/src/index.ts"],
       "@syncore/next": ["./packages/next/src/index.tsx"],
+      "@syncore/testing/*": ["./packages/testing/*"],
       "@syncore/cli": ["./packages/cli/src/index.ts"]
     }
   }

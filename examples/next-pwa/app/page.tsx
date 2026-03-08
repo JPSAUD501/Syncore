@@ -1,12 +1,14 @@
 "use client";
 
-import { SyncoreExampleProvider } from "./syncore-provider";
+import { SyncoreNextProvider } from "@syncore/next";
 import { TodosScreen } from "./todos-screen";
 
 export default function Page() {
   return (
-    <SyncoreExampleProvider>
+    <SyncoreNextProvider
+      workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
+    >
       <TodosScreen />
-    </SyncoreExampleProvider>
+    </SyncoreNextProvider>
   );
 }

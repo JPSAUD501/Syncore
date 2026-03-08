@@ -23,7 +23,6 @@
   },
   "dependencies": {
     "@syncore/devtools-protocol": "workspace:*",
-    "commander": "^13.1.0",
     "syncore": "workspace:*",
     "tsx": "^4.19.3",
     "ws": "^8.18.0"

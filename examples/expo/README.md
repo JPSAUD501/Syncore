@@ -1,6 +1,6 @@
 # Expo example
 
-This example focuses on the app-side developer experience:
+This example focuses on the app-side developer experience after you already understand the quickstart flow:
 
 - Syncore runtime created during app bootstrap
 - React components use `SyncoreProvider` and hooks

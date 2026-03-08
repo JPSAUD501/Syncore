@@ -1,8 +1,11 @@
+import { Directory, File, Paths } from "expo-file-system";
 import {
-  Directory,
-  File,
-  Paths
-} from "expo-file-system";
+  createElement,
+  Fragment,
+  useEffect,
+  useState,
+  type ReactNode
+} from "react";
 import {
   defaultDatabaseDirectory,
   openDatabaseSync,
@@ -21,31 +24,80 @@ import {
   type StorageObject,
   type StorageWriteInput
 } from "syncore";
+import { SyncoreProvider } from "@syncore/react";
 
 export type ExpoSyncoreSchema = AnySyncoreSchema;
 
+/**
+ * Options for constructing an Expo Syncore runtime.
+ *
+ * Use this when you want Syncore to persist locally with `expo-sqlite` and the
+ * Expo file system.
+ */
 export interface CreateExpoRuntimeOptions {
+  /** The schema for the local Syncore app. */
   schema: ExpoSyncoreSchema;
+
+  /** The generated function registry for the local Syncore app. */
   functions: SyncoreRuntimeOptions<ExpoSyncoreSchema>["functions"];
+
+  /** Optional platform capabilities exposed to function handlers. */
   capabilities?: SyncoreCapabilities;
+
+  /** Optional custom SQL driver. Defaults to `expo-sqlite`. */
   driver?: SyncoreSqlDriver;
+
+  /** Optional experimental plugins for runtime hooks. */
   experimentalPlugins?: Array<SyncoreExperimentalPlugin<ExpoSyncoreSchema>>;
+
+  /** Optional custom file/blob storage adapter. */
   storage?: SyncoreStorageAdapter;
+
+  /** The SQLite database filename to open locally. */
   databaseName?: string;
+
+  /** Optional directory for the SQLite database file. */
   databaseDirectory?: string;
+
+  /** Directory name used for local file/blob storage. */
   storageDirectoryName?: string;
+
+  /** Optional runtime platform label shown in devtools snapshots. */
   platform?: string;
+
+  /** Optional devtools sink used during development. */
   devtools?: DevtoolsSink;
+
+  /** Optional scheduler configuration for jobs and recurring work. */
   scheduler?: SchedulerOptions;
 }
 
+/**
+ * A reusable bootstrap that lazily creates, starts, and stops an Expo Syncore runtime.
+ */
 export interface ExpoSyncoreBootstrap {
+  /** Return the local runtime instance, creating it if needed. */
   getRuntime(): SyncoreRuntime<ExpoSyncoreSchema>;
-  getClient(): Promise<ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>>;
+
+  /** Start the runtime if needed and return a ready client. */
+  getClient(): Promise<
+    ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>
+  >;
+
+  /** Stop the current runtime instance if one exists. */
   stop(): Promise<void>;
+
+  /** Fully discard the runtime so the next call recreates it. */
   reset(): Promise<void>;
 }
 
+type ExpoSyncoreClient = ReturnType<
+  SyncoreRuntime<ExpoSyncoreSchema>["createClient"]
+>;
+
+/**
+ * Create an Expo Syncore runtime backed by `expo-sqlite` and local file storage.
+ */
 export function createExpoSyncoreRuntime(
   options: CreateExpoRuntimeOptions
 ): SyncoreRuntime<ExpoSyncoreSchema> {
@@ -65,7 +117,9 @@ export function createExpoSyncoreRuntime(
     );
   const storage =
     options.storage ??
-    new ExpoFileStorageAdapter(options.storageDirectoryName ?? "syncore-storage");
+    new ExpoFileStorageAdapter(
+      options.storageDirectoryName ?? "syncore-storage"
+    );
 
   return new SyncoreRuntime({
     schema: options.schema,
@@ -82,16 +136,25 @@ export function createExpoSyncoreRuntime(
   });
 }
 
-export function createExpoSyncoreClient(runtime: SyncoreRuntime<ExpoSyncoreSchema>) {
+/**
+ * Create a same-process Syncore client from a started Expo runtime.
+ */
+export function createExpoSyncoreClient(
+  runtime: SyncoreRuntime<ExpoSyncoreSchema>
+) {
   return runtime.createClient();
 }
 
+/**
+ * Create a reusable Expo bootstrap that lazily starts the local runtime.
+ */
 export function createExpoSyncoreBootstrap(
   options: CreateExpoRuntimeOptions
 ): ExpoSyncoreBootstrap {
   let runtime: SyncoreRuntime<ExpoSyncoreSchema> | null = null;
-  let started: Promise<ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>>
-    | null = null;
+  let started: Promise<
+    ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>
+  > | null = null;
 
   const ensureRuntime = () => {
     runtime ??= createExpoSyncoreRuntime(options);
@@ -105,7 +168,9 @@ export function createExpoSyncoreBootstrap(
     async getClient() {
       if (!started) {
         const activeRuntime = ensureRuntime();
-        started = activeRuntime.start().then(() => activeRuntime.createClient());
+        started = activeRuntime
+          .start()
+          .then(() => activeRuntime.createClient());
       }
       return started;
     },
@@ -126,6 +191,63 @@ export function createExpoSyncoreBootstrap(
   };
 }
 
+/**
+ * Props for {@link SyncoreExpoProvider}.
+ */
+export interface SyncoreExpoProviderProps {
+  /**
+   * The bootstrap created with {@link createExpoSyncoreBootstrap}.
+   */
+  bootstrap: ExpoSyncoreBootstrap;
+
+  /**
+   * The React subtree that should receive the Syncore client.
+   */
+  children: ReactNode;
+
+  /**
+   * Optional fallback content rendered while the local runtime starts.
+   */
+  fallback?: ReactNode;
+}
+
+/**
+ * Start an Expo Syncore bootstrap and provide its client to React descendants.
+ *
+ * This avoids the manual `useEffect` + loading-state boilerplate in simple Expo apps.
+ */
+export function SyncoreExpoProvider({
+  bootstrap,
+  children,
+  fallback = null
+}: SyncoreExpoProviderProps) {
+  const [client, setClient] = useState<ExpoSyncoreClient | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void bootstrap.getClient().then((nextClient) => {
+      if (!cancelled) {
+        setClient(nextClient);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      setClient(null);
+      void bootstrap.stop();
+    };
+  }, [bootstrap]);
+
+  if (!client) {
+    return createElement(Fragment, null, fallback);
+  }
+
+  return createElement(SyncoreProvider, { client, children });
+}
+
+/**
+ * Syncore SQL driver implementation backed by `expo-sqlite`.
+ */
 export class ExpoSqliteDriver implements SyncoreSqlDriver {
   private transactionDepth = 0;
   private closed = false;
@@ -151,7 +273,10 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
 
   async get<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
     this.ensureOpen();
-    const row = await this.database.getFirstAsync<T>(sql, normalizeParams(params));
+    const row = await this.database.getFirstAsync<T>(
+      sql,
+      normalizeParams(params)
+    );
     return row ?? undefined;
   }
 
@@ -213,6 +338,9 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
   }
 }
 
+/**
+ * Syncore file/blob storage backed by the Expo file system.
+ */
 export class ExpoFileStorageAdapter implements SyncoreStorageAdapter {
   private readonly rootDirectory: Directory;
 
@@ -267,7 +395,9 @@ export class ExpoFileStorageAdapter implements SyncoreStorageAdapter {
   }
 }
 
-function normalizeParams(values: unknown[]): Array<string | number | Uint8Array | null> {
+function normalizeParams(
+  values: unknown[]
+): Array<string | number | Uint8Array | null> {
   return values.map((value) => {
     if (typeof value === "boolean") {
       return value ? 1 : 0;

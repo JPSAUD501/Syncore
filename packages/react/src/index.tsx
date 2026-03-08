@@ -6,22 +6,23 @@ import {
   useMemo,
   useState
 } from "react";
-import type {
-  FunctionReference,
-  SyncoreClient,
-  SyncoreWatch
-} from "syncore";
+import type { FunctionReference, SyncoreClient, SyncoreWatch } from "syncore";
 
 type ManagedSyncoreWatch<TResult> = SyncoreWatch<TResult> & {
   dispose?: () => void;
 };
 
-type OptionalArgsTuple<TArgs> = Record<never, never> extends TArgs
-  ? [args?: TArgs]
-  : [args: TArgs];
+type OptionalArgsTuple<TArgs> =
+  Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
 const SyncoreContext = createContext<SyncoreClient | null>(null);
 
+/**
+ * Provide a Syncore client to React descendants.
+ *
+ * Wrap your app with this component to use Syncore hooks like `useQuery` and
+ * `useMutation`.
+ */
 export function SyncoreProvider({
   client,
   children
@@ -34,6 +35,11 @@ export function SyncoreProvider({
   );
 }
 
+/**
+ * Read the active Syncore client from React context.
+ *
+ * Throws if used outside of {@link SyncoreProvider}.
+ */
 export function useSyncore(): SyncoreClient {
   const client = useContext(SyncoreContext);
   if (!client) {
@@ -42,12 +48,22 @@ export function useSyncore(): SyncoreClient {
   return client;
 }
 
+/**
+ * Load a reactive Syncore query within a React component.
+ *
+ * The hook subscribes automatically and re-renders whenever the local query
+ * result changes.
+ */
 export function useQuery<TArgs, TResult>(
   reference: FunctionReference<"query", TArgs, TResult>,
   ...args: OptionalArgsTuple<TArgs>
 ): TResult | undefined {
   const client = useSyncore();
-  const watch = useManagedQueryWatch(client, reference, normalizeOptionalArgs(args));
+  const watch = useManagedQueryWatch(
+    client,
+    reference,
+    normalizeOptionalArgs(args)
+  );
   const [snapshot, setSnapshot] = useState(() => readWatchSnapshot(watch));
 
   useEffect(() => {
@@ -65,6 +81,9 @@ export function useQuery<TArgs, TResult>(
   return snapshot.result;
 }
 
+/**
+ * Construct a stable function that executes a Syncore mutation.
+ */
 export function useMutation<TArgs, TResult>(
   reference: FunctionReference<"mutation", TArgs, TResult>
 ): (...args: OptionalArgsTuple<TArgs>) => Promise<TResult> {
@@ -72,6 +91,9 @@ export function useMutation<TArgs, TResult>(
   return (...args) => client.mutation(reference, normalizeOptionalArgs(args));
 }
 
+/**
+ * Construct a stable function that executes a Syncore action.
+ */
 export function useAction<TArgs, TResult>(
   reference: FunctionReference<"action", TArgs, TResult>
 ): (...args: OptionalArgsTuple<TArgs>) => Promise<TResult> {
@@ -79,6 +101,9 @@ export function useAction<TArgs, TResult>(
   return (...args) => client.action(reference, normalizeOptionalArgs(args));
 }
 
+/**
+ * Load several Syncore queries at once using explicit keys.
+ */
 export function useQueries<TResult>(
   entries: Array<{
     key: string;
@@ -147,12 +172,13 @@ function useManagedQueryWatch<TArgs, TResult>(
   args?: TArgs
 ): ManagedSyncoreWatch<TResult> {
   const argsKey = stableStringify(args ?? {});
-  const normalizedArgs = useMemo(
-    () => JSON.parse(argsKey) as TArgs,
-    [argsKey]
-  );
+  const normalizedArgs = useMemo(() => JSON.parse(argsKey) as TArgs, [argsKey]);
   const watch = useMemo<ManagedSyncoreWatch<TResult>>(
-    () => client.watchQuery(reference, normalizedArgs) as ManagedSyncoreWatch<TResult>,
+    () =>
+      client.watchQuery(
+        reference,
+        normalizedArgs
+      ) as ManagedSyncoreWatch<TResult>,
     [client, normalizedArgs, reference]
   );
 
@@ -161,13 +187,13 @@ function useManagedQueryWatch<TArgs, TResult>(
   return watch;
 }
 
-function normalizeOptionalArgs<TArgs>(args: [] | [TArgs] | readonly unknown[]): TArgs {
+function normalizeOptionalArgs<TArgs>(
+  args: [] | [TArgs] | readonly unknown[]
+): TArgs {
   return (args[0] ?? {}) as TArgs;
 }
 
-function readWatchSnapshot<TResult>(
-  watch: SyncoreWatch<TResult>
-): {
+function readWatchSnapshot<TResult>(watch: SyncoreWatch<TResult>): {
   result: TResult | undefined;
   error: Error | undefined;
 } {

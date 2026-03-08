@@ -2,6 +2,19 @@
 
 Syncore is a local-first reactive backend toolkit for offline apps. It brings a Convex-like programming model to fully local runtimes backed by SQLite.
 
+## Quick feel
+
+The intended happy path is:
+
+```bash
+npx syncore dev
+```
+
+Inside a user project, `syncore dev` is the main development loop. If Syncore
+has not been initialized yet, it scaffolds a minimal local backend first. Then
+it regenerates `syncore/_generated/*`, checks schema drift, applies local
+migrations, starts the local hub, and watches `syncore/` sources.
+
 ## Scope
 
 Syncore targets offline-first applications that run entirely on-device:
@@ -84,10 +97,11 @@ pnpm clean
 The dashboard shell can be started with:
 
 ```bash
-pnpm --filter @syncore/cli dev
+npx syncore dev
 ```
 
-Inside a user project, `syncore dev` also runs codegen, checks schema drift, applies local migrations, and keeps watching `syncore/` sources while the hub is alive.
+Inside a user project, `syncore dev` is the main development loop. It can also
+scaffold Syncore automatically when the project is still empty.
 
 Smoke commands:
 
@@ -107,13 +121,28 @@ CI runs the same workspace quality gates plus the smoke suite for web, Electron,
 - [`docs/quickstarts/next-pwa.md`](D:\GitHub\Syncore\docs\quickstarts\next-pwa.md)
 - [`docs/quickstarts/expo.md`](D:\GitHub\Syncore\docs\quickstarts\expo.md)
 - [`docs/quickstarts/electron.md`](D:\GitHub\Syncore\docs\quickstarts\electron.md)
+- [`docs/quickstarts/node-script.md`](D:\GitHub\Syncore\docs\quickstarts\node-script.md)
 
 The current DX model is:
 
 - user code lives in `syncore/schema.ts` and `syncore/functions/**/*.ts`
-- `npx syncore codegen` generates `syncore/_generated/api`, `syncore/_generated/functions`, and `syncore/_generated/server`
+- `npx syncore dev` is the main happy path and auto-scaffolds when needed
+- `npx syncore init --template <platform>` is available when you want explicit scaffolding
+- `npx syncore dev` keeps `syncore/_generated/api`, `syncore/_generated/functions`, and `syncore/_generated/server` in sync during development
+- `npx syncore codegen` is available for one-off generation without the full dev loop
+- `npx syncore import --table tasks sampleData.jsonl` imports local sample data
 - React code imports typed references from `syncore/_generated/api`
 - function files import server helpers from `syncore/_generated/server`
+
+## How Syncore differs from Convex
+
+Syncore keeps the Convex-style programming model, but the runtime is local to
+the app instead of living in a remote deployment.
+
+- functions are still declared with `query`, `mutation`, and `action`
+- clients still call typed references from generated `api.*`
+- the data lives in local SQLite or local browser persistence instead of a hosted backend
+- platform helpers hide most of the worker, IPC, and bootstrap setup needed for offline runtimes
 
 ## Design references
 
@@ -123,3 +152,4 @@ The repository intentionally keeps `./reference/Convex` available during develop
 
 - [`docs/architecture.md`](D:\GitHub\Syncore\docs\architecture.md)
 - [`docs/development.md`](D:\GitHub\Syncore\docs\development.md)
+- [`docs/guides/syncore-vs-convex.md`](D:\GitHub\Syncore\docs\guides\syncore-vs-convex.md)

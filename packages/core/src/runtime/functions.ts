@@ -8,6 +8,11 @@ import {
 export type SyncoreFunctionKind = "query" | "mutation" | "action";
 export type EmptyArgs = Record<never, never>;
 
+/**
+ * A typed reference to a Syncore function.
+ *
+ * Most app code gets these references from the generated `api` object.
+ */
 export interface FunctionReference<
   TKind extends SyncoreFunctionKind = SyncoreFunctionKind,
   TArgs = EmptyArgs,
@@ -31,21 +36,23 @@ export interface SyncoreFunctionDefinition<
   handler: (ctx: TContext, args: TArgs) => Promise<TResult> | TResult;
 }
 
-export type FunctionArgs<TReference> = TReference extends FunctionReference<
-  SyncoreFunctionKind,
-  infer TArgs,
-  unknown
->
-  ? TArgs
-  : never;
+export type FunctionArgs<TReference> =
+  TReference extends FunctionReference<
+    SyncoreFunctionKind,
+    infer TArgs,
+    unknown
+  >
+    ? TArgs
+    : never;
 
-export type FunctionResult<TReference> = TReference extends FunctionReference<
-  SyncoreFunctionKind,
-  unknown,
-  infer TResult
->
-  ? TResult
-  : never;
+export type FunctionResult<TReference> =
+  TReference extends FunctionReference<
+    SyncoreFunctionKind,
+    unknown,
+    infer TResult
+  >
+    ? TResult
+    : never;
 
 export type FunctionKindFromDefinition<TDefinition> = TDefinition extends {
   kind: infer TKind;
@@ -53,19 +60,17 @@ export type FunctionKindFromDefinition<TDefinition> = TDefinition extends {
   ? Extract<TKind, SyncoreFunctionKind>
   : never;
 
-export type FunctionArgsFromDefinition<TDefinition> =
-  TDefinition extends {
-    argsValidator: Validator<infer TArgs>;
-  }
-    ? TArgs
-    : never;
+export type FunctionArgsFromDefinition<TDefinition> = TDefinition extends {
+  argsValidator: Validator<infer TArgs>;
+}
+  ? TArgs
+  : never;
 
-export type FunctionResultFromDefinition<TDefinition> =
-  TDefinition extends {
-    returnsValidator?: Validator<infer TResult>;
-  }
-    ? TResult
-    : never;
+export type FunctionResultFromDefinition<TDefinition> = TDefinition extends {
+  returnsValidator?: Validator<infer TResult>;
+}
+  ? TResult
+  : never;
 
 export type FunctionReferenceFor<TDefinition> =
   FunctionKindFromDefinition<TDefinition> extends never
@@ -104,12 +109,19 @@ function createFunctionDefinition<
 ): SyncoreFunctionDefinition<TKind, TContext, InferArgs<TArgsShape>, TResult> {
   return {
     kind,
-    argsValidator: ensureObjectValidator(config.args) as Validator<InferArgs<TArgsShape>>,
+    argsValidator: ensureObjectValidator(config.args) as Validator<
+      InferArgs<TArgsShape>
+    >,
     ...(config.returns ? { returnsValidator: config.returns } : {}),
     handler: config.handler
   };
 }
 
+/**
+ * Define a Syncore query.
+ *
+ * Queries can read local Syncore state and are available to clients.
+ */
 export function query<
   TContext = unknown,
   TValidator extends Validator<unknown> = Validator<unknown>,
@@ -136,10 +148,20 @@ export function query<
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
   }
-): SyncoreFunctionDefinition<"query", TContext, InferArgs<TArgsShape>, TResult> {
+): SyncoreFunctionDefinition<
+  "query",
+  TContext,
+  InferArgs<TArgsShape>,
+  TResult
+> {
   return createFunctionDefinition("query", config);
 }
 
+/**
+ * Define a Syncore mutation.
+ *
+ * Mutations can modify local Syncore state and are available to clients.
+ */
 export function mutation<
   TContext = unknown,
   TValidator extends Validator<unknown> = Validator<unknown>,
@@ -157,7 +179,12 @@ export function mutation<
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
   }
-): SyncoreFunctionDefinition<"mutation", TContext, InferArgs<TArgsShape>, TResult>;
+): SyncoreFunctionDefinition<
+  "mutation",
+  TContext,
+  InferArgs<TArgsShape>,
+  TResult
+>;
 export function mutation<
   TContext = unknown,
   TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap,
@@ -166,10 +193,20 @@ export function mutation<
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
   }
-): SyncoreFunctionDefinition<"mutation", TContext, InferArgs<TArgsShape>, TResult> {
+): SyncoreFunctionDefinition<
+  "mutation",
+  TContext,
+  InferArgs<TArgsShape>,
+  TResult
+> {
   return createFunctionDefinition("mutation", config);
 }
 
+/**
+ * Define a Syncore action.
+ *
+ * Actions can run arbitrary JavaScript and may call other Syncore functions.
+ */
 export function action<
   TContext = unknown,
   TValidator extends Validator<unknown> = Validator<unknown>,
@@ -187,7 +224,12 @@ export function action<
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
   }
-): SyncoreFunctionDefinition<"action", TContext, InferArgs<TArgsShape>, TResult>;
+): SyncoreFunctionDefinition<
+  "action",
+  TContext,
+  InferArgs<TArgsShape>,
+  TResult
+>;
 export function action<
   TContext = unknown,
   TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap,
@@ -196,7 +238,12 @@ export function action<
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
   }
-): SyncoreFunctionDefinition<"action", TContext, InferArgs<TArgsShape>, TResult> {
+): SyncoreFunctionDefinition<
+  "action",
+  TContext,
+  InferArgs<TArgsShape>,
+  TResult
+> {
   return createFunctionDefinition("action", config);
 }
 
@@ -303,6 +350,9 @@ export class CronJobs {
   }
 }
 
+/**
+ * Create a recurring job registry for Syncore scheduler definitions.
+ */
 export function cronJobs(): CronJobs {
   return new CronJobs();
 }

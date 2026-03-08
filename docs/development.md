@@ -37,6 +37,8 @@ The current dashboard is intentionally a shell. The protocol, connection model, 
 
 `syncore dev` is the main development loop inside an app project. It bootstraps codegen and migrations first, then starts the local hub/dashboard and watches `syncore.config.ts`, schema files, functions, and SQL migrations for changes.
 
+Use `npx syncore codegen` when you only want a one-off refresh of generated files. For day-to-day app work, prefer leaving `npx syncore dev` running in a separate terminal.
+
 ## Reference material
 
 The `reference/Convex` directory stays available while Syncore is under active development. It is used to study how Convex solved problems such as developer ergonomics, scheduling, and dashboard workflows, then adapt those ideas to a fully local architecture.

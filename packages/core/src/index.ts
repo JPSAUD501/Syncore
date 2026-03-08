@@ -1,3 +1,9 @@
+/**
+ * Syncore public API.
+ *
+ * This entrypoint exports the schema builders, runtime primitives, function
+ * helpers, validators, and devtools types used by app code.
+ */
 export type {
   SyncoreDevtoolsEvent,
   SyncoreDevtoolsSnapshot

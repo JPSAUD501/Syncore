@@ -10,7 +10,9 @@ import { ReactNode } from 'react';
 
 // @public (undocumented)
 export function createNextSyncoreClient(options: {
-    createWorker: () => Worker;
+    createWorker?: () => Worker;
+    workerUrl?: URL | string;
+    workerAssetUrl?: string;
 }): ManagedWebWorkerClient;
 
 // @public (undocumented)
@@ -25,13 +27,17 @@ export interface SyncoreNextOptions {
     serviceWorkerUrl?: string;
     // (undocumented)
     wasmAssetUrl?: string;
+    // (undocumented)
+    workerAssetUrl?: string;
 }
 
 // @public (undocumented)
 export function SyncoreNextProvider(input: {
     children: ReactNode;
-    createWorker: () => Worker;
+    createWorker?: () => Worker;
     serviceWorkerUrl?: string;
+    workerUrl?: URL | string;
+    workerAssetUrl?: string;
 }): react_jsx_runtime0.JSX.Element | null;
 
 // @public (undocumented)

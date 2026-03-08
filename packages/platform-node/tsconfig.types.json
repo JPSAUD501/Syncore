@@ -11,6 +11,7 @@
     "baseUrl": ".",
     "paths": {
       "syncore": ["../core/dist/index.d.ts"],
+      "@syncore/react": ["../react/dist/index.d.ts"],
       "@syncore/schema": ["../schema/dist/index.d.ts"],
       "@syncore/devtools-protocol": ["../devtools-protocol/dist/index.d.ts"]
     }

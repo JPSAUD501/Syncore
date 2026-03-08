@@ -1,29 +1,13 @@
-import { createRendererSyncoreBridgeClient } from "@syncore/platform-node/ipc";
-import { SyncoreProvider, useMutation, useQuery } from "@syncore/react";
-import { useEffect, useMemo, useState } from "react";
+import { SyncoreElectronProvider } from "@syncore/platform-node/ipc";
+import { useMutation, useQuery } from "@syncore/react";
+import { useState } from "react";
 import { api } from "../../syncore/_generated/api";
 
-declare global {
-  interface Window {
-    syncoreBridge: {
-      postMessage(message: unknown): void;
-      onMessage(listener: (message: unknown) => void): () => void;
-    };
-  }
-}
-
 export function App() {
-  const client = useMemo(
-    () => createRendererSyncoreBridgeClient(window.syncoreBridge),
-    []
-  );
-
-  useEffect(() => () => client.dispose(), [client]);
-
   return (
-    <SyncoreProvider client={client}>
+    <SyncoreElectronProvider>
       <TasksScreen />
-    </SyncoreProvider>
+    </SyncoreElectronProvider>
   );
 }
 
@@ -47,8 +31,8 @@ function TasksScreen() {
         <p className="eyebrow">Electron + local runtime</p>
         <h1>Syncore stays on disk and reacts instantly in the renderer.</h1>
         <p className="body">
-          The main process owns SQLite. The renderer only talks to typed functions through
-          the Syncore IPC bridge.
+          The main process owns SQLite. The renderer only talks to typed
+          functions through the Syncore IPC bridge.
         </p>
       </section>
 
@@ -61,7 +45,11 @@ function TasksScreen() {
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Write a local desktop task"
           />
-          <button className="primaryButton" onClick={() => void handleCreate()} type="button">
+          <button
+            className="primaryButton"
+            onClick={() => void handleCreate()}
+            type="button"
+          >
             Add task
           </button>
         </div>
@@ -77,12 +65,16 @@ function TasksScreen() {
               <div>
                 <div className="taskTitle">{task.text}</div>
                 <div className="taskStatus">
-                  {task.done ? "Completed on this machine" : "Stored on this machine"}
+                  {task.done
+                    ? "Completed on this machine"
+                    : "Stored on this machine"}
                 </div>
               </div>
               <button
                 className="secondaryButton"
-                onClick={() => void toggleDone({ id: task._id, done: !task.done })}
+                onClick={() =>
+                  void toggleDone({ id: task._id, done: !task.done })
+                }
                 type="button"
               >
                 {task.done ? "Reopen" : "Complete"}

@@ -4,11 +4,9 @@
 
 ```ts
 
+import { AnySyncoreSchema } from 'syncore';
 import { DevtoolsSink } from 'syncore';
-import type { FunctionArgs } from 'syncore';
 import type { FunctionReference } from 'syncore';
-import type { FunctionResult } from 'syncore';
-import type { JsonObject } from 'syncore';
 import { SchedulerOptions } from 'syncore';
 import { StorageObject } from 'syncore';
 import { StorageWriteInput } from 'syncore';
@@ -19,8 +17,6 @@ import { SyncoreDevtoolsSnapshot } from '@syncore/devtools-protocol';
 import { SyncoreExperimentalPlugin } from 'syncore';
 import { SyncoreRuntime } from 'syncore';
 import { SyncoreRuntimeOptions } from 'syncore';
-import type { SyncoreSchema } from '@syncore/schema';
-import type { SyncoreSchema as SyncoreSchema_2 } from 'syncore';
 import { SyncoreSqlDriver } from 'syncore';
 import { SyncoreStorageAdapter } from 'syncore';
 import type { SyncoreWatch } from 'syncore';
@@ -42,6 +38,29 @@ export interface AttachNodeIpcRuntimeOptions {
     createRuntime: (() => Promise<SyncoreRuntime<NodeIpcSyncoreSchema>>) | (() => SyncoreRuntime<NodeIpcSyncoreSchema>);
     // (undocumented)
     endpoint: SyncoreIpcMessageEndpoint;
+}
+
+// @public (undocumented)
+export function bindElectronWindowToSyncoreRuntime(options: {
+    runtime: SyncoreRuntime<NodeSyncoreSchema>;
+    window: SyncoreElectronBridgeWindow;
+    onRendererMessage(listener: (message: unknown) => void): () => void;
+    channel?: string;
+}): SyncoreElectronIpcBinding;
+
+// @public (undocumented)
+export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): SyncoreIpcMessageEndpoint & {
+    dispose(): void;
+};
+
+// @public (undocumented)
+export interface CreateElectronSyncoreBridgeOptions {
+    // (undocumented)
+    channel?: string;
+    // (undocumented)
+    onRendererMessage(listener: (message: unknown) => void): () => void;
+    // (undocumented)
+    window: SyncoreElectronBridgeWindow;
 }
 
 // @public (undocumented)
@@ -89,6 +108,20 @@ export function createRendererSyncoreBridgeClient(bridge: SyncoreRendererBridge)
 export function createRendererSyncoreClient(endpoint: SyncoreIpcMessageEndpoint): SyncoreRendererClient;
 
 // @public (undocumented)
+export function createRendererSyncoreWindowClient(windowObject: Window & typeof globalThis, bridgeName?: string): SyncoreRendererClient;
+
+// @public (undocumented)
+export interface CreateSyncoreRendererWindowClientOptions {
+    // (undocumented)
+    bridgeName?: string;
+}
+
+// @public (undocumented)
+export function installSyncoreWindowBridge(options?: {
+    bridgeName?: string;
+}): string;
+
+// @public (undocumented)
 export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
     constructor(directory: string);
     // (undocumented)
@@ -104,7 +137,7 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
 }
 
 // @public (undocumented)
-export type NodeIpcSyncoreSchema = SyncoreSchema_2<any>;
+export type NodeIpcSyncoreSchema = AnySyncoreSchema;
 
 // @public (undocumented)
 export class NodeSqliteDriver implements SyncoreSqlDriver {
@@ -129,7 +162,7 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
 }
 
 // @public (undocumented)
-export type NodeSyncoreSchema = SyncoreSchema<any>;
+export type NodeSyncoreSchema = AnySyncoreSchema;
 
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
@@ -155,6 +188,24 @@ export type RendererQueryWatch<TValue> = SyncoreWatch<TValue> & {
 export { SyncoreDevtoolsEvent }
 
 export { SyncoreDevtoolsSnapshot }
+
+// @public (undocumented)
+export interface SyncoreElectronBridgeWindow {
+    // (undocumented)
+    isDestroyed(): boolean;
+    // (undocumented)
+    webContents: {
+        send(channel: string, message: unknown): void;
+    };
+}
+
+// @public (undocumented)
+export interface SyncoreElectronIpcBinding {
+    // (undocumented)
+    dispose(): Promise<void>;
+    // (undocumented)
+    ready: Promise<void>;
+}
 
 // @public (undocumented)
 export interface SyncoreIpcMessageEndpoint {
@@ -186,17 +237,25 @@ export interface SyncoreRendererBridge {
 export class SyncoreRendererClient implements SyncoreClient {
     constructor(endpoint: SyncoreIpcMessageEndpoint);
     // (undocumented)
-    action<TReference extends FunctionReference<"action", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     dispose(): void;
     // (undocumented)
-    mutation<TReference extends FunctionReference<"mutation", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
-    query<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
-    watchQuery<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): RendererQueryWatch<FunctionResult<TReference>>;
+    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): RendererQueryWatch<TResult>;
+}
+
+// @public (undocumented)
+export interface SyncoreWindowBridge {
+    // (undocumented)
+    onMessage(listener: (message: unknown) => void): () => void;
+    // (undocumented)
+    postMessage(message: unknown): void;
 }
 
 // (No @packageDocumentation comment for this package)

@@ -1,5 +1,3 @@
-import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
@@ -8,17 +6,10 @@ export default defineConfig({
   target: "node22",
   format: "esm",
   deps: {
-    neverBundle: ["vite"]
+    neverBundle: ["syncore/cli"]
   },
   unbundle: true,
   dts: true,
   sourcemap: true,
-  clean: true,
-  hooks: {
-    "build:done": async () => {
-      const outputFile = path.resolve(import.meta.dirname, "dist", "index.mjs");
-      const body = (await readFile(outputFile, "utf8")).replace(/^(#!.*\r?\n)+/, "");
-      await writeFile(outputFile, `#!/usr/bin/env node\n${body}`);
-    }
-  }
+  clean: true
 });

@@ -129,12 +129,18 @@ export interface SyncoreSqlDriver {
   close?(): Promise<void>;
 }
 
+/**
+ * The binary or text payload written through Syncore storage APIs.
+ */
 export interface StorageWriteInput {
   data: Uint8Array | ArrayBuffer | string;
   contentType?: string;
   fileName?: string;
 }
 
+/**
+ * Metadata about an object stored through Syncore storage APIs.
+ */
 export interface StorageObject {
   id: string;
   path: string;
@@ -176,13 +182,13 @@ export interface SyncoreExperimentalPluginContext<
   emitDevtools(event: SyncoreDevtoolsEvent): void;
 }
 
-export interface SyncoreExperimentalPlugin<
-  TSchema extends AnySyncoreSchema
-> {
+export interface SyncoreExperimentalPlugin<TSchema extends AnySyncoreSchema> {
   name: string;
   capabilities?:
     | SyncoreCapabilities
-    | ((context: SyncoreExperimentalPluginContext<TSchema>) => SyncoreCapabilities | void);
+    | ((
+        context: SyncoreExperimentalPluginContext<TSchema>
+      ) => SyncoreCapabilities | void);
   onStart?(
     context: SyncoreExperimentalPluginContext<TSchema>
   ): Promise<void> | void;
@@ -191,9 +197,7 @@ export interface SyncoreExperimentalPlugin<
   ): Promise<void> | void;
 }
 
-export interface SyncoreRuntimeOptions<
-  TSchema extends AnySyncoreSchema
-> {
+export interface SyncoreRuntimeOptions<TSchema extends AnySyncoreSchema> {
   schema: TSchema;
   functions: SyncoreFunctionRegistry;
   driver: SyncoreSqlDriver;
@@ -211,40 +215,81 @@ export interface PaginationOptions {
 }
 
 export interface PaginationResult<TItem> {
+  /** The current page of results. */
   page: TItem[];
+
+  /** The cursor to pass to the next page request, or `null` when finished. */
   cursor: string | null;
+
+  /** Whether there are no more pages to read. */
   isDone: boolean;
 }
 
 export interface SyncoreWatch<TValue> {
+  /** Subscribe to updates for this query watch. */
   onUpdate(callback: () => void): () => void;
+
+  /** Read the latest local query result, if one is available. */
   localQueryResult(): TValue | undefined;
+
+  /** Read the latest local query error, if one is available. */
   localQueryError(): Error | undefined;
+
+  /** Dispose the watch if the implementation exposes explicit cleanup. */
   dispose?(): void;
 }
 
 export interface FilterBuilder {
+  /** Match documents whose field is exactly equal to a value. */
   eq(field: string, value: unknown): QueryExpression;
+
+  /** Match documents whose field is greater than a value. */
   gt(field: string, value: unknown): QueryExpression;
+
+  /** Match documents whose field is greater than or equal to a value. */
   gte(field: string, value: unknown): QueryExpression;
+
+  /** Match documents whose field is less than a value. */
   lt(field: string, value: unknown): QueryExpression;
+
+  /** Match documents whose field is less than or equal to a value. */
   lte(field: string, value: unknown): QueryExpression;
+
+  /** Combine several filter expressions with logical AND. */
   and(...expressions: QueryExpression[]): QueryExpression;
+
+  /** Combine several filter expressions with logical OR. */
   or(...expressions: QueryExpression[]): QueryExpression;
 }
 
 export interface IndexRangeBuilder {
+  /** Constrain an indexed field to an exact value. */
   eq(field: string, value: unknown): IndexRangeBuilder;
+
+  /** Constrain an indexed field to values greater than a value. */
   gt(field: string, value: unknown): IndexRangeBuilder;
+
+  /** Constrain an indexed field to values greater than or equal to a value. */
   gte(field: string, value: unknown): IndexRangeBuilder;
+
+  /** Constrain an indexed field to values less than a value. */
   lt(field: string, value: unknown): IndexRangeBuilder;
+
+  /** Constrain an indexed field to values less than or equal to a value. */
   lte(field: string, value: unknown): IndexRangeBuilder;
+
+  /** Finish building the index range. */
   build(): QueryCondition[];
 }
 
 export interface SearchIndexBuilder {
+  /** Set the text field and text to search for. */
   search(field: string, value: string): SearchIndexBuilder;
+
+  /** Add an equality filter alongside the text search. */
   eq(field: string, value: unknown): SearchIndexBuilder;
+
+  /** Finish building the search query. */
   build(): SearchQuery;
 }
 
@@ -268,124 +313,182 @@ export type InsertValueForTable<
   TTableName extends TableNames<TSchema>
 > = InferTableInput<TSchema["tables"][TTableName]>;
 
-type OptionalArgsTuple<TArgs> = Record<never, never> extends TArgs
-  ? [args?: TArgs]
-  : [args: TArgs];
+type OptionalArgsTuple<TArgs> =
+  Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
 export interface SyncoreDatabaseReader<
   TSchema extends AnySyncoreSchema = AnySyncoreSchema
 > {
+  /** Read a single document by table name and id. */
   get<TTableName extends TableNames<TSchema>>(
     table: TTableName,
     id: string
   ): Promise<DocumentForTable<TSchema, TTableName> | null>;
+
+  /** Start building a table query. */
   query<TTableName extends TableNames<TSchema>>(
     table: TTableName
   ): QueryBuilder<DocumentForTable<TSchema, TTableName>>;
+
+  /** Run raw SQL against the local Syncore database. */
   raw<TValue = unknown>(sql: string, params?: unknown[]): Promise<TValue[]>;
 }
 
 export interface SyncoreDatabaseWriter<
   TSchema extends AnySyncoreSchema = AnySyncoreSchema
 > extends SyncoreDatabaseReader<TSchema> {
+  /** Insert a new document into a table and return its generated id. */
   insert<TTableName extends TableNames<TSchema>>(
     table: TTableName,
     value: InsertValueForTable<TSchema, TTableName>
   ): Promise<string>;
+
+  /** Apply a partial update to an existing document. */
   patch<TTableName extends TableNames<TSchema>>(
     table: TTableName,
     id: string,
     value: Partial<InsertValueForTable<TSchema, TTableName>>
   ): Promise<void>;
+
+  /** Replace an existing document with a full new value. */
   replace<TTableName extends TableNames<TSchema>>(
     table: TTableName,
     id: string,
     value: InsertValueForTable<TSchema, TTableName>
   ): Promise<void>;
-  delete<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<void>;
+
+  /** Delete a document from a table. */
+  delete<TTableName extends TableNames<TSchema>>(
+    table: TTableName,
+    id: string
+  ): Promise<void>;
 }
 
+/**
+ * The storage API exposed inside Syncore runtime contexts.
+ */
 export interface SyncoreStorageApi {
+  /** Store a file-like payload locally and return its generated id. */
   put(input: StorageWriteInput): Promise<string>;
+
+  /** Read metadata for a stored object. */
   get(id: string): Promise<StorageObject | null>;
+
+  /** Read the stored bytes for an object. */
   read(id: string): Promise<Uint8Array | null>;
+
+  /** Delete a stored object. */
   delete(id: string): Promise<void>;
 }
 
 export interface SchedulerApi {
+  /** Schedule a mutation or action to run after a delay. */
   runAfter<TArgs, TResult>(
     delayMs: number,
     functionReference: FunctionReference<"mutation" | "action", TArgs, TResult>,
-    ...args: [
-      ...OptionalArgsTuple<TArgs>,
-      misfirePolicy?: MisfirePolicy
-    ]
+    ...args: [...OptionalArgsTuple<TArgs>, misfirePolicy?: MisfirePolicy]
   ): Promise<string>;
+
+  /** Schedule a mutation or action to run at a specific time. */
   runAt<TArgs, TResult>(
     timestamp: number | Date,
     functionReference: FunctionReference<"mutation" | "action", TArgs, TResult>,
-    ...args: [
-      ...OptionalArgsTuple<TArgs>,
-      misfirePolicy?: MisfirePolicy
-    ]
+    ...args: [...OptionalArgsTuple<TArgs>, misfirePolicy?: MisfirePolicy]
   ): Promise<string>;
+
+  /** Cancel a previously scheduled job. */
   cancel(id: string): Promise<void>;
 }
 
-export interface QueryCtx<
-  TSchema extends AnySyncoreSchema = AnySyncoreSchema
-> {
+/**
+ * The context object available inside Syncore queries.
+ */
+export interface QueryCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+  /** Read-only database access for this query. */
   db: SyncoreDatabaseReader<TSchema>;
+
+  /** Local file/blob storage for this runtime. */
   storage: SyncoreStorageApi;
+
+  /** Optional adapter or plugin capabilities exposed by the runtime. */
   capabilities?: Readonly<SyncoreCapabilities>;
+
+  /** Call another Syncore query from inside this query. */
   runQuery<TArgs, TResult>(
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
 }
 
+/**
+ * The context object available inside Syncore mutations.
+ */
 export interface MutationCtx<
   TSchema extends AnySyncoreSchema = AnySyncoreSchema
 > extends QueryCtx<TSchema> {
   db: SyncoreDatabaseWriter<TSchema>;
+
+  /** Schedule future work from this mutation. */
   scheduler: SchedulerApi;
+
+  /** Call another mutation from inside this mutation. */
   runMutation<TArgs, TResult>(
     reference: FunctionReference<"mutation", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
+
+  /** Call an action from this mutation. */
   runAction<TArgs, TResult>(
     reference: FunctionReference<"action", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
 }
 
+/**
+ * The context object available inside Syncore actions.
+ */
 export interface ActionCtx<
   TSchema extends AnySyncoreSchema = AnySyncoreSchema
 > extends QueryCtx<TSchema> {
+  /** Schedule future work from this action. */
   scheduler: SchedulerApi;
+
+  /** Call a mutation from this action. */
   runMutation<TArgs, TResult>(
     reference: FunctionReference<"mutation", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
+
+  /** Call another action from this action. */
   runAction<TArgs, TResult>(
     reference: FunctionReference<"action", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
 }
 
+/**
+ * The typed client API exposed by a Syncore runtime.
+ */
 export interface SyncoreClient {
+  /** Fetch a query result once. */
   query<TArgs, TResult>(
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
+
+  /** Execute a mutation. */
   mutation<TArgs, TResult>(
     reference: FunctionReference<"mutation", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
+
+  /** Execute an action. */
   action<TArgs, TResult>(
     reference: FunctionReference<"action", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult>;
+
+  /** Subscribe to a query and receive reactive updates. */
   watchQuery<TArgs, TResult>(
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
@@ -504,21 +607,41 @@ type RuntimeExecutionState = {
   dependencyCollector?: Set<DependencyKey>;
 };
 
+/**
+ * A composable builder for Syncore table queries.
+ */
 export interface QueryBuilder<TDocument> {
+  /** Query through a named index instead of scanning the whole table. */
   withIndex(
     indexName: string,
     builder?: (range: IndexRangeBuilder) => IndexRangeBuilder
   ): this;
+
+  /** Query through a named search index for text search. */
   withSearchIndex(
     indexName: string,
     builder: (search: SearchIndexBuilder) => SearchIndexBuilder
   ): this;
+
+  /** Set the result ordering. */
   order(order: "asc" | "desc"): this;
+
+  /** Add a filter expression to the query. */
   filter(builder: (filter: FilterBuilder) => QueryExpression): this;
+
+  /** Collect all matching documents. */
   collect(): Promise<TDocument[]>;
+
+  /** Collect up to a fixed number of matching documents. */
   take(count: number): Promise<TDocument[]>;
+
+  /** Return the first matching document, or `null` if none exist. */
   first(): Promise<TDocument | null>;
+
+  /** Return one matching document and throw if multiple rows match. */
   unique(): Promise<TDocument | null>;
+
+  /** Read a paginated slice of documents using a cursor. */
   paginate(options: PaginationOptions): Promise<PaginationResult<TDocument>>;
 }
 
@@ -587,7 +710,9 @@ class RuntimeQueryBuilder<TDocument> implements QueryBuilder<TDocument> {
     return results[0] ?? null;
   }
 
-  async paginate(options: PaginationOptions): Promise<PaginationResult<TDocument>> {
+  async paginate(
+    options: PaginationOptions
+  ): Promise<PaginationResult<TDocument>> {
     const offset = options.cursor ? Number.parseInt(options.cursor, 10) : 0;
     const page = await this.execute({ limit: options.numItems, offset });
     const nextCursor =
@@ -623,13 +748,16 @@ class RuntimeQueryBuilder<TDocument> implements QueryBuilder<TDocument> {
   }
 }
 
-export class SyncoreRuntime<
-  TSchema extends AnySyncoreSchema
-> {
+/**
+ * The local Syncore runtime that owns the database, storage, scheduler, and function execution.
+ */
+export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private readonly runtimeId = crypto.randomUUID();
   private readonly platform: string;
   private readonly capabilities: Readonly<SyncoreCapabilities>;
-  private readonly experimentalPlugins: Array<SyncoreExperimentalPlugin<TSchema>>;
+  private readonly experimentalPlugins: Array<
+    SyncoreExperimentalPlugin<TSchema>
+  >;
   private readonly activeQueries = new Map<string, ActiveQueryRecord>();
   private readonly disabledSearchIndexes = new Set<string>();
   private readonly recentEvents: SyncoreDevtoolsEvent[] = [];
@@ -646,6 +774,9 @@ export class SyncoreRuntime<
     this.capabilities = Object.freeze(this.buildCapabilities());
   }
 
+  /**
+   * Start the local Syncore runtime.
+   */
   async start(): Promise<void> {
     if (this.started) {
       return;
@@ -667,6 +798,9 @@ export class SyncoreRuntime<
     });
   }
 
+  /**
+   * Stop the local Syncore runtime and release any open resources.
+   */
   async stop(): Promise<void> {
     if (this.schedulerTimer) {
       clearInterval(this.schedulerTimer);
@@ -686,6 +820,9 @@ export class SyncoreRuntime<
     this.started = false;
   }
 
+  /**
+   * Create a typed client for calling this runtime from the same process.
+   */
   createClient(): SyncoreClient {
     return {
       query: (reference, ...args) =>
@@ -722,15 +859,11 @@ export class SyncoreRuntime<
     const definition = this.resolveFunction(reference, "query");
     const dependencyCollector = new Set<DependencyKey>();
     const startedAt = Date.now();
-    const result = await this.invokeFunction<TResult>(
-      definition,
-      args,
-      {
-        mutationDepth: 0,
-        changedTables: new Set<string>(),
-        dependencyCollector
-      }
-    );
+    const result = await this.invokeFunction<TResult>(definition, args, {
+      mutationDepth: 0,
+      changedTables: new Set<string>(),
+      dependencyCollector
+    });
 
     this.emitDevtools({
       type: "query.executed",
@@ -755,14 +888,10 @@ export class SyncoreRuntime<
     const changedTables = new Set<string>();
 
     const result = await this.options.driver.withTransaction(async () =>
-      this.invokeFunction<TResult>(
-        definition,
-        args,
-        {
-          mutationDepth: 1,
-          changedTables
-        }
-      )
+      this.invokeFunction<TResult>(definition, args, {
+        mutationDepth: 1,
+        changedTables
+      })
     );
 
     await this.refreshInvalidatedQueries(changedTables, mutationId);
@@ -789,14 +918,10 @@ export class SyncoreRuntime<
     const startedAt = Date.now();
 
     try {
-      const result = await this.invokeFunction<TResult>(
-        definition,
-        args,
-        {
-          mutationDepth: 0,
-          changedTables: new Set<string>()
-        }
-      );
+      const result = await this.invokeFunction<TResult>(definition, args, {
+        mutationDepth: 0,
+        changedTables: new Set<string>()
+      });
       this.emitDevtools({
         type: "action.completed",
         runtimeId: this.runtimeId,
@@ -880,9 +1005,9 @@ export class SyncoreRuntime<
   private async executeQueryBuilder<TDocument>(
     options: ExecuteQueryBuilderOptions
   ): Promise<TDocument[]> {
-    const table = this.options.schema.getTable(options.tableName) as TableDefinition<
-      Validator<unknown>
-    >;
+    const table = this.options.schema.getTable(
+      options.tableName
+    ) as TableDefinition<Validator<unknown>>;
     const params: unknown[] = [];
     const whereClauses: string[] = [];
     const orderClauses: string[] = [];
@@ -890,7 +1015,9 @@ export class SyncoreRuntime<
     const source = options.source;
 
     if (source.type === "index") {
-      const index = table.indexes.find((candidate) => candidate.name === source.name);
+      const index = table.indexes.find(
+        (candidate) => candidate.name === source.name
+      );
       if (!index) {
         throw new Error(
           `Unknown index "${source.name}" on table "${options.tableName}".`
@@ -928,7 +1055,10 @@ export class SyncoreRuntime<
         );
         params.push(`%${source.query.searchText}%`);
       } else {
-        const searchTableName = searchIndexTableName(options.tableName, searchIndex.name);
+        const searchTableName = searchIndexTableName(
+          options.tableName,
+          searchIndex.name
+        );
         joinClause = `JOIN ${quoteIdentifier(searchTableName)} s ON s._id = t._id`;
         whereClauses.push(`s.search_value MATCH ?`);
         params.push(source.query.searchText);
@@ -939,11 +1069,15 @@ export class SyncoreRuntime<
     }
 
     if (options.filterExpression) {
-      whereClauses.push(this.renderExpression("t", options.filterExpression, params));
+      whereClauses.push(
+        this.renderExpression("t", options.filterExpression, params)
+      );
     }
 
     if (orderClauses.length === 0) {
-      orderClauses.push(`t._creationTime ${options.orderDirection.toUpperCase()}`);
+      orderClauses.push(
+        `t._creationTime ${options.orderDirection.toUpperCase()}`
+      );
     }
     orderClauses.push(`t._id ${options.orderDirection.toUpperCase()}`);
 
@@ -965,7 +1099,12 @@ export class SyncoreRuntime<
   }
 
   private async invokeFunction<TResult>(
-    definition: SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, unknown, unknown>,
+    definition: SyncoreFunctionDefinition<
+      SyncoreFunctionKind,
+      unknown,
+      unknown,
+      unknown
+    >,
     rawArgs: JsonObject,
     state: RuntimeExecutionState
   ): Promise<TResult> {
@@ -997,8 +1136,7 @@ export class SyncoreRuntime<
       runQuery: <TArgs, TResult>(
         reference: FunctionReference<"query", TArgs, TResult>,
         ...args: OptionalArgsTuple<TArgs>
-      ) =>
-        this.runQuery(reference, normalizeOptionalArgs(args) as JsonObject),
+      ) => this.runQuery(reference, normalizeOptionalArgs(args) as JsonObject),
       runMutation: <TArgs, TResult>(
         reference: FunctionReference<"mutation", TArgs, TResult>,
         ...args: OptionalArgsTuple<TArgs>
@@ -1023,8 +1161,7 @@ export class SyncoreRuntime<
       runAction: <TArgs, TResult>(
         reference: FunctionReference<"action", TArgs, TResult>,
         ...args: OptionalArgsTuple<TArgs>
-      ) =>
-        this.runAction(reference, normalizeOptionalArgs(args) as JsonObject)
+      ) => this.runAction(reference, normalizeOptionalArgs(args) as JsonObject)
     } as QueryCtx<TSchema> | MutationCtx<TSchema> | ActionCtx<TSchema>;
   }
 
@@ -1032,18 +1169,29 @@ export class SyncoreRuntime<
     state: RuntimeExecutionState
   ): SyncoreDatabaseReader<TSchema> {
     return {
-      get: async <TTableName extends TableNames<TSchema>>(tableName: TTableName, id: string) => {
+      get: async <TTableName extends TableNames<TSchema>>(
+        tableName: TTableName,
+        id: string
+      ) => {
         state.dependencyCollector?.add(`table:${tableName}`);
         state.dependencyCollector?.add(`row:${tableName}:${id}`);
         const row = await this.options.driver.get<DatabaseRow>(
           `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(tableName)} WHERE _id = ?`,
           [id]
         );
-        return row ? this.deserializeDocument<DocumentForTable<TSchema, TTableName>>(tableName, row) : null;
+        return row
+          ? this.deserializeDocument<DocumentForTable<TSchema, TTableName>>(
+              tableName,
+              row
+            )
+          : null;
       },
       query: <TTableName extends TableNames<TSchema>>(tableName: TTableName) =>
         new RuntimeQueryBuilder<DocumentForTable<TSchema, TTableName>>(
-          (options) => this.executeQueryBuilder<DocumentForTable<TSchema, TTableName>>(options),
+          (options) =>
+            this.executeQueryBuilder<DocumentForTable<TSchema, TTableName>>(
+              options
+            ),
           tableName,
           state.dependencyCollector
         ),
@@ -1071,7 +1219,11 @@ export class SyncoreRuntime<
           `INSERT INTO ${quoteIdentifier(tableName)} (_id, _creationTime, _json) VALUES (?, ?, ?)`,
           [id, creationTime, json]
         );
-        await this.syncSearchIndexes(tableName, { _id: id, _creationTime: creationTime, _json: json });
+        await this.syncSearchIndexes(tableName, {
+          _id: id,
+          _creationTime: creationTime,
+          _json: json
+        });
         state.changedTables.add(tableName);
         return id;
       },
@@ -1124,7 +1276,10 @@ export class SyncoreRuntime<
         await this.syncSearchIndexes(tableName, row);
         state.changedTables.add(tableName);
       },
-      delete: async <TTableName extends TableNames<TSchema>>(tableName: TTableName, id: string) => {
+      delete: async <TTableName extends TableNames<TSchema>>(
+        tableName: TTableName,
+        id: string
+      ) => {
         await this.options.driver.run(
           `DELETE FROM ${quoteIdentifier(tableName)} WHERE _id = ?`,
           [id]
@@ -1157,7 +1312,10 @@ export class SyncoreRuntime<
               object.path
             ]
           );
-          await this.options.driver.run(`DELETE FROM "_storage_pending" WHERE _id = ?`, [id]);
+          await this.options.driver.run(
+            `DELETE FROM "_storage_pending" WHERE _id = ?`,
+            [id]
+          );
         });
         this.emitDevtools({
           type: "storage.updated",
@@ -1184,10 +1342,9 @@ export class SyncoreRuntime<
         };
       },
       read: async (id) => {
-        const row = await this.options.driver.get<Pick<StorageMetadataRow, "_id">>(
-          `SELECT _id FROM "_storage" WHERE _id = ?`,
-          [id]
-        );
+        const row = await this.options.driver.get<
+          Pick<StorageMetadataRow, "_id">
+        >(`SELECT _id FROM "_storage" WHERE _id = ?`, [id]);
         if (!row) {
           return null;
         }
@@ -1196,8 +1353,14 @@ export class SyncoreRuntime<
       delete: async (id) => {
         await this.options.storage.delete(id);
         await this.options.driver.withTransaction(async () => {
-          await this.options.driver.run(`DELETE FROM "_storage" WHERE _id = ?`, [id]);
-          await this.options.driver.run(`DELETE FROM "_storage_pending" WHERE _id = ?`, [id]);
+          await this.options.driver.run(
+            `DELETE FROM "_storage" WHERE _id = ?`,
+            [id]
+          );
+          await this.options.driver.run(
+            `DELETE FROM "_storage_pending" WHERE _id = ?`,
+            [id]
+          );
         });
         this.emitDevtools({
           type: "storage.updated",
@@ -1215,12 +1378,18 @@ export class SyncoreRuntime<
       runAfter: async (delayMs, reference, ...args) => {
         const [functionArgs, misfirePolicy = { type: "catch_up" }] =
           splitSchedulerArgs(args);
-        return this.scheduleJob(Date.now() + delayMs, reference, functionArgs, misfirePolicy);
+        return this.scheduleJob(
+          Date.now() + delayMs,
+          reference,
+          functionArgs,
+          misfirePolicy
+        );
       },
       runAt: async (timestamp, reference, ...args) => {
         const [functionArgs, misfirePolicy = { type: "catch_up" }] =
           splitSchedulerArgs(args);
-        const value = timestamp instanceof Date ? timestamp.getTime() : timestamp;
+        const value =
+          timestamp instanceof Date ? timestamp.getTime() : timestamp;
         return this.scheduleJob(value, reference, functionArgs, misfirePolicy);
       },
       cancel: async (id) => {
@@ -1291,10 +1460,9 @@ export class SyncoreRuntime<
     );
 
     for (const pendingRow of pendingRows) {
-      const committed = await this.options.driver.get<Pick<StorageMetadataRow, "_id">>(
-        `SELECT _id FROM "_storage" WHERE _id = ?`,
-        [pendingRow._id]
-      );
+      const committed = await this.options.driver.get<
+        Pick<StorageMetadataRow, "_id">
+      >(`SELECT _id FROM "_storage" WHERE _id = ?`, [pendingRow._id]);
       if (!committed) {
         await this.options.storage.delete(pendingRow._id);
         this.emitDevtools({
@@ -1305,18 +1473,19 @@ export class SyncoreRuntime<
           timestamp: Date.now()
         });
       }
-      await this.options.driver.run(`DELETE FROM "_storage_pending" WHERE _id = ?`, [
-        pendingRow._id
-      ]);
+      await this.options.driver.run(
+        `DELETE FROM "_storage_pending" WHERE _id = ?`,
+        [pendingRow._id]
+      );
     }
 
     if (!this.options.storage.list) {
       return;
     }
 
-    const storedRows = await this.options.driver.all<Pick<StorageMetadataRow, "_id">>(
-      `SELECT _id FROM "_storage"`
-    );
+    const storedRows = await this.options.driver.all<
+      Pick<StorageMetadataRow, "_id">
+    >(`SELECT _id FROM "_storage"`);
     const knownIds = new Set(storedRows.map((row) => row._id));
     const physicalObjects = await this.options.storage.list();
     for (const object of physicalObjects) {
@@ -1431,7 +1600,6 @@ export class SyncoreRuntime<
         }
       }
     }
-
   }
 
   private async scheduleJob(
@@ -1486,9 +1654,11 @@ export class SyncoreRuntime<
           Date.now(),
           job.name,
           stableStringify(job.schedule),
-          "timezone" in job.schedule ? job.schedule.timezone ?? null : null,
+          "timezone" in job.schedule ? (job.schedule.timezone ?? null) : null,
           job.misfirePolicy.type,
-          job.misfirePolicy.type === "windowed" ? job.misfirePolicy.windowMs : null
+          job.misfirePolicy.type === "windowed"
+            ? job.misfirePolicy.windowMs
+            : null
         ]
       );
     }
@@ -1503,7 +1673,10 @@ export class SyncoreRuntime<
     const executedJobIds: string[] = [];
 
     for (const job of dueJobs) {
-      const misfirePolicy = parseMisfirePolicy(job.misfire_policy, job.window_ms);
+      const misfirePolicy = parseMisfirePolicy(
+        job.misfire_policy,
+        job.window_ms
+      );
       if (!shouldRunMissedJob(job.run_at, now, misfirePolicy)) {
         await this.advanceOrFinalizeJob(job, "skipped", now);
         continue;
@@ -1605,7 +1778,10 @@ export class SyncoreRuntime<
       record.lastResult = result;
       record.lastError = undefined;
       record.lastRunAt = Date.now();
-      const dependencies = await this.collectQueryDependencies(record.functionName, record.args);
+      const dependencies = await this.collectQueryDependencies(
+        record.functionName,
+        record.args
+      );
       record.dependencyKeys = dependencies;
     } catch (error) {
       record.lastError = error as Error;
@@ -1624,15 +1800,11 @@ export class SyncoreRuntime<
       "query"
     );
     const dependencyCollector = new Set<DependencyKey>();
-    await this.invokeFunction(
-      definition,
-      args,
-      {
-        mutationDepth: 0,
-        changedTables: new Set<string>(),
-        dependencyCollector
-      }
-    );
+    await this.invokeFunction(definition, args, {
+      mutationDepth: 0,
+      changedTables: new Set<string>(),
+      dependencyCollector
+    });
     return dependencyCollector;
   }
 
@@ -1649,7 +1821,12 @@ export class SyncoreRuntime<
         `Function "${reference.name}" is a ${definition.kind}, expected ${expectedKind}.`
       );
     }
-    return definition as SyncoreFunctionDefinition<TKind, unknown, unknown, unknown>;
+    return definition as SyncoreFunctionDefinition<
+      TKind,
+      unknown,
+      unknown,
+      unknown
+    >;
   }
 
   private validateDocument(tableName: string, value: JsonObject): JsonObject {
@@ -1671,7 +1848,10 @@ export class SyncoreRuntime<
     return document as TDocument;
   }
 
-  private async syncSearchIndexes(tableName: string, row: DatabaseRow): Promise<void> {
+  private async syncSearchIndexes(
+    tableName: string,
+    row: DatabaseRow
+  ): Promise<void> {
     const table = this.getTableDefinition(tableName);
     if (table.searchIndexes.length === 0) {
       return;
@@ -1694,7 +1874,10 @@ export class SyncoreRuntime<
     }
   }
 
-  private async removeSearchIndexes(tableName: string, id: string): Promise<void> {
+  private async removeSearchIndexes(
+    tableName: string,
+    id: string
+  ): Promise<void> {
     const table = this.getTableDefinition(tableName);
     for (const searchIndex of table.searchIndexes) {
       if (this.disabledSearchIndexes.has(`${tableName}:${searchIndex.name}`)) {
@@ -1777,9 +1960,7 @@ export class SyncoreRuntime<
     return capabilities;
   }
 
-  private async runPluginHook(
-    hook: "onStart" | "onStop"
-  ): Promise<void> {
+  private async runPluginHook(hook: "onStart" | "onStop"): Promise<void> {
     const context = this.createPluginContext();
     for (const plugin of this.experimentalPlugins) {
       const handler = plugin[hook];
@@ -1794,7 +1975,9 @@ export class SyncoreRuntime<
     for (const tableName of this.options.schema.tableNames()) {
       const table = this.getTableDefinition(tableName);
       for (const searchIndex of table.searchIndexes) {
-        if (statement === renderCreateSearchIndexStatement(tableName, searchIndex)) {
+        if (
+          statement === renderCreateSearchIndexStatement(tableName, searchIndex)
+        ) {
           return `${tableName}:${searchIndex.name}`;
         }
       }
@@ -1802,7 +1985,9 @@ export class SyncoreRuntime<
     return null;
   }
 
-  private getTableDefinition(tableName: string): TableDefinition<Validator<unknown>> {
+  private getTableDefinition(
+    tableName: string
+  ): TableDefinition<Validator<unknown>> {
     return this.options.schema.getTable(
       tableName as TableNames<TSchema>
     ) as TableDefinition<Validator<unknown>>;
@@ -1836,7 +2021,9 @@ function sortValue(value: unknown): unknown {
   return value;
 }
 
-function omitSystemFields<TDocument extends object>(document: TDocument): JsonObject {
+function omitSystemFields<TDocument extends object>(
+  document: TDocument
+): JsonObject {
   const clone = { ...(document as Record<string, unknown>) };
   delete clone._id;
   delete clone._creationTime;
@@ -1850,13 +2037,20 @@ function toSearchValue(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
     return String(value);
   }
   return stableStringify(value);
 }
 
-function parseMisfirePolicy(type: string, windowMs: number | null): MisfirePolicy {
+function parseMisfirePolicy(
+  type: string,
+  windowMs: number | null
+): MisfirePolicy {
   if (type === "windowed") {
     return { type, windowMs: windowMs ?? 0 };
   }
@@ -1886,7 +2080,10 @@ function shouldRunMissedJob(
   }
 }
 
-function computeNextRun(schedule: RecurringSchedule, fromTimestamp: number): number {
+function computeNextRun(
+  schedule: RecurringSchedule,
+  fromTimestamp: number
+): number {
   switch (schedule.type) {
     case "interval":
       return fromTimestamp + intervalToMs(schedule);
@@ -1956,13 +2153,15 @@ export function createFunctionReference<
   TKind extends SyncoreFunctionKind,
   TArgs = Record<never, never>,
   TResult = unknown
->(
-  kind: TKind,
-  name: string
-): FunctionReference<TKind, TArgs, TResult> {
+>(kind: TKind, name: string): FunctionReference<TKind, TArgs, TResult> {
   return { kind, name };
 }
 
+/**
+ * Create a typed function reference from a concrete Syncore function definition.
+ *
+ * Generated code uses this helper to preserve function arg and result inference.
+ */
 export function createFunctionReferenceFor<
   TDefinition extends {
     kind: SyncoreFunctionKind;
@@ -1980,7 +2179,9 @@ export function createFunctionReferenceFor<
   return { kind, name };
 }
 
-function normalizeOptionalArgs<TArgs>(args: [] | [TArgs] | readonly unknown[]): TArgs {
+function normalizeOptionalArgs<TArgs>(
+  args: [] | [TArgs] | readonly unknown[]
+): TArgs {
   return (args[0] ?? {}) as TArgs;
 }
 
@@ -1997,7 +2198,7 @@ function splitSchedulerArgs(
     }
     return [(first ?? {}) as JsonObject, undefined];
   }
-  return [((args[0] ?? {}) as JsonObject), args[1] as MisfirePolicy | undefined];
+  return [(args[0] ?? {}) as JsonObject, args[1] as MisfirePolicy | undefined];
 }
 
 function isMisfirePolicy(value: unknown): value is MisfirePolicy {

@@ -9,9 +9,12 @@ import {
   type QueryCtx
 } from "syncore";
 import { defineSchema, defineTable, v } from "@syncore/schema";
-import { createWebSyncoreRuntime } from "./index.js";
+import { createWebSyncoreRuntime, createWebWorkerRuntime } from "./index.js";
 
-const wasmFilePath = path.resolve(process.cwd(), "node_modules/sql.js/dist/sql-wasm.wasm");
+const wasmFilePath = path.resolve(
+  process.cwd(),
+  "node_modules/sql.js/dist/sql-wasm.wasm"
+);
 
 describe("platform-web sql.js runtime", () => {
   beforeEach(async () => {
@@ -55,10 +58,11 @@ describe("platform-web sql.js runtime", () => {
       locateFile: () => wasmFilePath
     });
     await firstRuntime.start();
-    await firstRuntime.createClient().mutation(
-      createFunctionReference("mutation", "todos/create"),
-      { title: "Persist me" }
-    );
+    await firstRuntime
+      .createClient()
+      .mutation(createFunctionReference("mutation", "todos/create"), {
+        title: "Persist me"
+      });
     await firstRuntime.stop();
 
     const secondRuntime = await createWebSyncoreRuntime({
@@ -69,19 +73,66 @@ describe("platform-web sql.js runtime", () => {
       locateFile: () => wasmFilePath
     });
     await secondRuntime.start();
-    const rows = await secondRuntime.createClient().query(
-      createFunctionReference<
-        "query",
-        Record<never, never>,
-        Array<{ title: string }>
-      >(
-        "query",
-        "todos/list"
-      )
-    );
+    const rows = await secondRuntime
+      .createClient()
+      .query(
+        createFunctionReference<
+          "query",
+          Record<never, never>,
+          Array<{ title: string }>
+        >("query", "todos/list")
+      );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.title).toBe("Persist me");
     await secondRuntime.stop();
+  });
+
+  it("creates a worker runtime attachment with one helper", async () => {
+    const messages: unknown[] = [];
+    const listeners = new Set<(event: MessageEvent<unknown>) => void>();
+    const endpoint = {
+      postMessage(message: unknown) {
+        messages.push(message);
+      },
+      addEventListener(
+        _type: "message",
+        listener: (event: MessageEvent<unknown>) => void
+      ) {
+        listeners.add(listener);
+      },
+      removeEventListener(
+        _type: "message",
+        listener: (event: MessageEvent<unknown>) => void
+      ) {
+        listeners.delete(listener);
+      }
+    };
+
+    const schema = defineSchema({
+      todos: defineTable({
+        title: v.string(),
+        complete: v.boolean()
+      })
+    });
+    const functions = {
+      "todos/list": query({
+        args: {},
+        returns: v.array(v.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
+      })
+    };
+
+    const attached = createWebWorkerRuntime({
+      endpoint,
+      schema,
+      functions,
+      locateFile: () => wasmFilePath,
+      persistenceDatabaseName: "syncore-web-test"
+    });
+
+    await attached.ready;
+    expect(messages).toContainEqual({ type: "runtime.ready" });
+    await attached.dispose();
   });
 });
 
@@ -90,7 +141,12 @@ async function deleteDatabase(name: string): Promise<void> {
     const request = indexedDB.deleteDatabase(name);
     request.onsuccess = () => resolve();
     request.onerror = () =>
-      reject(request.error ?? new Error(`Failed to delete IndexedDB database "${name}".`));
+      reject(
+        request.error ??
+          new Error(
+            `Failed to delete IndexedDB database ${JSON.stringify(name)}.`
+          )
+      );
     request.onblocked = () => resolve();
   });
 }

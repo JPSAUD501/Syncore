@@ -4,11 +4,9 @@
 
 ```ts
 
+import { AnySyncoreSchema } from 'syncore';
 import { DevtoolsSink } from 'syncore';
-import { FunctionArgs } from 'syncore';
 import { FunctionReference } from 'syncore';
-import { FunctionResult } from 'syncore';
-import { JsonObject } from 'syncore';
 import { SchedulerOptions } from 'syncore';
 import { StorageObject } from 'syncore';
 import { StorageWriteInput } from 'syncore';
@@ -18,7 +16,6 @@ import { SyncoreClient } from 'syncore';
 import { SyncoreExperimentalPlugin } from 'syncore';
 import { SyncoreRuntime } from 'syncore';
 import { SyncoreRuntimeOptions } from 'syncore';
-import { SyncoreSchema } from '@syncore/schema';
 import { SyncoreStorageAdapter } from 'syncore';
 import { SyncoreWatch } from 'syncore';
 
@@ -60,6 +57,9 @@ export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
 export function createManagedWebWorkerClient(options: {
     createWorker: () => Worker;
 }): ManagedWebWorkerClient;
+
+// @public (undocumented)
+export function createSyncoreWebWorkerClient(options: CreateWebWorkerClientProviderOptions): ManagedWebWorkerClient;
 
 // @public (undocumented)
 export function createWebPersistence(options?: CreateWebPersistenceOptions): Promise<SyncoreWebPersistence>;
@@ -120,6 +120,25 @@ export function createWebSyncoreRuntime(options: CreateWebRuntimeOptions): Promi
 
 // @public (undocumented)
 export function createWebWorkerClient(endpoint: SyncoreWorkerMessageEndpoint): SyncoreWebWorkerClient;
+
+// @public (undocumented)
+export interface CreateWebWorkerClientProviderOptions {
+    // (undocumented)
+    workerName?: string;
+    // (undocumented)
+    workerType?: WorkerOptions["type"];
+    // (undocumented)
+    workerUrl: URL | string;
+}
+
+// @public (undocumented)
+export function createWebWorkerRuntime(options: CreateWebWorkerRuntimeOptions): AttachedWebWorkerRuntime;
+
+// @public (undocumented)
+export interface CreateWebWorkerRuntimeOptions extends CreateWebRuntimeOptions {
+    // (undocumented)
+    endpoint: SyncoreWorkerMessageEndpoint;
+}
 
 // @public (undocumented)
 export interface IndexedDbPersistenceOptions {
@@ -218,17 +237,17 @@ export interface SyncoreWebPersistence {
 export class SyncoreWebWorkerClient implements SyncoreClient {
     constructor(endpoint: SyncoreWorkerMessageEndpoint);
     // (undocumented)
-    action<TReference extends FunctionReference<"action", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     dispose(): void;
     // (undocumented)
-    mutation<TReference extends FunctionReference<"mutation", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
-    query<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
-    watchQuery<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): WorkerQueryWatch<FunctionResult<TReference>>;
+    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): WorkerQueryWatch<TResult>;
 }
 
 // @public (undocumented)
@@ -245,10 +264,10 @@ export interface SyncoreWorkerMessageEndpoint {
 export type WebPersistenceMode = "auto" | "indexeddb" | "opfs";
 
 // @public (undocumented)
-export type WebSyncoreSchema = SyncoreSchema<any>;
+export type WebSyncoreSchema = AnySyncoreSchema;
 
 // @public (undocumented)
-export type WebWorkerSyncoreSchema = SyncoreSchema<any>;
+export type WebWorkerSyncoreSchema = AnySyncoreSchema;
 
 // @public (undocumented)
 export type WorkerQueryWatch<TValue> = SyncoreWatch<TValue> & {

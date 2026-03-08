@@ -10,8 +10,23 @@ export type ValidatorKind =
   | "any"
   | "null";
 
+/**
+ * Validates unknown input at runtime and carries its parsed TypeScript type.
+ *
+ * Syncore uses validators for function arguments, return values, and table
+ * definitions. Most apps create validators through {@link v} instead of
+ * instantiating validator classes directly.
+ */
 export interface Validator<TValue> {
   readonly kind: ValidatorKind;
+
+  /**
+   * Parse and validate an unknown value.
+   *
+   * @param value - The value to validate.
+   * @param path - A human-readable path used in validation errors.
+   * @returns The parsed value when validation succeeds.
+   */
   parse(value: unknown, path?: string): TValue;
 }
 
@@ -83,9 +98,9 @@ export class AnyValidator implements Validator<unknown> {
   }
 }
 
-export class LiteralValidator<TValue extends string | number | boolean | null>
-  implements Validator<TValue>
-{
+export class LiteralValidator<
+  TValue extends string | number | boolean | null
+> implements Validator<TValue> {
   readonly kind = "literal" as const;
 
   constructor(public readonly literalValue: TValue) {}
@@ -113,9 +128,9 @@ export class ArrayValidator<TItem> implements Validator<TItem[]> {
   }
 }
 
-export class ObjectValidator<TShape extends ObjectValidatorShape>
-  implements Validator<{ [TKey in keyof TShape]: Infer<TShape[TKey]> }>
-{
+export class ObjectValidator<
+  TShape extends ObjectValidatorShape
+> implements Validator<{ [TKey in keyof TShape]: Infer<TShape[TKey]> }> {
   readonly kind = "object" as const;
 
   constructor(public readonly shape: TShape) {}
@@ -144,9 +159,9 @@ export class ObjectValidator<TShape extends ObjectValidatorShape>
   }
 }
 
-export class IdValidator<TTableName extends string>
-  implements Validator<string>
-{
+export class IdValidator<
+  TTableName extends string
+> implements Validator<string> {
   readonly kind = "id" as const;
 
   constructor(public readonly tableName: TTableName) {}
@@ -159,9 +174,9 @@ export class IdValidator<TTableName extends string>
   }
 }
 
-export class OptionalValidator<TValue>
-  implements Validator<TValue | undefined>
-{
+export class OptionalValidator<TValue> implements Validator<
+  TValue | undefined
+> {
   readonly kind = "optional" as const;
 
   constructor(public readonly inner: Validator<TValue>) {}
@@ -174,13 +189,103 @@ export class OptionalValidator<TValue>
   }
 }
 
-export type Infer<TValidator> = TValidator extends Validator<infer TValue>
-  ? TValue
-  : never;
+export type Infer<TValidator> =
+  TValidator extends Validator<infer TValue> ? TValue : never;
 
 export type ValidatorMap = Record<string, Validator<unknown>>;
 
-function isValidator(value: Validator<unknown> | ValidatorMap): value is Validator<unknown> {
+/**
+ * The public validator builder API.
+ *
+ * Hover each property in your editor to see what it validates and how to use it.
+ */
+export interface ValidatorBuilderApi {
+  /**
+   * Validate a string value.
+   *
+   * @returns A validator that accepts JavaScript strings.
+   */
+  string(): StringValidator;
+
+  /**
+   * Validate a number value.
+   *
+   * @returns A validator that accepts finite JavaScript numbers.
+   */
+  number(): NumberValidator;
+
+  /**
+   * Validate a boolean value.
+   *
+   * @returns A validator that accepts `true` and `false`.
+   */
+  boolean(): BooleanValidator;
+
+  /**
+   * Validate the literal value `null`.
+   *
+   * @returns A validator that only accepts `null`.
+   */
+  null(): NullValidator;
+
+  /**
+   * Accept any value without validation.
+   *
+   * Use this sparingly for escape hatches when you do not want Syncore to
+   * enforce a more specific runtime shape.
+   */
+  any(): AnyValidator;
+
+  /**
+   * Validate a single literal value.
+   *
+   * @param literalValue - The exact value that must be provided.
+   * @returns A validator that only accepts that one value.
+   */
+  literal<TValue extends string | number | boolean | null>(
+    literalValue: TValue
+  ): LiteralValidator<TValue>;
+
+  /**
+   * Validate an array whose items all use the same validator.
+   *
+   * @param itemValidator - The validator for each item in the array.
+   * @returns A validator for arrays of the provided item type.
+   */
+  array<TItem>(itemValidator: Validator<TItem>): ArrayValidator<TItem>;
+
+  /**
+   * Validate an object with a fixed property shape.
+   *
+   * @param shape - The validators for each property on the object.
+   * @returns A validator for objects matching that shape.
+   */
+  object<TShape extends ObjectValidatorShape>(
+    shape: TShape
+  ): ObjectValidator<TShape>;
+
+  /**
+   * Validate an identifier string that points at a table.
+   *
+   * Use this for document ids that come from Syncore tables.
+   *
+   * @param tableName - The name of the referenced table.
+   * @returns A validator for ids belonging to that table.
+   */
+  id<TTableName extends string>(tableName: TTableName): IdValidator<TTableName>;
+
+  /**
+   * Make another validator optional.
+   *
+   * @param inner - The validator for the defined case.
+   * @returns A validator that accepts `undefined` or the inner value.
+   */
+  optional<TValue>(inner: Validator<TValue>): OptionalValidator<TValue>;
+}
+
+function isValidator(
+  value: Validator<unknown> | ValidatorMap
+): value is Validator<unknown> {
   return typeof (value as Validator<unknown>).parse === "function";
 }
 
@@ -193,7 +298,19 @@ export function ensureObjectValidator(
   return new ObjectValidator(value);
 }
 
-export const v = {
+/**
+ * Build runtime validators for schemas, function args, and return values.
+ *
+ * @example
+ * ```ts
+ * defineTable({
+ *   text: v.string(),
+ *   done: v.boolean(),
+ *   ownerId: v.optional(v.id("users"))
+ * });
+ * ```
+ */
+export const v: ValidatorBuilderApi = {
   string: () => new StringValidator(),
   number: () => new NumberValidator(),
   boolean: () => new BooleanValidator(),
@@ -224,15 +341,19 @@ export function describeValidator(
     case "literal":
       return {
         kind: "literal",
-        value: (validator as LiteralValidator<string | number | boolean | null>).literalValue
+        value: (validator as LiteralValidator<string | number | boolean | null>)
+          .literalValue
       };
     case "array":
       return {
         kind: "array",
-        item: describeValidator((validator as ArrayValidator<unknown>).itemValidator)
+        item: describeValidator(
+          (validator as ArrayValidator<unknown>).itemValidator
+        )
       };
     case "object": {
-      const objectValidator = validator as ObjectValidator<ObjectValidatorShape>;
+      const objectValidator =
+        validator as ObjectValidator<ObjectValidatorShape>;
       return {
         kind: "object",
         shape: Object.fromEntries(
@@ -251,7 +372,9 @@ export function describeValidator(
     case "optional":
       return {
         kind: "optional",
-        inner: describeValidator((validator as OptionalValidator<unknown>).inner)
+        inner: describeValidator(
+          (validator as OptionalValidator<unknown>).inner
+        )
       };
   }
 }

@@ -12,6 +12,8 @@ const bootstrap = createExpoSyncoreBootstrap({
   }
 });
 
+export const syncore = bootstrap;
+
 export function createExampleRuntime() {
   return bootstrap.getRuntime();
 }

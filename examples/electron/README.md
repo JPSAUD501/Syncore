@@ -1,11 +1,12 @@
 # Electron example
 
-This example shows the intended desktop setup:
+This example shows the intended desktop setup after the quickstart, with a fuller smoke-tested integration:
 
 - Syncore runtime in the Electron main process
 - renderer talks to Syncore through a safe preload bridge
 - SQLite and file storage stay local on disk
 - optional devtools connection goes to `ws://127.0.0.1:4311`
+- the main process uses the short-form `bindElectronWindowToSyncoreRuntime({ ipcMain, ... })` helper
 
 ## Files
 
@@ -15,6 +16,9 @@ This example shows the intended desktop setup:
 - [`src/renderer/App.tsx`](D:\GitHub\Syncore\examples\electron\src\renderer\App.tsx)
 - [`syncore/schema.ts`](D:\GitHub\Syncore\examples\electron\syncore\schema.ts)
 - [`syncore/functions/tasks.ts`](D:\GitHub\Syncore\examples\electron\syncore\functions\tasks.ts)
+
+The renderer uses `SyncoreElectronProvider`, so app code no longer needs to
+manually create and dispose the renderer client.
 
 ## Commands
 

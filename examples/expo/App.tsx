@@ -1,4 +1,5 @@
-import { SyncoreProvider, useMutation, useQuery } from "@syncore/react";
+import { SyncoreExpoProvider } from "@syncore/platform-expo";
+import { useMutation, useQuery } from "@syncore/react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,15 +12,13 @@ import {
   TextInput,
   View
 } from "react-native";
-import type { SyncoreClient } from "syncore";
-import { createExampleRuntime, resetSyncore, startSyncore } from "./lib/syncore";
+import { createExampleRuntime, resetSyncore, syncore } from "./lib/syncore";
 import { api } from "./syncore/_generated/api";
 
 type AppMode = "loading" | "notes" | "smoke";
 
 export default function App() {
   const [mode, setMode] = useState<AppMode>("loading");
-  const [client, setClient] = useState<SyncoreClient | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,13 +28,19 @@ export default function App() {
       if (cancelled) {
         return;
       }
-      setMode(initialUrl?.startsWith("syncore-expo-example://smoke") ? "smoke" : "notes");
+      setMode(
+        initialUrl?.startsWith("syncore-expo-example://smoke")
+          ? "smoke"
+          : "notes"
+      );
     };
 
     void resolveMode();
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
-      setMode(url.startsWith("syncore-expo-example://smoke") ? "smoke" : "notes");
+      setMode(
+        url.startsWith("syncore-expo-example://smoke") ? "smoke" : "notes"
+      );
     });
 
     return () => {
@@ -43,23 +48,6 @@ export default function App() {
       subscription.remove();
     };
   }, []);
-
-  useEffect(() => {
-    if (mode !== "notes") {
-      return;
-    }
-
-    let cancelled = false;
-    void startSyncore().then((nextClient) => {
-      if (!cancelled) {
-        setClient(nextClient);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mode]);
 
   if (mode === "loading") {
     return (
@@ -74,29 +62,30 @@ export default function App() {
     return <ExpoSmokeHarness />;
   }
 
-  if (!client) {
-    return (
-      <SafeAreaView style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color="#ffb454" />
-        <Text style={styles.loadingText}>Booting Syncore locally...</Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SyncoreProvider client={client}>
+    <SyncoreExpoProvider
+      bootstrap={syncore}
+      fallback={
+        <SafeAreaView style={styles.loadingScreen}>
+          <ActivityIndicator size="large" color="#ffb454" />
+          <Text style={styles.loadingText}>Booting Syncore locally...</Text>
+        </SafeAreaView>
+      }
+    >
       <NotesScreen />
-    </SyncoreProvider>
+    </SyncoreExpoProvider>
   );
 }
 
 function NotesScreen() {
   const [draft, setDraft] = useState("");
-  const rawNotes = useQuery(api.notes.list);
-  const notes = useMemo(() => rawNotes ?? [], [rawNotes]);
+  const notes = useQuery(api.notes.list) ?? [];
   const createNote = useMutation(api.notes.create);
   const togglePinned = useMutation(api.notes.togglePinned);
-  const pinnedNotes = useMemo(() => notes.filter((note) => note.pinned), [notes]);
+  const pinnedNotes = useMemo(
+    () => notes.filter((note) => note.pinned),
+    [notes]
+  );
 
   const handleCreate = async () => {
     if (!draft.trim()) {
@@ -110,10 +99,12 @@ function NotesScreen() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.eyebrow}>Expo + local SQLite</Text>
-        <Text style={styles.title}>Syncore runs on-device, no backend required.</Text>
+        <Text style={styles.title}>
+          Syncore runs on-device, no backend required.
+        </Text>
         <Text style={styles.subtitle}>
-          Notes are stored locally, queries stay reactive, and the UI only talks to typed
-          functions.
+          Notes are stored locally, queries stay reactive, and the UI only talks
+          to typed functions.
         </Text>
 
         <View style={styles.composer}>
@@ -124,7 +115,10 @@ function NotesScreen() {
             placeholderTextColor="#9ba6b2"
             style={styles.input}
           />
-          <Pressable onPress={() => void handleCreate()} style={styles.primaryButton}>
+          <Pressable
+            onPress={() => void handleCreate()}
+            style={styles.primaryButton}
+          >
             <Text style={styles.primaryButtonText}>Add note</Text>
           </Pressable>
         </View>
@@ -210,7 +204,10 @@ function ExpoSmokeHarness() {
 }
 
 async function runSmoke(
-  updateStatus: (status: { state: "running" | "pass" | "fail"; message: string }) => void
+  updateStatus: (status: {
+    state: "running" | "pass" | "fail";
+    message: string;
+  }) => void
 ): Promise<void> {
   const runId = Date.now();
   const createdBody = `Created note ${runId}`;
@@ -218,24 +215,35 @@ async function runSmoke(
   const skipBody = `Skip note ${runId}`;
 
   try {
-    updateStatus({ state: "running", message: "Resetting the local runtime..." });
+    updateStatus({
+      state: "running",
+      message: "Resetting the local runtime..."
+    });
     await resetSyncore();
 
     const runtime1 = createExampleRuntime();
     await runtime1.start();
     const client1 = runtime1.createClient();
 
-    updateStatus({ state: "running", message: "Preparing a clean local note set..." });
+    updateStatus({
+      state: "running",
+      message: "Preparing a clean local note set..."
+    });
     await client1.mutation(api.notes.resetAll);
 
     const watch = client1.watchQuery(api.notes.list);
     await waitFor(() => Array.isArray(watch.localQueryResult()), 3_000);
 
-    updateStatus({ state: "running", message: "Creating and reacting to a local note..." });
+    updateStatus({
+      state: "running",
+      message: "Creating and reacting to a local note..."
+    });
     await client1.mutation(api.notes.create, { body: createdBody });
     await waitFor(
       () =>
-        (watch.localQueryResult() ?? []).some((note) => note.body === createdBody),
+        (watch.localQueryResult() ?? []).some(
+          (note) => note.body === createdBody
+        ),
       3_000
     );
 
@@ -243,16 +251,24 @@ async function runSmoke(
       (note) => note.body === createdBody
     );
     if (!createdNote) {
-      throw new Error("The created note never became visible through the query.");
+      throw new Error(
+        "The created note never became visible through the query."
+      );
     }
 
-    updateStatus({ state: "running", message: "Toggling pinned state before restart..." });
+    updateStatus({
+      state: "running",
+      message: "Toggling pinned state before restart..."
+    });
     await client1.mutation(api.notes.togglePinned, {
       id: createdNote._id,
       pinned: true
     });
 
-    updateStatus({ state: "running", message: "Scheduling catch-up and skip jobs..." });
+    updateStatus({
+      state: "running",
+      message: "Scheduling catch-up and skip jobs..."
+    });
     await client1.mutation(api.notes.scheduleCreateCatchUp, {
       body: catchUpBody,
       delayMs: 120
@@ -266,7 +282,10 @@ async function runSmoke(
     await runtime1.stop();
     await wait(240);
 
-    updateStatus({ state: "running", message: "Restarting the runtime to reconcile jobs..." });
+    updateStatus({
+      state: "running",
+      message: "Restarting the runtime to reconcile jobs..."
+    });
     const runtime2 = createExampleRuntime();
     await runtime2.start();
     const client2 = runtime2.createClient();
@@ -274,14 +293,20 @@ async function runSmoke(
     await wait(200);
     const afterRestart = await client2.query(api.notes.list);
 
-    if (!afterRestart.some((note) => note.body === createdBody && note.pinned)) {
-      throw new Error("The original note did not persist with its pinned state.");
+    if (
+      !afterRestart.some((note) => note.body === createdBody && note.pinned)
+    ) {
+      throw new Error(
+        "The original note did not persist with its pinned state."
+      );
     }
     if (!afterRestart.some((note) => note.body === catchUpBody)) {
       throw new Error("The catch-up scheduler job did not run after restart.");
     }
     if (afterRestart.some((note) => note.body === skipBody)) {
-      throw new Error("The skip scheduler job should not run after the missed window.");
+      throw new Error(
+        "The skip scheduler job should not run after the missed window."
+      );
     }
 
     await runtime2.stop();
@@ -301,7 +326,10 @@ async function runSmoke(
   }
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<void> {
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs: number
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
     if (Date.now() > deadline) {

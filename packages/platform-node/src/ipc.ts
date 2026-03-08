@@ -4,8 +4,10 @@ import type {
   JsonObject,
   SyncoreClient,
   SyncoreRuntime,
-  SyncoreWatch,
+  SyncoreWatch
 } from "syncore";
+import { createElement, useEffect, useMemo, type ReactNode } from "react";
+import { SyncoreProvider } from "@syncore/react";
 
 export type NodeIpcSyncoreSchema = AnySyncoreSchema;
 
@@ -104,9 +106,8 @@ export type RendererQueryWatch<TValue> = SyncoreWatch<TValue> & {
   dispose(): void;
 };
 
-type OptionalArgsTuple<TArgs> = Record<never, never> extends TArgs
-  ? [args?: TArgs]
-  : [args: TArgs];
+type OptionalArgsTuple<TArgs> =
+  Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
 export class SyncoreRendererClient implements SyncoreClient {
   private readonly pendingRequests = new Map<string, PendingRequest>();
@@ -140,7 +141,9 @@ export class SyncoreRendererClient implements SyncoreClient {
         return;
       }
       case "watch.update": {
-        const watchKey = this.watchKeyBySubscriptionId.get(message.subscriptionId);
+        const watchKey = this.watchKeyBySubscriptionId.get(
+          message.subscriptionId
+        );
         if (!watchKey) {
           return;
         }
@@ -169,21 +172,33 @@ export class SyncoreRendererClient implements SyncoreClient {
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult> {
-    return this.invoke("query", reference, normalizeOptionalArgs(args) as JsonObject);
+    return this.invoke(
+      "query",
+      reference,
+      normalizeOptionalArgs(args) as JsonObject
+    );
   }
 
   mutation<TArgs, TResult>(
     reference: FunctionReference<"mutation", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult> {
-    return this.invoke("mutation", reference, normalizeOptionalArgs(args) as JsonObject);
+    return this.invoke(
+      "mutation",
+      reference,
+      normalizeOptionalArgs(args) as JsonObject
+    );
   }
 
   action<TArgs, TResult>(
     reference: FunctionReference<"action", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult> {
-    return this.invoke("action", reference, normalizeOptionalArgs(args) as JsonObject);
+    return this.invoke(
+      "action",
+      reference,
+      normalizeOptionalArgs(args) as JsonObject
+    );
   }
 
   watchQuery<TArgs, TResult>(
@@ -285,7 +300,11 @@ export class SyncoreRendererClient implements SyncoreClient {
   ): Promise<TResult>;
   private invoke<TArgs, TResult>(
     kind: "query" | "mutation" | "action",
-    reference: FunctionReference<"query" | "mutation" | "action", TArgs, TResult>,
+    reference: FunctionReference<
+      "query" | "mutation" | "action",
+      TArgs,
+      TResult
+    >,
     args: JsonObject
   ): Promise<TResult> {
     this.ensureNotDisposed();
@@ -298,7 +317,9 @@ export class SyncoreRendererClient implements SyncoreClient {
       case "query":
       case "mutation":
       case "action":
-        this.endpoint.postMessage(createInvokeRequest(requestId, kind, reference, args));
+        this.endpoint.postMessage(
+          createInvokeRequest(requestId, kind, reference, args)
+        );
         break;
     }
 
@@ -331,9 +352,23 @@ export interface SyncoreRendererBridge {
   onMessage(listener: (message: unknown) => void): () => void;
 }
 
+export interface SyncoreWindowBridge {
+  postMessage(message: unknown): void;
+  onMessage(listener: (message: unknown) => void): () => void;
+}
+
 export interface SyncoreMainProcessBridge {
   postMessage(message: unknown): void;
   onMessage(listener: (message: unknown) => void): () => void;
+}
+
+/**
+ * Install the default Electron preload bridge used by Syncore renderer helpers.
+ */
+export function installSyncoreWindowBridge(options?: {
+  bridgeName?: string;
+}): string {
+  return `(function(){const bridgeName=${JSON.stringify(options?.bridgeName ?? "syncoreBridge")};const {contextBridge,ipcRenderer}=require("electron");const channel="syncore:message";const listeners=new Map();contextBridge.exposeInMainWorld(bridgeName,{postMessage(message){ipcRenderer.send(channel,message);},onMessage(listener){const wrapped=(_event,payload)=>{listener(payload);};listeners.set(listener,wrapped);ipcRenderer.on(channel,wrapped);return()=>{ipcRenderer.off(channel,wrapped);listeners.delete(listener);};}});})();`;
 }
 
 export interface AttachedNodeIpcRuntime {
@@ -341,12 +376,32 @@ export interface AttachedNodeIpcRuntime {
   dispose(): Promise<void>;
 }
 
+/**
+ * Props for {@link SyncoreElectronProvider}.
+ */
+export interface SyncoreElectronProviderProps {
+  /** The React subtree that should receive the renderer Syncore client. */
+  children: ReactNode;
+
+  /** Optional custom bridge name exposed on `window`. */
+  bridgeName?: string;
+
+  /** Optional window-like object for tests or custom shells. */
+  windowObject?: Window & typeof globalThis;
+}
+
+/**
+ * Create a renderer client from a low-level IPC message endpoint.
+ */
 export function createRendererSyncoreClient(
   endpoint: SyncoreIpcMessageEndpoint
 ): SyncoreRendererClient {
   return new SyncoreRendererClient(endpoint);
 }
 
+/**
+ * Create a renderer client from a bridge object exposed by preload code.
+ */
 export function createRendererSyncoreBridgeClient(
   bridge: SyncoreRendererBridge
 ): SyncoreRendererClient {
@@ -372,6 +427,58 @@ export function createRendererSyncoreBridgeClient(
       listeners.delete(listener);
     }
   });
+}
+
+/**
+ * Create a renderer client from `window.syncoreBridge` or another named bridge.
+ */
+export function createRendererSyncoreWindowClient(
+  windowObject: Window & typeof globalThis,
+  bridgeName = "syncoreBridge"
+): SyncoreRendererClient {
+  const bridge = (
+    windowObject as typeof windowObject & Record<string, unknown>
+  )[bridgeName];
+  if (!bridge || typeof bridge !== "object") {
+    throw new Error(`Missing window.${bridgeName} bridge.`);
+  }
+
+  const candidate = bridge as SyncoreWindowBridge;
+  if (
+    typeof candidate.postMessage !== "function" ||
+    typeof candidate.onMessage !== "function"
+  ) {
+    throw new Error(
+      `window.${bridgeName} must expose postMessage() and onMessage().`
+    );
+  }
+
+  return createRendererSyncoreBridgeClient(candidate);
+}
+
+/**
+ * Create a renderer Syncore client from `window.syncoreBridge` and provide it to React.
+ *
+ * This is the shortest recommended setup for Electron renderers.
+ */
+export function SyncoreElectronProvider({
+  children,
+  bridgeName,
+  windowObject
+}: SyncoreElectronProviderProps) {
+  const resolvedWindow = windowObject ?? window;
+  const client = useMemo(
+    () =>
+      createRendererSyncoreWindowClient(
+        resolvedWindow,
+        bridgeName ?? "syncoreBridge"
+      ),
+    [bridgeName, resolvedWindow]
+  );
+
+  useEffect(() => () => client.dispose(), [client]);
+
+  return createElement(SyncoreProvider, { client, children });
 }
 
 export function createNodeIpcMessageEndpoint(
@@ -418,16 +525,22 @@ export function attachNodeIpcRuntime(
     }
   >();
 
-  const runtimePromise = Promise.resolve(options.createRuntime()).then(async (runtime) => {
-    await runtime.start();
-    return runtime;
-  });
+  const runtimePromise = Promise.resolve(options.createRuntime()).then(
+    async (runtime) => {
+      await runtime.start();
+      return runtime;
+    }
+  );
 
-  const clientPromise = runtimePromise.then((runtime) => runtime.createClient());
+  const clientPromise = runtimePromise.then((runtime) =>
+    runtime.createClient()
+  );
 
   const ready = clientPromise
     .then(() => {
-      options.endpoint.postMessage({ type: "runtime.ready" } satisfies SyncoreIpcResponse);
+      options.endpoint.postMessage({
+        type: "runtime.ready"
+      } satisfies SyncoreIpcResponse);
     })
     .catch((error) => {
       options.endpoint.postMessage({
@@ -500,7 +613,8 @@ export function attachNodeIpcRuntime(
           }
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         if (message.type === "invoke") {
           options.endpoint.postMessage({
             type: "invoke.result",
@@ -581,7 +695,9 @@ function createWatchKey(
   return `${reference.name}:${stableStringify(args)}`;
 }
 
-function normalizeOptionalArgs<TArgs>(args: [] | [TArgs] | readonly unknown[]): TArgs {
+function normalizeOptionalArgs<TArgs>(
+  args: [] | [TArgs] | readonly unknown[]
+): TArgs {
   return (args[0] ?? {}) as TArgs;
 }
 

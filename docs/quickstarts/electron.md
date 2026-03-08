@@ -1,31 +1,31 @@
 # Electron Quickstart
 
-In Electron, Syncore should live in the main process. The renderer only talks to typed functions through IPC.
+In Electron, Syncore should live in the main process. The renderer only talks to
+typed functions through the IPC bridge.
 
-## 1. Install packages
+## 1. Create the app host
 
-```bash
-npm install syncore @syncore/react @syncore/platform-node react react-dom
-```
+Start from an Electron app that already builds a `src/main.ts`, a preload script,
+and a React renderer.
 
-## 2. Create the backend
-
-Create:
-
-```text
-syncore/
-  schema.ts
-  functions/
-    tasks.ts
-```
-
-Generate the typed API:
+## 2. Install packages
 
 ```bash
-npx syncore codegen
+npm install syncore @syncore/react @syncore/platform-node react react-dom electron
 ```
 
-## 3. Start the runtime in the main process
+## 3. Start the Syncore dev loop
+
+Run this in one terminal and leave it running:
+
+```bash
+npx syncore dev
+```
+
+If this is a fresh app, Syncore scaffolds a minimal local backend for you and
+keeps `syncore/_generated/*` up to date.
+
+## 4. Start the runtime in the main process
 
 `src/main.ts`
 
@@ -33,14 +33,12 @@ npx syncore codegen
 import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import {
-  attachNodeIpcRuntime,
-  createNodeIpcMessageEndpoint,
+  bindElectronWindowToSyncoreRuntime,
   createNodeSyncoreRuntime
 } from "@syncore/platform-node";
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
-const channel = "syncore:message";
 const runtime = createNodeSyncoreRuntime({
   databasePath: path.join(app.getPath("userData"), "syncore.db"),
   storageDirectory: path.join(app.getPath("userData"), "storage"),
@@ -49,56 +47,55 @@ const runtime = createNodeSyncoreRuntime({
   platform: "electron-main"
 });
 
-function bindWindow(window: BrowserWindow) {
-  const listeners = new Set<(message: unknown) => void>();
-  const endpoint = createNodeIpcMessageEndpoint({
-    postMessage(message) {
-      window.webContents.send(channel, message);
-    },
-    onMessage(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
+async function createWindow() {
+  const window = new BrowserWindow({
+    webPreferences: {
+      preload: path.join(import.meta.dirname, "preload.cjs"),
+      contextIsolation: true
     }
   });
 
-  ipcMain.on(channel, (_event, message) => {
-    for (const listener of listeners) {
-      listener(message);
-    }
+  const binding = bindElectronWindowToSyncoreRuntime({
+    runtime,
+    window,
+    ipcMain
   });
 
-  return attachNodeIpcRuntime({
-    endpoint,
-    createRuntime: () => runtime
+  await binding.ready;
+  await window.loadURL("http://localhost:5173");
+
+  window.on("closed", () => {
+    void binding.dispose();
   });
 }
+
+void app.whenReady().then(createWindow);
 ```
 
-## 4. Use the renderer helper
+## 5. Keep preload narrow
+
+`src/preload.cjs`
+
+```js
+const { installSyncoreWindowBridge } = require("@syncore/platform-node/ipc");
+
+eval(installSyncoreWindowBridge());
+```
+
+## 6. Use the renderer provider
 
 `src/renderer/App.tsx`
 
 ```tsx
-import { createRendererSyncoreBridgeClient } from "@syncore/platform-node/ipc";
-import { SyncoreProvider, useQuery } from "@syncore/react";
+import { SyncoreElectronProvider } from "@syncore/platform-node/ipc";
+import { useQuery } from "@syncore/react";
 import { api } from "../../syncore/_generated/api";
-
-declare global {
-  interface Window {
-    syncoreBridge: {
-      postMessage(message: unknown): void;
-      onMessage(listener: (message: unknown) => void): () => void;
-    };
-  }
-}
-
-const client = createRendererSyncoreBridgeClient(window.syncoreBridge);
 
 export function App() {
   return (
-    <SyncoreProvider client={client}>
+    <SyncoreElectronProvider>
       <Tasks />
-    </SyncoreProvider>
+    </SyncoreElectronProvider>
   );
 }
 
@@ -108,8 +105,13 @@ function Tasks() {
 }
 ```
 
-## 5. Keep the preload narrow
+## 7. Run the app
 
-Expose only the bridge methods the renderer needs. Do not put SQLite in the renderer process.
+In a second terminal, start your renderer dev server and then Electron. Confirm
+that tasks read and write through the main-process runtime.
 
-See `examples/electron` for the full working setup and smoke-tested path.
+To preload sample data from JSONL, use:
+
+```bash
+npx syncore import --table tasks sampleData.jsonl
+```

@@ -4,6 +4,9 @@
 
 ```ts
 
+// @public (undocumented)
+export function runSyncoreCli(argv?: string[]): Promise<void>;
+
 // (No @packageDocumentation comment for this package)
 
 ```

@@ -5,18 +5,23 @@
 ```ts
 
 // @public (undocumented)
-export function action<TContext = unknown, TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap, TResult = unknown>(config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
+export function action<TContext = unknown, TValidator extends Validator<unknown> = Validator<unknown>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
+    args: TValidator;
+}): SyncoreFunctionDefinition<"action", TContext, Infer<TValidator>, TResult>;
+
+// @public (undocumented)
+export function action<TContext = unknown, TArgsShape extends ValidatorMap = ValidatorMap, TResult = unknown>(config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
 }): SyncoreFunctionDefinition<"action", TContext, InferArgs<TArgsShape>, TResult>;
 
 // @public (undocumented)
 export interface ActionCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> extends QueryCtx<TSchema> {
     // (undocumented)
-    runAction<TReference extends FunctionReference<"action", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
-    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
+    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.mts
     //
     // (undocumented)
-    runMutation<TReference extends FunctionReference<"mutation", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     scheduler: SchedulerApi;
 }
@@ -61,7 +66,11 @@ export type ComparisonOperator = "=" | ">" | ">=" | "<" | "<=";
 export function createFunctionReference<TKind extends SyncoreFunctionKind, TArgs = Record<never, never>, TResult = unknown>(kind: TKind, name: string): FunctionReference<TKind, TArgs, TResult>;
 
 // @public (undocumented)
-export function createFunctionReferenceFor<TDefinition extends SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, unknown, unknown>>(kind: TDefinition["kind"], name: string): FunctionReference<TDefinition["kind"], TDefinition extends SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, infer TArgs, unknown> ? TArgs : never, TDefinition extends SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, unknown, infer TResult> ? TResult : unknown>;
+export function createFunctionReferenceFor<TDefinition extends {
+    kind: SyncoreFunctionKind;
+    argsValidator: Validator<unknown>;
+    returnsValidator?: Validator<unknown>;
+}>(kind: FunctionKindFromDefinition<TDefinition>, name: string): FunctionReference<FunctionKindFromDefinition<TDefinition>, FunctionArgsFromDefinition<TDefinition>, FunctionResultFromDefinition<TDefinition>>;
 
 // @public (undocumented)
 export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(schema: SyncoreSchema<TTables>): SchemaSnapshot;
@@ -133,7 +142,9 @@ export interface FilterBuilder {
 export type FunctionArgs<TReference> = TReference extends FunctionReference<SyncoreFunctionKind, infer TArgs, unknown> ? TArgs : never;
 
 // @public (undocumented)
-export type FunctionArgsFromDefinition<TDefinition> = TDefinition extends SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, infer TArgs, unknown> ? TArgs : never;
+export type FunctionArgsFromDefinition<TDefinition> = TDefinition extends {
+    argsValidator: Validator<infer TArgs>;
+} ? TArgs : never;
 
 // @public (undocumented)
 export interface FunctionConfig<TContext, TArgs, TResult> {
@@ -144,6 +155,11 @@ export interface FunctionConfig<TContext, TArgs, TResult> {
     // (undocumented)
     returns?: Validator<TResult>;
 }
+
+// @public (undocumented)
+export type FunctionKindFromDefinition<TDefinition> = TDefinition extends {
+    kind: infer TKind;
+} ? Extract<TKind, SyncoreFunctionKind> : never;
 
 // @public (undocumented)
 export interface FunctionReference<TKind extends SyncoreFunctionKind = SyncoreFunctionKind, TArgs = EmptyArgs, TResult = unknown> {
@@ -158,13 +174,15 @@ export interface FunctionReference<TKind extends SyncoreFunctionKind = SyncoreFu
 }
 
 // @public (undocumented)
-export type FunctionReferenceFor<TDefinition> = TDefinition extends SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, unknown, unknown> ? FunctionReference<TDefinition["kind"], FunctionArgsFromDefinition<TDefinition>, FunctionResultFromDefinition<TDefinition>> : never;
+export type FunctionReferenceFor<TDefinition> = FunctionKindFromDefinition<TDefinition> extends never ? never : FunctionReference<FunctionKindFromDefinition<TDefinition>, FunctionArgsFromDefinition<TDefinition>, FunctionResultFromDefinition<TDefinition>>;
 
 // @public (undocumented)
 export type FunctionResult<TReference> = TReference extends FunctionReference<SyncoreFunctionKind, unknown, infer TResult> ? TResult : never;
 
 // @public (undocumented)
-export type FunctionResultFromDefinition<TDefinition> = TDefinition extends SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, unknown, infer TResult> ? TResult : never;
+export type FunctionResultFromDefinition<TDefinition> = TDefinition extends {
+    returnsValidator?: Validator<infer TResult>;
+} ? TResult : never;
 
 // @public (undocumented)
 export class IdValidator<TTableName extends string> implements Validator<string> {
@@ -243,7 +261,12 @@ export type MisfirePolicy = {
 };
 
 // @public (undocumented)
-export function mutation<TContext = unknown, TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap, TResult = unknown>(config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
+export function mutation<TContext = unknown, TValidator extends Validator<unknown> = Validator<unknown>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
+    args: TValidator;
+}): SyncoreFunctionDefinition<"mutation", TContext, Infer<TValidator>, TResult>;
+
+// @public (undocumented)
+export function mutation<TContext = unknown, TArgsShape extends ValidatorMap = ValidatorMap, TResult = unknown>(config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
 }): SyncoreFunctionDefinition<"mutation", TContext, InferArgs<TArgsShape>, TResult>;
 
@@ -252,9 +275,9 @@ export interface MutationCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema
     // (undocumented)
     db: SyncoreDatabaseWriter<TSchema>;
     // (undocumented)
-    runAction<TReference extends FunctionReference<"action", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
-    runMutation<TReference extends FunctionReference<"mutation", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     scheduler: SchedulerApi;
 }
@@ -325,7 +348,12 @@ export interface PaginationResult<TItem> {
 export function parseSchemaSnapshot(source: string): SchemaSnapshot;
 
 // @public (undocumented)
-export function query<TContext = unknown, TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap, TResult = unknown>(config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
+export function query<TContext = unknown, TValidator extends Validator<unknown> = Validator<unknown>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
+    args: TValidator;
+}): SyncoreFunctionDefinition<"query", TContext, Infer<TValidator>, TResult>;
+
+// @public (undocumented)
+export function query<TContext = unknown, TArgsShape extends ValidatorMap = ValidatorMap, TResult = unknown>(config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
     args: TArgsShape;
 }): SyncoreFunctionDefinition<"query", TContext, InferArgs<TArgsShape>, TResult>;
 
@@ -365,7 +393,7 @@ export interface QueryCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
     // (undocumented)
     db: SyncoreDatabaseReader<TSchema>;
     // (undocumented)
-    runQuery<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     storage: SyncoreStorageApi;
 }
@@ -481,9 +509,9 @@ export interface SchedulerApi {
     // (undocumented)
     cancel(id: string): Promise<void>;
     // (undocumented)
-    runAfter<TReference extends FunctionReference<"mutation" | "action", JsonObject, unknown>>(delayMs: number, functionReference: TReference, ...args: [...OptionalArgsTuple<FunctionArgs<TReference>>, misfirePolicy?: MisfirePolicy]): Promise<string>;
+    runAfter<TArgs, TResult>(delayMs: number, functionReference: FunctionReference<"mutation" | "action", TArgs, TResult>, ...args: [...OptionalArgsTuple<TArgs>, misfirePolicy?: MisfirePolicy]): Promise<string>;
     // (undocumented)
-    runAt<TReference extends FunctionReference<"mutation" | "action", JsonObject, unknown>>(timestamp: number | Date, functionReference: TReference, ...args: [...OptionalArgsTuple<FunctionArgs<TReference>>, misfirePolicy?: MisfirePolicy]): Promise<string>;
+    runAt<TArgs, TResult>(timestamp: number | Date, functionReference: FunctionReference<"mutation" | "action", TArgs, TResult>, ...args: [...OptionalArgsTuple<TArgs>, misfirePolicy?: MisfirePolicy]): Promise<string>;
 }
 
 // @public (undocumented)
@@ -587,13 +615,13 @@ export interface SyncoreCapabilities {
 // @public (undocumented)
 export interface SyncoreClient {
     // (undocumented)
-    action<TReference extends FunctionReference<"action", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
-    mutation<TReference extends FunctionReference<"mutation", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
-    query<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Promise<FunctionResult<TReference>>;
+    query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
-    watchQuery<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): SyncoreWatch<FunctionResult<TReference>>;
+    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): SyncoreWatch<TResult>;
 }
 
 // @public (undocumented)
@@ -761,17 +789,17 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     // (undocumented)
     getDevtoolsSnapshot(): SyncoreDevtoolsSnapshot;
     // (undocumented)
-    runAction<TReference extends FunctionReference<"action", JsonObject, unknown>>(reference: TReference, args?: JsonObject): Promise<FunctionResult<TReference>>;
+    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
     // (undocumented)
-    runMutation<TReference extends FunctionReference<"mutation", JsonObject, unknown>>(reference: TReference, args?: JsonObject): Promise<FunctionResult<TReference>>;
+    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
     // (undocumented)
-    runQuery<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, args?: JsonObject): Promise<FunctionResult<TReference>>;
+    runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
     // (undocumented)
     start(): Promise<void>;
     // (undocumented)
     stop(): Promise<void>;
     // (undocumented)
-    watchQuery<TReference extends FunctionReference<"query", JsonObject, unknown>>(reference: TReference, args?: JsonObject): SyncoreWatch<FunctionResult<TReference>>;
+    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): SyncoreWatch<TResult>;
 }
 
 // @public (undocumented)
