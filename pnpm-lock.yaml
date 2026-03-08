@@ -230,6 +230,9 @@ importers:
       '@syncore/platform-web':
         specifier: workspace:*
         version: link:../platform-web
+      '@syncore/react':
+        specifier: workspace:*
+        version: link:../react
       next:
         specifier: ^15.0.0
         version: 15.5.12(@babel/core@7.29.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -239,6 +242,9 @@ importers:
 
   packages/platform-expo:
     dependencies:
+      '@syncore/schema':
+        specifier: workspace:*
+        version: link:../schema
       expo-file-system:
         specifier: ^55.0.10
         version: 55.0.10(expo@55.0.5)(react-native@0.84.1(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))
@@ -251,6 +257,12 @@ importers:
 
   packages/platform-node:
     dependencies:
+      '@syncore/devtools-protocol':
+        specifier: workspace:*
+        version: link:../devtools-protocol
+      '@syncore/schema':
+        specifier: workspace:*
+        version: link:../schema
       syncore:
         specifier: workspace:*
         version: link:../core
@@ -260,6 +272,9 @@ importers:
 
   packages/platform-web:
     dependencies:
+      '@syncore/schema':
+        specifier: workspace:*
+        version: link:../schema
       sql.js:
         specifier: ^1.14.1
         version: 1.14.1
