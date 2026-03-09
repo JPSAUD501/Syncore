@@ -12,7 +12,7 @@
     "LICENSE"
   ],
   "bin": {
-    "syncorejs": "./dist/cli.js"
+    "syncorejs": "dist/cli.js"
   },
   "repository": {
     "type": "git",
