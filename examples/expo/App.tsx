@@ -1,5 +1,5 @@
-import { SyncoreExpoProvider } from "@syncore/platform-expo";
-import { useMutation, useQuery } from "@syncore/react";
+import { SyncoreExpoProvider } from "syncore/expo/react";
+import { useMutation, useQuery } from "syncore/react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -79,7 +79,8 @@ export default function App() {
 
 function NotesScreen() {
   const [draft, setDraft] = useState("");
-  const notes = useQuery(api.notes.list) ?? [];
+  const notesQuery = useQuery(api.notes.list);
+  const notes = useMemo(() => notesQuery ?? [], [notesQuery]);
   const createNote = useMutation(api.notes.create);
   const togglePinned = useMutation(api.notes.togglePinned);
   const pinnedNotes = useMemo(

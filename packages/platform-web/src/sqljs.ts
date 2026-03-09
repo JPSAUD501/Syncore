@@ -1,8 +1,5 @@
 import initSqlJs from "sql.js";
-import type {
-  RunResult,
-  SyncoreSqlDriver
-} from "syncore";
+import type { RunResult, SyncoreSqlDriver } from "@syncore/core";
 import { SyncoreIndexedDbPersistence } from "./indexeddb.js";
 import type { SyncoreWebPersistence } from "./persistence.js";
 
@@ -27,12 +24,14 @@ export class SqlJsDriver implements SyncoreSqlDriver {
   ) {}
 
   static async create(options: CreateSqlJsDriverOptions): Promise<SqlJsDriver> {
-    const persistence = options.persistence ?? new SyncoreIndexedDbPersistence();
+    const persistence =
+      options.persistence ?? new SyncoreIndexedDbPersistence();
     const SQL = await initSqlJs(
       typeof window === "undefined" && !options.locateFile && !options.wasmUrl
         ? undefined
         : {
-            locateFile: options.locateFile ?? (() => options.wasmUrl ?? "/sql-wasm.wasm")
+            locateFile:
+              options.locateFile ?? (() => options.wasmUrl ?? "/sql-wasm.wasm")
           }
     );
     const existingBytes = await persistence.loadDatabase(options.databaseName);
@@ -53,7 +52,10 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     const statement = this.database.prepare(sql);
     try {
       statement.run(normalizeParams(params));
-      const lastInsertRowid = readScalarNumber(this.database, "SELECT last_insert_rowid()");
+      const lastInsertRowid = readScalarNumber(
+        this.database,
+        "SELECT last_insert_rowid()"
+      );
       const result = {
         changes: this.database.getRowsModified(),
         ...(lastInsertRowid !== null ? { lastInsertRowid } : {})
@@ -150,7 +152,10 @@ export class SqlJsDriver implements SyncoreSqlDriver {
 
   private async persistNow(): Promise<void> {
     this.ensureOpen();
-    await this.persistence.saveDatabase(this.databaseName, this.database.export());
+    await this.persistence.saveDatabase(
+      this.databaseName,
+      this.database.export()
+    );
   }
 
   private ensureOpen(): void {

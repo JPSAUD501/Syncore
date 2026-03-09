@@ -1,4 +1,4 @@
-import { createExpoSyncoreBootstrap } from "@syncore/platform-expo";
+import { createExpoSyncoreBootstrap } from "syncore/expo";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 

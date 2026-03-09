@@ -9,15 +9,7 @@ import {
   type SyncoreStorageAdapter,
   type StorageObject,
   type StorageWriteInput
-} from "syncore";
-import {
-  createElement,
-  Fragment,
-  useEffect,
-  useState,
-  type ReactNode
-} from "react";
-import { SyncoreProvider } from "@syncore/react";
+} from "@syncore/core";
 import {
   createWebPersistence,
   type SyncoreWebPersistence,
@@ -26,8 +18,6 @@ import {
 import { SqlJsDriver } from "./sqljs.js";
 import {
   attachWebWorkerRuntime,
-  createSyncoreWebWorkerClient,
-  type ManagedWebWorkerClient,
   type SyncoreWorkerMessageEndpoint
 } from "./worker.js";
 export * from "./worker.js";
@@ -36,6 +26,7 @@ export * from "./indexeddb.js";
 export * from "./opfs.js";
 
 export type WebSyncoreSchema = AnySyncoreSchema;
+export type BrowserSyncoreSchema = WebSyncoreSchema;
 
 /**
  * Options for constructing a browser Syncore runtime.
@@ -104,6 +95,16 @@ export interface CreateWebWorkerRuntimeOptions extends CreateWebRuntimeOptions {
 }
 
 /**
+ * Options for constructing a browser Syncore runtime.
+ */
+export type CreateBrowserRuntimeOptions = CreateWebRuntimeOptions;
+
+/**
+ * Options for hosting a Syncore runtime inside a browser Worker.
+ */
+export type CreateBrowserWorkerRuntimeOptions = CreateWebWorkerRuntimeOptions;
+
+/**
  * Create a full Syncore runtime directly in the browser.
  *
  * Most React apps should use a worker runtime instead so queries and SQLite work
@@ -142,7 +143,7 @@ export async function createWebSyncoreRuntime(
     functions: options.functions,
     driver,
     storage,
-    platform: options.platform ?? "web",
+    platform: options.platform ?? "browser",
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
     ...(options.devtools ? { devtools: options.devtools } : {}),
     ...(options.experimentalPlugins
@@ -163,6 +164,15 @@ export function createWebWorkerRuntime(options: CreateWebWorkerRuntimeOptions) {
 }
 
 /**
+ * Attach a Syncore runtime to a browser Worker endpoint.
+ */
+export function createBrowserWorkerRuntime(
+  options: CreateBrowserWorkerRuntimeOptions
+) {
+  return createWebWorkerRuntime(options);
+}
+
+/**
  * Create a client directly from a browser Syncore runtime.
  */
 export function createWebSyncoreClient(
@@ -172,74 +182,21 @@ export function createWebSyncoreClient(
 }
 
 /**
- * Props for {@link SyncoreWebProvider}.
+ * Create a full Syncore runtime directly in the browser.
  */
-export interface SyncoreWebProviderProps {
-  /**
-   * The React subtree that should receive the Syncore client.
-   */
-  children: ReactNode;
-
-  /**
-   * The URL of the worker module that hosts the local Syncore runtime.
-   */
-  workerUrl: URL | string;
-
-  /**
-   * Optional worker type to pass through to the Worker constructor.
-   */
-  workerType?: WorkerOptions["type"];
-
-  /**
-   * Optional worker name to improve debugging in browser devtools.
-   */
-  workerName?: string;
-
-  /**
-   * Optional fallback content rendered before the worker client is ready.
-   */
-  fallback?: ReactNode;
+export function createBrowserSyncoreRuntime(
+  options: CreateBrowserRuntimeOptions
+) {
+  return createWebSyncoreRuntime(options);
 }
 
 /**
- * Start a worker-backed Syncore client and provide it to React descendants.
- *
- * This is the shortest happy path for Vite-style React apps using
- * `@syncore/platform-web`.
+ * Create a client directly from a browser Syncore runtime.
  */
-export function SyncoreWebProvider({
-  children,
-  workerUrl,
-  workerType,
-  workerName,
-  fallback = null
-}: SyncoreWebProviderProps) {
-  const [managedClient, setManagedClient] =
-    useState<ManagedWebWorkerClient | null>(null);
-
-  useEffect(() => {
-    const nextClient = createSyncoreWebWorkerClient({
-      workerUrl,
-      ...(workerType ? { workerType } : {}),
-      ...(workerName ? { workerName } : {})
-    });
-    setManagedClient(nextClient);
-
-    return () => {
-      nextClient.dispose();
-      setManagedClient(null);
-    };
-  }, [workerName, workerType, workerUrl]);
-
-  if (!managedClient) {
-    return createElement(Fragment, null, fallback);
-  }
-
-  return createElement(
-    SyncoreProvider,
-    { client: managedClient.client, children },
-    children
-  );
+export function createBrowserSyncoreClient(
+  runtime: SyncoreRuntime<BrowserSyncoreSchema>
+) {
+  return createWebSyncoreClient(runtime);
 }
 
 /**

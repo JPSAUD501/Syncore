@@ -14,7 +14,7 @@ cd my-syncore-web
 ## 2. Install packages
 
 ```bash
-npm install syncore @syncore/react @syncore/platform-web
+npm install syncore react react-dom sql.js
 ```
 
 ## 3. Start the Syncore dev loop
@@ -46,11 +46,11 @@ applies local migrations, and watches `syncore/` for changes.
 ```ts
 /// <reference lib="webworker" />
 
-import { createWebWorkerRuntime } from "@syncore/platform-web";
+import { createBrowserWorkerRuntime } from "syncore/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
-void createWebWorkerRuntime({
+void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
@@ -66,16 +66,16 @@ void createWebWorkerRuntime({
 ```tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { SyncoreWebProvider } from "@syncore/platform-web";
+import { SyncoreBrowserProvider } from "syncore/browser/react";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <SyncoreWebProvider
+    <SyncoreBrowserProvider
       workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
     >
       <App />
-    </SyncoreWebProvider>
+    </SyncoreBrowserProvider>
   </React.StrictMode>
 );
 ```
@@ -85,7 +85,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 `src/App.tsx`
 
 ```tsx
-import { useMutation, useQuery } from "@syncore/react";
+import { useMutation, useQuery } from "syncore/react";
 import { api } from "../syncore/_generated/api";
 
 export default function App() {

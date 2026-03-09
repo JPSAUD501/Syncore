@@ -6,7 +6,11 @@ import {
   useMemo,
   useState
 } from "react";
-import type { FunctionReference, SyncoreClient, SyncoreWatch } from "syncore";
+import type {
+  FunctionReference,
+  SyncoreClient,
+  SyncoreWatch
+} from "@syncore/core";
 
 type ManagedSyncoreWatch<TResult> = SyncoreWatch<TResult> & {
   dispose?: () => void;

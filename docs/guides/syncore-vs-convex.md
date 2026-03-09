@@ -36,7 +36,7 @@ The DX goal is to hide as much of that as possible behind short-form helpers.
 
 ## Current Syncore short forms
 
-- web: `SyncoreWebProvider`
+- browser react: `SyncoreBrowserProvider`
 - next: `SyncoreNextProvider`
 - expo: `SyncoreExpoProvider`
 - electron renderer: `SyncoreElectronProvider`

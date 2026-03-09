@@ -3,7 +3,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import {
   bindElectronWindowToSyncoreRuntime,
   createNodeSyncoreRuntime
-} from "@syncore/platform-node";
+} from "syncore/node";
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 

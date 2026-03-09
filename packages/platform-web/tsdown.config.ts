@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/react.tsx"],
   platform: "browser",
   target: "es2022",
   format: "esm",
@@ -10,5 +10,11 @@ export default defineConfig({
     build: true
   },
   sourcemap: true,
-  clean: true
+  clean: true,
+  checks: {
+    pluginTimings: false
+  },
+  deps: {
+    neverBundle: ["react", "react/jsx-runtime", "@syncore/react"]
+  }
 });

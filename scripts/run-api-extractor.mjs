@@ -5,8 +5,10 @@ import path from "node:path";
 const workspaceRoot = path.resolve(import.meta.dirname, "..");
 const publicPackageFilters = [
   "syncore",
+  "@syncore/core",
   "@syncore/schema",
   "@syncore/devtools-protocol",
+  "@syncore/svelte",
   "@syncore/react",
   "@syncore/platform-node",
   "@syncore/platform-expo",
@@ -16,12 +18,15 @@ const publicPackageFilters = [
 ];
 
 const configFiles = [
+  "packages/syncore/api-extractor.json",
   "packages/core/api-extractor.json",
   "packages/schema/api-extractor.json",
   "packages/devtools-protocol/api-extractor.json",
+  "packages/svelte/api-extractor.json",
   "packages/react/api-extractor.json",
   "packages/platform-node/api-extractor.json",
   "packages/platform-node/api-extractor.ipc.json",
+  "packages/platform-node/api-extractor.ipc-react.json",
   "packages/platform-expo/api-extractor.json",
   "packages/platform-web/api-extractor.json",
   "packages/next/api-extractor.json",
@@ -31,7 +36,11 @@ const configFiles = [
 const local = process.argv.includes("--local");
 
 const projectFolders = [
-  ...new Set(configFiles.map((configFile) => path.dirname(path.join(workspaceRoot, configFile))))
+  ...new Set(
+    configFiles.map((configFile) =>
+      path.dirname(path.join(workspaceRoot, configFile))
+    )
+  )
 ];
 
 try {
@@ -88,7 +97,9 @@ async function runCommand(command, args, cwd) {
         return;
       }
       reject(
-        new Error(`Command failed: ${command} ${args.join(" ")} (exit ${code ?? "unknown"})`)
+        new Error(
+          `Command failed: ${command} ${args.join(" ")} (exit ${code ?? "unknown"})`
+        )
       );
     });
   });

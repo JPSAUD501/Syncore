@@ -19,18 +19,40 @@
     "jsx": "react-jsx",
     "types": ["node"],
     "paths": {
-      "syncore": ["./packages/core/src/index.ts"],
-      "syncore/cli": ["./packages/core/src/cli.ts"],
+      "syncore": ["./packages/syncore/src/index.ts"],
+      "syncore/cli": ["./packages/syncore/src/cli.ts"],
+      "syncore/browser": ["./packages/syncore/src/browser.ts"],
+      "syncore/browser/react": ["./packages/syncore/src/browser-react.tsx"],
+      "syncore/react": ["./packages/syncore/src/react.ts"],
+      "syncore/svelte": ["./packages/syncore/src/svelte.ts"],
+      "syncore/expo": ["./packages/syncore/src/expo.ts"],
+      "syncore/expo/react": ["./packages/syncore/src/expo-react.tsx"],
+      "syncore/node": ["./packages/syncore/src/node.ts"],
+      "syncore/node/ipc": ["./packages/syncore/src/node-ipc.ts"],
+      "syncore/node/ipc/react": ["./packages/syncore/src/node-ipc-react.tsx"],
+      "syncore/next": ["./packages/syncore/src/next.ts"],
+      "syncore/next/config": ["./packages/syncore/src/next-config.ts"],
+      "@syncore/core": ["./packages/core/src/index.ts"],
+      "@syncore/core/cli": ["./packages/core/src/cli.ts"],
       "@syncore/schema": ["./packages/schema/src/index.ts"],
       "@syncore/devtools-protocol": [
         "./packages/devtools-protocol/src/index.ts"
       ],
+      "@syncore/svelte": ["./packages/svelte/src/index.ts"],
       "@syncore/react": ["./packages/react/src/index.tsx"],
+      "@syncore/platform-web/react": ["./packages/platform-web/src/react.tsx"],
       "@syncore/platform-node": ["./packages/platform-node/src/index.ts"],
       "@syncore/platform-node/ipc": ["./packages/platform-node/src/ipc.ts"],
+      "@syncore/platform-node/ipc/react": [
+        "./packages/platform-node/src/ipc-react.tsx"
+      ],
       "@syncore/platform-web": ["./packages/platform-web/src/index.ts"],
       "@syncore/platform-expo": ["./packages/platform-expo/src/index.ts"],
+      "@syncore/platform-expo/react": [
+        "./packages/platform-expo/src/react.tsx"
+      ],
       "@syncore/next": ["./packages/next/src/index.tsx"],
+      "@syncore/next/config": ["./packages/next/src/config.ts"],
       "@syncore/testing/*": ["./packages/testing/*"],
       "@syncore/cli": ["./packages/cli/src/index.ts"]
     }

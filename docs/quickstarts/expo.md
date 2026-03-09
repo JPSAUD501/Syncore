@@ -14,7 +14,7 @@ cd my-syncore-expo
 ## 2. Install packages
 
 ```bash
-npm install syncore @syncore/react @syncore/platform-expo
+npm install syncore expo expo-sqlite expo-file-system react react-native
 ```
 
 ## 3. Start the Syncore dev loop
@@ -33,7 +33,7 @@ keeps `syncore/_generated/*` up to date.
 `lib/syncore.ts`
 
 ```ts
-import { createExpoSyncoreBootstrap } from "@syncore/platform-expo";
+import { createExpoSyncoreBootstrap } from "syncore/expo";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -51,8 +51,8 @@ export const syncore = createExpoSyncoreBootstrap({
 
 ```tsx
 import { Text, View } from "react-native";
-import { useQuery } from "@syncore/react";
-import { SyncoreExpoProvider } from "@syncore/platform-expo";
+import { useQuery } from "syncore/react";
+import { SyncoreExpoProvider } from "syncore/expo/react";
 import { syncore } from "./lib/syncore";
 import { api } from "./syncore/_generated/api";
 

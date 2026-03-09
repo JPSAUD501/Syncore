@@ -10,7 +10,19 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
   const baseConfig = config as Record<string, unknown>;
   const isStaticExport = baseConfig.output === "export";
   const headers = (baseConfig.headers ?? []) as Array<Record<string, unknown>>;
-  const userWebpack = baseConfig.webpack;
+  const userWebpack =
+    typeof baseConfig.webpack === "function"
+      ? (baseConfig.webpack as (
+          config: Record<string, unknown>,
+          context: unknown
+        ) => Record<string, unknown>)
+      : undefined;
+  const userHeaders =
+    typeof baseConfig.headers === "function"
+      ? (baseConfig.headers as () =>
+          | Array<Record<string, unknown>>
+          | Promise<Array<Record<string, unknown>>>)
+      : undefined;
   const syncoreHeaders = {
     source: "/sql-wasm.wasm",
     headers: [
@@ -34,7 +46,7 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
         asyncWebAssembly: true
       };
 
-      if (typeof userWebpack === "function") {
+      if (userWebpack) {
         return userWebpack(nextConfig, context);
       }
 
@@ -42,13 +54,9 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
     }
   };
 
-  if (!isStaticExport || typeof baseConfig.headers === "function") {
+  if (!isStaticExport || userHeaders) {
     nextConfig.headers = async () => {
-      const userHeaders = baseConfig.headers;
-      const resolvedHeaders =
-        typeof userHeaders === "function"
-          ? ((await userHeaders()) as Array<Record<string, unknown>>)
-          : headers;
+      const resolvedHeaders = userHeaders ? await userHeaders() : headers;
       return isStaticExport
         ? resolvedHeaders
         : [...resolvedHeaders, syncoreHeaders];

@@ -1,9 +1,17 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { defineSchema, defineTable, v } from "@syncore/schema";
+import { defineSchema, defineTable, v } from "../../../schema/src/index.js";
 import { mutation, query } from "./functions.js";
 import {
   createFunctionReference,
@@ -46,11 +54,15 @@ class TestSqliteDriver implements SyncoreSqlDriver {
   }
 
   async get<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
-    return this.database.prepare(sql).get(...(params as SQLInputValue[])) as T | undefined;
+    return this.database.prepare(sql).get(...(params as SQLInputValue[])) as
+      | T
+      | undefined;
   }
 
   async all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
-    return this.database.prepare(sql).all(...(params as SQLInputValue[])) as T[];
+    return this.database
+      .prepare(sql)
+      .all(...(params as SQLInputValue[])) as T[];
   }
 
   async withTransaction<T>(callback: () => Promise<T>): Promise<T> {
@@ -160,7 +172,10 @@ class TestStorageAdapter implements SyncoreStorageAdapter {
 }
 
 class InterruptingStorageAdapter extends TestStorageAdapter {
-  override async put(id: string, input: StorageWriteInput): Promise<StorageObject> {
+  override async put(
+    id: string,
+    input: StorageWriteInput
+  ): Promise<StorageObject> {
     const object = await super.put(id, input);
     throw new Error(`Simulated crash after writing ${object.id}`);
   }
@@ -285,36 +300,46 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
 
     await runtime.start();
-    await runtime.createClient().mutation(
-      createFunctionReference<"mutation", { text: string }, string>(
-        "mutation",
-        "tasks/create"
-      ),
-      { text: "Immediate" }
-    );
-    runtime.createClient().watchQuery(
-      createFunctionReference<"query", Record<never, never>, Array<{ text: string }>>(
-        "query",
-        "tasks/list"
-      )
-    );
-    await runtime.createClient().mutation(
-      createFunctionReference<
-        "mutation",
-        { text: string; delayMs: number },
-        null
-      >("mutation", "tasks/scheduleCreate"),
-      { text: "From schedule", delayMs: 5 }
-    );
+    await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<"mutation", { text: string }, string>(
+          "mutation",
+          "tasks/create"
+        ),
+        { text: "Immediate" }
+      );
+    runtime
+      .createClient()
+      .watchQuery(
+        createFunctionReference<
+          "query",
+          Record<never, never>,
+          Array<{ text: string }>
+        >("query", "tasks/list")
+      );
+    await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<
+          "mutation",
+          { text: string; delayMs: number },
+          null
+        >("mutation", "tasks/scheduleCreate"),
+        { text: "From schedule", delayMs: 5 }
+      );
 
     await new Promise((resolve) => setTimeout(resolve, 60));
 
-    const result = await runtime.createClient().query(
-      createFunctionReference<"query", Record<never, never>, Array<{ text: string }>>(
-        "query",
-        "tasks/list"
-      )
-    );
+    const result = await runtime
+      .createClient()
+      .query(
+        createFunctionReference<
+          "query",
+          Record<never, never>,
+          Array<{ text: string }>
+        >("query", "tasks/list")
+      );
     expect(result.map((item) => item.text).sort()).toEqual([
       "From schedule",
       "Immediate"
@@ -357,7 +382,10 @@ describe("SyncoreRuntime schema + scheduler", () => {
             pluginOnly: v.string()
           }),
           handler: async (ctx) => {
-            const capabilities = (ctx as QueryCtx).capabilities as Record<string, string>;
+            const capabilities = (ctx as QueryCtx).capabilities as Record<
+              string,
+              string
+            >;
             return {
               platformProvided: capabilities.platformProvided,
               pluginOnly: capabilities.pluginOnly
@@ -432,17 +460,19 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
     await crashingRuntime.start();
     await expect(
-      crashingRuntime.createClient().mutation(
-        createFunctionReference<
-          "mutation",
-          { label: string; body: string },
-          string
-        >("mutation", "files/write"),
-        {
-          label: "interrupted",
-          body: "hello"
-        }
-      )
+      crashingRuntime
+        .createClient()
+        .mutation(
+          createFunctionReference<
+            "mutation",
+            { label: string; body: string },
+            string
+          >("mutation", "files/write"),
+          {
+            label: "interrupted",
+            body: "hello"
+          }
+        )
     ).rejects.toThrow(/simulated crash/i);
     await crashingRuntime.stop().catch(() => undefined);
     const interruptedFiles = await readDirectorySafe(storagePath);
@@ -511,17 +541,19 @@ describe("SyncoreRuntime schema + scheduler", () => {
       storage: new TestStorageAdapter(storagePath)
     });
     await firstRuntime.start();
-    const fileId = await firstRuntime.createClient().mutation(
-      createFunctionReference<
-        "mutation",
-        { label: string; body: string },
-        string
-      >("mutation", "files/write"),
-      {
-        label: "metadata",
-        body: "body"
-      }
-    );
+    const fileId = await firstRuntime
+      .createClient()
+      .mutation(
+        createFunctionReference<
+          "mutation",
+          { label: string; body: string },
+          string
+        >("mutation", "files/write"),
+        {
+          label: "metadata",
+          body: "body"
+        }
+      );
     await firstRuntime.stop();
 
     const secondRuntime = new SyncoreRuntime({
@@ -531,14 +563,15 @@ describe("SyncoreRuntime schema + scheduler", () => {
       storage: new TestStorageAdapter(storagePath)
     });
     await secondRuntime.start();
-    const metadata = await secondRuntime.createClient().query(
-      createFunctionReference<
-        "query",
-        { id: string },
-        StorageObject | null
-      >("query", "files/read"),
-      { id: fileId }
-    );
+    const metadata = await secondRuntime
+      .createClient()
+      .query(
+        createFunctionReference<"query", { id: string }, StorageObject | null>(
+          "query",
+          "files/read"
+        ),
+        { id: fileId }
+      );
     expect(metadata?.contentType).toBe("text/plain");
     await secondRuntime.stop();
   });

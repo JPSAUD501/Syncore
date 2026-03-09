@@ -7,7 +7,7 @@ import {
   query,
   type MutationCtx,
   type QueryCtx
-} from "syncore";
+} from "@syncore/core";
 import { defineSchema, defineTable, v } from "@syncore/schema";
 import { createWebSyncoreRuntime } from "./index.js";
 import {
@@ -16,7 +16,10 @@ import {
   type SyncoreWorkerMessageEndpoint
 } from "./worker.js";
 
-const wasmFilePath = path.resolve(process.cwd(), "node_modules/sql.js/dist/sql-wasm.wasm");
+const wasmFilePath = path.resolve(
+  process.cwd(),
+  "node_modules/sql.js/dist/sql-wasm.wasm"
+);
 
 describe("platform-web worker bridge", () => {
   beforeEach(async () => {
@@ -73,10 +76,7 @@ describe("platform-web worker bridge", () => {
         "query",
         Record<never, never>,
         Array<{ title: string }>
-      >(
-        "query",
-        "todos/list"
-      )
+      >("query", "todos/list")
     );
 
     await waitFor(
@@ -141,7 +141,9 @@ describe("platform-web worker bridge", () => {
       Array<{ title: string }>
     >("query", "todos/fail");
 
-    await expect(client.query(failingQuery)).rejects.toThrow("Worker query failed");
+    await expect(client.query(failingQuery)).rejects.toThrow(
+      "Worker query failed"
+    );
 
     const watch = client.watchQuery(failingQuery);
     await waitFor(
@@ -193,7 +195,10 @@ async function deleteDatabase(name: string): Promise<void> {
     const request = indexedDB.deleteDatabase(name);
     request.onsuccess = () => resolve();
     request.onerror = () =>
-      reject(request.error ?? new Error(`Failed to delete IndexedDB database "${name}".`));
+      reject(
+        request.error ??
+          new Error(`Failed to delete IndexedDB database "${name}".`)
+      );
     request.onblocked = () => resolve();
   });
 }

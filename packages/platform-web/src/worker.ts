@@ -5,7 +5,7 @@ import type {
   SyncoreClient,
   SyncoreRuntime,
   SyncoreWatch
-} from "syncore";
+} from "@syncore/core";
 export type WebWorkerSyncoreSchema = AnySyncoreSchema;
 
 export interface SyncoreWorkerMessageEndpoint {

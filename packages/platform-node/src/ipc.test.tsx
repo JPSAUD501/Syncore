@@ -13,16 +13,16 @@ import {
   v,
   type MutationCtx,
   type QueryCtx
-} from "syncore";
+} from "../../core/src/index.ts";
 import { createNodeSyncoreRuntime } from "./index.js";
 import {
   attachNodeIpcRuntime,
   createRendererSyncoreClient,
   createRendererSyncoreWindowClient,
   installSyncoreWindowBridge,
-  SyncoreElectronProvider,
   type SyncoreIpcMessageEndpoint
 } from "./ipc.js";
+import { SyncoreElectronProvider } from "./ipc-react.js";
 
 describe("Node IPC bridge", () => {
   let rootDir: string;

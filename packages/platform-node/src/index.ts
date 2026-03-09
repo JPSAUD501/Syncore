@@ -25,7 +25,7 @@ import {
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
   type SyncoreStorageAdapter
-} from "syncore";
+} from "@syncore/core";
 import { attachNodeIpcRuntime, createNodeIpcMessageEndpoint } from "./ipc.js";
 export * from "./ipc.js";
 export type {
@@ -213,7 +213,7 @@ export interface CreateNodeRuntimeOptions {
 /**
  * Options for creating a managed Node Syncore client.
  */
-export interface WithNodeSyncoreClientOptions extends CreateNodeRuntimeOptions {}
+export type WithNodeSyncoreClientOptions = CreateNodeRuntimeOptions;
 
 /**
  * A started local Node runtime paired with its client and a dispose helper.
@@ -399,9 +399,11 @@ export function bindElectronWindowToSyncoreRuntime(options: {
 }): SyncoreElectronIpcBinding {
   const cleanupCallbacks: Array<() => void> = [];
   const channel = options.channel ?? "syncore:message";
-  let onRendererMessage = options.onRendererMessage;
+  let onRendererMessage:
+    | ((listener: (message: unknown) => void) => () => void)
+    | undefined;
 
-  if (!onRendererMessage) {
+  if (!options.onRendererMessage) {
     if (!options.ipcMain) {
       throw new Error(
         "bindElectronWindowToSyncoreRuntime requires either onRendererMessage() or ipcMain."
@@ -422,6 +424,8 @@ export function bindElectronWindowToSyncoreRuntime(options: {
       listeners.add(listener);
       return () => listeners.delete(listener);
     };
+  } else {
+    onRendererMessage = (listener) => options.onRendererMessage!(listener);
   }
 
   const endpoint = createElectronSyncoreBridge({
@@ -461,7 +465,7 @@ export function createNodeWebSocketDevtoolsSink(
 ): NodeWebSocketDevtoolsSink {
   let socket: WebSocket | undefined;
   let disposed = false;
-  let connectTimer: NodeJS.Timeout | undefined;
+  let connectTimer: ReturnType<typeof setTimeout> | undefined;
   let getSnapshot: (() => SyncoreDevtoolsSnapshot) | undefined;
   const pendingMessages: SyncoreDevtoolsMessage[] = [];
   let latestHello:

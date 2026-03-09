@@ -5,9 +5,7 @@ import type {
   SyncoreClient,
   SyncoreRuntime,
   SyncoreWatch
-} from "syncore";
-import { createElement, useEffect, useMemo, type ReactNode } from "react";
-import { SyncoreProvider } from "@syncore/react";
+} from "@syncore/core";
 
 export type NodeIpcSyncoreSchema = AnySyncoreSchema;
 
@@ -377,20 +375,6 @@ export interface AttachedNodeIpcRuntime {
 }
 
 /**
- * Props for {@link SyncoreElectronProvider}.
- */
-export interface SyncoreElectronProviderProps {
-  /** The React subtree that should receive the renderer Syncore client. */
-  children: ReactNode;
-
-  /** Optional custom bridge name exposed on `window`. */
-  bridgeName?: string;
-
-  /** Optional window-like object for tests or custom shells. */
-  windowObject?: Window & typeof globalThis;
-}
-
-/**
  * Create a renderer client from a low-level IPC message endpoint.
  */
 export function createRendererSyncoreClient(
@@ -454,31 +438,6 @@ export function createRendererSyncoreWindowClient(
   }
 
   return createRendererSyncoreBridgeClient(candidate);
-}
-
-/**
- * Create a renderer Syncore client from `window.syncoreBridge` and provide it to React.
- *
- * This is the shortest recommended setup for Electron renderers.
- */
-export function SyncoreElectronProvider({
-  children,
-  bridgeName,
-  windowObject
-}: SyncoreElectronProviderProps) {
-  const resolvedWindow = windowObject ?? window;
-  const client = useMemo(
-    () =>
-      createRendererSyncoreWindowClient(
-        resolvedWindow,
-        bridgeName ?? "syncoreBridge"
-      ),
-    [bridgeName, resolvedWindow]
-  );
-
-  useEffect(() => () => client.dispose(), [client]);
-
-  return createElement(SyncoreProvider, { client, children });
 }
 
 export function createNodeIpcMessageEndpoint(

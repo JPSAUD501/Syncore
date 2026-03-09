@@ -1,6 +1,6 @@
 "use client";
 
-import { SyncoreNextProvider } from "@syncore/next";
+import { SyncoreNextProvider } from "syncore/next";
 import { TodosScreen } from "./todos-screen";
 
 export default function Page() {

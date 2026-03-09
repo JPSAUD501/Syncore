@@ -15,7 +15,7 @@ adding extra local provider boilerplate.
 
 ## Important
 
-When using `@syncore/platform-web` with `sql.js`, the app must serve `sql-wasm.wasm`.
+When using `syncore/browser` with `sql.js`, the app must serve `sql-wasm.wasm`.
 The simplest setup is copying `node_modules/sql.js/dist/sql-wasm.wasm` into `public/sql-wasm.wasm`.
 
 This example includes a helper script for that:

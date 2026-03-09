@@ -72,7 +72,7 @@ const validTemplates: SyncoreTemplateName[] = [
   "electron",
   "next"
 ];
-let pendingDevBootstrap: NodeJS.Timeout | undefined;
+let pendingDevBootstrap: ReturnType<typeof setTimeout> | undefined;
 let devBootstrapInFlight = false;
 
 program
@@ -300,7 +300,6 @@ async function runCodegen(cwd: string): Promise<void> {
   }
 
   const apiSource = [
-    `/* eslint-disable */`,
     `/**`,
     ` * Generated \`api\` utility for referencing Syncore functions.`,
     ` *`,
@@ -329,7 +328,6 @@ async function runCodegen(cwd: string): Promise<void> {
   ].join("\n");
 
   const functionsSource = [
-    `/* eslint-disable */`,
     `/**`,
     ` * Generated Syncore function registry.`,
     ` *`,
@@ -338,6 +336,8 @@ async function runCodegen(cwd: string): Promise<void> {
     ` * To regenerate, run \`npx syncore dev\` or \`npx syncore codegen\`.`,
     ` * @module`,
     ` */`,
+    ``,
+    `import type { SyncoreFunctionRegistry } from "syncore";`,
     ``,
     ...renderFunctionImports(functionEntries, functionImportExtension),
     ``,
@@ -358,7 +358,6 @@ async function runCodegen(cwd: string): Promise<void> {
   ].join("\n");
 
   const serverSource = [
-    `/* eslint-disable */`,
     `/**`,
     ` * Generated utilities for implementing Syncore query, mutation, and action functions.`,
     ` *`,
@@ -574,11 +573,11 @@ export const create = mutation({
           path: path.join("src", "syncore.worker.ts"),
           content: `/// <reference lib="webworker" />
 
-import { createWebWorkerRuntime } from "@syncore/platform-web";
+import { createBrowserWorkerRuntime } from "syncore/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
-void createWebWorkerRuntime({
+void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
@@ -590,13 +589,13 @@ void createWebWorkerRuntime({
         {
           path: path.join("src", "syncore-provider.tsx"),
           content: `import type { ReactNode } from "react";
-import { SyncoreWebProvider } from "@syncore/platform-web";
+import { SyncoreBrowserProvider } from "syncore/browser/react";
 
 export function AppSyncoreProvider({ children }: { children: ReactNode }) {
   return (
-    <SyncoreWebProvider workerUrl={new URL("./syncore.worker.ts", import.meta.url)}>
+    <SyncoreBrowserProvider workerUrl={new URL("./syncore.worker.ts", import.meta.url)}>
       {children}
-    </SyncoreWebProvider>
+    </SyncoreBrowserProvider>
   );
 }
 `
@@ -606,7 +605,7 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
     case "expo":
       files.push({
         path: path.join("lib", "syncore.ts"),
-        content: `import { createExpoSyncoreBootstrap } from "@syncore/platform-expo";
+        content: `import { createExpoSyncoreBootstrap } from "syncore/expo";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -625,12 +624,12 @@ export const syncore = createExpoSyncoreBootstrap({
           path: path.join("app", "syncore.worker.ts"),
           content: `/// <reference lib="webworker" />
 
-import { createWebWorkerRuntime } from "@syncore/platform-web";
-import { resolveSqlJsWasmUrl } from "@syncore/next";
+import { createBrowserWorkerRuntime } from "syncore/browser";
+import { resolveSqlJsWasmUrl } from "syncore/next";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
-void createWebWorkerRuntime({
+void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
@@ -646,7 +645,7 @@ void createWebWorkerRuntime({
           content: `"use client";
 
 import type { ReactNode } from "react";
-import { SyncoreNextProvider } from "@syncore/next";
+import { SyncoreNextProvider } from "syncore/next";
 
 export function AppSyncoreProvider({ children }: { children: ReactNode }) {
   return (
@@ -663,7 +662,7 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
       files.push({
         path: "script.mjs",
         content: `import path from "node:path";
-import { withNodeSyncoreClient } from "@syncore/platform-node";
+import { withNodeSyncoreClient } from "syncore/node";
 import { api } from "./syncore/_generated/api.ts";
 import schema from "./syncore/schema.ts";
 import { functions } from "./syncore/_generated/functions.ts";
@@ -688,7 +687,7 @@ await withNodeSyncoreClient(
         path: path.join("src", "syncore-runtime.ts"),
         content: `import path from "node:path";
 import { app } from "electron";
-import { createNodeSyncoreRuntime } from "@syncore/platform-node";
+import { createNodeSyncoreRuntime } from "syncore/node";
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
@@ -899,9 +898,9 @@ async function importJsonlIntoProject(
   sourcePath: string
 ): Promise<number> {
   const schema = await loadProjectSchema(cwd);
-  const table = schema.getTable(
-    tableName as Extract<keyof typeof schema.tables, string>
-  ) as TableDefinition<Validator<unknown>>;
+  const table = schema.getTable(tableName) as TableDefinition<
+    Validator<unknown>
+  >;
   const config = await loadProjectConfig(cwd);
   const databasePath = path.resolve(cwd, config.databasePath);
   const storageDirectory = path.resolve(cwd, config.storageDirectory);
@@ -1201,7 +1200,7 @@ function renderGeneratedFunctionsInterface(
     `/**`,
     ` * Type-safe runtime definitions for every function exported from \`syncore/functions\`.`,
     ` */`,
-    `export interface SyncoreFunctionsRegistry {`
+    `export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {`
   ];
 
   for (const entry of functionEntries

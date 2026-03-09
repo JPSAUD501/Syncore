@@ -1,15 +1,15 @@
 /// <reference lib="webworker" />
 
-import { createWebWorkerRuntime } from "@syncore/platform-web";
+import { createBrowserWorkerRuntime } from "syncore/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
-void createWebWorkerRuntime({
+void createBrowserWorkerRuntime({
   endpoint: self,
   databaseName: "syncore-next-example",
   persistenceDatabaseName: "syncore-next-example",
   schema,
   functions,
   locateFile: () => "/sql-wasm.wasm",
-  platform: "web-worker"
+  platform: "browser-worker"
 });

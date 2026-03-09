@@ -27,6 +27,7 @@
   "dependencies": {
     "@syncore/platform-web": "workspace:*",
     "@syncore/react": "workspace:*",
+    "@syncore/core": "workspace:*",
     "react": "^19.0.0"
   },
   "peerDependencies": {

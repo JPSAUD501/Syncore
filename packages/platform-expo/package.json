@@ -7,29 +7,31 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "default": "./dist/react.js"
     }
   },
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",
-    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/schema build",
+    "build:deps": "pnpm --filter @syncore/core build && pnpm --filter @syncore/schema build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src --ext .ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/react": "workspace:*",
+    "@syncore/core": "workspace:*",
     "@syncore/schema": "workspace:*",
     "expo-file-system": "^55.0.10",
-    "expo-sqlite": "^55.0.10",
-    "react": "^19.0.0",
-    "syncore": "workspace:*"
+    "expo-sqlite": "^55.0.10"
   },
   "devDependencies": {
-    "react-dom": "^19.0.0"
-  },
-  "peerDependencies": {
-    "react": "^18.3.0 || ^19.0.0"
+    "@types/react": "^19.0.10",
+    "react": "^19.0.0"
   }
 }

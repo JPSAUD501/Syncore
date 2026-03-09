@@ -13,7 +13,7 @@ import {
   v,
   type MutationCtx,
   type QueryCtx
-} from "syncore";
+} from "../../core/src/index.ts";
 import {
   bindElectronWindowToSyncoreRuntime,
   createManagedNodeSyncoreClient,

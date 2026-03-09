@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { v } from "@syncore/schema";
+import { v } from "../../../schema/src/index.js";
 import {
   action,
   type FunctionArgs,
@@ -21,7 +21,9 @@ describe("function definition typing", () => {
 
     expect(definition.kind).toBe("query");
     expectTypeOf<FunctionArgs<Reference>>().toEqualTypeOf<{ title: string }>();
-    expectTypeOf<FunctionResult<Reference>>().toEqualTypeOf<{ length: number }>();
+    expectTypeOf<FunctionResult<Reference>>().toEqualTypeOf<{
+      length: number;
+    }>();
   });
 
   it("preserves scalar validator overloads for args and return values", () => {

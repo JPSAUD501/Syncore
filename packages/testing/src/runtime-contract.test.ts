@@ -16,7 +16,7 @@ import {
   type MutationCtx,
   type QueryCtx,
   type SyncoreRuntime
-} from "syncore";
+} from "@syncore/core";
 
 const require = createRequire(import.meta.url);
 const wasmFilePath = require.resolve("sql.js/dist/sql-wasm.wasm");
@@ -38,10 +38,7 @@ const functions = {
   }),
   "todos/create": mutation({
     args: { title: v.string() },
-    handler: async (
-      ctx: MutationCtx<typeof schema>,
-      args: { title: string }
-    ) =>
+    handler: async (ctx: MutationCtx<typeof schema>, args: { title: string }) =>
       ctx.db.insert("todos", {
         title: args.title,
         complete: false
@@ -83,10 +80,7 @@ const functions = {
     args: {
       id: v.string()
     },
-    handler: async (
-      ctx: QueryCtx<typeof schema>,
-      args: { id: string }
-    ) => {
+    handler: async (ctx: QueryCtx<typeof schema>, args: { id: string }) => {
       const file = await ctx.storage.get(args.id);
       const bytes = await ctx.storage.read(args.id);
       return {
@@ -187,15 +181,16 @@ describe("adapter runtime contracts", () => {
           title: `${label}-reactive`
         });
 
-        await waitFor(
-          () =>
-            (watch.localQueryResult() ?? []).some(
-              (todo) => todo.title === `${label}-reactive`
-            )
+        await waitFor(() =>
+          (watch.localQueryResult() ?? []).some(
+            (todo) => todo.title === `${label}-reactive`
+          )
         );
 
         const rows = await client.query(listTodos);
-        expect(rows.some((todo) => todo.title === `${label}-reactive`)).toBe(true);
+        expect(rows.some((todo) => todo.title === `${label}-reactive`)).toBe(
+          true
+        );
 
         unsubscribe();
         watch.dispose?.();
@@ -238,7 +233,9 @@ describe("adapter runtime contracts", () => {
 
         const secondRuntime = await factory.createRuntime();
         await secondRuntime.start();
-        const stored = await secondRuntime.createClient().query(getFile, { id: fileId });
+        const stored = await secondRuntime
+          .createClient()
+          .query(getFile, { id: fileId });
 
         expect(stored.file?.id).toBe(fileId);
         expect(stored.file?.size).toBeGreaterThan(0);
@@ -262,10 +259,16 @@ describe("adapter runtime contracts", () => {
 
         const destructiveRuntime =
           label === "node"
-            ? await (getFactory() as NodeFactory).createDestructiveRuntime(destructiveSchema)
-            : await (getFactory() as WebFactory).createDestructiveRuntime(destructiveSchema);
+            ? await (getFactory() as NodeFactory).createDestructiveRuntime(
+                destructiveSchema
+              )
+            : await (getFactory() as WebFactory).createDestructiveRuntime(
+                destructiveSchema
+              );
 
-        await expect(destructiveRuntime.start()).rejects.toThrow(/manual migration/i);
+        await expect(destructiveRuntime.start()).rejects.toThrow(
+          /manual migration/i
+        );
         await destructiveRuntime.stop().catch(() => undefined);
       });
     });
@@ -273,7 +276,9 @@ describe("adapter runtime contracts", () => {
 });
 
 async function createNodeFactory(): Promise<NodeFactory> {
-  const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-contract-node-"));
+  const rootDirectory = await mkdtemp(
+    path.join(os.tmpdir(), "syncore-contract-node-")
+  );
   const databasePath = path.join(rootDirectory, "syncore.db");
   const storageDirectory = path.join(rootDirectory, "storage");
   return {
@@ -360,13 +365,16 @@ async function deleteIndexedDbDatabase(name: string): Promise<void> {
     const request = indexedDB.deleteDatabase(name);
     request.onsuccess = () => resolve();
     request.onerror = () =>
-      reject(request.error ?? new Error(`Failed to delete IndexedDB database "${name}".`));
+      reject(
+        request.error ??
+          new Error(`Failed to delete IndexedDB database "${name}".`)
+      );
     request.onblocked = () => resolve();
   });
 }
 
 async function waitFor(
-  predicate: (() => boolean | Promise<boolean>),
+  predicate: () => boolean | Promise<boolean>,
   timeoutMs = 5_000
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;

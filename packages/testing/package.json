@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@syncore/core": "workspace:*",
     "@syncore/next": "workspace:*",
     "@syncore/platform-expo": "workspace:*",
     "@syncore/platform-node": "workspace:*",
     "@syncore/platform-web": "workspace:*",
     "@syncore/react": "workspace:*",
     "@syncore/schema": "workspace:*",
+    "@syncore/svelte": "workspace:*",
     "syncore": "workspace:*"
   },
   "devDependencies": {

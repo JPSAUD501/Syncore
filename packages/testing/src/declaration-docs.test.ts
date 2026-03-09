@@ -62,6 +62,22 @@ describe("published declaration docs", () => {
     ]);
   });
 
+  it("covers svelte public symbols", async () => {
+    const declarations = await readDeclarationFile(
+      "../../svelte/dist/index.d.ts"
+    );
+
+    expectPublicDeclarationsToBeDocumented(declarations, [
+      { symbol: "SyncoreQueryStoreState", kind: "interface" },
+      { symbol: "setSyncoreClient", kind: "function" },
+      { symbol: "getSyncoreClient", kind: "function" },
+      { symbol: "createQueryStore", kind: "function" },
+      { symbol: "createClientQueryStore", kind: "function" },
+      { symbol: "createMutation", kind: "function" },
+      { symbol: "createAction", kind: "function" }
+    ]);
+  });
+
   it("covers web adapter public symbols", async () => {
     const declarations = await readDeclarationFile(
       "../../platform-web/dist/index.d.ts"
@@ -69,16 +85,29 @@ describe("published declaration docs", () => {
     const workerDeclarations = await readDeclarationFile(
       "../../platform-web/dist/worker.d.ts"
     );
+    const reactDeclarations = await readDeclarationFile(
+      "../../platform-web/dist/react.d.ts"
+    );
 
     expectPublicDeclarationsToBeDocumented(declarations, [
       { symbol: "CreateWebRuntimeOptions", kind: "interface" },
       { symbol: "CreateWebWorkerRuntimeOptions", kind: "interface" },
+      { symbol: "CreateBrowserRuntimeOptions", kind: "type" },
+      { symbol: "CreateBrowserWorkerRuntimeOptions", kind: "type" },
       { symbol: "createWebSyncoreRuntime", kind: "function" },
       { symbol: "createWebWorkerRuntime", kind: "function" },
       { symbol: "createWebSyncoreClient", kind: "function" },
-      { symbol: "SyncoreWebProviderProps", kind: "interface" },
-      { symbol: "SyncoreWebProvider", kind: "function" },
+      { symbol: "createBrowserSyncoreRuntime", kind: "function" },
+      { symbol: "createBrowserWorkerRuntime", kind: "function" },
+      { symbol: "createBrowserSyncoreClient", kind: "function" },
       { symbol: "BrowserFileStorageAdapter", kind: "class" }
+    ]);
+
+    expectPublicDeclarationsToBeDocumented(reactDeclarations, [
+      { symbol: "SyncoreWebProviderProps", kind: "interface" },
+      { symbol: "SyncoreBrowserProviderProps", kind: "type" },
+      { symbol: "SyncoreWebProvider", kind: "function" },
+      { symbol: "SyncoreBrowserProvider", kind: "function" }
     ]);
 
     expectPublicDeclarationsToBeDocumented(workerDeclarations, [
@@ -93,14 +122,17 @@ describe("published declaration docs", () => {
 
   it("covers node adapter public symbols", async () => {
     const declarations = await readDeclarationFile(
-      "../../platform-node/dist/index.d.ts"
+      "../../platform-node/dist/index.d.mts"
     );
     const ipcDeclarations = await readDeclarationFile(
-      "../../platform-node/dist/ipc.d.ts"
+      "../../platform-node/dist/ipc.d.mts"
+    );
+    const ipcReactDeclarations = await readDeclarationFile(
+      "../../platform-node/dist/ipc-react.d.mts"
     );
 
     expectPublicDeclarationsToBeDocumented(declarations, [
-      { symbol: "WithNodeSyncoreClientOptions", kind: "interface" },
+      { symbol: "WithNodeSyncoreClientOptions", kind: "type" },
       { symbol: "ManagedNodeSyncoreClient", kind: "interface" },
       { symbol: "createNodeSyncoreRuntime", kind: "function" },
       { symbol: "createNodeSyncoreClient", kind: "function" },
@@ -112,10 +144,13 @@ describe("published declaration docs", () => {
 
     expectPublicDeclarationsToBeDocumented(ipcDeclarations, [
       { symbol: "installSyncoreWindowBridge", kind: "function" },
-      { symbol: "SyncoreElectronProviderProps", kind: "interface" },
       { symbol: "createRendererSyncoreClient", kind: "function" },
       { symbol: "createRendererSyncoreBridgeClient", kind: "function" },
-      { symbol: "createRendererSyncoreWindowClient", kind: "function" },
+      { symbol: "createRendererSyncoreWindowClient", kind: "function" }
+    ]);
+
+    expectPublicDeclarationsToBeDocumented(ipcReactDeclarations, [
+      { symbol: "SyncoreElectronProviderProps", kind: "interface" },
       { symbol: "SyncoreElectronProvider", kind: "function" }
     ]);
   });
@@ -123,6 +158,9 @@ describe("published declaration docs", () => {
   it("covers expo adapter public symbols", async () => {
     const declarations = await readDeclarationFile(
       "../../platform-expo/dist/index.d.ts"
+    );
+    const reactDeclarations = await readDeclarationFile(
+      "../../platform-expo/dist/react.d.ts"
     );
 
     expectPublicDeclarationsToBeDocumented(declarations, [
@@ -133,6 +171,11 @@ describe("published declaration docs", () => {
       { symbol: "createExpoSyncoreBootstrap", kind: "function" },
       { symbol: "ExpoSqliteDriver", kind: "class" },
       { symbol: "ExpoFileStorageAdapter", kind: "class" }
+    ]);
+
+    expectPublicDeclarationsToBeDocumented(reactDeclarations, [
+      { symbol: "SyncoreExpoProviderProps", kind: "interface" },
+      { symbol: "SyncoreExpoProvider", kind: "function" }
     ]);
   });
 

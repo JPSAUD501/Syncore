@@ -13,7 +13,7 @@ cd my-syncore-next
 ## 2. Install packages
 
 ```bash
-npm install syncore @syncore/react @syncore/platform-web @syncore/next sql.js
+npm install syncore next react react-dom sql.js
 ```
 
 ## 3. Start the Syncore dev loop
@@ -29,7 +29,7 @@ npx syncore dev
 `next.config.ts`
 
 ```ts
-import { withSyncoreNext } from "@syncore/next/config";
+import { withSyncoreNext } from "syncore/next/config";
 
 export default withSyncoreNext({
   output: "export"
@@ -43,12 +43,12 @@ export default withSyncoreNext({
 ```ts
 /// <reference lib="webworker" />
 
-import { createWebWorkerRuntime } from "@syncore/platform-web";
-import { resolveSqlJsWasmUrl } from "@syncore/next";
+import { createBrowserWorkerRuntime } from "syncore/browser";
+import { resolveSqlJsWasmUrl } from "syncore/next";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
-void createWebWorkerRuntime({
+void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
@@ -66,8 +66,8 @@ void createWebWorkerRuntime({
 ```tsx
 "use client";
 
-import { useQuery } from "@syncore/react";
-import { SyncoreNextProvider } from "@syncore/next";
+import { useQuery } from "syncore/react";
+import { SyncoreNextProvider } from "syncore/next";
 import { api } from "../syncore/_generated/api";
 
 function Todos() {

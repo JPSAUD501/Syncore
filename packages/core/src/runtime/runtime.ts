@@ -35,7 +35,9 @@ export interface RegisteredSyncoreFunction {
   handler: RegisteredSyncoreHandler;
 }
 
-export type SyncoreFunctionRegistry = Record<string, RegisteredSyncoreFunction>;
+export interface SyncoreFunctionRegistry {
+  readonly [name: string]: RegisteredSyncoreFunction | undefined;
+}
 export type RegisteredSyncoreHandler = {
   bivarianceHack(ctx: unknown, args: unknown): unknown;
 }["bivarianceHack"];
@@ -761,7 +763,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private readonly activeQueries = new Map<string, ActiveQueryRecord>();
   private readonly disabledSearchIndexes = new Set<string>();
   private readonly recentEvents: SyncoreDevtoolsEvent[] = [];
-  private schedulerTimer: NodeJS.Timeout | undefined;
+  private schedulerTimer: ReturnType<typeof setInterval> | undefined;
   private readonly recurringJobs: RecurringJobDefinition[];
   private readonly schedulerPollIntervalMs: number;
   private started = false;

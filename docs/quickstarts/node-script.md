@@ -15,7 +15,7 @@ npm pkg set type="module"
 ## 2. Install packages
 
 ```bash
-npm install syncore @syncore/platform-node
+npm install syncore
 ```
 
 ## 3. Start the Syncore dev loop
@@ -35,7 +35,7 @@ On a fresh project, `syncore dev` scaffolds the minimal local backend and keeps
 
 ```js
 import path from "node:path";
-import { withNodeSyncoreClient } from "@syncore/platform-node";
+import { withNodeSyncoreClient } from "syncore/node";
 import { api } from "./syncore/_generated/api.ts";
 import schema from "./syncore/schema.ts";
 import { functions } from "./syncore/_generated/functions.ts";

@@ -1,12 +1,5 @@
 import { Directory, File, Paths } from "expo-file-system";
 import {
-  createElement,
-  Fragment,
-  useEffect,
-  useState,
-  type ReactNode
-} from "react";
-import {
   defaultDatabaseDirectory,
   openDatabaseSync,
   type SQLiteDatabase
@@ -23,8 +16,7 @@ import {
   type SyncoreStorageAdapter,
   type StorageObject,
   type StorageWriteInput
-} from "syncore";
-import { SyncoreProvider } from "@syncore/react";
+} from "@syncore/core";
 
 export type ExpoSyncoreSchema = AnySyncoreSchema;
 
@@ -90,10 +82,6 @@ export interface ExpoSyncoreBootstrap {
   /** Fully discard the runtime so the next call recreates it. */
   reset(): Promise<void>;
 }
-
-type ExpoSyncoreClient = ReturnType<
-  SyncoreRuntime<ExpoSyncoreSchema>["createClient"]
->;
 
 /**
  * Create an Expo Syncore runtime backed by `expo-sqlite` and local file storage.
@@ -189,60 +177,6 @@ export function createExpoSyncoreBootstrap(
       started = null;
     }
   };
-}
-
-/**
- * Props for {@link SyncoreExpoProvider}.
- */
-export interface SyncoreExpoProviderProps {
-  /**
-   * The bootstrap created with {@link createExpoSyncoreBootstrap}.
-   */
-  bootstrap: ExpoSyncoreBootstrap;
-
-  /**
-   * The React subtree that should receive the Syncore client.
-   */
-  children: ReactNode;
-
-  /**
-   * Optional fallback content rendered while the local runtime starts.
-   */
-  fallback?: ReactNode;
-}
-
-/**
- * Start an Expo Syncore bootstrap and provide its client to React descendants.
- *
- * This avoids the manual `useEffect` + loading-state boilerplate in simple Expo apps.
- */
-export function SyncoreExpoProvider({
-  bootstrap,
-  children,
-  fallback = null
-}: SyncoreExpoProviderProps) {
-  const [client, setClient] = useState<ExpoSyncoreClient | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void bootstrap.getClient().then((nextClient) => {
-      if (!cancelled) {
-        setClient(nextClient);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      setClient(null);
-      void bootstrap.stop();
-    };
-  }, [bootstrap]);
-
-  if (!client) {
-    return createElement(Fragment, null, fallback);
-  }
-
-  return createElement(SyncoreProvider, { client, children });
 }
 
 /**

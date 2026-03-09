@@ -8,5 +8,8 @@ export default defineConfig({
   unbundle: true,
   dts: true,
   sourcemap: true,
-  clean: true
+  clean: true,
+  checks: {
+    pluginTimings: false
+  }
 });

@@ -3,37 +3,42 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./ipc": {
-      "types": "./dist/ipc.d.ts",
-      "import": "./dist/ipc.mjs"
+      "types": "./dist/ipc.d.mts",
+      "import": "./dist/ipc.mjs",
+      "default": "./dist/ipc.mjs"
+    },
+    "./ipc/react": {
+      "types": "./dist/ipc-react.d.mts",
+      "import": "./dist/ipc-react.mjs",
+      "default": "./dist/ipc-react.mjs"
     }
   },
   "scripts": {
-    "build": "pnpm run build:deps && tsdown --config tsdown.config.ts && tsc -p tsconfig.types.json",
-    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/schema build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/react build",
+    "build": "pnpm run build:deps && tsdown --config tsdown.config.ts",
+    "build:deps": "pnpm --filter @syncore/core build && pnpm --filter @syncore/react build && pnpm --filter @syncore/schema build && pnpm --filter @syncore/devtools-protocol build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src --ext .ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@syncore/core": "workspace:*",
     "@syncore/devtools-protocol": "workspace:*",
-    "@syncore/react": "workspace:*",
     "@syncore/schema": "workspace:*",
-    "react": "^19.0.0",
-    "syncore": "workspace:*",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "react": "^19.0.0",
     "react-dom": "^19.0.0"
-  },
-  "peerDependencies": {
-    "react": "^18.3.0 || ^19.0.0"
   }
 }

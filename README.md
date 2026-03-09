@@ -31,10 +31,10 @@ This repository contains the v1 foundation:
 
 - TypeScript monorepo with Turbo
 - `syncore` core runtime and schema system
-- React bindings in `@syncore/react`
-- Node platform adapter in `@syncore/platform-node`
+- React bindings in `syncore/react`
+- Node platform adapter in `syncore/node`
 - Web, Expo, and Next bootstrap packages
-- `@syncore/cli` with project scaffolding, code generation, and devtools hub
+- `syncore` CLI with project scaffolding, code generation, and devtools hub
 - Vite + Tailwind dashboard shell
 
 The implementation is intentionally structured for long-term OSS maintenance: explicit interfaces, separated responsibilities, tests, and space for future plugins.

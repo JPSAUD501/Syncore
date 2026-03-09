@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "syncore:codegen": "pnpm exec syncore codegen",
-    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/react build && pnpm --filter @syncore/platform-web build && pnpm --filter @syncore/next build",
+    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
+    "build:deps": "pnpm --filter syncore build",
     "dev": "pnpm run copy:sqljs-wasm && next dev",
     "build": "pnpm run build:deps && pnpm run clean && pnpm run copy:sqljs-wasm && next build",
     "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true});require('node:fs').rmSync('public/sql-wasm.wasm',{force:true})\"",
@@ -17,9 +17,6 @@
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit"
   },
   "dependencies": {
-    "@syncore/next": "workspace:*",
-    "@syncore/platform-web": "workspace:*",
-    "@syncore/react": "workspace:*",
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

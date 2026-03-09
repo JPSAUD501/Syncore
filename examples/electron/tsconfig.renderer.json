@@ -3,8 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "noEmit": true,
-    "moduleResolution": "Bundler",
-    "paths": {}
+    "moduleResolution": "Bundler"
   },
   "include": ["src/**/*.tsx", "src/**/*.ts", "syncore/**/*.ts"]
 }

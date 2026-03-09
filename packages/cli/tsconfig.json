@@ -1,11 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "paths": {
-      "syncore": ["../core/dist/index.d.mts"],
-      "syncore/cli": ["../core/dist/cli.d.mts"]
-    }
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.ts"]
 }

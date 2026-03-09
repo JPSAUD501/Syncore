@@ -11,6 +11,9 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
+  checks: {
+    pluginTimings: false
+  },
   deps: {
     neverBundle: ["vite"]
   },

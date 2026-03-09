@@ -1,0 +1,95 @@
+{
+  "name": "syncore",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "syncore": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "default": "./dist/cli.js",
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    },
+    "./browser": {
+      "default": "./dist/browser.js",
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./browser/react": {
+      "default": "./dist/browser-react.js",
+      "types": "./dist/browser-react.d.ts",
+      "import": "./dist/browser-react.js"
+    },
+    "./react": {
+      "default": "./dist/react.js",
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./svelte": {
+      "default": "./dist/svelte.js",
+      "types": "./dist/svelte.d.ts",
+      "import": "./dist/svelte.js"
+    },
+    "./expo": {
+      "default": "./dist/expo.js",
+      "types": "./dist/expo.d.ts",
+      "import": "./dist/expo.js"
+    },
+    "./expo/react": {
+      "default": "./dist/expo-react.js",
+      "types": "./dist/expo-react.d.ts",
+      "import": "./dist/expo-react.js"
+    },
+    "./node": {
+      "default": "./dist/node.js",
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./node/ipc": {
+      "default": "./dist/node-ipc.js",
+      "types": "./dist/node-ipc.d.ts",
+      "import": "./dist/node-ipc.js"
+    },
+    "./node/ipc/react": {
+      "default": "./dist/node-ipc-react.js",
+      "types": "./dist/node-ipc-react.d.ts",
+      "import": "./dist/node-ipc-react.js"
+    },
+    "./next": {
+      "default": "./dist/next.js",
+      "types": "./dist/next.d.ts",
+      "import": "./dist/next.js"
+    },
+    "./next/config": {
+      "default": "./dist/next-config.js",
+      "types": "./dist/next-config.d.ts",
+      "import": "./dist/next-config.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm run build:deps && tsdown --config tsdown.config.ts",
+    "build:deps": "pnpm --filter @syncore/core build && pnpm --filter @syncore/schema build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/react build && pnpm --filter @syncore/platform-web build && pnpm --filter @syncore/platform-node build && pnpm --filter @syncore/platform-expo build && pnpm --filter @syncore/next build && pnpm --filter @syncore/svelte build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/core": "workspace:*",
+    "@syncore/next": "workspace:*",
+    "@syncore/platform-expo": "workspace:*",
+    "@syncore/platform-node": "workspace:*",
+    "@syncore/platform-web": "workspace:*",
+    "@syncore/react": "workspace:*",
+    "@syncore/schema": "workspace:*",
+    "@syncore/svelte": "workspace:*"
+  }
+}

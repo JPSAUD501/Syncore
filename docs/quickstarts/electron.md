@@ -11,7 +11,7 @@ and a React renderer.
 ## 2. Install packages
 
 ```bash
-npm install syncore @syncore/react @syncore/platform-node react react-dom electron
+npm install syncore react react-dom electron
 ```
 
 ## 3. Start the Syncore dev loop
@@ -35,7 +35,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import {
   bindElectronWindowToSyncoreRuntime,
   createNodeSyncoreRuntime
-} from "@syncore/platform-node";
+} from "syncore/node";
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
@@ -77,7 +77,7 @@ void app.whenReady().then(createWindow);
 `src/preload.cjs`
 
 ```js
-const { installSyncoreWindowBridge } = require("@syncore/platform-node/ipc");
+const { installSyncoreWindowBridge } = require("syncore/node/ipc");
 
 eval(installSyncoreWindowBridge());
 ```
@@ -87,8 +87,8 @@ eval(installSyncoreWindowBridge());
 `src/renderer/App.tsx`
 
 ```tsx
-import { SyncoreElectronProvider } from "@syncore/platform-node/ipc";
-import { useQuery } from "@syncore/react";
+import { SyncoreElectronProvider } from "syncore/node/ipc/react";
+import { useQuery } from "syncore/react";
 import { api } from "../../syncore/_generated/api";
 
 export function App() {

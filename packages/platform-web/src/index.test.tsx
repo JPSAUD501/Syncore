@@ -7,7 +7,7 @@ import {
   query,
   type MutationCtx,
   type QueryCtx
-} from "syncore";
+} from "@syncore/core";
 import { defineSchema, defineTable, v } from "@syncore/schema";
 import { createWebSyncoreRuntime, createWebWorkerRuntime } from "./index.js";
 

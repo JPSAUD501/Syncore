@@ -1,0 +1,22 @@
+{
+  "name": "syncore-example-sveltekit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
+    "build:deps": "pnpm --filter syncore build",
+    "dev": "pnpm run build:deps && pnpm run syncore:codegen && vite dev",
+    "build": "pnpm run build:deps && pnpm run syncore:codegen && vite build",
+    "typecheck": "pnpm run syncore:codegen && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "sql.js": "^1.13.0",
+    "svelte": "^5.0.0",
+    "syncore": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.4.1"
+  }
+}

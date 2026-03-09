@@ -1,20 +1,19 @@
 {
-  "name": "syncore",
+  "name": "@syncore/core",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
-  "bin": {
-    "syncore": "./dist/cli.mjs"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./cli": {
       "types": "./dist/cli.d.mts",
-      "import": "./dist/cli.mjs"
+      "import": "./dist/cli.mjs",
+      "default": "./dist/cli.mjs"
     }
   },
   "scripts": {

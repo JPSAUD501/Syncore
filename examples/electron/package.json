@@ -4,7 +4,7 @@
   "type": "module",
   "main": "./dist/src/main.js",
   "scripts": {
-    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/react build && pnpm --filter @syncore/platform-node build",
+    "build:deps": "pnpm --filter syncore build",
     "dev": "pnpm run build && electron ./dist/src/main.js",
     "build": "pnpm run build:deps && pnpm run build:main && pnpm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json && node ./scripts/copy-preload.mjs",
@@ -15,12 +15,10 @@
     "predev": "pnpm run syncore:codegen",
     "prelint": "pnpm run syncore:codegen",
     "pretypecheck": "pnpm run syncore:codegen",
-    "syncore:codegen": "pnpm exec syncore codegen",
+    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "dependencies": {
-    "@syncore/platform-node": "workspace:*",
-    "@syncore/react": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "syncore": "workspace:*"

@@ -5,7 +5,7 @@ import {
   type FunctionReference,
   type SyncoreClient,
   type SyncoreWatch
-} from "syncore";
+} from "@syncore/core";
 import { SyncoreProvider, useAction, useMutation, useQuery } from "./index.js";
 
 describe("@syncore/react", () => {
@@ -108,7 +108,9 @@ function useHookInference() {
   const measureTodo = useAction(actionReference);
 
   expectTypeOf(todos).toEqualTypeOf<Array<{ title: string }> | undefined>();
-  expectTypeOf(createTodo).parameters.toEqualTypeOf<[args: { title: string }]>();
+  expectTypeOf(createTodo).parameters.toEqualTypeOf<
+    [args: { title: string }]
+  >();
   expectTypeOf(createTodo).returns.toEqualTypeOf<Promise<string>>();
   expectTypeOf(measureTodo).parameters.toEqualTypeOf<[args: string]>();
   expectTypeOf(measureTodo).returns.toEqualTypeOf<Promise<number>>();
@@ -134,9 +136,7 @@ function TodosProbe({
   return <div>{todos[0]?.title}</div>;
 }
 
-function createTestClient<TResult>(
-  watch: TestWatch<TResult>
-): SyncoreClient {
+function createTestClient<TResult>(watch: TestWatch<TResult>): SyncoreClient {
   const watchQuery = vi.fn(
     () => watch as unknown as SyncoreWatch<unknown>
   ) as SyncoreClient["watchQuery"];

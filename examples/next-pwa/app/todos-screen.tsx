@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "@syncore/react";
+import { useMutation, useQuery } from "syncore/react";
 import { api } from "../syncore/_generated/api";
 
 export function TodosScreen() {
@@ -30,15 +30,21 @@ export function TodosScreen() {
       }}
     >
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
-        <p style={{ textTransform: "uppercase", letterSpacing: "0.14em", opacity: 0.7 }}>
+        <p
+          style={{
+            textTransform: "uppercase",
+            letterSpacing: "0.14em",
+            opacity: 0.7
+          }}
+        >
           Next static + worker runtime
         </p>
         <h1 style={{ fontSize: "3rem", lineHeight: 1, margin: "12px 0 10px" }}>
           Syncore runs fully local in the browser.
         </h1>
         <p style={{ maxWidth: 520, opacity: 0.78 }}>
-          Queries stay reactive because the runtime lives in a dedicated worker and pushes
-          invalidations back to React hooks.
+          Queries stay reactive because the runtime lives in a dedicated worker
+          and pushes invalidations back to React hooks.
         </p>
 
         <section
@@ -81,7 +87,15 @@ export function TodosScreen() {
             </button>
           </div>
 
-          <ul style={{ listStyle: "none", padding: 0, marginTop: 24, display: "grid", gap: 12 }}>
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              marginTop: 24,
+              display: "grid",
+              gap: 12
+            }}
+          >
             {todos.map((todo) => (
               <li
                 key={todo._id}

@@ -1,34 +1,31 @@
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  rm,
-  stat,
-  symlink,
-  writeFile
-} from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import WebSocket from "ws";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 const cliRoot = import.meta.dirname;
 const workspaceRoot = path.resolve(cliRoot, "..", "..", "..");
-const distCliPath = path.resolve(
+const cliEntryPath = path.resolve(
   workspaceRoot,
   "packages",
-  "core",
-  "dist",
-  "cli.mjs"
+  "cli",
+  "src",
+  "index.ts"
 );
+const tsxRegisterPath = pathToFileURL(
+  path.resolve(workspaceRoot, "node_modules", "tsx", "dist", "loader.mjs")
+).href;
+const tsxTsconfigPath = path.resolve(workspaceRoot, "tsconfig.base.json");
 
 const tempDirectories: string[] = [];
 
 beforeAll(async () => {
-  await stat(distCliPath);
+  await stat(cliEntryPath);
 });
 
 afterEach(async () => {
@@ -37,7 +34,7 @@ afterEach(async () => {
     if (!directory) {
       continue;
     }
-    await rm(directory, { recursive: true, force: true });
+    await removeDirectory(directory);
   }
 });
 
@@ -156,17 +153,20 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
     const devtoolsPort = await getAvailablePort();
     const dashboardPort = await getAvailablePort();
-    await linkWorkspacePackage(cwd, "syncore");
+    await writeWorkspaceTsconfig(cwd);
 
-    const child = spawn(process.execPath, [distCliPath, "dev"], {
-      cwd,
-      env: {
-        ...process.env,
-        SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
-        SYNCORE_DASHBOARD_PORT: String(dashboardPort)
-      },
-      stdio: ["ignore", "pipe", "pipe"]
-    });
+    const child = spawn(
+      process.execPath,
+      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
+      {
+        cwd,
+        env: createCliProcessEnv({
+          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
+          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
+        }),
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
     const childPipes = getPipedStreams(child);
 
     try {
@@ -190,7 +190,7 @@ describe("syncore CLI", () => {
   test("import loads JSONL rows into a local table", async () => {
     const cwd = await createTempProjectDirectory();
     await runCli(cwd, ["init"]);
-    await linkWorkspacePackage(cwd, "syncore");
+    await writeWorkspaceTsconfig(cwd);
 
     const jsonlPath = path.join(cwd, "sampleData.jsonl");
     await writeFile(
@@ -218,7 +218,7 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
 
     await runCli(cwd, ["init"]);
-    await linkWorkspacePackage(cwd, "syncore");
+    await writeWorkspaceTsconfig(cwd);
 
     const generateResult = await runCli(cwd, ["migrate:generate", "initial"]);
     expect(generateResult.stdout).toContain("Generated");
@@ -250,24 +250,27 @@ describe("syncore CLI", () => {
     const statusResult = await runCli(cwd, ["migrate:status"]);
     expect(statusResult.stdout).toContain("Statements to generate: 0");
     expect(statusResult.stdout).toContain("Destructive changes: 0");
-  });
+  }, 20_000);
 
   test("dev starts the hub and serves websocket clients", async () => {
     const cwd = await createTempProjectDirectory();
     const devtoolsPort = await getAvailablePort();
     const dashboardPort = await getAvailablePort();
     await runCli(cwd, ["init"]);
-    await linkWorkspacePackage(cwd, "syncore");
+    await writeWorkspaceTsconfig(cwd);
 
-    const child = spawn(process.execPath, [distCliPath, "dev"], {
-      cwd,
-      env: {
-        ...process.env,
-        SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
-        SYNCORE_DASHBOARD_PORT: String(dashboardPort)
-      },
-      stdio: ["ignore", "pipe", "pipe"]
-    });
+    const child = spawn(
+      process.execPath,
+      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
+      {
+        cwd,
+        env: createCliProcessEnv({
+          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
+          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
+        }),
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
     const childPipes = getPipedStreams(child);
 
     const output = await waitForOutput(
@@ -352,16 +355,72 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
+async function removeDirectory(directory: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (
+        !isRetryableWindowsFsError(error) ||
+        attempt === 4 ||
+        !(await exists(directory))
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+    }
+  }
+}
+
+async function writeWorkspaceTsconfig(cwd: string): Promise<void> {
+  const configPath = path.join(cwd, "tsconfig.json");
+  const extendsPath = path
+    .relative(cwd, path.join(workspaceRoot, "tsconfig.base.json"))
+    .replaceAll("\\", "/");
+
+  await writeFile(
+    configPath,
+    `${JSON.stringify(
+      {
+        extends: extendsPath.startsWith(".") ? extendsPath : `./${extendsPath}`
+      },
+      null,
+      2
+    )}\n`
+  );
+}
+
+function createCliProcessEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    TSX_TSCONFIG_PATH: tsxTsconfigPath,
+    ...extra
+  };
+}
+
+function isRetryableWindowsFsError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error.code === "EBUSY" || error.code === "EPERM")
+  );
+}
+
 async function runCli(
   cwd: string,
   args: string[]
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [distCliPath, ...args], {
-      cwd,
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
+    const child = spawn(
+      process.execPath,
+      ["--import", tsxRegisterPath, cliEntryPath, ...args],
+      {
+        cwd,
+        env: createCliProcessEnv(),
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
     let stdout = "";
     let stderr = "";
 
@@ -470,31 +529,6 @@ async function getAvailablePort(): Promise<number> {
       });
     });
   });
-}
-
-async function linkWorkspacePackage(
-  cwd: string,
-  packageName: string
-): Promise<void> {
-  const nodeModulesDirectory = path.join(cwd, "node_modules");
-  await mkdir(nodeModulesDirectory, { recursive: true });
-
-  const source = resolveWorkspacePackageDirectory(packageName);
-  const destination = path.join(nodeModulesDirectory, packageName);
-  await symlink(
-    source,
-    destination,
-    process.platform === "win32" ? "junction" : "dir"
-  );
-}
-
-function resolveWorkspacePackageDirectory(packageName: string): string {
-  if (packageName === "syncore") {
-    return path.join(workspaceRoot, "packages", "core");
-  }
-  throw new Error(
-    `No workspace package directory mapping exists for "${packageName}".`
-  );
 }
 
 function getPipedStreams(child: ReturnType<typeof spawn>): {

@@ -10,20 +10,21 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     }
   },
   "scripts": {
     "build": "pnpm run build:deps && pnpm run clean && tsdown --config tsdown.config.ts",
-    "build:deps": "pnpm --filter syncore build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/schema build",
+    "build:deps": "pnpm --filter @syncore/core build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/schema build",
     "clean": "node -e \"const fs=require('node:fs');for (const target of ['dist','node_modules/.unrun','node_modules/.vite','node_modules/.vite-temp']) { fs.rmSync(target,{recursive:true,force:true}); }\"",
     "lint": "eslint src --ext .ts",
-    "test": "pnpm run build:deps && pnpm run build && vitest run",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@syncore/core": "workspace:*",
     "@syncore/devtools-protocol": "workspace:*",
-    "syncore": "workspace:*",
     "tsx": "^4.19.3",
     "ws": "^8.18.0"
   }

@@ -6,12 +6,15 @@ import {
   query,
   type MutationCtx,
   type QueryCtx
-} from "syncore";
+} from "@syncore/core";
 import { defineSchema, defineTable, v } from "@syncore/schema";
 import { createWebPersistence } from "./persistence.js";
 import { createWebSyncoreRuntime } from "./index.js";
 
-const wasmFilePath = path.resolve(process.cwd(), "node_modules/sql.js/dist/sql-wasm.wasm");
+const wasmFilePath = path.resolve(
+  process.cwd(),
+  "node_modules/sql.js/dist/sql-wasm.wasm"
+);
 
 describe("platform-web OPFS persistence", () => {
   const originalNavigator = globalThis.navigator;
@@ -61,10 +64,11 @@ describe("platform-web OPFS persistence", () => {
       locateFile: () => wasmFilePath
     });
     await firstRuntime.start();
-    await firstRuntime.createClient().mutation(
-      createFunctionReference("mutation", "todos/create"),
-      { title: "Persist me in OPFS" }
-    );
+    await firstRuntime
+      .createClient()
+      .mutation(createFunctionReference("mutation", "todos/create"), {
+        title: "Persist me in OPFS"
+      });
     await firstRuntime.stop();
 
     const secondRuntime = await createWebSyncoreRuntime({
@@ -76,16 +80,15 @@ describe("platform-web OPFS persistence", () => {
       locateFile: () => wasmFilePath
     });
     await secondRuntime.start();
-    const rows = await secondRuntime.createClient().query(
-      createFunctionReference<
-        "query",
-        Record<never, never>,
-        Array<{ title: string }>
-      >(
-        "query",
-        "todos/list"
-      )
-    );
+    const rows = await secondRuntime
+      .createClient()
+      .query(
+        createFunctionReference<
+          "query",
+          Record<never, never>,
+          Array<{ title: string }>
+        >("query", "todos/list")
+      );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.title).toBe("Persist me in OPFS");
     await secondRuntime.stop();
@@ -114,7 +117,9 @@ describe("platform-web OPFS persistence", () => {
 });
 
 function installMockOpfs(): void {
-  const navigatorValue = originalNavigatorWithStorage(new MockDirectoryHandle("root"));
+  const navigatorValue = originalNavigatorWithStorage(
+    new MockDirectoryHandle("root")
+  );
   Object.defineProperty(globalThis, "navigator", {
     configurable: true,
     value: navigatorValue
@@ -236,10 +241,7 @@ async function normalizeChunk(chunk: unknown): Promise<Uint8Array> {
   }
   if (ArrayBuffer.isView(chunk)) {
     return new Uint8Array(
-      chunk.buffer.slice(
-        chunk.byteOffset,
-        chunk.byteOffset + chunk.byteLength
-      )
+      chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength)
     );
   }
   if (chunk instanceof ArrayBuffer) {
@@ -282,10 +284,7 @@ async function normalizeChunk(chunk: unknown): Promise<Uint8Array> {
           byteLength: number;
         };
         return new Uint8Array(
-          view.buffer.slice(
-            view.byteOffset,
-            view.byteOffset + view.byteLength
-          )
+          view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)
         );
       }
     }
