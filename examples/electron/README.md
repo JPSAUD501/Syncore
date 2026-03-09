@@ -23,9 +23,9 @@ manually create and dispose the renderer client.
 ## Commands
 
 ```bash
-pnpm --filter syncore-example-electron build
-pnpm --filter syncore-example-electron dev
-pnpm --filter @syncore/testing test:smoke:electron
+bun run --filter syncore-example-electron build
+bun run --filter syncore-example-electron dev
+bun run --filter @syncore/testing test:smoke:electron
 ```
 
 The smoke test launches the built Electron app, writes local state through the renderer bridge,

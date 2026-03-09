@@ -23,7 +23,7 @@ The example also includes an on-device smoke harness triggered through the deep 
 Host-side automation lives in `@syncore/testing`:
 
 ```bash
-pnpm --filter @syncore/testing test:smoke:expo
+bun run --filter @syncore/testing test:smoke:expo
 ```
 
 Behavior:

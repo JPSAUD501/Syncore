@@ -67,7 +67,7 @@ interface PackageJsonShape {
 }
 
 const COMBINED_DEV_COMMAND =
-  'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "pnpm run syncore:dev" "pnpm run dev:app"';
+  'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "bun run syncore:dev" "bun run dev:app"';
 
 const program = new Command();
 const migrationSnapshotFileName = "_schema_snapshot.json";

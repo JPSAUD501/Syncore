@@ -18,9 +18,9 @@
 
 ## Tests To Run
 
-- `pnpm --filter @syncore/schema lint`
-- `pnpm --filter @syncore/schema typecheck`
-- `pnpm --filter syncore test`
+- `bun run --filter @syncore/schema lint`
+- `bun run --filter @syncore/schema typecheck`
+- `bun run --filter syncore test`
 
 ## Common Failure Modes
 

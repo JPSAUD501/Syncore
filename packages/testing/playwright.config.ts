@@ -21,8 +21,8 @@ export default defineConfig({
   },
   webServer: {
     command: [
-      "pnpm turbo run build --filter=syncore-example-next-pwa",
-      `tsx "${staticServerScript}" "${path.join(exampleRoot, "out")}" 3210`
+      "bun run turbo run build --filter=syncore-example-next-pwa",
+      `bun run tsx "${staticServerScript}" "${path.join(exampleRoot, "out")}" 3210`
     ].join(" && "),
     cwd: workspaceRoot,
     port: 3210,

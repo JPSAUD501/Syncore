@@ -76,8 +76,8 @@
   },
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",
-    "build:deps": "pnpm --filter @syncore/core build && pnpm --filter @syncore/schema build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/react build && pnpm --filter @syncore/platform-web build && pnpm --filter @syncore/platform-node build && pnpm --filter @syncore/platform-expo build && pnpm --filter @syncore/next build && pnpm --filter @syncore/svelte build",
-    "build:standalone": "pnpm run build:deps && pnpm run build",
+    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/schema build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/react build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build && bun run --filter @syncore/svelte build",
+    "build:standalone": "bun run build:deps && bun run build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run --passWithNoTests",

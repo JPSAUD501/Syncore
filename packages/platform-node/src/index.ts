@@ -12,9 +12,7 @@ import WebSocket from "ws";
 import type {
   SyncoreDevtoolsMessage,
   SyncoreDevtoolsRequest,
-  SyncoreDevtoolsSnapshot,
-  SyncoreRequestPayload,
-  SyncoreResponsePayload
+  SyncoreDevtoolsSnapshot
 } from "@syncore/devtools-protocol";
 import {
   type AnySyncoreSchema,
@@ -562,8 +560,7 @@ export function createNodeWebSocketDevtoolsSink(
       if (message.type === "ping") {
         send({ type: "pong" });
       } else if (message.type === "request" && onRequest) {
-        const req = message as SyncoreDevtoolsRequest;
-        onRequest(req.payload)
+        onRequest(message.payload)
           .then((responsePayload) => {
             const runtimeId =
               latestHello?.runtimeId ?? getSnapshot?.().runtimeId;
@@ -572,7 +569,7 @@ export function createNodeWebSocketDevtoolsSink(
             }
             send({
               type: "response",
-              requestId: req.requestId,
+              requestId: message.requestId,
               runtimeId,
               payload: responsePayload
             });
@@ -585,7 +582,7 @@ export function createNodeWebSocketDevtoolsSink(
             }
             send({
               type: "response",
-              requestId: req.requestId,
+              requestId: message.requestId,
               runtimeId,
               payload: {
                 kind: "error",

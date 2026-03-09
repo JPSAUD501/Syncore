@@ -15,12 +15,14 @@
     }
   },
   "scripts": {
-    "build": "pnpm run clean && tsdown --config tsdown.config.ts",
-    "build:deps": "pnpm --filter @syncore/core build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/schema build",
+    "build": "bun run clean && tsdown --config tsdown.config.ts",
+    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build",
     "clean": "node -e \"const fs=require('node:fs');for (const target of ['dist','node_modules/.unrun','node_modules/.vite','node_modules/.vite-temp']) { fs.rmSync(target,{recursive:true,force:true}); }\"",
     "lint": "eslint src --ext .ts",
-    "test": "pnpm run build:deps && vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test": "bun run build:deps && vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "syncore:dev": "syncore dev",
+    "syncore:codegen": "syncore codegen"
   },
   "dependencies": {
     "@syncore/core": "workspace:*",

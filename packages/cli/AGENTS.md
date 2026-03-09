@@ -12,13 +12,13 @@
 
 ## Example Integration
 
-- Examples run codegen from CLI source via `pnpm --dir ../../packages/cli exec tsx src/index.ts codegen`.
+- Examples run codegen from CLI source via `bun run --cwd ../../packages/cli tsx src/index.ts codegen`.
 - Avoid changes that require the built CLI `dist` to exist during parallel lint/typecheck tasks.
 
 ## Tests To Run
 
-- `pnpm --filter @syncore/cli test`
-- `pnpm --filter @syncore/cli typecheck`
+- `bun run --filter @syncore/cli test`
+- `bun run --filter @syncore/cli typecheck`
 
 ## Common Failure Modes
 

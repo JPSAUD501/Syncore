@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "name": "tasks",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "text": {
+            "kind": "string"
+          },
+          "done": {
+            "kind": "boolean"
+          }
+        }
+      },
+      "indexes": [
+        {
+          "name": "by_done",
+          "fields": [
+            "done"
+          ]
+        }
+      ],
+      "searchIndexes": []
+    }
+  ],
+  "hash": "{\"tables\":[{\"indexes\":[{\"fields\":[\"done\"],\"name\":\"by_done\"}],\"name\":\"tasks\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"done\":{\"kind\":\"boolean\"},\"text\":{\"kind\":\"string\"}}}}],\"version\":1}"
+}

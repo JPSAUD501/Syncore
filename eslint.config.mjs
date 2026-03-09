@@ -31,7 +31,7 @@ export default tseslint.config(
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/consistent-type-imports": [
         "error",
-        { "fixStyle": "inline-type-imports" }
+        { fixStyle: "inline-type-imports" }
       ]
     },
     settings: {
@@ -67,7 +67,7 @@ export default tseslint.config(
       "coverage/**",
       "reference/**",
       "node_modules/**",
-      "pnpm-lock.yaml"
+      "bun.lock"
     ]
   }
 );

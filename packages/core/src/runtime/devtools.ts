@@ -5,12 +5,14 @@ import type {
   SyncoreResponsePayload
 } from "@syncore/devtools-protocol";
 import { describeValidator } from "@syncore/schema";
+import type { TableDefinition, Validator } from "@syncore/schema";
 import type {
   AnySyncoreSchema,
   SyncoreRuntimeOptions,
   SyncoreSqlDriver
 } from "./runtime.js";
-import { createFunctionReference, SyncoreRuntime } from "./runtime.js";
+import { createFunctionReference } from "./runtime.js";
+import type { SyncoreRuntime } from "./runtime.js";
 
 export interface DevtoolsRequestHandlerDeps {
   driver: SyncoreSqlDriver;
@@ -104,7 +106,9 @@ export function createDevtoolsRequestHandler(
         const tableNames = schema.tableNames();
         const tables = await Promise.all(
           tableNames.map(async (name) => {
-            const table = schema.getTable(name);
+            const table = schema.getTable(name) as TableDefinition<
+              Validator<unknown>
+            >;
             const validatorDesc = describeValidator(table.validator);
             const fields =
               validatorDesc.kind === "object"

@@ -5,16 +5,6 @@ import {
   v
 } from "../_generated/server";
 
-const NOTE_COLORS = [
-  "#FF6B6B",
-  "#4ECDC4",
-  "#45B7D1",
-  "#96CEB4",
-  "#FFEAA7",
-  "#DDA0DD",
-  "#98D8C8"
-];
-
 export const list = query({
   args: {},
   handler: async (ctx) =>

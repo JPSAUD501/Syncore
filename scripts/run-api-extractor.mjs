@@ -45,8 +45,9 @@ const projectFolders = [
 
 try {
   await runCommand(
-    "pnpm",
+    "bun",
     [
+      "run",
       "turbo",
       "run",
       "build",
@@ -58,10 +59,9 @@ try {
   for (const configFile of configFiles) {
     await ensureApiExtractorDirectories(path.join(workspaceRoot, configFile));
     await runCommand(
-      "pnpm",
+      "node",
       [
-        "exec",
-        "api-extractor",
+        "./node_modules/@microsoft/api-extractor/bin/api-extractor",
         "run",
         "--config",
         configFile,

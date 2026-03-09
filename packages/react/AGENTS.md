@@ -18,8 +18,8 @@
 
 ## Tests To Run
 
-- `pnpm --filter @syncore/react test`
-- `pnpm --filter @syncore/react typecheck`
+- `bun run --filter @syncore/react test`
+- `bun run --filter @syncore/react typecheck`
 
 ## Common Failure Modes
 

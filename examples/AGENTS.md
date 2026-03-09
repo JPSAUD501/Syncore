@@ -12,9 +12,9 @@ Examples are both documentation and integration fixtures. They should demonstrat
 
 ## Validation
 
-- Expo: `pnpm --filter syncore-example-expo typecheck`
-- Electron: `pnpm --filter syncore-example-electron typecheck`
-- Next PWA: `pnpm --filter syncore-example-next-pwa build`
+- Expo: `bun run --filter syncore-example-expo typecheck`
+- Electron: `bun run --filter syncore-example-electron typecheck`
+- Next PWA: `bun run --filter syncore-example-next-pwa build`
 
 ## Editing Guidance
 

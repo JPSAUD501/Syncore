@@ -18,9 +18,9 @@
 
 ## Tests To Run
 
-- `pnpm --filter @syncore/platform-web test`
-- `pnpm --filter @syncore/platform-web typecheck`
-- `pnpm --filter syncore-example-next-pwa build`
+- `bun run --filter @syncore/platform-web test`
+- `bun run --filter @syncore/platform-web typecheck`
+- `bun run --filter syncore-example-next-pwa build`
 
 ## Common Failure Modes
 

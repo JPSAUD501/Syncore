@@ -46,16 +46,23 @@ async function main(): Promise<void> {
     }
 
     await runStreaming(
-      "pnpm",
-      ["turbo", "run", "build", "--filter=syncore-example-expo..."],
+      "bun",
+      ["run", "turbo", "run", "build", "--filter=syncore-example-expo..."],
       workspaceRoot
     );
-    await runStreaming("pnpm", ["--filter", "syncore-example-expo", "android:smoke"], workspaceRoot);
+    await runStreaming(
+      "bun",
+      ["run", "--filter", "syncore-example-expo", "android:smoke"],
+      workspaceRoot
+    );
 
     await prepareDevice(deviceState.device.serial);
     await clearAppData(deviceState.device.serial);
     await launchSmokeHarness(deviceState.device.serial);
-    const status = await waitForSmokeOutcome(deviceState.device.serial, smokeTimeoutMs);
+    const status = await waitForSmokeOutcome(
+      deviceState.device.serial,
+      smokeTimeoutMs
+    );
 
     if (status === "pass") {
       process.stdout.write("Syncore Expo smoke passed.\n");
@@ -94,7 +101,8 @@ async function ensureAndroidDevice(): Promise<EnsuredAndroidDevice> {
   if (!(await isCommandAvailable("emulator", ["-list-avds"]))) {
     return {
       kind: "skip",
-      reason: "No Android device is connected and the emulator command is unavailable."
+      reason:
+        "No Android device is connected and the emulator command is unavailable."
     };
   }
 
@@ -110,10 +118,13 @@ async function ensureAndroidDevice(): Promise<EnsuredAndroidDevice> {
   if (!avdName) {
     return {
       kind: "skip",
-      reason: "No Android device is connected and no valid AVD name was resolved."
+      reason:
+        "No Android device is connected and no valid AVD name was resolved."
     };
   }
-  process.stdout.write(`Starting Android emulator "${avdName}" for Syncore smoke...\n`);
+  process.stdout.write(
+    `Starting Android emulator "${avdName}" for Syncore smoke...\n`
+  );
   const emulatorProcess = spawn(
     "emulator",
     ["-avd", avdName, "-no-snapshot-save", "-no-boot-anim"],
@@ -139,10 +150,17 @@ async function waitForBootedDevice(): Promise<AndroidDevice> {
 
   while (Date.now() < deadline) {
     const devices = await listAndroidDevices();
-    const bootedDevice = devices.find((device) => device.isEmulator) ?? devices[0];
+    const bootedDevice =
+      devices.find((device) => device.isEmulator) ?? devices[0];
     if (bootedDevice) {
       const bootState = (
-        await runCapture("adb", ["-s", bootedDevice.serial, "shell", "getprop", "sys.boot_completed"])
+        await runCapture("adb", [
+          "-s",
+          bootedDevice.serial,
+          "shell",
+          "getprop",
+          "sys.boot_completed"
+        ])
       ).stdout.trim();
       if (bootState === "1") {
         await prepareDevice(bootedDevice.serial);
@@ -153,13 +171,17 @@ async function waitForBootedDevice(): Promise<AndroidDevice> {
     await wait(2_000);
   }
 
-  throw new Error("Timed out waiting for the Android emulator/device to finish booting.");
+  throw new Error(
+    "Timed out waiting for the Android emulator/device to finish booting."
+  );
 }
 
 async function listAvailableAvds(): Promise<string[]> {
   const result = await runCapture("emulator", ["-list-avds"]);
   if (result.code !== 0) {
-    throw new Error(`Unable to list Android AVDs.\n${result.stderr || result.stdout}`);
+    throw new Error(
+      `Unable to list Android AVDs.\n${result.stderr || result.stdout}`
+    );
   }
   return result.stdout
     .split(/\r?\n/)
@@ -170,7 +192,9 @@ async function listAvailableAvds(): Promise<string[]> {
 async function listAndroidDevices(): Promise<AndroidDevice[]> {
   const result = await runCapture("adb", ["devices"]);
   if (result.code !== 0) {
-    throw new Error(`Unable to list Android devices.\n${result.stderr || result.stdout}`);
+    throw new Error(
+      `Unable to list Android devices.\n${result.stderr || result.stdout}`
+    );
   }
 
   return result.stdout
@@ -189,14 +213,35 @@ async function listAndroidDevices(): Promise<AndroidDevice[]> {
 }
 
 async function prepareDevice(serial: string): Promise<void> {
-  await runCapture("adb", ["-s", serial, "shell", "input", "keyevent", "KEYCODE_WAKEUP"]);
+  await runCapture("adb", [
+    "-s",
+    serial,
+    "shell",
+    "input",
+    "keyevent",
+    "KEYCODE_WAKEUP"
+  ]);
   await runCapture("adb", ["-s", serial, "shell", "wm", "dismiss-keyguard"]);
   await runCapture("adb", ["-s", serial, "shell", "input", "keyevent", "82"]);
 }
 
 async function clearAppData(serial: string): Promise<void> {
-  await runCapture("adb", ["-s", serial, "shell", "am", "force-stop", androidPackageId]);
-  const result = await runCapture("adb", ["-s", serial, "shell", "pm", "clear", androidPackageId]);
+  await runCapture("adb", [
+    "-s",
+    serial,
+    "shell",
+    "am",
+    "force-stop",
+    androidPackageId
+  ]);
+  const result = await runCapture("adb", [
+    "-s",
+    serial,
+    "shell",
+    "pm",
+    "clear",
+    androidPackageId
+  ]);
   const output = `${result.stdout}\n${result.stderr}`;
   if (!output.includes("Success")) {
     throw new Error(`Unable to clear Expo example app data.\n${output}`);
@@ -218,7 +263,9 @@ async function launchSmokeHarness(serial: string): Promise<void> {
     androidPackageId
   ]);
   if (result.code !== 0) {
-    throw new Error(`Unable to launch the Expo smoke deep link.\n${result.stderr || result.stdout}`);
+    throw new Error(
+      `Unable to launch the Expo smoke deep link.\n${result.stderr || result.stdout}`
+    );
   }
 }
 
@@ -249,8 +296,21 @@ async function waitForSmokeOutcome(
 
 async function dumpUiHierarchy(serial: string): Promise<string> {
   const remotePath = "/data/local/tmp/syncore-expo-smoke.xml";
-  await runCapture("adb", ["-s", serial, "shell", "uiautomator", "dump", remotePath]);
-  const dump = await runCapture("adb", ["-s", serial, "shell", "cat", remotePath]);
+  await runCapture("adb", [
+    "-s",
+    serial,
+    "shell",
+    "uiautomator",
+    "dump",
+    remotePath
+  ]);
+  const dump = await runCapture("adb", [
+    "-s",
+    serial,
+    "shell",
+    "cat",
+    remotePath
+  ]);
   return `${dump.stdout}\n${dump.stderr}`;
 }
 
@@ -258,7 +318,10 @@ async function stopEmulator(serial: string): Promise<void> {
   await runCapture("adb", ["-s", serial, "emu", "kill"]);
 }
 
-async function isCommandAvailable(command: string, args: string[]): Promise<boolean> {
+async function isCommandAvailable(
+  command: string,
+  args: string[]
+): Promise<boolean> {
   const result = await runCapture(command, args, { allowSpawnFailure: true });
   return result.code === 0;
 }
@@ -282,7 +345,11 @@ async function runStreaming(
         resolve();
         return;
       }
-      reject(new Error(`Command failed: ${command} ${args.join(" ")} (exit ${code ?? "unknown"})`));
+      reject(
+        new Error(
+          `Command failed: ${command} ${args.join(" ")} (exit ${code ?? "unknown"})`
+        )
+      );
     });
   });
 }

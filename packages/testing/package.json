@@ -23,10 +23,10 @@
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('playwright-report',{recursive:true,force:true});require('node:fs').rmSync('test-results',{recursive:true,force:true})\"",
     "lint": "eslint playwright.config.ts src tests --ext .ts",
     "test": "vitest run --config vitest.config.ts",
-    "test:smoke:electron": "pnpm turbo run build --filter=syncore-example-electron && playwright test -c playwright.electron.config.ts",
+    "test:smoke:electron": "bun run turbo run build --filter=syncore-example-electron && playwright test -c playwright.electron.config.ts",
     "test:smoke:expo": "tsx src/expo-smoke.ts",
     "test:smoke:web": "playwright test -c playwright.config.ts",
-    "test:smoke": "pnpm run test:smoke:web && pnpm run test:smoke:electron && pnpm run test:smoke:expo",
+    "test:smoke": "bun run test:smoke:web && bun run test:smoke:electron && bun run test:smoke:expo",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }

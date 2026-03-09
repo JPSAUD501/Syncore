@@ -16,20 +16,20 @@ Package builds use `tsdown`. Static type-checking stays explicit via `tsc --noEm
 ## Commands
 
 ```bash
-pnpm install
-pnpm api:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm test:smoke
+bun install
+bun run api:check
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+bun run test:smoke
 ```
 
 Use these companion commands during normal development:
 
-- `pnpm api:update`: refresh checked-in API Extractor reports after intentional public API changes
-- `pnpm changeset`: create the release note/version entry for a user-facing change
-- `pnpm clean`: remove generated build output from the workspace and examples
+- `bun run api:update`: refresh checked-in API Extractor reports after intentional public API changes
+- `bun run changeset`: create the release note/version entry for a user-facing change
+- `bun run clean`: remove generated build output from the workspace and examples
 
 ## Dev dashboard
 
@@ -47,9 +47,9 @@ The `reference/Convex` directory stays available while Syncore is under active d
 
 Smoke coverage is currently split by target:
 
-- Next static/PWA: `pnpm --filter @syncore/testing test:smoke:web`
-- Electron: `pnpm --filter @syncore/testing test:smoke:electron`
-- Expo Android: `pnpm --filter @syncore/testing test:smoke:expo`
+- Next static/PWA: `bun run --filter @syncore/testing test:smoke:web`
+- Electron: `bun run --filter @syncore/testing test:smoke:electron`
+- Expo Android: `bun run --filter @syncore/testing test:smoke:expo`
 
 Expo smoke is environment-aware. If `adb` or an Android device/emulator is not available, the
 runner exits successfully with a skip message instead of failing the whole workspace.
@@ -58,11 +58,11 @@ runner exits successfully with a skip message instead of failing the whole works
 
 The repository CI runs:
 
-- `pnpm api:check`
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm build`
-- `pnpm test:smoke`
+- `bun run api:check`
+- `bun run lint`
+- `bun run typecheck`
+- `bun run test`
+- `bun run build`
+- `bun run test:smoke`
 
 Electron and browser smoke jobs run under `xvfb` on Linux. Expo smoke keeps its skip behavior when Android tooling is unavailable.

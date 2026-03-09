@@ -19,8 +19,8 @@
 
 ## Tests To Run
 
-- `pnpm --filter syncore test`
-- `pnpm --filter syncore typecheck`
+- `bun run --filter syncore test`
+- `bun run --filter syncore typecheck`
 
 ## Common Failure Modes
 

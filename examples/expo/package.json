@@ -3,13 +3,13 @@
   "private": true,
   "scripts": {
     "android:smoke": "expo run:android --variant release --no-bundler --app-id dev.syncore.expoexample",
-    "build:deps": "pnpm --filter syncore build:standalone",
+    "build:deps": "bun run --filter syncore build:standalone",
     "clean": "node -e \"require('node:fs').rmSync('.expo',{recursive:true,force:true});require('node:fs').rmSync('android',{recursive:true,force:true})\"",
     "lint": "eslint App.tsx lib syncore --ext .ts,.tsx",
-    "prelint": "pnpm run syncore:codegen",
-    "prestart": "pnpm run syncore:codegen",
-    "pretypecheck": "pnpm run syncore:codegen",
-    "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
+    "prelint": "bun run syncore:codegen",
+    "prestart": "bun run syncore:codegen",
+    "pretypecheck": "bun run syncore:codegen",
+    "syncore:codegen": "bun run --cwd ../../packages/cli tsx src/index.ts codegen",
     "start": "expo start",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

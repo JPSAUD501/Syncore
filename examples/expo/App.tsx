@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "syncore/react";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -23,7 +22,7 @@ const NOTE_COLORS = [
   "#FFEAA7",
   "#DDA0DD",
   "#98D8C8"
-];
+] as const;
 
 export default function App() {
   return (
@@ -50,11 +49,12 @@ function NotesScreen() {
   const [showComposer, setShowComposer] = useState(false);
   const [searchText, setSearchText] = useState("");
 
-  const allNotes = useQuery(api.notes.list) ?? [];
+  const allNotesQuery = useQuery(api.notes.list);
   const searchResults = useQuery(api.notes.search, { query: searchText });
   const createNote = useMutation(api.notes.create);
   const togglePin = useMutation(api.notes.togglePin);
   const removeNote = useMutation(api.notes.remove);
+  const allNotes = useMemo(() => allNotesQuery ?? [], [allNotesQuery]);
 
   const notes = useMemo(() => {
     if (searchText.trim() && searchResults) return searchResults;
@@ -66,7 +66,9 @@ function NotesScreen() {
 
   const handleCreate = useCallback(
     async (title: string, body: string) => {
-      const color = NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)];
+      const color =
+        NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)] ??
+        NOTE_COLORS[0];
       await createNote({ title, body, color });
       setShowComposer(false);
     },

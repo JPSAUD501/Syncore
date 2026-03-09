@@ -18,9 +18,9 @@
 
 ## Tests To Run
 
-- `pnpm --filter @syncore/platform-node test`
-- `pnpm --filter @syncore/platform-node typecheck`
-- `pnpm --filter syncore-example-electron typecheck`
+- `bun run --filter @syncore/platform-node test`
+- `bun run --filter @syncore/platform-node typecheck`
+- `bun run --filter syncore-example-electron typecheck`
 
 ## Common Failure Modes
 

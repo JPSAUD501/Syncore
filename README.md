@@ -67,31 +67,31 @@ Platform status right now:
 Install dependencies and run the standard checks:
 
 ```bash
-pnpm install
-pnpm api:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm test:smoke
+bun install
+bun run api:check
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+bun run test:smoke
 ```
 
 If public APIs change intentionally, refresh the checked-in API reports before committing:
 
 ```bash
-pnpm api:update
+bun run api:update
 ```
 
 Release metadata is managed with Changesets:
 
 ```bash
-pnpm changeset
+bun run changeset
 ```
 
 To remove generated build artifacts across the workspace:
 
 ```bash
-pnpm clean
+bun run clean
 ```
 
 The dashboard shell can be started with:
@@ -106,9 +106,9 @@ scaffold Syncore automatically when the project is still empty.
 Smoke commands:
 
 ```bash
-pnpm --filter @syncore/testing test:smoke:web
-pnpm --filter @syncore/testing test:smoke:electron
-pnpm --filter @syncore/testing test:smoke:expo
+bun run --filter @syncore/testing test:smoke:web
+bun run --filter @syncore/testing test:smoke:electron
+bun run --filter @syncore/testing test:smoke:expo
 ```
 
 The Expo smoke runner skips cleanly when `adb` or an Android device/emulator is unavailable.

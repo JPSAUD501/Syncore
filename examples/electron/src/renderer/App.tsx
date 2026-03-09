@@ -83,7 +83,7 @@ function JournalScreen() {
       setBody("");
       setMood("okay");
     }
-  }, [currentEntry?._id, selectedDate]);
+  }, [currentEntry]);
 
   /* Auto-save with debounce */
   const scheduleSave = useCallback(

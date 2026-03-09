@@ -21,13 +21,13 @@ The simplest setup is copying `node_modules/sql.js/dist/sql-wasm.wasm` into `pub
 This example includes a helper script for that:
 
 ```bash
-pnpm --filter syncore-example-next-pwa copy:sqljs-wasm
+bun run --filter syncore-example-next-pwa copy:sqljs-wasm
 ```
 
 Useful commands:
 
 ```bash
-pnpm --filter syncore-example-next-pwa dev
-pnpm --filter syncore-example-next-pwa build
-pnpm --filter syncore-example-next-pwa clean
+bun run --filter syncore-example-next-pwa dev
+bun run --filter syncore-example-next-pwa build
+bun run --filter syncore-example-next-pwa clean
 ```

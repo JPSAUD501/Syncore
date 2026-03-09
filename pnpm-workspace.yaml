@@ -1,8 +1,0 @@
-packages:
-  - "apps/*"
-  - "packages/*"
-  - "examples/*"
-allowBuilds:
-  electron: true
-  esbuild: true
-  sharp: true

@@ -22,22 +22,22 @@ This repository builds a local-first application platform around a typed runtime
 
 ## Validation Commands
 
-- Full workspace: `pnpm lint`, `pnpm typecheck`, `pnpm test`
-- Public API surface: `pnpm api:check` to validate API reports, `pnpm api:update` after intentional exported API changes
-- Focused packages: `pnpm --filter syncore test`, `pnpm --filter @syncore/cli test`, `pnpm --filter @syncore/react test`
-- Examples: `pnpm --filter syncore-example-expo typecheck`, `pnpm --filter syncore-example-electron typecheck`, `pnpm --filter syncore-example-next-pwa build`
+- Full workspace: `bun run lint`, `bun run typecheck`, `bun run test`
+- Public API surface: `bun run api:check` to validate API reports, `bun run api:update` after intentional exported API changes
+- Focused packages: `bun run --filter syncore test`, `bun run --filter @syncore/cli test`, `bun run --filter @syncore/react test`
+- Examples: `bun run --filter syncore-example-expo typecheck`, `bun run --filter syncore-example-electron typecheck`, `bun run --filter syncore-example-next-pwa build`
 
 ## API Extractor Workflow
 
-- `pnpm api:check` runs the workspace API Extractor script in CI-style mode. Use it before opening a PR to confirm checked-in API reports still match the exported public surface.
-- `pnpm api:update` runs the same script with `--local`, which refreshes the checked-in `packages/*/etc/*.api.md` baselines after an intentional public API change.
+- `bun run api:check` runs the workspace API Extractor script in CI-style mode. Use it before opening a PR to confirm checked-in API reports still match the exported public surface.
+- `bun run api:update` runs the same script with `--local`, which refreshes the checked-in `packages/*/etc/*.api.md` baselines after an intentional public API change.
 - The script builds the public packages first, then runs every package `api-extractor.json` config in sequence. Expect `packages/*/etc/*.api.md` files to change when exported types, functions, or entrypoints move.
-- If your PR changes the public API, include the updated `etc/*.api.md` files in the same PR. If the API should not have changed, run `pnpm api:check` and fix the export/type regression instead of updating the baselines.
+- If your PR changes the public API, include the updated `etc/*.api.md` files in the same PR. If the API should not have changed, run `bun run api:check` and fix the export/type regression instead of updating the baselines.
 
 ## Development Rules
 
 - Prefer fixing DX regressions at the type source, not in examples.
 - When editing codegen, assert both runtime output shape and generated source strings in CLI tests.
 - When editing adapters, add tests for both happy-path data flow and error propagation.
-- When editing exported types or entrypoints in published packages, run `pnpm api:update`, review the generated API report diff, and ensure `pnpm api:check` passes before the PR.
+- When editing exported types or entrypoints in published packages, run `bun run api:update`, review the generated API report diff, and ensure `bun run api:check` passes before the PR.
 - Keep examples minimal and representative; they are fixtures for integration validation, not product demos.
