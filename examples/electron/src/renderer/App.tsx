@@ -1,5 +1,5 @@
-import { SyncoreElectronProvider } from "syncore/node/ipc/react";
-import { useMutation, useQuery } from "syncore/react";
+import { SyncoreElectronProvider } from "syncorejs/node/ipc/react";
+import { useMutation, useQuery } from "syncorejs/react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "../../syncore/_generated/api";
 

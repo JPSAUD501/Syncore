@@ -2,15 +2,21 @@
 
 Syncore is a local-first reactive backend toolkit for offline apps. It brings a Convex-like programming model to fully local runtimes backed by SQLite.
 
+## Install
+
+```bash
+npm add syncorejs
+```
+
 ## Quick feel
 
 The intended happy path is:
 
 ```bash
-npx syncore dev
+npx syncorejs dev
 ```
 
-Inside a user project, `syncore dev` is the main development loop. If Syncore
+Inside a user project, `syncorejs dev` is the main development loop. If Syncore
 has not been initialized yet, it scaffolds a minimal local backend first. Then
 it regenerates `syncore/_generated/*`, checks schema drift, applies local
 migrations, starts the local hub, and watches `syncore/` sources.
@@ -30,9 +36,9 @@ The production runtime stays inside the app. The only external development surfa
 This repository contains the v1 foundation:
 
 - TypeScript monorepo with Turbo
-- `syncore` core runtime and schema system
-- React bindings in `syncore/react`
-- Node platform adapter in `syncore/node`
+- `syncorejs` core runtime and schema system
+- React bindings in `syncorejs/react`
+- Node platform adapter in `syncorejs/node`
 - Web, Expo, and Next bootstrap packages
 - `syncore` CLI with project scaffolding, code generation, and devtools hub
 - Vite + Tailwind dashboard shell
@@ -97,10 +103,10 @@ bun run clean
 The dashboard shell can be started with:
 
 ```bash
-npx syncore dev
+npx syncorejs dev
 ```
 
-Inside a user project, `syncore dev` is the main development loop. It can also
+Inside a user project, `syncorejs dev` is the main development loop. It can also
 scaffold Syncore automatically when the project is still empty.
 
 Smoke commands:
@@ -126,11 +132,11 @@ CI runs the same workspace quality gates plus the smoke suite for web, Electron,
 The current DX model is:
 
 - user code lives in `syncore/schema.ts` and `syncore/functions/**/*.ts`
-- `npx syncore dev` is the main happy path and auto-scaffolds when needed
-- `npx syncore init --template <platform>` is available when you want explicit scaffolding
-- `npx syncore dev` keeps `syncore/_generated/api`, `syncore/_generated/functions`, and `syncore/_generated/server` in sync during development
-- `npx syncore codegen` is available for one-off generation without the full dev loop
-- `npx syncore import --table tasks sampleData.jsonl` imports local sample data
+- `npx syncorejs dev` is the main happy path and auto-scaffolds when needed
+- `npx syncorejs init --template <platform>` is available when you want explicit scaffolding
+- `npx syncorejs dev` keeps `syncore/_generated/api`, `syncore/_generated/functions`, and `syncore/_generated/server` in sync during development
+- `npx syncorejs codegen` is available for one-off generation without the full dev loop
+- `npx syncorejs import --table tasks sampleData.jsonl` imports local sample data
 - React code imports typed references from `syncore/_generated/api`
 - function files import server helpers from `syncore/_generated/server`
 

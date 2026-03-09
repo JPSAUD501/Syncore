@@ -89,11 +89,11 @@ Syncore keeps the product runtime inside the app:
 Inside an app project:
 
 - user code lives in `syncore/schema.ts` and `syncore/functions/**/*.ts`
-- `npx syncore dev` is the main happy path and auto-scaffolds a missing Syncore project
-- `npx syncore init --template <minimal|node|react-web|expo|electron|next>` is available for explicit scaffolding
-- `npx syncore codegen` generates `_generated/api`, `_generated/functions`, and `_generated/server`
-- `npx syncore migrate:status`, `migrate:generate [name]`, and `migrate:apply` manage schema drift, `_schema_snapshot.json`, and SQL
-- `npx syncore import --table <table> <file>` and `npx syncore seed --table <table>` load local sample data
+- `npx syncorejs dev` is the main happy path and auto-scaffolds a missing Syncore project
+- `npx syncorejs init --template <minimal|node|react-web|expo|electron|next>` is available for explicit scaffolding
+- `npx syncorejs codegen` generates `_generated/api`, `_generated/functions`, and `_generated/server`
+- `npx syncorejs migrate:status`, `migrate:generate [name]`, and `migrate:apply` manage schema drift, `_schema_snapshot.json`, and SQL
+- `npx syncorejs import --table <table> <file>` and `npx syncorejs seed --table <table>` load local sample data
 
 Recurring jobs are configured through runtime or bootstrap `scheduler` options. Syncore currently does not auto-load a special `syncore/crons.ts` file.
 
@@ -127,7 +127,7 @@ export const create = mutation({
 ### Typical Client Usage
 
 ```tsx
-import { useMutation, useQuery } from "syncore/react";
+import { useMutation, useQuery } from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 function Tasks() {

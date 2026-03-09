@@ -69,8 +69,8 @@ Use `cronJobs()` to build a recurring job registry, then pass its `jobs` array i
 Syncore currently does not auto-load a special `syncore/crons.ts` file.
 
 ```ts
-import { createExpoSyncoreBootstrap } from "syncore/expo";
-import { cronJobs, createFunctionReference } from "syncore";
+import { createExpoSyncoreBootstrap } from "syncorejs/expo";
+import { cronJobs, createFunctionReference } from "syncorejs";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 

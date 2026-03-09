@@ -1,6 +1,6 @@
 "use client";
 
-import { SyncoreNextProvider } from "syncore/next";
+import { SyncoreNextProvider } from "syncorejs/next";
 import { BookmarksScreen } from "./bookmarks-screen";
 
 const createWorker = () =>

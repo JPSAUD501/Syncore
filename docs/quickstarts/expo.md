@@ -1,7 +1,7 @@
 # Expo Quickstart
 
-This quickstart starts from a fresh Expo app and uses `npx syncore dev` as the
-main local loop. If Syncore is missing, `syncore dev` scaffolds the local
+This quickstart starts from a fresh Expo app and uses `npx syncorejs dev` as the
+main local loop. If Syncore is missing, `syncorejs dev` scaffolds the local
 backend automatically.
 
 ## 1. Create the app host
@@ -22,7 +22,7 @@ npm install syncore expo expo-sqlite expo-file-system react react-native
 Run this in one terminal and leave it running:
 
 ```bash
-npx syncore dev
+npx syncorejs dev
 ```
 
 If this is a fresh app, Syncore scaffolds a minimal local backend for you and
@@ -33,7 +33,7 @@ keeps `syncore/_generated/*` up to date.
 `lib/syncore.ts`
 
 ```ts
-import { createExpoSyncoreBootstrap } from "syncore/expo";
+import { createExpoSyncoreBootstrap } from "syncorejs/expo";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -51,8 +51,8 @@ export const syncore = createExpoSyncoreBootstrap({
 
 ```tsx
 import { Text, View } from "react-native";
-import { useQuery } from "syncore/react";
-import { SyncoreExpoProvider } from "syncore/expo/react";
+import { useQuery } from "syncorejs/react";
+import { SyncoreExpoProvider } from "syncorejs/expo/react";
 import { syncore } from "./lib/syncore";
 import { api } from "./syncore/_generated/api";
 
@@ -92,5 +92,5 @@ Scan the Expo QR code or run on a simulator, then confirm the task list renders 
 To preload sample data from JSONL, use:
 
 ```bash
-npx syncore import --table tasks sampleData.jsonl
+npx syncorejs import --table tasks sampleData.jsonl
 ```

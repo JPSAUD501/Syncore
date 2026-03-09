@@ -19,7 +19,7 @@ npm install syncore react react-dom electron
 Run this in one terminal and leave it running:
 
 ```bash
-npx syncore dev
+npx syncorejs dev
 ```
 
 If this is a fresh app, Syncore scaffolds a minimal local backend for you and
@@ -35,7 +35,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import {
   bindElectronWindowToSyncoreRuntime,
   createNodeSyncoreRuntime
-} from "syncore/node";
+} from "syncorejs/node";
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
@@ -87,8 +87,8 @@ eval(installSyncoreWindowBridge());
 `src/renderer/App.tsx`
 
 ```tsx
-import { SyncoreElectronProvider } from "syncore/node/ipc/react";
-import { useQuery } from "syncore/react";
+import { SyncoreElectronProvider } from "syncorejs/node/ipc/react";
+import { useQuery } from "syncorejs/react";
 import { api } from "../../syncore/_generated/api";
 
 export function App() {
@@ -113,5 +113,5 @@ that tasks read and write through the main-process runtime.
 To preload sample data from JSONL, use:
 
 ```bash
-npx syncore import --table tasks sampleData.jsonl
+npx syncorejs import --table tasks sampleData.jsonl
 ```

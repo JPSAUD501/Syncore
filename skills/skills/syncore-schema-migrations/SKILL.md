@@ -31,7 +31,7 @@ Read these first:
 Define tables in `syncore/schema.ts` with `defineSchema`, `defineTable`, and validators from `v`.
 
 ```ts
-import { defineSchema, defineTable, v } from "syncore";
+import { defineSchema, defineTable, v } from "syncorejs";
 
 export default defineSchema({
   tasks: defineTable({
@@ -48,11 +48,11 @@ export default defineSchema({
 Syncore's migration workflow is local and CLI-driven:
 
 1. Change `syncore/schema.ts`
-2. Run `npx syncore migrate:status`
-3. If the diff is safe, run `npx syncore migrate:generate [name]`
+2. Run `npx syncorejs migrate:status`
+3. If the diff is safe, run `npx syncorejs migrate:generate [name]`
 4. Review the generated SQL in `syncore/migrations/*.sql`
-5. Apply it with `npx syncore migrate:apply`
-6. Regenerate typed files with `npx syncore codegen` or let `npx syncore dev` keep them fresh
+5. Apply it with `npx syncorejs migrate:apply`
+6. Regenerate typed files with `npx syncorejs codegen` or let `npx syncorejs dev` keep them fresh
 
 The CLI stores a schema snapshot in `syncore/migrations/_schema_snapshot.json` and compares the current schema against that saved snapshot. Destructive drift is intentionally surfaced early.
 
@@ -103,7 +103,7 @@ Schema changes usually require updating:
 ### Safe Additive Change
 
 ```ts
-import { defineSchema, defineTable, v } from "syncore";
+import { defineSchema, defineTable, v } from "syncorejs";
 
 export default defineSchema({
   todos: defineTable({
@@ -119,10 +119,10 @@ export default defineSchema({
 Then run:
 
 ```bash
-npx syncore migrate:status
-npx syncore migrate:generate add_todo_category
-npx syncore migrate:apply
-npx syncore codegen
+npx syncorejs migrate:status
+npx syncorejs migrate:generate add_todo_category
+npx syncorejs migrate:apply
+npx syncorejs codegen
 ```
 
 ### Search Index Workflow

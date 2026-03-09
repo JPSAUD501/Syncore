@@ -71,7 +71,7 @@ Start with these repo-local sources:
 - "Wire Syncore into a browser worker, Electron, or Next app" -> `syncore-platform-adapters`
 - "Fix `useQuery(api.tasks.list)` inference" -> `syncore-react-realtime` and `syncore-functions`
 - "Schedule a local reminder and store an attachment" -> `syncore-scheduler-storage`
-- "Update `syncore dev` scaffolding or generated API output" -> `syncore-cli-codegen`
+- "Update `syncorejs dev` scaffolding or generated API output" -> `syncore-cli-codegen`
 
 ## Best Practices
 

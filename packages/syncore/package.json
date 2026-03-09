@@ -1,11 +1,31 @@
 {
-  "name": "syncore",
+  "name": "syncorejs",
   "version": "0.1.0",
+  "description": "Local-first reactive backend toolkit for offline apps",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
-    "syncore": "./dist/cli.js"
+    "syncorejs": "./dist/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JPSAUD501/Syncore.git",
+    "directory": "packages/syncore"
+  },
+  "homepage": "https://github.com/JPSAUD501/Syncore#readme",
+  "bugs": {
+    "url": "https://github.com/JPSAUD501/Syncore/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "exports": {
     ".": {
@@ -75,7 +95,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts",
+    "build": "tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
     "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/schema build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/react build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build && bun run --filter @syncore/svelte build",
     "build:standalone": "bun run build:deps && bun run build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
@@ -84,6 +104,41 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "commander": "^13.1.0",
+    "date-fns-tz": "^3.2.0",
+    "sql.js": "^1.14.1",
+    "tsx": "^4.19.3",
+    "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "expo-file-system": "^55.0.10",
+    "expo-sqlite": "^55.0.10",
+    "next": "^15.0.0",
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0",
+    "svelte": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "expo-file-system": {
+      "optional": true
+    },
+    "expo-sqlite": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
     "@syncore/core": "workspace:*",
     "@syncore/devtools-protocol": "workspace:*",
     "@syncore/next": "workspace:*",

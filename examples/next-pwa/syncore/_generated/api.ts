@@ -3,12 +3,12 @@
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
- * To regenerate, run `npx syncore dev` or `npx syncore codegen`.
+ * To regenerate, run `npx syncorejs dev` or `npx syncorejs codegen`.
  * @module
  */
 
-import { createFunctionReferenceFor } from "syncore";
-import type { FunctionReferenceFor } from "syncore";
+import { createFunctionReferenceFor } from "syncorejs";
+import type { FunctionReferenceFor } from "syncorejs";
 import type { create as bookmarks__create } from "../functions/bookmarks";
 import type { list as bookmarks__list } from "../functions/bookmarks";
 import type { listByTag as bookmarks__listByTag } from "../functions/bookmarks";

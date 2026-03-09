@@ -3,17 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "syncore:dev": "bun run --cwd ../../packages/cli tsx src/index.ts dev",
-    "build:deps": "bun run --filter syncore build:standalone",
+    "syncorejs:dev": "bunx tsx ../../packages/cli/src/index.ts dev",
+    "build:deps": "bun run --filter syncorejs build:standalone",
     "build": "bun run build:deps && vite build",
-    "dev": "bun run build:deps && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncore:dev\" \"bun run dev:app\"",
+    "dev": "bun run build:deps && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
     "dev:app": "vite"
   },
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sql.js": "^1.13.0",
-    "syncore": "workspace:*"
+    "syncorejs": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

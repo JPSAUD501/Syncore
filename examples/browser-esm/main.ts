@@ -1,5 +1,5 @@
-import { createBrowserWorkerClient } from "syncore/browser";
-import { createFunctionReference } from "syncore";
+import { createBrowserWorkerClient } from "syncorejs/browser";
+import { createFunctionReference } from "syncorejs";
 
 /* ─── Function references (no codegen — all inline) ─── */
 interface Contact {

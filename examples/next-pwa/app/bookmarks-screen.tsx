@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useMutation, useQuery } from "syncore/react";
+import { useMutation, useQuery } from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 const TAGS = [

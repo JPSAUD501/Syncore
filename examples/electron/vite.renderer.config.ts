@@ -1,23 +1,13 @@
-import path from "node:path";
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "./",
   plugins: [react()],
-  resolve: {
-    alias: {
-      "@syncore/react": path.join(
-        import.meta.dirname,
-        "node_modules",
-        "@syncore",
-        "react"
-      )
-    }
-  },
-  root: path.join(import.meta.dirname, "src", "renderer"),
+  root: fileURLToPath(new URL("./src/renderer/", import.meta.url)),
   build: {
-    outDir: path.join(import.meta.dirname, "dist", "renderer"),
+    outDir: fileURLToPath(new URL("./dist/renderer/", import.meta.url)),
     emptyOutDir: false
   }
 });

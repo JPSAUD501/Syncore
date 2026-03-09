@@ -34,7 +34,7 @@ Prefer repo-local references over assumptions:
 | [syncore-functions](skills/syncore-functions/SKILL.md)                 | Queries, mutations, actions, references, and typed handlers             |
 | [syncore-schema-migrations](skills/syncore-schema-migrations/SKILL.md) | Schema design, drift detection, generated snapshots, and SQL migrations |
 | [syncore-react-realtime](skills/syncore-react-realtime/SKILL.md)       | Provider setup, reactive hooks, and inferred query or mutation usage    |
-| [syncore-cli-codegen](skills/syncore-cli-codegen/SKILL.md)             | `syncore init`, `codegen`, `doctor`, migrations, and `syncore dev`      |
+| [syncore-cli-codegen](skills/syncore-cli-codegen/SKILL.md)             | `syncorejs init`, `codegen`, `doctor`, migrations, and `syncorejs dev`      |
 | [syncore-platform-adapters](skills/syncore-platform-adapters/SKILL.md) | Electron, web worker, Expo, and Next PWA integration patterns           |
 | [syncore-scheduler-storage](skills/syncore-scheduler-storage/SKILL.md) | Durable local scheduling, misfire policies, and file storage            |
 

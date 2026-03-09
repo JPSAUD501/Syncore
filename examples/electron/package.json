@@ -4,27 +4,26 @@
   "type": "module",
   "main": "./dist/src/main.js",
   "scripts": {
-    "syncore:dev": "bun run --cwd ../../packages/cli tsx src/index.ts dev",
-    "build:deps": "bun run --filter syncore build:standalone",
-    "dev": "concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncore:dev\" \"bun run dev:app\"",
+    "syncorejs:dev": "bunx tsx ../../packages/cli/src/index.ts dev",
+    "build:deps": "bun run --filter syncorejs build:standalone",
+    "dev": "concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
     "dev:app": "bun run build && electron ./dist/src/main.js",
     "build": "bun run build:deps && bun run build:main && bun run build:renderer",
     "build:main": "tsc -p tsconfig.main.json && node ./scripts/copy-preload.mjs",
     "build:renderer": "vite build --config vite.renderer.config.ts && node ./scripts/fix-renderer-html.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"syncore/**/*.ts\"",
-    "prebuild": "bun run syncore:codegen",
-    "predev": "bun run syncore:codegen",
-    "prelint": "bun run syncore:codegen",
-    "pretypecheck": "bun run syncore:codegen",
-    "syncore:codegen": "bun run --cwd ../../packages/cli tsx src/index.ts codegen",
+    "prebuild": "bun run syncorejs:codegen",
+    "predev": "bun run syncorejs:codegen",
+    "prelint": "bun run syncorejs:codegen",
+    "pretypecheck": "bun run syncorejs:codegen",
+    "syncorejs:codegen": "bunx tsx ../../packages/cli/src/index.ts codegen",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@syncore/react": "workspace:*",
-    "syncore": "workspace:*"
+    "syncorejs": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.10",

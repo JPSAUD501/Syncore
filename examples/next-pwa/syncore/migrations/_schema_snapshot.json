@@ -2,34 +2,48 @@
   "version": 1,
   "tables": [
     {
-      "name": "todos",
+      "name": "bookmarks",
       "validator": {
         "kind": "object",
         "shape": {
+          "url": {
+            "kind": "string"
+          },
           "title": {
             "kind": "string"
           },
-          "complete": {
+          "description": {
+            "kind": "string"
+          },
+          "tag": {
+            "kind": "string"
+          },
+          "starred": {
             "kind": "boolean"
+          },
+          "createdAt": {
+            "kind": "number"
           }
         }
       },
       "indexes": [
         {
-          "name": "by_complete",
-          "fields": [
-            "complete"
-          ]
+          "name": "by_starred",
+          "fields": ["starred", "createdAt"]
+        },
+        {
+          "name": "by_tag",
+          "fields": ["tag", "createdAt"]
         }
       ],
       "searchIndexes": [
         {
-          "name": "search_title",
+          "name": "search_bookmarks",
           "searchField": "title",
-          "filterFields": []
+          "filterFields": ["tag", "starred"]
         }
       ]
     }
   ],
-  "hash": "{\"tables\":[{\"indexes\":[{\"fields\":[\"complete\"],\"name\":\"by_complete\"}],\"name\":\"todos\",\"searchIndexes\":[{\"filterFields\":[],\"name\":\"search_title\",\"searchField\":\"title\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"complete\":{\"kind\":\"boolean\"},\"title\":{\"kind\":\"string\"}}}}],\"version\":1}"
+  "hash": "{\"tables\":[{\"indexes\":[{\"fields\":[\"starred\",\"createdAt\"],\"name\":\"by_starred\"},{\"fields\":[\"tag\",\"createdAt\"],\"name\":\"by_tag\"}],\"name\":\"bookmarks\",\"searchIndexes\":[{\"filterFields\":[\"tag\",\"starred\"],\"name\":\"search_bookmarks\",\"searchField\":\"title\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"createdAt\":{\"kind\":\"number\"},\"description\":{\"kind\":\"string\"},\"starred\":{\"kind\":\"boolean\"},\"tag\":{\"kind\":\"string\"},\"title\":{\"kind\":\"string\"},\"url\":{\"kind\":\"string\"}}}}],\"version\":1}"
 }

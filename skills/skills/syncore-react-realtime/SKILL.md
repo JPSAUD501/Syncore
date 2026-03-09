@@ -38,7 +38,7 @@ Every hook depends on `SyncoreProvider` or a platform wrapper that mounts it for
 Raw provider:
 
 ```tsx
-import { SyncoreProvider } from "syncore/react";
+import { SyncoreProvider } from "syncorejs/react";
 
 <SyncoreProvider client={client}>{children}</SyncoreProvider>;
 ```
@@ -57,7 +57,7 @@ If no provider is present, hooks will throw.
 `useQuery` is the core reactive read API. It returns `undefined` while the first result is still loading.
 
 ```tsx
-import { useQuery } from "syncore/react";
+import { useQuery } from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 function Tasks() {
@@ -71,7 +71,7 @@ function Tasks() {
 Mutations and actions return callable functions with typed args and results inferred from the reference.
 
 ```tsx
-import { useAction, useMutation } from "syncore/react";
+import { useAction, useMutation } from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 const createTask = useMutation(api.tasks.create);
@@ -117,8 +117,8 @@ Represent the result as keyed query state, not as a substitute for ordinary comp
 ### Basic App Wiring
 
 ```tsx
-import { SyncoreProvider, useMutation, useQuery } from "syncore/react";
-import type { SyncoreClient } from "syncore";
+import { SyncoreProvider, useMutation, useQuery } from "syncorejs/react";
+import type { SyncoreClient } from "syncorejs";
 import { api } from "../syncore/_generated/api";
 
 export function App({ client }: { client: SyncoreClient }) {
@@ -149,7 +149,7 @@ function Todos() {
 ### Platform Wrapper Example
 
 ```tsx
-import { SyncoreNextProvider } from "syncore/next";
+import { SyncoreNextProvider } from "syncorejs/next";
 
 const createWorker = () =>
   new Worker(new URL("./syncore.worker.js", import.meta.url), {

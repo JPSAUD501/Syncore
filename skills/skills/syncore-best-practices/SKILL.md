@@ -53,12 +53,12 @@ Keep concerns separated:
 Inside an app, the main local loop is:
 
 ```bash
-npx syncore dev
+npx syncorejs dev
 ```
 
-`syncore dev` can scaffold a missing Syncore project, keep generated files fresh, check schema drift, apply local migrations, and run the local hub.
+`syncorejs dev` can scaffold a missing Syncore project, keep generated files fresh, check schema drift, apply local migrations, and run the local hub.
 
-Use `npx syncore init --template <platform>` when you want explicit scaffolding instead of auto-detection.
+Use `npx syncorejs init --template <platform>` when you want explicit scaffolding instead of auto-detection.
 
 ### Generated Files Are Outputs
 
@@ -125,8 +125,8 @@ Examples are integration fixtures, not product apps.
 
 For local sample data, prefer CLI workflows over ad hoc SQL or edited generated artifacts:
 
-- `npx syncore import --table <table> <file>` for explicit JSONL imports
-- `npx syncore seed --table <table>` for conventional seed files under `syncore/seed`
+- `npx syncorejs import --table <table> <file>` for explicit JSONL imports
+- `npx syncorejs seed --table <table>` for conventional seed files under `syncore/seed`
 
 ### Validate Cross-Package Changes Together
 
@@ -174,7 +174,7 @@ export const toggleDone = mutation({
 ### Recommended React Usage
 
 ```tsx
-import { useMutation, useQuery } from "syncore/react";
+import { useMutation, useQuery } from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 function Tasks() {
@@ -195,7 +195,7 @@ function Tasks() {
 - Import server helpers from `../_generated/server` inside function files
 - Import typed references from `syncore/_generated/api` in app code
 - Prefer fixing inference in shared packages rather than adding manual generics in examples
-- Treat `npx syncore dev` as the main local development loop
+- Treat `npx syncorejs dev` as the main local development loop
 - Use examples as fixtures to confirm intended DX, not as a place to patch over shared regressions
 
 ## Common Pitfalls

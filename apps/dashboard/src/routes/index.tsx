@@ -252,7 +252,7 @@ function OverviewPage() {
             </code>
             . Start your app with{" "}
             <code className="font-mono text-[12px] bg-warning/10 px-1.5 py-0.5 rounded">
-              syncore dev
+              syncorejs dev
             </code>
             .
           </span>

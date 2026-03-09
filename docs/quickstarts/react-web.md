@@ -1,7 +1,7 @@
 # React Web Quickstart
 
-This quickstart starts from a fresh Vite app and uses `npx syncore dev` as the
-main happy path. If Syncore is missing, `syncore dev` scaffolds the local
+This quickstart starts from a fresh Vite app and uses `npx syncorejs dev` as the
+main happy path. If Syncore is missing, `syncorejs dev` scaffolds the local
 backend automatically.
 
 ## 1. Create the app host
@@ -22,7 +22,7 @@ npm install syncore react react-dom sql.js
 Run this in one terminal and leave it running:
 
 ```bash
-npx syncore dev
+npx syncorejs dev
 ```
 
 If this is a fresh app, Syncore scaffolds a minimal local backend for you:
@@ -36,7 +36,7 @@ syncore/
 syncore.config.ts
 ```
 
-`syncore dev` also regenerates `syncore/_generated/*`, checks schema drift,
+`syncorejs dev` also regenerates `syncore/_generated/*`, checks schema drift,
 applies local migrations, and watches `syncore/` for changes.
 
 ## 4. Add the worker runtime
@@ -46,7 +46,7 @@ applies local migrations, and watches `syncore/` for changes.
 ```ts
 /// <reference lib="webworker" />
 
-import { createBrowserWorkerRuntime } from "syncore/browser";
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -66,7 +66,7 @@ void createBrowserWorkerRuntime({
 ```tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { SyncoreBrowserProvider } from "syncore/browser/react";
+import { SyncoreBrowserProvider } from "syncorejs/browser/react";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -85,7 +85,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 `src/App.tsx`
 
 ```tsx
-import { useMutation, useQuery } from "syncore/react";
+import { useMutation, useQuery } from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 export default function App() {
@@ -118,7 +118,7 @@ Open the Vite URL, click the button, and confirm the task list updates reactivel
 To preload sample data from JSONL, use:
 
 ```bash
-npx syncore import --table tasks sampleData.jsonl
+npx syncorejs import --table tasks sampleData.jsonl
 ```
 
-Use `npx syncore codegen` only when you need a one-off generation pass without the full dev loop.
+Use `npx syncorejs codegen` only when you need a one-off generation pass without the full dev loop.

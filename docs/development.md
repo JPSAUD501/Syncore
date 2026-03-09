@@ -35,9 +35,9 @@ Use these companion commands during normal development:
 
 The current dashboard is intentionally a shell. The protocol, connection model, and placeholder routes are already in place so a later UI/UX pass can focus on actual tooling workflows instead of wiring.
 
-`syncore dev` is the main development loop inside an app project. It bootstraps codegen and migrations first, then starts the local hub/dashboard and watches `syncore.config.ts`, schema files, functions, and SQL migrations for changes.
+`syncorejs dev` is the main development loop inside an app project. It bootstraps codegen and migrations first, then starts the local hub/dashboard and watches `syncore.config.ts`, schema files, functions, and SQL migrations for changes.
 
-Use `npx syncore codegen` when you only want a one-off refresh of generated files. For day-to-day app work, prefer leaving `npx syncore dev` running in a separate terminal.
+Use `npx syncorejs codegen` when you only want a one-off refresh of generated files. For day-to-day app work, prefer leaving `npx syncorejs dev` running in a separate terminal.
 
 ## Reference material
 

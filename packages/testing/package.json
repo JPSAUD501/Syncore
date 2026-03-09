@@ -11,7 +11,7 @@
     "@syncore/react": "workspace:*",
     "@syncore/schema": "workspace:*",
     "@syncore/svelte": "workspace:*",
-    "syncore": "workspace:*"
+    "syncorejs": "workspace:*"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.5",

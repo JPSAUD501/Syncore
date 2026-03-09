@@ -7,5 +7,16 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "@syncore/cli",
+    "@syncore/core",
+    "@syncore/devtools-protocol",
+    "@syncore/next",
+    "@syncore/platform-expo",
+    "@syncore/platform-node",
+    "@syncore/platform-web",
+    "@syncore/react",
+    "@syncore/schema",
+    "@syncore/svelte"
+  ]
 }

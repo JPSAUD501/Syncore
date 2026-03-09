@@ -21,7 +21,7 @@ npm install syncore next react react-dom sql.js
 Run this in one terminal and leave it running:
 
 ```bash
-npx syncore dev
+npx syncorejs dev
 ```
 
 ## 4. Enable the Next integration
@@ -29,7 +29,7 @@ npx syncore dev
 `next.config.ts`
 
 ```ts
-import { withSyncoreNext } from "syncore/next/config";
+import { withSyncoreNext } from "syncorejs/next/config";
 
 export default withSyncoreNext({
   output: "export"
@@ -43,7 +43,7 @@ export default withSyncoreNext({
 ```js
 /* eslint-disable */
 
-import { createBrowserWorkerRuntime } from "syncore/browser";
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -65,8 +65,8 @@ void createBrowserWorkerRuntime({
 ```tsx
 "use client";
 
-import { useQuery } from "syncore/react";
-import { SyncoreNextProvider } from "syncore/next";
+import { useQuery } from "syncorejs/react";
+import { SyncoreNextProvider } from "syncorejs/next";
 import { api } from "../syncore/_generated/api";
 
 const createWorker = () =>
@@ -99,7 +99,7 @@ into `public/`.
 You can optionally preload sample data with:
 
 ```bash
-npx syncore import --table tasks sampleData.jsonl
+npx syncorejs import --table tasks sampleData.jsonl
 ```
 
 ## 8. Run the app

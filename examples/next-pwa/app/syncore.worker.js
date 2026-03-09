@@ -1,6 +1,6 @@
 /* eslint-disable */
 
-import { createBrowserWorkerRuntime } from "syncore/browser";
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 

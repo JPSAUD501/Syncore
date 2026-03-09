@@ -124,9 +124,15 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   runtimes: {},
   selectedRuntimeId: null,
 
-  _setConnected: (v) => set({ connected: v }),
+  _setConnected: (v) =>
+    set((state) => (state.connected === v ? state : { connected: v })),
 
-  selectRuntime: (runtimeId) => set({ selectedRuntimeId: runtimeId }),
+  selectRuntime: (runtimeId) =>
+    set((state) =>
+      state.selectedRuntimeId === runtimeId
+        ? state
+        : { selectedRuntimeId: runtimeId }
+    ),
 
   _handleMessage: (msg) => {
     switch (msg.type) {

@@ -1,5 +1,5 @@
-import { SyncoreExpoProvider } from "syncore/expo/react";
-import { useMutation, useQuery } from "syncore/react";
+import { SyncoreExpoProvider } from "syncorejs/expo/react";
+import { useMutation, useQuery } from "syncorejs/react";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,

@@ -2,6 +2,7 @@
 
 import { readdir, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { connect as connectToNet } from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -67,9 +68,13 @@ interface PackageJsonShape {
 }
 
 const COMBINED_DEV_COMMAND =
-  'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "bun run syncore:dev" "bun run dev:app"';
+  'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "bun run syncorejs:dev" "bun run dev:app"';
 
 const program = new Command();
+const CORE_PACKAGE_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  ".."
+);
 const migrationSnapshotFileName = "_schema_snapshot.json";
 const validTemplates: SyncoreTemplateName[] = [
   "minimal",
@@ -83,7 +88,7 @@ let pendingDevBootstrap: ReturnType<typeof setTimeout> | undefined;
 let devBootstrapInFlight = false;
 
 program
-  .name("syncore")
+  .name("syncorejs")
   .description("Syncore local-first toolkit CLI")
   .version("0.1.0");
 
@@ -106,7 +111,7 @@ program
     await runCodegen(cwd);
     logScaffoldResult(result, "Syncore project scaffolded.");
     console.log(
-      "Next: run `npx syncore dev` to keep codegen and local migrations in sync."
+      "Next: run `npx syncorejs dev` to keep codegen and local migrations in sync."
     );
   });
 
@@ -312,12 +317,12 @@ async function runCodegen(cwd: string): Promise<void> {
     ` *`,
     ` * THIS CODE IS AUTOMATICALLY GENERATED.`,
     ` *`,
-    ` * To regenerate, run \`npx syncore dev\` or \`npx syncore codegen\`.`,
+    ` * To regenerate, run \`npx syncorejs dev\` or \`npx syncorejs codegen\`.`,
     ` * @module`,
     ` */`,
     ``,
-    `import { createFunctionReferenceFor } from "syncore";`,
-    `import type { FunctionReferenceFor } from "syncore";`,
+    `import { createFunctionReferenceFor } from "syncorejs";`,
+    `import type { FunctionReferenceFor } from "syncorejs";`,
     ...renderFunctionTypeImports(functionEntries, functionImportExtension),
     ``,
     ...renderGeneratedApiInterfaces(functionEntries),
@@ -340,11 +345,11 @@ async function runCodegen(cwd: string): Promise<void> {
     ` *`,
     ` * THIS CODE IS AUTOMATICALLY GENERATED.`,
     ` *`,
-    ` * To regenerate, run \`npx syncore dev\` or \`npx syncore codegen\`.`,
+    ` * To regenerate, run \`npx syncorejs dev\` or \`npx syncorejs codegen\`.`,
     ` * @module`,
     ` */`,
     ``,
-    `import type { SyncoreFunctionRegistry } from "syncore";`,
+    `import type { SyncoreFunctionRegistry } from "syncorejs";`,
     ``,
     ...renderFunctionImports(functionEntries, functionImportExtension),
     ``,
@@ -370,12 +375,12 @@ async function runCodegen(cwd: string): Promise<void> {
     ` *`,
     ` * THIS CODE IS AUTOMATICALLY GENERATED.`,
     ` *`,
-    ` * To regenerate, run \`npx syncore dev\` or \`npx syncore codegen\`.`,
+    ` * To regenerate, run \`npx syncorejs dev\` or \`npx syncorejs codegen\`.`,
     ` * @module`,
     ` */`,
     ``,
     `import type schema from "../schema${functionImportExtension}";`,
-    `import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncore";`,
+    `import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncorejs";`,
     `import type {`,
     `  ActionCtx as BaseActionCtx,`,
     `  FunctionConfig,`,
@@ -386,9 +391,9 @@ async function runCodegen(cwd: string): Promise<void> {
     `  SyncoreFunctionDefinition,`,
     `  Validator,`,
     `  ValidatorMap`,
-    `} from "syncore";`,
+    `} from "syncorejs";`,
     ``,
-    `export { createFunctionReference, createFunctionReferenceFor, v } from "syncore";`,
+    `export { createFunctionReference, createFunctionReferenceFor, v } from "syncorejs";`,
     ``,
     `/**`,
     ` * The context object available inside Syncore query handlers in this app.`,
@@ -405,7 +410,7 @@ async function runCodegen(cwd: string): Promise<void> {
     ` */`,
     `export type ActionCtx = BaseActionCtx<typeof schema>;`,
     ``,
-    `export type { FunctionReference } from "syncore";`,
+    `export type { FunctionReference } from "syncorejs";`,
     ``,
     `/**`,
     ` * Define a query in this Syncore app's public API.`,
@@ -544,7 +549,7 @@ function buildTemplateFiles(
     },
     {
       path: path.join("syncore", "schema.ts"),
-      content: `import { defineSchema, defineTable, v } from "syncore";
+      content: `import { defineSchema, defineTable, v } from "syncorejs";
 
 export default defineSchema({
   tasks: defineTable({
@@ -580,7 +585,7 @@ export const create = mutation({
           path: path.join("src", "syncore.worker.ts"),
           content: `/// <reference lib="webworker" />
 
-import { createBrowserWorkerRuntime } from "syncore/browser";
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -596,7 +601,7 @@ void createBrowserWorkerRuntime({
         {
           path: path.join("src", "syncore-provider.tsx"),
           content: `import type { ReactNode } from "react";
-import { SyncoreBrowserProvider } from "syncore/browser/react";
+import { SyncoreBrowserProvider } from "syncorejs/browser/react";
 
 export function AppSyncoreProvider({ children }: { children: ReactNode }) {
   return (
@@ -612,7 +617,7 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
     case "expo":
       files.push({
         path: path.join("lib", "syncore.ts"),
-        content: `import { createExpoSyncoreBootstrap } from "syncore/expo";
+        content: `import { createExpoSyncoreBootstrap } from "syncorejs/expo";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -631,7 +636,7 @@ export const syncore = createExpoSyncoreBootstrap({
           path: path.join("app", "syncore.worker.js"),
           content: `/* eslint-disable */
 
-import { createBrowserWorkerRuntime } from "syncore/browser";
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -651,7 +656,7 @@ void createBrowserWorkerRuntime({
           content: `"use client";
 
 import type { ReactNode } from "react";
-import { SyncoreNextProvider } from "syncore/next";
+import { SyncoreNextProvider } from "syncorejs/next";
 
 const createWorker = () =>
   new Worker(new URL("./syncore.worker.js", import.meta.url), {
@@ -673,7 +678,7 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
       files.push({
         path: "script.mjs",
         content: `import path from "node:path";
-import { withNodeSyncoreClient } from "syncore/node";
+import { withNodeSyncoreClient } from "syncorejs/node";
 import { api } from "./syncore/_generated/api.ts";
 import schema from "./syncore/schema.ts";
 import { functions } from "./syncore/_generated/functions.ts";
@@ -698,7 +703,7 @@ await withNodeSyncoreClient(
         path: path.join("src", "syncore-runtime.ts"),
         content: `import path from "node:path";
 import { app } from "electron";
-import { createNodeSyncoreRuntime } from "syncore/node";
+import { createNodeSyncoreRuntime } from "syncorejs/node";
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
@@ -844,8 +849,8 @@ async function ensurePackageScripts(
   };
 
   nextPackageJson.scripts ??= {};
-  nextPackageJson.scripts["syncore:dev"] ??= "syncore dev";
-  nextPackageJson.scripts["syncore:codegen"] ??= "syncore codegen";
+  nextPackageJson.scripts["syncorejs:dev"] ??= "syncorejs dev";
+  nextPackageJson.scripts["syncorejs:codegen"] ??= "syncorejs codegen";
 
   maybeAddManagedDevScripts(nextPackageJson, template);
 
@@ -887,7 +892,7 @@ function maybeAddManagedDevScripts(
     return;
   }
 
-  if (currentDev.includes("syncore:dev") || currentDev.includes("dev:app")) {
+  if (currentDev.includes("syncorejs:dev") || currentDev.includes("dev:app")) {
     return;
   }
 
@@ -1578,6 +1583,19 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
+async function isLocalPortInUse(port: number): Promise<boolean> {
+  return await new Promise((resolve) => {
+    const socket = connectToNet({ host: "127.0.0.1", port });
+    socket.once("connect", () => {
+      socket.end();
+      resolve(true);
+    });
+    socket.once("error", () => {
+      resolve(false);
+    });
+  });
+}
+
 function slugify(value: string): string {
   const slug = value
     .trim()
@@ -1619,6 +1637,15 @@ async function startDevHub(options: {
   const dashboardPort = resolvePortFromEnv("SYNCORE_DASHBOARD_PORT", 4310);
   const devtoolsPort = resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311);
   await runDevProjectBootstrap(options.cwd, options.template);
+  await setupDevProjectWatch(options.cwd, options.template);
+
+  if (await isLocalPortInUse(devtoolsPort)) {
+    console.log(
+      `Syncore devtools hub already running at ws://127.0.0.1:${devtoolsPort}. Reusing existing hub/dashboard.`
+    );
+    return;
+  }
+
   const httpServer = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ ok: true, wsPort: devtoolsPort }));
@@ -1738,6 +1765,11 @@ async function startDevHub(options: {
     }
   }, 4000);
 
+  httpServer.on("error", (error) => {
+    console.error(`Syncore devtools hub failed: ${formatError(error)}`);
+    process.exit(1);
+  });
+
   httpServer.listen(devtoolsPort, "127.0.0.1", () => {
     void (async () => {
       console.log(`Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`);
@@ -1750,8 +1782,13 @@ async function startDevHub(options: {
       console.log(
         "Expo apps: use the same hub URL through LAN or adb reverse while developing."
       );
-      await setupDevProjectWatch(options.cwd, options.template);
-      const dashboardRoot = path.resolve(process.cwd(), "apps", "dashboard");
+      const dashboardRoot = path.resolve(
+        CORE_PACKAGE_ROOT,
+        "..",
+        "..",
+        "apps",
+        "dashboard"
+      );
       if (await fileExists(path.join(dashboardRoot, "vite.config.ts"))) {
         try {
           const viteModule = await import("vite");
@@ -1764,9 +1801,9 @@ async function startDevHub(options: {
           });
           await server.listen();
           console.log(`Dashboard shell: http://127.0.0.1:${dashboardPort}`);
-        } catch {
+        } catch (error) {
           console.log(
-            "Dashboard source not started automatically. Run the dashboard app separately if needed."
+            `Dashboard source not started automatically: ${formatError(error)}`
           );
         }
       }

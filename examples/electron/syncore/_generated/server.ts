@@ -3,12 +3,12 @@
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
- * To regenerate, run `npx syncore dev` or `npx syncore codegen`.
+ * To regenerate, run `npx syncorejs dev` or `npx syncorejs codegen`.
  * @module
  */
 
 import type schema from "../schema.js";
-import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncore";
+import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncorejs";
 import type {
   ActionCtx as BaseActionCtx,
   FunctionConfig,
@@ -19,9 +19,9 @@ import type {
   SyncoreFunctionDefinition,
   Validator,
   ValidatorMap
-} from "syncore";
+} from "syncorejs";
 
-export { createFunctionReference, createFunctionReferenceFor, v } from "syncore";
+export { createFunctionReference, createFunctionReferenceFor, v } from "syncorejs";
 
 /**
  * The context object available inside Syncore query handlers in this app.
@@ -38,7 +38,7 @@ export type MutationCtx = BaseMutationCtx<typeof schema>;
  */
 export type ActionCtx = BaseActionCtx<typeof schema>;
 
-export type { FunctionReference } from "syncore";
+export type { FunctionReference } from "syncorejs";
 
 /**
  * Define a query in this Syncore app's public API.

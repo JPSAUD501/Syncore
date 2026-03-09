@@ -1,8 +1,11 @@
 {
   "cSpell.words": [
+    "codegen",
     "indexeddb",
     "opfs",
+    "sqljs",
     "syncore",
-    "Syncore"
+    "Syncore",
+    "syncorejs"
   ]
 }

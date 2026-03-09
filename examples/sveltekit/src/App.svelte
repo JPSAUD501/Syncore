@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { createMutation, createQueryStore, setSyncoreClient } from "syncore/svelte";
-  import { createBrowserWorkerClient } from "syncore/browser";
+  import { createMutation, createQueryStore, setSyncoreClient } from "syncorejs/svelte";
+  import { createBrowserWorkerClient } from "syncorejs/browser";
   import { api } from "../syncore/_generated/api";
 
   const managed = createBrowserWorkerClient({

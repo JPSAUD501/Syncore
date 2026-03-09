@@ -22,6 +22,7 @@
     "test": "turbo run test --concurrency=2",
     "test:smoke": "bun run --filter @syncore/testing test:smoke",
     "typecheck": "turbo run typecheck --concurrency=2",
+    "validate:pack:syncore": "tsx ./scripts/validate-syncore-package.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "clean": "turbo run clean --parallel"

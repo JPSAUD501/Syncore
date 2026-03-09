@@ -28,19 +28,19 @@ Read these first:
 
 The current CLI surface includes:
 
-- `npx syncore init`
-- `npx syncore codegen`
-- `npx syncore doctor`
-- `npx syncore import --table <table> <file>`
-- `npx syncore seed --table <table>`
-- `npx syncore migrate:status`
-- `npx syncore migrate:generate [name]`
-- `npx syncore migrate:apply`
-- `npx syncore dev`
+- `npx syncorejs init`
+- `npx syncorejs codegen`
+- `npx syncorejs doctor`
+- `npx syncorejs import --table <table> <file>`
+- `npx syncorejs seed --table <table>`
+- `npx syncorejs migrate:status`
+- `npx syncorejs migrate:generate [name]`
+- `npx syncorejs migrate:apply`
+- `npx syncorejs dev`
 
 ### init
 
-`syncore init` scaffolds the standard project layout and supports templates such as `minimal`, `node`, `react-web`, `expo`, `electron`, and `next`.
+`syncorejs init` scaffolds the standard project layout and supports templates such as `minimal`, `node`, `react-web`, `expo`, `electron`, and `next`.
 
 Core scaffold output is:
 
@@ -54,7 +54,7 @@ Template-specific files are added on top of that. Current scaffolding does not c
 
 ### codegen
 
-`syncore codegen` scans `syncore/functions/**/*.ts`, finds exported `query`, `mutation`, and `action` definitions, and generates:
+`syncorejs codegen` scans `syncore/functions/**/*.ts`, finds exported `query`, `mutation`, and `action` definitions, and generates:
 
 - `syncore/_generated/api`
 - `syncore/_generated/functions`
@@ -64,7 +64,7 @@ The generated API must preserve end-to-end types by referencing function definit
 
 ### dev
 
-`syncore dev` is the main local development loop. It can scaffold a missing Syncore project, then bootstraps codegen and migration work, starts the devtools hub, and watches relevant project inputs.
+`syncorejs dev` is the main local development loop. It can scaffold a missing Syncore project, then bootstraps codegen and migration work, starts the devtools hub, and watches relevant project inputs.
 
 ### import And seed
 
@@ -79,9 +79,9 @@ The CLI compares the current schema against a stored snapshot and renders SQL fo
 Typical flow:
 
 ```bash
-npx syncore migrate:status
-npx syncore migrate:generate add_notes_table
-npx syncore migrate:apply
+npx syncorejs migrate:status
+npx syncorejs migrate:generate add_notes_table
+npx syncorejs migrate:apply
 ```
 
 `migrate:generate` accepts an optional name and falls back to `auto`.
@@ -95,10 +95,10 @@ Inside the Syncore repo, examples intentionally run codegen from CLI source. Avo
 ### Typical App Loop
 
 ```bash
-npx syncore dev
-npx syncore doctor
-npx syncore import --table tasks sampleData.jsonl
-npx syncore seed --table tasks
+npx syncorejs dev
+npx syncorejs doctor
+npx syncorejs import --table tasks sampleData.jsonl
+npx syncorejs seed --table tasks
 ```
 
 ### Generated API Pattern
@@ -106,7 +106,7 @@ npx syncore seed --table tasks
 Codegen should emit references shaped like this:
 
 ```ts
-import { createFunctionReferenceFor } from "syncore";
+import { createFunctionReferenceFor } from "syncorejs";
 import {
   create as tasks__create,
   list as tasks__list
@@ -131,7 +131,7 @@ export const api = {
 - Prefer `import type` where generated code only needs type positions
 - Verify codegen changes with CLI tests and example integrations
 - Keep the dev loop independent from workspace `dist` artifacts when examples are involved
-- Document `syncore dev` as the happy path unless the task is specifically about one-off commands
+- Document `syncorejs dev` as the happy path unless the task is specifically about one-off commands
 
 ## Common Pitfalls
 

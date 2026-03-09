@@ -1,4 +1,4 @@
-import { defineSchema, defineTable, v } from "syncore";
+import { defineSchema, defineTable, v } from "syncorejs";
 
 export default defineSchema({
   entries: defineTable({

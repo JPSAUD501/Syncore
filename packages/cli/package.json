@@ -1,11 +1,12 @@
 {
   "name": "@syncore/cli",
+  "private": true,
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "bin": {
-    "syncore": "./dist/index.mjs"
+    "syncorejs": "./dist/index.mjs"
   },
   "exports": {
     ".": {
@@ -21,8 +22,8 @@
     "lint": "eslint src --ext .ts",
     "test": "bun run build:deps && vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "syncore:dev": "syncore dev",
-    "syncore:codegen": "syncore codegen"
+    "syncorejs:dev": "syncorejs dev",
+    "syncorejs:codegen": "syncorejs codegen"
   },
   "dependencies": {
     "@syncore/core": "workspace:*",

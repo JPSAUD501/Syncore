@@ -70,7 +70,7 @@ For local scripts without a UI shell, use `withNodeSyncoreClient`:
 
 ```ts
 import path from "node:path";
-import { withNodeSyncoreClient } from "syncore/node";
+import { withNodeSyncoreClient } from "syncorejs/node";
 import { api } from "./syncore/_generated/api.ts";
 import schema from "./syncore/schema.ts";
 import { functions } from "./syncore/_generated/functions.ts";
@@ -98,7 +98,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import {
   bindElectronWindowToSyncoreRuntime,
   createNodeSyncoreRuntime
-} from "syncore/node";
+} from "syncorejs/node";
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
@@ -122,7 +122,7 @@ For the web target, host Syncore inside a dedicated worker and talk to it throug
 ```ts
 /// <reference lib="webworker" />
 
-import { createBrowserWorkerRuntime } from "syncore/browser";
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -136,7 +136,7 @@ void createBrowserWorkerRuntime({
 ```
 
 ```tsx
-import { SyncoreBrowserProvider } from "syncore/browser/react";
+import { SyncoreBrowserProvider } from "syncorejs/browser/react";
 
 <SyncoreBrowserProvider
   workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
@@ -150,7 +150,7 @@ import { SyncoreBrowserProvider } from "syncore/browser/react";
 Use the bootstrap helper and mount `SyncoreExpoProvider` with a fallback while the local runtime starts.
 
 ```ts
-import { createExpoSyncoreBootstrap } from "syncore/expo";
+import { createExpoSyncoreBootstrap } from "syncorejs/expo";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -169,7 +169,7 @@ Use the Next helpers to integrate the worker and serve the SQL.js wasm asset.
 Configure `next.config.ts` with `withSyncoreNext`:
 
 ```ts
-import { withSyncoreNext } from "syncore/next/config";
+import { withSyncoreNext } from "syncorejs/next/config";
 
 export default withSyncoreNext({
   output: "export"
@@ -181,7 +181,7 @@ Then wire the provider:
 ```tsx
 "use client";
 
-import { SyncoreNextProvider } from "syncore/next";
+import { SyncoreNextProvider } from "syncorejs/next";
 
 const createWorker = () =>
   new Worker(new URL("./syncore.worker.js", import.meta.url), {

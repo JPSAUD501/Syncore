@@ -83,7 +83,7 @@ Misfire policies are explicit:
 
 The dashboard is a dev-only surface. Runtimes emit protocol events to a local hub and the dashboard subscribes to the same event stream. Production builds should not include the dashboard codepath.
 
-`syncore dev` is the development entrypoint. It:
+`syncorejs dev` is the development entrypoint. It:
 
 - regenerates typed files
 - validates schema drift
@@ -92,7 +92,7 @@ The dashboard is a dev-only surface. Runtimes emit protocol events to a local hu
 - starts the dashboard shell when available
 - watches project inputs and reruns bootstrap work on changes
 
-`syncore codegen` is intentionally narrower: it only refreshes generated API files and skips the rest of the local dev bootstrap work.
+`syncorejs codegen` is intentionally narrower: it only refreshes generated API files and skips the rest of the local dev bootstrap work.
 
 ## Reference policy
 

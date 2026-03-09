@@ -21,7 +21,7 @@ The biggest difference is where the runtime lives.
 - your functions run inside the app or device
 - the database is local SQLite or local browser persistence
 - the client talks to a local runtime, worker, or IPC bridge
-- `syncore dev` keeps local codegen, schema state, and migrations in sync
+- `syncorejs dev` keeps local codegen, schema state, and migrations in sync
 
 ## Why the DX needs different tooling
 

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { createBrowserWorkerRuntime } from "syncore/browser";
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import {
   defineSchema,
   defineTable,
@@ -9,7 +9,7 @@ import {
   v,
   type MutationCtx,
   type QueryCtx
-} from "syncore";
+} from "syncorejs";
 
 const schema = defineSchema({
   contacts: defineTable({

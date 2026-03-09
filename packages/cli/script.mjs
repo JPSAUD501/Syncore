@@ -1,5 +1,5 @@
 import path from "node:path";
-import { withNodeSyncoreClient } from "syncore/node";
+import { withNodeSyncoreClient } from "syncorejs/node";
 import { api } from "./syncore/_generated/api.ts";
 import schema from "./syncore/schema.ts";
 import { functions } from "./syncore/_generated/functions.ts";

@@ -90,7 +90,7 @@ describe("syncore CLI", () => {
       "export interface SyncoreFunctionsRegistry"
     );
     expect(firstGeneratedServer).toContain(
-      'export { createFunctionReference, createFunctionReferenceFor, v } from "syncore";'
+      'export { createFunctionReference, createFunctionReferenceFor, v } from "syncorejs";'
     );
     expect(firstGeneratedServer).toContain(
       "Generated utilities for implementing Syncore query, mutation, and action functions"
@@ -99,7 +99,7 @@ describe("syncore CLI", () => {
       'import type schema from "../schema"'
     );
     expect(firstGeneratedServer).toContain(
-      'import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncore";'
+      'import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncorejs";'
     );
     expect(firstGeneratedServer).toContain("export function query<");
     expect(firstGeneratedServer).toContain(
@@ -455,7 +455,7 @@ async function waitForOutput(
     let output = "";
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error(`Timed out waiting for "${needle}" from syncore dev.`));
+      reject(new Error(`Timed out waiting for "${needle}" from syncorejs dev.`));
     }, 15_000);
 
     const handleData = (chunk: Buffer | string) => {
@@ -470,7 +470,7 @@ async function waitForOutput(
       cleanup();
       reject(
         new Error(
-          `syncore dev exited before becoming ready (code ${code ?? "unknown"}).`
+          `syncorejs dev exited before becoming ready (code ${code ?? "unknown"}).`
         )
       );
     };

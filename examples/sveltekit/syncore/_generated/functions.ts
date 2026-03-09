@@ -3,11 +3,11 @@
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
- * To regenerate, run `npx syncore dev` or `npx syncore codegen`.
+ * To regenerate, run `npx syncorejs dev` or `npx syncorejs codegen`.
  * @module
  */
 
-import type { SyncoreFunctionRegistry } from "syncore";
+import type { SyncoreFunctionRegistry } from "syncorejs";
 
 import { archiveHabit as habits__archiveHabit } from "../functions/habits";
 import { completionsForDate as habits__completionsForDate } from "../functions/habits";
