@@ -1,8 +1,8 @@
 ---
 name: syncore-functions
 displayName: Syncore Functions
-description: Writing Syncore queries, mutations, and actions with typed validators, function references, scheduler calls, and inference-friendly patterns.
-version: 1.0.0
+description: Writing Syncore queries, mutations, and actions with typed validators, richer query builders, function references, scheduler calls, and inference-friendly patterns.
+version: 1.1.0
 author: Syncore
 tags: [syncore, functions, query, mutation, action, types]
 ---
@@ -17,6 +17,7 @@ Read these repo-local references first:
 
 - `packages/core/src/runtime/functions.ts`
 - `packages/core/src/runtime/runtime.ts`
+- `packages/schema/src/validators.ts`
 - `packages/core/AGENTS.md`
 - `README.md`
 - `docs/architecture.md`
@@ -44,6 +45,19 @@ import { mutation, query, v } from "../_generated/server";
 
 This keeps app code aligned with current codegen output and shared validator types.
 
+### Prefer Strong Validators
+
+Use the most specific validators you can. For document ids, prefer table-aware ids over plain strings:
+
+```ts
+args: {
+  id: v.id("tasks"),
+  done: v.boolean()
+}
+```
+
+That keeps intent clear and improves downstream typing.
+
 ### Queries
 
 Queries are reactive and should read only:
@@ -65,6 +79,19 @@ export const list = query({
 });
 ```
 
+The current query builder surface includes:
+
+- `withIndex(...)`
+- `withSearchIndex(...)`
+- `filter(...)`
+- `collect()`
+- `take(count)`
+- `first()`
+- `unique()`
+- `paginate({ cursor, numItems })`
+
+Use indexes and search indexes from schema before depending on those query paths in functions.
+
 ### Mutations
 
 Mutations own writes and can schedule follow-up work:
@@ -74,7 +101,7 @@ import { mutation, v } from "../_generated/server";
 
 export const toggleDone = mutation({
   args: {
-    id: v.string(),
+    id: v.id("tasks"),
     done: v.boolean()
   },
   returns: v.null(),
@@ -84,6 +111,8 @@ export const toggleDone = mutation({
   }
 });
 ```
+
+Mutations have `ctx.db`, `ctx.storage`, `ctx.scheduler`, `ctx.runQuery`, `ctx.runMutation`, and `ctx.runAction`.
 
 ### Actions
 
@@ -107,6 +136,8 @@ export const exportTasks = action({
   }
 });
 ```
+
+Actions also have access to `ctx.storage` and `ctx.scheduler`.
 
 ### Typed References
 
@@ -163,10 +194,21 @@ import {
   v
 } from "../_generated/server";
 
-export const list = query({
+export const listPinned = query({
   args: {},
   handler: async (ctx) =>
     ctx.db.query("notes").withIndex("by_pinned").order("asc").collect()
+});
+
+export const searchNotes = query({
+  args: { term: v.string() },
+  handler: async (ctx, args) =>
+    ctx.db
+      .query("notes")
+      .withSearchIndex("search_body", (search) =>
+        search.search("body", args.term).eq("pinned", false)
+      )
+      .take(20)
 });
 
 export const create = mutation({
@@ -197,6 +239,7 @@ export const scheduleCreateSkip = mutation({
 
 - Use `query` for reads, `mutation` for writes, and `action` for side effects
 - Import helpers from `../_generated/server` inside function files
+- Prefer `v.id("table")` over plain `v.string()` for document ids
 - Add `returns` validators where explicit shape matters to callers
 - Preserve optional args ergonomics for empty-object validators
 - Prefer generated references in app code and explicit references in low-level runtime flows
@@ -208,10 +251,12 @@ export const scheduleCreateSkip = mutation({
 2. Breaking `useQuery(api.foo.bar)` inference by widening reference types
 3. Editing generated API references instead of source function definitions
 4. Forgetting that scheduler APIs accept typed function references and optional misfire policies
+5. Reaching for plain strings where `v.id("table")` better expresses intent
 
 ## References
 
 - `packages/core/src/runtime/functions.ts`
 - `packages/core/src/runtime/runtime.ts`
+- `packages/schema/src/validators.ts`
 - `packages/core/AGENTS.md`
 - `examples/expo/syncore/functions/notes.ts`

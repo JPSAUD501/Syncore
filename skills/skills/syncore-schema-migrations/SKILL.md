@@ -1,8 +1,8 @@
 ---
 name: syncore-schema-migrations
 displayName: Syncore Schema And Migrations
-description: Schema design and migration workflow for Syncore, including validators, indexes, search indexes, drift detection, generated snapshots, and SQL migration files.
-version: 1.0.0
+description: Schema design and migration workflow for Syncore, including validators, indexes, search indexes, drift detection, stored snapshots, and SQL migration files.
+version: 1.1.0
 author: Syncore
 tags: [syncore, schema, migrations, validators, sqlite]
 ---
@@ -17,9 +17,9 @@ Read these first:
 
 - `packages/schema/AGENTS.md`
 - `packages/cli/AGENTS.md`
+- `packages/core/src/cli.ts`
 - `README.md`
 - `docs/architecture.md`
-- `packages/cli/src/index.ts`
 - `examples/electron/syncore/schema.ts`
 - `examples/expo/syncore/schema.ts`
 - `examples/next-pwa/syncore/schema.ts`
@@ -49,12 +49,12 @@ Syncore's migration workflow is local and CLI-driven:
 
 1. Change `syncore/schema.ts`
 2. Run `npx syncore migrate:status`
-3. If the diff is safe, run `npx syncore migrate:generate <name>`
+3. If the diff is safe, run `npx syncore migrate:generate [name]`
 4. Review the generated SQL in `syncore/migrations/*.sql`
 5. Apply it with `npx syncore migrate:apply`
-6. Regenerate typed files with `npx syncore codegen`
+6. Regenerate typed files with `npx syncore codegen` or let `npx syncore dev` keep them fresh
 
-The CLI stores a schema snapshot and compares the current schema against the last saved snapshot. Destructive drift is intentionally surfaced early.
+The CLI stores a schema snapshot in `syncore/migrations/_schema_snapshot.json` and compares the current schema against that saved snapshot. Destructive drift is intentionally surfaced early.
 
 ### Drift Safety
 
@@ -87,12 +87,14 @@ export default defineSchema({
 });
 ```
 
+Define indexes before relying on `withIndex(...)` or `withSearchIndex(...)` in functions.
+
 ### Keep Consumers In Sync
 
 Schema changes usually require updating:
 
 - function args or return validators
-- React components using generated references
+- React or other UI code using generated references
 - examples used as integration fixtures
 - tests covering inference or runtime behavior
 
@@ -144,6 +146,7 @@ Add the index in schema before expecting search-related queries or migration SQL
 - Add indexes and search indexes explicitly in schema definitions
 - Run `migrate:status` before generating or applying migrations
 - Review generated SQL instead of blindly applying it
+- Remember that `migrate:generate` can use the default `auto` name when you do not pass one
 - Regenerate code after schema changes so generated APIs stay aligned
 - Update examples and tests when a public data shape changes
 
@@ -158,5 +161,5 @@ Add the index in schema before expecting search-related queries or migration SQL
 
 - `packages/schema/AGENTS.md`
 - `packages/cli/AGENTS.md`
-- `packages/cli/src/index.ts`
+- `packages/core/src/cli.ts`
 - `docs/architecture.md`

@@ -1,8 +1,8 @@
 ---
 name: syncore-scheduler-storage
 displayName: Syncore Scheduler And Storage
-description: Local scheduling and file storage patterns for Syncore, including cron jobs, runAfter, runAt, misfire policies, and storage metadata consistency.
-version: 1.0.0
+description: Local scheduling and file storage patterns for Syncore, including recurring jobs, runAfter, runAt, misfire policies, and storage metadata consistency.
+version: 1.1.0
 author: Syncore
 tags: [syncore, scheduler, storage, cron, offline]
 ---
@@ -19,6 +19,7 @@ Read these first:
 - `packages/core/src/runtime/functions.ts`
 - `packages/core/src/runtime/runtime.ts`
 - `packages/testing/src/runtime-contract.test.ts`
+- `examples/expo/lib/syncore.ts`
 - `examples/expo/syncore/functions/notes.ts`
 
 ## Instructions
@@ -61,12 +62,17 @@ export const scheduleCreateCatchUp = mutation({
 });
 ```
 
-### Cron Jobs
+### Recurring Jobs
 
-Use `cronJobs()` to define recurring jobs in `syncore/crons.ts`:
+Use `cronJobs()` to build a recurring job registry, then pass its `jobs` array into runtime or bootstrap `scheduler.recurringJobs`.
+
+Syncore currently does not auto-load a special `syncore/crons.ts` file.
 
 ```ts
+import { createExpoSyncoreBootstrap } from "syncore/expo";
 import { cronJobs, createFunctionReference } from "syncore";
+import schema from "../syncore/schema";
+import { functions } from "../syncore/_generated/functions";
 
 const crons = cronJobs();
 
@@ -78,12 +84,19 @@ crons.interval(
   { type: "catch_up" }
 );
 
-export default crons;
+export const syncore = createExpoSyncoreBootstrap({
+  schema,
+  functions,
+  scheduler: {
+    recurringJobs: crons.jobs,
+    pollIntervalMs: 25
+  }
+});
 ```
 
 ### Storage APIs
 
-Queries and mutations can use `ctx.storage`:
+Queries, mutations, and actions can use `ctx.storage`:
 
 - `put(...)`
 - `get(id)`
@@ -123,7 +136,7 @@ Syncore's storage and scheduler are designed for local durability:
 - scheduled jobs are persisted in SQLite
 - missed jobs are reconciled on restart according to the policy
 - storage metadata is tracked in system tables
-- startup cleanup removes pending or orphaned storage artifacts
+- orphan cleanup can only be as complete as the storage adapter capabilities; adapters that implement `storage.list()` allow fuller reconciliation
 
 ## Examples
 
@@ -139,6 +152,7 @@ Syncore's storage and scheduler are designed for local durability:
 - Choose misfire policies deliberately instead of accepting defaults blindly
 - Use typed function references for scheduled jobs
 - Keep scheduled handlers idempotent where possible
+- Pass recurring jobs through runtime or bootstrap scheduler options instead of assuming a magic file loader
 - Use storage metadata APIs rather than writing unmanaged files beside Syncore's storage directory
 - Test restart and offline behavior for features that depend on scheduling or files
 
@@ -147,7 +161,8 @@ Syncore's storage and scheduler are designed for local durability:
 1. Forgetting that jobs may run after restart and need sensible misfire behavior
 2. Scheduling non-idempotent follow-up work without considering retries or restarts
 3. Treating file bytes and storage metadata as separate systems instead of one API
-4. Testing only the happy path and missing restart recovery behavior
+4. Assuming recurring jobs are discovered from `syncore/crons.ts` automatically
+5. Testing only the happy path and missing restart recovery behavior
 
 ## References
 

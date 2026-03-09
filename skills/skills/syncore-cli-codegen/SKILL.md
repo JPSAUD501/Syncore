@@ -1,8 +1,8 @@
 ---
 name: syncore-cli-codegen
 displayName: Syncore CLI And Codegen
-description: Syncore CLI workflows for project scaffolding, generated APIs, schema checks, SQL migrations, and the local devtools hub.
-version: 1.0.0
+description: Syncore CLI workflows for project scaffolding, generated APIs, schema checks, sample-data import, seeding, SQL migrations, and the local devtools hub.
+version: 1.1.0
 author: Syncore
 tags: [syncore, cli, codegen, migrations, devtools]
 ---
@@ -15,6 +15,7 @@ Use this skill when working on `@syncore/cli`, generated files, or the developer
 
 Read these first:
 
+- `packages/core/src/cli.ts`
 - `packages/cli/src/index.ts`
 - `packages/cli/AGENTS.md`
 - `README.md`
@@ -30,21 +31,26 @@ The current CLI surface includes:
 - `npx syncore init`
 - `npx syncore codegen`
 - `npx syncore doctor`
+- `npx syncore import --table <table> <file>`
+- `npx syncore seed --table <table>`
 - `npx syncore migrate:status`
-- `npx syncore migrate:generate <name>`
+- `npx syncore migrate:generate [name]`
 - `npx syncore migrate:apply`
 - `npx syncore dev`
 
 ### init
 
-`syncore init` scaffolds the standard project layout:
+`syncore init` scaffolds the standard project layout and supports templates such as `minimal`, `node`, `react-web`, `expo`, `electron`, and `next`.
+
+Core scaffold output is:
 
 - `syncore.config.ts`
 - `syncore/schema.ts`
-- `syncore/functions/messages.ts`
-- `syncore/crons.ts`
+- `syncore/functions/tasks.ts`
 - `syncore/migrations/`
 - `syncore/_generated/`
+
+Template-specific files are added on top of that. Current scaffolding does not create a special `syncore/crons.ts` file.
 
 ### codegen
 
@@ -58,7 +64,13 @@ The generated API must preserve end-to-end types by referencing function definit
 
 ### dev
 
-`syncore dev` is the main local development loop. It bootstraps codegen and migration work, then runs the devtools hub and watches relevant project inputs.
+`syncore dev` is the main local development loop. It can scaffold a missing Syncore project, then bootstraps codegen and migration work, starts the devtools hub, and watches relevant project inputs.
+
+### import And seed
+
+Use `import` to load JSONL data into an explicit table and file path.
+
+Use `seed` to load conventional sample data from `syncore/seed.jsonl` or `syncore/seed/<table>.jsonl`, or from an explicit `--file` path.
 
 ### Migrations
 
@@ -72,6 +84,8 @@ npx syncore migrate:generate add_notes_table
 npx syncore migrate:apply
 ```
 
+`migrate:generate` accepts an optional name and falls back to `auto`.
+
 ### Monorepo Constraint
 
 Inside the Syncore repo, examples intentionally run codegen from CLI source. Avoid changes that require built `dist` output to exist while parallel tasks are running.
@@ -81,11 +95,10 @@ Inside the Syncore repo, examples intentionally run codegen from CLI source. Avo
 ### Typical App Loop
 
 ```bash
-npx syncore init
-npx syncore codegen
-npx syncore doctor
-npx syncore migrate:status
 npx syncore dev
+npx syncore doctor
+npx syncore import --table tasks sampleData.jsonl
+npx syncore seed --table tasks
 ```
 
 ### Generated API Pattern
@@ -118,6 +131,7 @@ export const api = {
 - Prefer `import type` where generated code only needs type positions
 - Verify codegen changes with CLI tests and example integrations
 - Keep the dev loop independent from workspace `dist` artifacts when examples are involved
+- Document `syncore dev` as the happy path unless the task is specifically about one-off commands
 
 ## Common Pitfalls
 
@@ -125,9 +139,11 @@ export const api = {
 2. Requiring built CLI output during parallel example validation
 3. Fixing generated files manually instead of fixing the template source
 4. Treating migration SQL as unreviewed boilerplate
+5. Documenting scaffolded files that the current templates no longer create
 
 ## References
 
+- `packages/core/src/cli.ts`
 - `packages/cli/src/index.ts`
 - `packages/cli/AGENTS.md`
 - `README.md`

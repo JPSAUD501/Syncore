@@ -10,10 +10,10 @@ For Syncore work, read the repository docs and package guides before relying on 
 
 ```text
 [Syncore Docs]|repo-local
-|overview:{README.md,docs/architecture.md,docs/development.md}
-|quickstarts:{docs/quickstarts/react-web.md,docs/quickstarts/expo.md,docs/quickstarts/electron.md,docs/quickstarts/next-pwa.md}
+|overview:{README.md,docs/architecture.md,docs/development.md,docs/guides/syncore-vs-convex.md}
+|quickstarts:{docs/quickstarts/react-web.md,docs/quickstarts/expo.md,docs/quickstarts/electron.md,docs/quickstarts/next-pwa.md,docs/quickstarts/node-script.md}
 |packages:{packages/core/AGENTS.md,packages/schema/AGENTS.md,packages/cli/AGENTS.md,packages/react/AGENTS.md,packages/platform-node/AGENTS.md,packages/platform-web/AGENTS.md,packages/testing/AGENTS.md}
-|examples:{examples/README.md,examples/electron,examples/expo,examples/next-pwa}
+|examples:{examples/README.md,examples/browser-esm,examples/electron,examples/expo,examples/next-pwa,examples/sveltekit}
 |reference:{reference/Convex,reference/convexskills}
 ```
 
@@ -28,16 +28,16 @@ This directory provides two complementary layers for AI coding agents:
 
 ## Available Skills
 
-| Skill                                                                  | Description                                                |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [syncore](skills/syncore/SKILL.md)                                     | Umbrella index for Syncore development workflows           |
-| [syncore-best-practices](skills/syncore-best-practices/SKILL.md)       | Project structure, DX rules, and common pitfalls           |
-| [syncore-functions](skills/syncore-functions/SKILL.md)                 | Queries, mutations, actions, and typed function references |
-| [syncore-schema-migrations](skills/syncore-schema-migrations/SKILL.md) | Schema evolution, drift safety, and SQL migration flow     |
-| [syncore-react-realtime](skills/syncore-react-realtime/SKILL.md)       | React provider wiring and reactive hooks                   |
-| [syncore-cli-codegen](skills/syncore-cli-codegen/SKILL.md)             | CLI commands, generated files, and dev loop                |
-| [syncore-platform-adapters](skills/syncore-platform-adapters/SKILL.md) | Electron, web, Expo, and Next integration                  |
-| [syncore-scheduler-storage](skills/syncore-scheduler-storage/SKILL.md) | Scheduler jobs, misfire policies, and file storage         |
+| Skill                                                                  | Description                                                           |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [syncore](skills/syncore/SKILL.md)                                     | Umbrella index for Syncore development workflows                      |
+| [syncore-best-practices](skills/syncore-best-practices/SKILL.md)       | Project structure, DX rules, and common pitfalls                      |
+| [syncore-functions](skills/syncore-functions/SKILL.md)                 | Queries, mutations, actions, query builders, and typed references     |
+| [syncore-schema-migrations](skills/syncore-schema-migrations/SKILL.md) | Schema evolution, drift safety, snapshots, and SQL migration flow     |
+| [syncore-react-realtime](skills/syncore-react-realtime/SKILL.md)       | React providers, reactive hooks, loading states, and watch lifecycles |
+| [syncore-cli-codegen](skills/syncore-cli-codegen/SKILL.md)             | CLI commands, scaffolding, generated files, and the dev loop          |
+| [syncore-platform-adapters](skills/syncore-platform-adapters/SKILL.md) | Node, Electron, web, Expo, Next, and Svelte integration               |
+| [syncore-scheduler-storage](skills/syncore-scheduler-storage/SKILL.md) | Scheduler jobs, recurring work, misfire policies, and file storage    |
 
 ## Skill Format
 
@@ -81,17 +81,21 @@ Syncore keeps the product runtime inside the app:
 
 - core owns typed references, validation, reactivity, scheduler state, storage metadata, and devtools events
 - platform adapters provide environment-specific IO such as SQLite, files, workers, IPC, and lifecycle hooks
-- React hooks stay thin over `SyncoreClient`
-- codegen flows types from source functions into `syncore/_generated/api`
+- React and Svelte bindings stay thin over `SyncoreClient`
+- codegen flows types from source function definitions into `syncore/_generated/api`
 
 ### Current Developer Loop
 
 Inside an app project:
 
 - user code lives in `syncore/schema.ts` and `syncore/functions/**/*.ts`
+- `npx syncore dev` is the main happy path and auto-scaffolds a missing Syncore project
+- `npx syncore init --template <minimal|node|react-web|expo|electron|next>` is available for explicit scaffolding
 - `npx syncore codegen` generates `_generated/api`, `_generated/functions`, and `_generated/server`
-- `npx syncore migrate:status`, `migrate:generate`, and `migrate:apply` manage schema drift and SQL
-- `npx syncore dev` bootstraps codegen, migration checks, and the local devtools hub
+- `npx syncore migrate:status`, `migrate:generate [name]`, and `migrate:apply` manage schema drift, `_schema_snapshot.json`, and SQL
+- `npx syncore import --table <table> <file>` and `npx syncore seed --table <table>` load local sample data
+
+Recurring jobs are configured through runtime or bootstrap `scheduler` options. Syncore currently does not auto-load a special `syncore/crons.ts` file.
 
 ## DO NOT
 
@@ -109,7 +113,8 @@ import { mutation, query, v } from "../_generated/server";
 
 export const list = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("tasks").order("desc").collect()
+  handler: async (ctx) =>
+    ctx.db.query("tasks").withIndex("by_done").order("asc").collect()
 });
 
 export const create = mutation({
@@ -122,7 +127,7 @@ export const create = mutation({
 ### Typical Client Usage
 
 ```tsx
-import { SyncoreProvider, useMutation, useQuery } from "@syncore/react";
+import { useMutation, useQuery } from "syncore/react";
 import { api } from "../syncore/_generated/api";
 
 function Tasks() {
@@ -142,6 +147,7 @@ function Tasks() {
 - `README.md`
 - `docs/architecture.md`
 - `docs/development.md`
+- `docs/guides/syncore-vs-convex.md`
 - `packages/core/AGENTS.md`
 - `packages/cli/AGENTS.md`
 - `packages/react/AGENTS.md`
