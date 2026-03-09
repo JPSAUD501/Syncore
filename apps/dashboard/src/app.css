@@ -1,0 +1,164 @@
+/* ================================================================== */
+/*  Fonts (from Google Fonts — must precede all other @import rules)    */
+/* ================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap");
+
+@import "tailwindcss";
+
+/* ================================================================== */
+/*  Substrate Design System — Custom Theme                             */
+/* ================================================================== */
+
+@theme {
+  /* --- Background strata --- */
+  --color-bg-deep: #141210;
+  --color-bg-base: #1a1814;
+  --color-bg-surface: #211f1a;
+  --color-bg-elevated: #2a2722;
+  --color-bg-overlay: #332f2a;
+
+  /* --- Accent (gold veins) --- */
+  --color-accent: #d4a853;
+  --color-accent-muted: #a68638;
+  --color-accent-subtle: oklch(0.72 0.12 70 / 0.08);
+
+  /* --- Text --- */
+  --color-text-primary: #e8e0d4;
+  --color-text-secondary: #a69e90;
+  --color-text-tertiary: #6b6459;
+  --color-text-code: #c4b898;
+
+  /* --- Semantic --- */
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #ef4444;
+  --color-info: #60a5fa;
+
+  /* --- Function type colors --- */
+  --color-fn-query: #4ade80;
+  --color-fn-mutation: #60a5fa;
+  --color-fn-action: #a78bfa;
+  --color-fn-cron: #fbbf24;
+
+  /* --- Border --- */
+  --color-border: oklch(0.72 0.12 70 / 0.08);
+  --color-border-hover: oklch(0.72 0.12 70 / 0.15);
+  --color-border-active: oklch(0.72 0.12 70 / 0.25);
+
+  /* --- shadcn/ui mapping (Substrate palette) --- */
+  --color-background: #141210;
+  --color-foreground: #e8e0d4;
+  --color-card: #1a1814;
+  --color-card-foreground: #e8e0d4;
+  --color-popover: #211f1a;
+  --color-popover-foreground: #e8e0d4;
+  --color-primary: #d4a853;
+  --color-primary-foreground: #141210;
+  --color-secondary: #2a2722;
+  --color-secondary-foreground: #e8e0d4;
+  --color-muted: #211f1a;
+  --color-muted-foreground: #a69e90;
+  --color-destructive: #ef4444;
+  --color-input: oklch(0.72 0.12 70 / 0.12);
+  --color-ring: #d4a853;
+
+  /* --- Typography --- */
+  --font-sans: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-mono: "Fira Code", "JetBrains Mono", ui-monospace, monospace;
+
+  /* --- Radius --- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+}
+
+/* ================================================================== */
+/*  Base resets                                                         */
+/* ================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg-deep);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Noise grain overlay for materiality */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.018;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* ================================================================== */
+/*  Scrollbar styling                                                  */
+/* ================================================================== */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.72 0.12 70 / 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.72 0.12 70 / 0.25);
+}
+
+/* ================================================================== */
+/*  Selection                                                          */
+/* ================================================================== */
+
+::selection {
+  background: oklch(0.72 0.12 70 / 0.25);
+  color: var(--color-text-primary);
+}
+
+/* ================================================================== */
+/*  Focus ring                                                         */
+/* ================================================================== */
+
+:focus-visible {
+  outline: 2px solid oklch(0.72 0.12 70 / 0.3);
+  outline-offset: 2px;
+}
+
+/* ================================================================== */
+/*  Button reset                                                       */
+/* ================================================================== */
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}

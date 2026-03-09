@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "name": "todos",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "title": {
+            "kind": "string"
+          },
+          "complete": {
+            "kind": "boolean"
+          }
+        }
+      },
+      "indexes": [
+        {
+          "name": "by_complete",
+          "fields": [
+            "complete"
+          ]
+        }
+      ],
+      "searchIndexes": [
+        {
+          "name": "search_title",
+          "searchField": "title",
+          "filterFields": []
+        }
+      ]
+    }
+  ],
+  "hash": "{\"tables\":[{\"indexes\":[{\"fields\":[\"complete\"],\"name\":\"by_complete\"}],\"name\":\"todos\",\"searchIndexes\":[{\"filterFields\":[],\"name\":\"search_title\",\"searchField\":\"title\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"complete\":{\"kind\":\"boolean\"},\"title\":{\"kind\":\"string\"}}}}],\"version\":1}"
+}

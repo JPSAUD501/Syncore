@@ -84,9 +84,156 @@ export interface SyncoreDevtoolsSnapshot {
   recentEvents: SyncoreDevtoolsEvent[];
 }
 
+/* ------------------------------------------------------------------ */
+/*  Runtime → Dashboard messages                                       */
+/* ------------------------------------------------------------------ */
+
 export type SyncoreDevtoolsMessage =
   | { type: "hello"; runtimeId: string; platform: string }
   | { type: "event"; event: SyncoreDevtoolsEvent }
   | { type: "snapshot"; snapshot: SyncoreDevtoolsSnapshot }
   | { type: "ping" }
-  | { type: "pong" };
+  | { type: "pong" }
+  /* Responses to dashboard requests */
+  | { type: "response"; requestId: string; payload: SyncoreResponsePayload };
+
+/* ------------------------------------------------------------------ */
+/*  Dashboard → Runtime requests                                       */
+/* ------------------------------------------------------------------ */
+
+export interface SyncoreDevtoolsRequest {
+  type: "request";
+  requestId: string;
+  payload: SyncoreRequestPayload;
+}
+
+export type SyncoreRequestPayload =
+  /* Functions */
+  | { kind: "fn.list" }
+  | {
+      kind: "fn.run";
+      functionName: string;
+      functionType: "query" | "mutation" | "action";
+      args: Record<string, unknown>;
+    }
+  /* Data */
+  | {
+      kind: "data.query";
+      table: string;
+      filters?: DataFilter[];
+      limit?: number;
+      cursor?: string;
+    }
+  | { kind: "data.insert"; table: string; document: Record<string, unknown> }
+  | {
+      kind: "data.patch";
+      table: string;
+      id: string;
+      fields: Record<string, unknown>;
+    }
+  | { kind: "data.delete"; table: string; id: string }
+  /* Schema */
+  | { kind: "schema.get" }
+  /* SQL */
+  | { kind: "sql.execute"; query: string }
+  /* Scheduler */
+  | { kind: "scheduler.list" }
+  | { kind: "scheduler.cancel"; jobId: string };
+
+export interface DataFilter {
+  field: string;
+  operator:
+    | "eq"
+    | "neq"
+    | "gt"
+    | "gte"
+    | "lt"
+    | "lte"
+    | "contains"
+    | "startsWith";
+  value: unknown;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Response payloads                                                   */
+/* ------------------------------------------------------------------ */
+
+export type SyncoreResponsePayload =
+  | { kind: "fn.list.result"; functions: FunctionDefinition[] }
+  | {
+      kind: "fn.run.result";
+      result?: unknown;
+      error?: string;
+      durationMs: number;
+    }
+  | {
+      kind: "data.result";
+      rows: Record<string, unknown>[];
+      totalCount: number;
+      cursor?: string;
+    }
+  | {
+      kind: "data.mutate.result";
+      success: boolean;
+      id?: string;
+      error?: string;
+    }
+  | { kind: "schema.result"; tables: TableSchema[] }
+  | {
+      kind: "sql.result";
+      columns: string[];
+      rows: unknown[][];
+      rowsAffected: number;
+      error?: string;
+    }
+  | { kind: "scheduler.list.result"; jobs: SchedulerJob[] }
+  | { kind: "scheduler.cancel.result"; success: boolean; error?: string }
+  | { kind: "error"; message: string };
+
+/* ------------------------------------------------------------------ */
+/*  Shared data shapes                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface FunctionDefinition {
+  name: string;
+  type: "query" | "mutation" | "action";
+  file: string;
+  /** Argument validator schema (JSON Schema-like), if available */
+  args?: Record<string, unknown>;
+  /** Return validator schema, if available */
+  returns?: Record<string, unknown>;
+}
+
+export interface TableSchema {
+  name: string;
+  fields: TableField[];
+  indexes: TableIndex[];
+  documentCount: number;
+}
+
+export interface TableField {
+  name: string;
+  type: string;
+  optional: boolean;
+}
+
+export interface TableIndex {
+  name: string;
+  fields: string[];
+  unique: boolean;
+}
+
+export interface SchedulerJob {
+  id: string;
+  functionName: string;
+  args: Record<string, unknown>;
+  scheduledAt: number;
+  runAt: number;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  completedAt?: number;
+  result?: unknown;
+  error?: string;
+  durationMs?: number;
+  /** If set, this is a recurring cron job */
+  cronSchedule?: string;
+}

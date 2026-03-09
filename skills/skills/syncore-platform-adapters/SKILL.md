@@ -183,15 +183,18 @@ Then wire the provider:
 
 import { SyncoreNextProvider } from "syncore/next";
 
+const createWorker = () =>
+  new Worker(new URL("./syncore.worker.js", import.meta.url), {
+    type: "module"
+  });
+
 export function AppSyncoreProvider({
   children
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <SyncoreNextProvider
-      workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
-    >
+    <SyncoreNextProvider createWorker={createWorker}>
       {children}
     </SyncoreNextProvider>
   );

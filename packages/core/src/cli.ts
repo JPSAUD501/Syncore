@@ -10,6 +10,7 @@ import { tsImport } from "tsx/esm/api";
 import WebSocket, { WebSocketServer } from "ws";
 import type { SyncoreDevtoolsMessage } from "@syncore/devtools-protocol";
 import {
+  generateId,
   type AnyTableDefinition,
   createSchemaSnapshot,
   diffSchemaSnapshots,
@@ -621,11 +622,10 @@ export const syncore = createExpoSyncoreBootstrap({
     case "next":
       files.push(
         {
-          path: path.join("app", "syncore.worker.ts"),
-          content: `/// <reference lib="webworker" />
+          path: path.join("app", "syncore.worker.js"),
+          content: `/* eslint-disable */
 
 import { createBrowserWorkerRuntime } from "syncore/browser";
-import { resolveSqlJsWasmUrl } from "syncore/next";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -635,8 +635,8 @@ void createBrowserWorkerRuntime({
   functions,
   databaseName: "syncore-app",
   persistenceDatabaseName: "syncore-app",
-  persistenceMode: "opfs",
-  locateFile: () => resolveSqlJsWasmUrl()
+  locateFile: () => "/sql-wasm.wasm",
+  platform: "browser-worker"
 });
 `
         },
@@ -647,9 +647,14 @@ void createBrowserWorkerRuntime({
 import type { ReactNode } from "react";
 import { SyncoreNextProvider } from "syncore/next";
 
+const createWorker = () =>
+  new Worker(new URL("./syncore.worker.js", import.meta.url), {
+    type: "module"
+  });
+
 export function AppSyncoreProvider({ children }: { children: ReactNode }) {
   return (
-    <SyncoreNextProvider workerUrl={new URL("./syncore.worker.ts", import.meta.url)}>
+    <SyncoreNextProvider createWorker={createWorker}>
       {children}
     </SyncoreNextProvider>
   );
@@ -940,7 +945,7 @@ async function importJsonlIntoProject(
         string,
         unknown
       >;
-      const id = crypto.randomUUID();
+      const id = generateId();
       const creationTime = Date.now() + importedCount;
       const json = stableStringify(validated);
       database

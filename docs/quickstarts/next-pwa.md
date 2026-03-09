@@ -38,13 +38,12 @@ export default withSyncoreNext({
 
 ## 5. Add the worker runtime
 
-`app/syncore.worker.ts`
+`app/syncore.worker.js`
 
-```ts
-/// <reference lib="webworker" />
+```js
+/* eslint-disable */
 
 import { createBrowserWorkerRuntime } from "syncore/browser";
-import { resolveSqlJsWasmUrl } from "syncore/next";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 
@@ -54,8 +53,8 @@ void createBrowserWorkerRuntime({
   functions,
   databaseName: "my-syncore-next",
   persistenceDatabaseName: "my-syncore-next",
-  persistenceMode: "opfs",
-  locateFile: () => resolveSqlJsWasmUrl()
+  locateFile: () => "/sql-wasm.wasm",
+  platform: "browser-worker"
 });
 ```
 
@@ -70,6 +69,11 @@ import { useQuery } from "syncore/react";
 import { SyncoreNextProvider } from "syncore/next";
 import { api } from "../syncore/_generated/api";
 
+const createWorker = () =>
+  new Worker(new URL("./syncore.worker.js", import.meta.url), {
+    type: "module"
+  });
+
 function Todos() {
   const tasks = useQuery(api.tasks.list) ?? [];
   return <pre>{JSON.stringify(tasks, null, 2)}</pre>;
@@ -77,9 +81,7 @@ function Todos() {
 
 export default function Page() {
   return (
-    <SyncoreNextProvider
-      workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
-    >
+    <SyncoreNextProvider createWorker={createWorker}>
       <Todos />
     </SyncoreNextProvider>
   );

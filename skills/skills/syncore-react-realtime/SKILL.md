@@ -149,7 +149,12 @@ function Todos() {
 ### Platform Wrapper Example
 
 ```tsx
-import { SyncoreBrowserProvider } from "syncore/browser/react";
+import { SyncoreNextProvider } from "syncore/next";
+
+const createWorker = () =>
+  new Worker(new URL("./syncore.worker.js", import.meta.url), {
+    type: "module"
+  });
 
 export function AppSyncoreProvider({
   children
@@ -157,11 +162,9 @@ export function AppSyncoreProvider({
   children: React.ReactNode;
 }) {
   return (
-    <SyncoreBrowserProvider
-      workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
-    >
+    <SyncoreNextProvider createWorker={createWorker}>
       {children}
-    </SyncoreBrowserProvider>
+    </SyncoreNextProvider>
   );
 }
 ```

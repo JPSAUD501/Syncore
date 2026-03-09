@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { createNextSyncoreClient, resolveSqlJsWasmUrl } from "./index.js";
-import { createSyncoreNextWorkerUrl, withSyncoreNext } from "./config.js";
+import {
+  createSyncoreNextWorkerUrl,
+  createNextSyncoreClient,
+  getSyncoreWorkerUrl,
+  resolveSqlJsWasmUrl
+} from "./index.js";
+import { withSyncoreNext } from "./config.js";
 
 describe("@syncore/next", () => {
   it("resolves the default wasm url", () => {
@@ -18,7 +23,9 @@ describe("@syncore/next", () => {
     expect(nextConfig.experiments).toMatchObject({ asyncWebAssembly: true });
 
     const headers = await (
-      wrapped as { headers: () => Promise<Array<Record<string, unknown>>> }
+      wrapped as unknown as {
+        headers: () => Promise<Array<Record<string, unknown>>>;
+      }
     ).headers();
     expect(headers).toEqual(
       expect.arrayContaining([
@@ -32,8 +39,14 @@ describe("@syncore/next", () => {
     expect("headers" in wrapped).toBe(false);
   });
 
-  it("creates a default worker url helper", () => {
-    expect(String(createSyncoreNextWorkerUrl())).toContain("syncore.worker.ts");
+  it("returns the worker url", () => {
+    expect(getSyncoreWorkerUrl()).toBe(
+      "/_next/static/chunks/syncore-worker.js"
+    );
+  });
+
+  it("creates a default worker module url", () => {
+    expect(String(createSyncoreNextWorkerUrl())).toContain("syncore.worker.js");
   });
 
   it("supports an explicit worker factory", () => {

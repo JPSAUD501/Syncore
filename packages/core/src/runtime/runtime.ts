@@ -27,6 +27,7 @@ import {
   type SyncoreFunctionKind,
   type SyncoreFunctionDefinition
 } from "./functions.js";
+import { generateId } from "./id.js";
 
 export interface RegisteredSyncoreFunction {
   kind: SyncoreFunctionKind;
@@ -754,7 +755,7 @@ class RuntimeQueryBuilder<TDocument> implements QueryBuilder<TDocument> {
  * The local Syncore runtime that owns the database, storage, scheduler, and function execution.
  */
 export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
-  private readonly runtimeId = crypto.randomUUID();
+  private readonly runtimeId = generateId();
   private readonly platform: string;
   private readonly capabilities: Readonly<SyncoreCapabilities>;
   private readonly experimentalPlugins: Array<
@@ -885,7 +886,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     args: JsonObject = {}
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "mutation");
-    const mutationId = crypto.randomUUID();
+    const mutationId = generateId();
     const startedAt = Date.now();
     const changedTables = new Set<string>();
 
@@ -916,7 +917,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     args: JsonObject = {}
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "action");
-    const actionId = crypto.randomUUID();
+    const actionId = generateId();
     const startedAt = Date.now();
 
     try {
@@ -1146,7 +1147,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         const normalizedArgs = normalizeOptionalArgs(args);
         if (kind === "mutation") {
           return this.options.driver.withSavepoint(
-            `sp_${crypto.randomUUID().replace(/-/g, "_")}`,
+            `sp_${generateId().replace(/-/g, "_")}`,
             () =>
               this.invokeFunction<TResult>(
                 this.resolveFunction(reference, "mutation"),
@@ -1214,7 +1215,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         value: InsertValueForTable<TSchema, TTableName>
       ) => {
         const validated = this.validateDocument(tableName, value as JsonObject);
-        const id = crypto.randomUUID();
+        const id = generateId();
         const creationTime = Date.now();
         const json = stableStringify(validated);
         await this.options.driver.run(
@@ -1295,7 +1296,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private createStorageApi(): SyncoreStorageApi {
     return {
       put: async (input) => {
-        const id = crypto.randomUUID();
+        const id = generateId();
         const createdAt = Date.now();
         await this.options.driver.run(
           `INSERT OR REPLACE INTO "_storage_pending" (_id, _creationTime, file_name, content_type) VALUES (?, ?, ?, ?)`,
@@ -1610,7 +1611,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     args: JsonObject,
     misfirePolicy: MisfirePolicy
   ): Promise<string> {
-    const id = crypto.randomUUID();
+    const id = generateId();
     const now = Date.now();
     await this.options.driver.run(
       `INSERT INTO "_scheduled_functions"

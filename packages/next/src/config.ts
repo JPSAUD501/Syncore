@@ -1,8 +1,15 @@
+const WORKER_NAME = "syncore-worker";
+
+function joinAppWorkerPath(dir: string) {
+  return `${dir.replace(/[\\/]$/, "")}/app/syncore.worker.js`;
+}
+
 /**
  * Wrap a Next config with the settings Syncore needs for SQL.js and worker assets.
  *
  * This enables async WebAssembly support and, for non-exported apps, adds a
- * long-lived cache header for `sql-wasm.wasm`.
+ * long-lived cache header for `sql-wasm.wasm`. It also configures webpack to
+ * bundle the syncore worker as a separate entry point.
  */
 export function withSyncoreNext<TConfig extends Record<string, unknown>>(
   config: TConfig
@@ -46,6 +53,38 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
         asyncWebAssembly: true
       };
 
+      type WebpackContext = {
+        dev?: boolean;
+        isServer: boolean;
+        nextRuntime?: string;
+        dir: string;
+      };
+      const ctx = context as WebpackContext | undefined;
+      if (
+        isStaticExport &&
+        ctx &&
+        !ctx.dev &&
+        !ctx.isServer &&
+        ctx.nextRuntime !== "edge"
+      ) {
+        const entry =
+          (nextConfig.entry as () => Promise<Record<string, unknown>>) ??
+          (async () => ({}));
+        const workerPath = joinAppWorkerPath(ctx.dir);
+        nextConfig.entry = async () => {
+          const entries = await entry();
+          const mainAppEntry = entries["main-app"];
+          return {
+            ...entries,
+            ...(mainAppEntry && !entries.main ? { main: mainAppEntry } : {}),
+            [WORKER_NAME]: {
+              import: workerPath,
+              filename: "static/chunks/[name].js"
+            }
+          };
+        };
+      }
+
       if (userWebpack) {
         return userWebpack(nextConfig, context);
       }
@@ -66,11 +105,15 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
   return nextConfig as TConfig;
 }
 
+export function getSyncoreWorkerUrl(): string {
+  return `/_next/static/chunks/${WORKER_NAME}.js`;
+}
+
 /**
  * Create the default worker URL used by the Next integration.
  */
 export function createSyncoreNextWorkerUrl(
-  relativePath = "./syncore.worker.ts"
+  relativePath = "./syncore.worker.js"
 ) {
   return new URL(relativePath, import.meta.url);
 }

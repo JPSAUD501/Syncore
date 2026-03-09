@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFunctionReference,
@@ -11,9 +11,8 @@ import {
 import { defineSchema, defineTable, v } from "@syncore/schema";
 import { createWebSyncoreRuntime, createWebWorkerRuntime } from "./index.js";
 
-const wasmFilePath = path.resolve(
-  process.cwd(),
-  "node_modules/sql.js/dist/sql-wasm.wasm"
+const wasmFilePath = fileURLToPath(
+  new URL("../node_modules/sql.js/dist/sql-wasm.wasm", import.meta.url)
 );
 
 describe("platform-web sql.js runtime", () => {

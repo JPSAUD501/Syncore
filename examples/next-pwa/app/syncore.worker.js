@@ -1,4 +1,4 @@
-/// <reference lib="webworker" />
+/* eslint-disable */
 
 import { createBrowserWorkerRuntime } from "syncore/browser";
 import schema from "../syncore/schema";

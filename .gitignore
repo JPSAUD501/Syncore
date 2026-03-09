@@ -17,3 +17,4 @@ examples/next-pwa/public/sql-wasm.wasm
 packages/*/temp/
 .tmp-electron-debug/
 !references/
+nul

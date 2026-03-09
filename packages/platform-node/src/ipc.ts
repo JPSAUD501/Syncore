@@ -1,10 +1,11 @@
-import type {
-  AnySyncoreSchema,
-  FunctionReference,
-  JsonObject,
-  SyncoreClient,
-  SyncoreRuntime,
-  SyncoreWatch
+import {
+  generateId,
+  type AnySyncoreSchema,
+  type FunctionReference,
+  type JsonObject,
+  type SyncoreClient,
+  type SyncoreRuntime,
+  type SyncoreWatch
 } from "@syncore/core";
 
 export type NodeIpcSyncoreSchema = AnySyncoreSchema;
@@ -209,7 +210,7 @@ export class SyncoreRendererClient implements SyncoreClient {
     let watchRecord = this.watchRecordsByKey.get(watchKey);
     if (!watchRecord) {
       watchRecord = {
-        subscriptionId: crypto.randomUUID(),
+        subscriptionId: generateId(),
         listeners: new Set<() => void>(),
         consumers: 0,
         result: undefined,
@@ -306,7 +307,7 @@ export class SyncoreRendererClient implements SyncoreClient {
     args: JsonObject
   ): Promise<TResult> {
     this.ensureNotDisposed();
-    const requestId = crypto.randomUUID();
+    const requestId = generateId();
     const promise = new Promise<TResult>((resolve, reject) => {
       this.pendingRequests.set(requestId, { resolve, reject });
     });

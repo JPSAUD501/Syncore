@@ -5,6 +5,10 @@ import {
 } from "@syncore/platform-web";
 import { SyncoreProvider } from "@syncore/react";
 import { useEffect, useState, type ReactNode } from "react";
+import { getSyncoreWorkerUrl } from "./config.js";
+
+export { getSyncoreWorkerUrl } from "./config.js";
+export { createSyncoreNextWorkerUrl } from "./config.js";
 
 export interface SyncoreNextOptions {
   /** Optional service worker URL used to cache the application shell. */
@@ -59,10 +63,13 @@ export function resolveSqlJsWasmUrl(options?: SyncoreNextOptions): string {
  * Create a worker-backed Syncore client for a Next app.
  */
 export function createNextSyncoreClient(options: {
-  /** Optional custom worker factory for tests or advanced setups. */
+  /**
+   * Optional custom worker factory for tests or framework-specific worker
+   * bundling patterns such as Next App Router development.
+   */
   createWorker?: () => Worker;
 
-  /** Optional explicit module URL for the worker. */
+  /** Optional explicit module URL for an already-public worker asset. */
   workerUrl?: URL | string;
 
   /** Optional public worker asset path for production builds. */
@@ -123,13 +130,15 @@ export function SyncoreNextProvider({
   /** The React subtree that should receive the Syncore client. */
   children: ReactNode;
 
-  /** Optional custom worker factory for tests or advanced setups. */
+  /**
+   * Optional custom worker factory for tests or Next colocated worker modules.
+   */
   createWorker?: () => Worker;
 
   /** Optional service worker URL used to cache the application shell. */
   serviceWorkerUrl?: string;
 
-  /** Optional explicit module URL for the worker. */
+  /** Optional explicit module URL for an already-public worker asset. */
   workerUrl?: URL | string;
 
   /** Optional public worker asset path for production builds. */
@@ -137,11 +146,20 @@ export function SyncoreNextProvider({
 }) {
   const [managedClient, setManagedClient] =
     useState<ManagedWebWorkerClient | null>(null);
+  const resolvedWorkerUrl =
+    typeof workerUrl === "string" ? workerUrl : workerUrl?.toString();
 
   useEffect(() => {
     const nextClient = createNextSyncoreClient({
       ...(createWorker ? { createWorker } : {}),
-      ...(workerUrl ? { workerUrl } : {}),
+      ...(resolvedWorkerUrl
+        ? {
+            workerUrl:
+              process.env.NODE_ENV === "production"
+                ? getSyncoreWorkerUrl()
+                : resolvedWorkerUrl
+          }
+        : {}),
       ...(workerAssetUrl ? { workerAssetUrl } : {})
     });
     setManagedClient(nextClient);
@@ -150,7 +168,7 @@ export function SyncoreNextProvider({
       nextClient.dispose();
       setManagedClient(null);
     };
-  }, [createWorker, workerAssetUrl, workerUrl]);
+  }, [createWorker, resolvedWorkerUrl, workerAssetUrl]);
 
   if (!managedClient) {
     return null;
