@@ -4,7 +4,7 @@
   "type": "module",
   "main": "./dist/src/main.js",
   "scripts": {
-    "build:deps": "pnpm --filter syncore build",
+    "build:deps": "pnpm --filter syncore build:standalone",
     "dev": "pnpm run build && electron ./dist/src/main.js",
     "build": "pnpm run build:deps && pnpm run build:main && pnpm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json && node ./scripts/copy-preload.mjs",
@@ -21,6 +21,7 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "@syncore/react": "workspace:*",
     "syncore": "workspace:*"
   },
   "devDependencies": {

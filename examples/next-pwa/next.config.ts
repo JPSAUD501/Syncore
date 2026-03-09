@@ -1,4 +1,4 @@
-import { withSyncoreNext } from "syncore/next/config";
+import { withSyncoreNext } from "../../packages/next/dist/config.js";
 
 export default withSyncoreNext({
   output: "export"

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:deps": "pnpm --filter syncore build",
+    "build:deps": "pnpm --filter syncore build:standalone",
     "build": "pnpm run build:deps && vite build",
     "dev": "pnpm run build:deps && vite"
   },

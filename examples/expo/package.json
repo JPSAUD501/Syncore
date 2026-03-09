@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "android:smoke": "expo run:android --variant release --no-bundler --app-id dev.syncore.expoexample",
-    "build:deps": "pnpm --filter syncore build",
+    "build:deps": "pnpm --filter syncore build:standalone",
     "clean": "node -e \"require('node:fs').rmSync('.expo',{recursive:true,force:true});require('node:fs').rmSync('android',{recursive:true,force:true})\"",
     "lint": "eslint App.tsx lib syncore --ext .ts,.tsx",
     "prelint": "pnpm run syncore:codegen",

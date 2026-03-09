@@ -13,7 +13,6 @@
   },
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",
-    "build:deps": "pnpm --filter @syncore/core build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run --passWithNoTests",

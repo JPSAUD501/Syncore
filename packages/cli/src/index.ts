@@ -1,5 +1,5 @@
 #!/usr/bin/env node
 
-import { runSyncoreCli } from "../../core/src/cli.ts";
+import { runSyncoreCli } from "@syncore/core/cli";
 
 await runSyncoreCli();

@@ -15,11 +15,11 @@
     }
   },
   "scripts": {
-    "build": "pnpm run build:deps && pnpm run clean && tsdown --config tsdown.config.ts",
+    "build": "pnpm run clean && tsdown --config tsdown.config.ts",
     "build:deps": "pnpm --filter @syncore/core build && pnpm --filter @syncore/devtools-protocol build && pnpm --filter @syncore/schema build",
     "clean": "node -e \"const fs=require('node:fs');for (const target of ['dist','node_modules/.unrun','node_modules/.vite','node_modules/.vite-temp']) { fs.rmSync(target,{recursive:true,force:true}); }\"",
     "lint": "eslint src --ext .ts",
-    "test": "vitest run",
+    "test": "pnpm run build:deps && vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

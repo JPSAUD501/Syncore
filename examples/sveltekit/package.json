@@ -4,12 +4,14 @@
   "type": "module",
   "scripts": {
     "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
-    "build:deps": "pnpm --filter syncore build",
+    "build:deps": "pnpm --filter syncore build:standalone",
     "dev": "pnpm run build:deps && pnpm run syncore:codegen && vite dev",
     "build": "pnpm run build:deps && pnpm run syncore:codegen && vite build",
     "typecheck": "pnpm run syncore:codegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@syncore/platform-web": "workspace:*",
+    "@syncore/svelte": "workspace:*",
     "sql.js": "^1.13.0",
     "svelte": "^5.0.0",
     "syncore": "workspace:*"
