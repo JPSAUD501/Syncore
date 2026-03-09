@@ -231,7 +231,7 @@ describe("platform-web sql.js runtime", () => {
         sentMessages.some((payload) => payload.includes('"type":"hello"'))
       ).toBe(true);
       expect(
-        sentMessages.some((payload) => payload.includes('"type":"snapshot"'))
+        sentMessages.some((payload) => payload.includes('"type":"event"'))
       ).toBe(true);
 
       await runtime.stop();
@@ -302,7 +302,7 @@ describe("platform-web sql.js runtime", () => {
         sentMessages.some((payload) => payload.includes('"type":"hello"'))
       ).toBe(true);
       expect(
-        sentMessages.some((payload) => payload.includes('"type":"snapshot"'))
+        sentMessages.some((payload) => payload.includes('"type":"event"'))
       ).toBe(true);
 
       await runtime.stop();

@@ -16,6 +16,7 @@ export function useConnection() {
     connected,
     runtimeId: activeRuntime?.runtimeId ?? null,
     platform: activeRuntime?.platform ?? null,
+    liveQueryVersion: activeRuntime?.liveQueryVersion ?? 0,
     runtimeCount: runtimes.length,
     isReady: connected && activeRuntime !== null
   };

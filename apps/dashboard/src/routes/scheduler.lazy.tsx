@@ -16,8 +16,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
-import { useSnapshot, useConnection } from "@/hooks";
-import { useReactiveRuntimeData } from "@/hooks/useReactiveData";
+import { useConnection } from "@/hooks";
+import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration, formatRelativeTime } from "@/lib/utils";
 import type { SchedulerJob } from "@syncore/devtools-protocol";
@@ -28,30 +28,24 @@ export const Route = createLazyFileRoute("/scheduler")({
 
 function SchedulerPage() {
   const { connected } = useConnection();
-  const { pendingJobs } = useSnapshot();
   const [selectedJob, setSelectedJob] = useState<SchedulerJob | null>(null);
 
   /* ---------------------------------------------------------------- */
   /*  Reactive job list fetch                                          */
   /* ---------------------------------------------------------------- */
 
-  const fetchJobs = useCallback(async () => {
-    const res = await sendRequest({ kind: "scheduler.list" });
-    if (res.kind === "scheduler.list.result") {
-      return res.jobs;
-    }
-    return [] as SchedulerJob[];
-  }, []);
-
-  const { data: fetchedJobs, loading } = useReactiveRuntimeData<SchedulerJob[]>(
-    fetchJobs,
-    {
-      enabled: connected,
-      pollInterval: 2000
-    }
+  const jobsSubscription = useDevtoolsSubscription(
+    connected ? { kind: "scheduler.jobs" } : null,
+    { enabled: connected }
   );
 
-  const jobs = useMemo(() => fetchedJobs ?? [], [fetchedJobs]);
+  const jobs = useMemo(
+    () =>
+      jobsSubscription.data?.kind === "scheduler.jobs.result"
+        ? jobsSubscription.data.jobs
+        : [],
+    [jobsSubscription.data]
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Cancel job                                                       */
@@ -76,34 +70,10 @@ function SchedulerPage() {
     [connected, selectedJob]
   );
 
-  /* ---------------------------------------------------------------- */
-  /*  Combine snapshot jobs with fetched jobs                          */
-  /* ---------------------------------------------------------------- */
-
-  const allJobs = useMemo(() => {
-    const map = new Map<string, SchedulerJob>();
-
-    // Fetched jobs take priority
-    for (const j of jobs) {
-      map.set(j.id, j);
-    }
-
-    // Add snapshot pending jobs if not already present
-    for (const j of pendingJobs) {
-      if (!map.has(j.id)) {
-        map.set(j.id, {
-          id: j.id,
-          functionName: j.functionName,
-          args: {},
-          scheduledAt: j.runAt,
-          runAt: j.runAt,
-          status: j.status as SchedulerJob["status"]
-        });
-      }
-    }
-
-    return Array.from(map.values()).sort((a, b) => b.runAt - a.runAt);
-  }, [jobs, pendingJobs]);
+  const allJobs = useMemo(
+    () => [...jobs].sort((a, b) => b.runAt - a.runAt),
+    [jobs]
+  );
 
   const pendingJobsList = useMemo(
     () =>
@@ -141,7 +111,7 @@ function SchedulerPage() {
           <h2 className="text-[14px] font-bold text-text-primary flex-1">
             Scheduler
           </h2>
-          {loading && (
+          {jobsSubscription.loading && (
             <Loader2 size={12} className="animate-spin text-text-tertiary" />
           )}
           <div className="flex items-center gap-1.5">

@@ -27,6 +27,7 @@ import {
   type SyncoreSqlDriver,
   type SyncoreStorageAdapter
 } from "./runtime.js";
+import { createDevtoolsSubscriptionHost } from "./devtools.js";
 
 class TestSqliteDriver implements SyncoreSqlDriver {
   private readonly database: DatabaseSync;
@@ -654,6 +655,115 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
     expect(applier.appliedEvents).toHaveLength(1);
     watch.dispose?.();
+    await runtime.stop();
+  });
+
+  it("pushes scoped devtools subscription updates for matching table changes", async () => {
+    const databasePath = path.join(rootDirectory, "devtools-live.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: v.string(),
+        done: v.boolean()
+      }),
+      notes: defineTable({
+        body: v.string()
+      })
+    });
+
+    const functions = {
+      "tasks/create": mutation({
+        args: { text: v.string() },
+        returns: v.string(),
+        handler: async (ctx, args) =>
+          (ctx as MutationCtx).db.insert("tasks", {
+            text: (args as { text: string }).text,
+            done: false
+          })
+      }),
+      "notes/create": mutation({
+        args: { body: v.string() },
+        returns: v.string(),
+        handler: async (ctx, args) =>
+          (ctx as MutationCtx).db.insert("notes", {
+            body: (args as { body: string }).body
+          })
+      })
+    };
+
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath)
+    });
+
+    await runtime.start();
+    const hostDriver = new TestSqliteDriver(databasePath);
+    const host = createDevtoolsSubscriptionHost({
+      driver: hostDriver,
+      schema,
+      functions,
+      runtime
+    });
+    const taskUpdates: Array<{ rows: Record<string, unknown>[] }> = [];
+    const noteUpdates: Array<{ rows: Record<string, unknown>[] }> = [];
+
+    await host.subscribe(
+      "tasks-sub",
+      { kind: "data.table", table: "tasks", limit: 100 },
+      (payload) => {
+        if (payload.kind === "data.table.result") {
+          taskUpdates.push({ rows: payload.rows });
+        }
+      }
+    );
+    await host.subscribe(
+      "notes-sub",
+      { kind: "data.table", table: "notes", limit: 100 },
+      (payload) => {
+        if (payload.kind === "data.table.result") {
+          noteUpdates.push({ rows: payload.rows });
+        }
+      }
+    );
+
+    await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<"mutation", { text: string }, string>(
+          "mutation",
+          "tasks/create"
+        ),
+        { text: "first task" }
+      );
+
+    await waitFor(
+      () => (taskUpdates.at(-1)?.rows.length ?? 0) === 1,
+      "task subscription should refresh"
+    );
+    expect(taskUpdates.at(-1)?.rows).toHaveLength(1);
+    expect(noteUpdates.at(-1)?.rows ?? []).toHaveLength(0);
+
+    await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<"mutation", { body: string }, string>(
+          "mutation",
+          "notes/create"
+        ),
+        { body: "note" }
+      );
+
+    await waitFor(
+      () => (noteUpdates.at(-1)?.rows.length ?? 0) === 1,
+      "note subscription should refresh"
+    );
+    expect(taskUpdates.at(-1)?.rows).toHaveLength(1);
+    expect(noteUpdates.at(-1)?.rows).toHaveLength(1);
+
+    host.dispose();
+    await hostDriver.close();
     await runtime.stop();
   });
 

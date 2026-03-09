@@ -1,9 +1,11 @@
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import type {
   SyncoreDevtoolsEvent,
-  SyncoreDevtoolsSnapshot
+  SyncoreActiveQueryInfo,
+  SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 import {
+  describeValidator,
   createSchemaSnapshot,
   diffSchemaSnapshots,
   type InferDocument,
@@ -194,7 +196,35 @@ export interface SyncoreStorageAdapter {
 
 export interface DevtoolsSink {
   emit(event: SyncoreDevtoolsEvent): void;
+  attachRuntime?(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
 }
+
+export interface DevtoolsLiveQuerySnapshot {
+  summary: SyncoreRuntimeSummary;
+  activeQueries: SyncoreActiveQueryInfo[];
+  schemaTables: Array<{
+    name: string;
+    fields: Array<{
+      name: string;
+      type: string;
+      optional: boolean;
+    }>;
+    indexes: Array<{
+      name: string;
+      fields: string[];
+      unique: boolean;
+    }>;
+    documentCount: number;
+  }>;
+}
+
+export type DevtoolsLiveQueryScope =
+  | "all"
+  | "runtime.summary"
+  | "runtime.activeQueries"
+  | "schema.tables"
+  | "scheduler.jobs"
+  | `table:${string}`;
 
 export interface SchedulerOptions {
   pollIntervalMs?: number;
@@ -806,6 +836,12 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private readonly activeQueries = new Map<string, ActiveQueryRecord>();
   private readonly disabledSearchIndexes = new Set<string>();
   private readonly recentEvents: SyncoreDevtoolsEvent[] = [];
+  private readonly devtoolsListeners = new Set<
+    (event: SyncoreDevtoolsEvent) => void
+  >();
+  private readonly devtoolsInvalidationListeners = new Set<
+    (scopes: Set<DevtoolsLiveQueryScope>) => void
+  >();
   private readonly externalChangeSourceId = generateId();
   private detachExternalChangeListener: (() => void) | undefined;
   private pendingExternalChangePromise: Promise<void> | undefined;
@@ -826,6 +862,9 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     this.recurringJobs = options.scheduler?.recurringJobs ?? [];
     this.schedulerPollIntervalMs = options.scheduler?.pollIntervalMs ?? 1000;
     this.capabilities = Object.freeze(this.buildCapabilities());
+    this.options.devtools?.attachRuntime?.(
+      this as unknown as SyncoreRuntime<AnySyncoreSchema>
+    );
   }
 
   /**
@@ -896,20 +935,123 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     };
   }
 
-  getDevtoolsSnapshot(): SyncoreDevtoolsSnapshot {
+  async getDevtoolsLiveQuerySnapshot(): Promise<DevtoolsLiveQuerySnapshot> {
+    return {
+      summary: this.getRuntimeSummary(),
+      activeQueries: this.getActiveQueryInfos(),
+      schemaTables: await this.getSchemaTablesForDevtools()
+    };
+  }
+
+  getRuntimeSummary(): SyncoreRuntimeSummary {
     return {
       runtimeId: this.runtimeId,
       platform: this.platform,
       connectedAt: Date.now(),
-      activeQueries: [...this.activeQueries.values()].map((query) => ({
-        id: query.id,
-        functionName: query.functionName,
-        dependencyKeys: [...query.dependencyKeys],
-        lastRunAt: query.lastRunAt
-      })),
-      pendingJobs: [],
-      recentEvents: [...this.recentEvents]
+      activeQueryCount: this.activeQueries.size,
+      recentEventCount: this.recentEvents.length
     };
+  }
+
+  getActiveQueryInfos(): SyncoreActiveQueryInfo[] {
+    return [...this.activeQueries.values()].map((query) => ({
+      id: query.id,
+      functionName: query.functionName,
+      dependencyKeys: [...query.dependencyKeys],
+      lastRunAt: query.lastRunAt
+    }));
+  }
+
+  subscribeToDevtoolsEvents(
+    listener: (event: SyncoreDevtoolsEvent) => void
+  ): () => void {
+    this.devtoolsListeners.add(listener);
+    return () => {
+      this.devtoolsListeners.delete(listener);
+    };
+  }
+
+  subscribeToDevtoolsInvalidations(
+    listener: (scopes: Set<DevtoolsLiveQueryScope>) => void
+  ): () => void {
+    this.devtoolsInvalidationListeners.add(listener);
+    return () => {
+      this.devtoolsInvalidationListeners.delete(listener);
+    };
+  }
+
+  notifyDevtoolsScopes(scopes: Iterable<DevtoolsLiveQueryScope>): void {
+    const scopeSet = new Set(scopes);
+    if (scopeSet.size === 0) {
+      return;
+    }
+    for (const listener of this.devtoolsInvalidationListeners) {
+      listener(scopeSet);
+    }
+  }
+
+  async runDevtoolsMutation<TResult>(
+    callback: (ctx: { db: SyncoreDatabaseWriter<TSchema> }) => Promise<TResult>
+  ): Promise<TResult> {
+    const mutationId = generateId();
+    const startedAt = Date.now();
+    const changedTables = new Set<string>();
+    const storageChanges: Array<{
+      storageId: string;
+      reason: Extract<
+        SyncoreExternalChangeReason,
+        "storage-put" | "storage-delete"
+      >;
+    }> = [];
+
+    const result = await this.options.driver.withTransaction(async () =>
+      callback({
+        db: this.createDatabaseWriter({
+          mutationDepth: 1,
+          changedTables,
+          storageChanges
+        })
+      })
+    );
+
+    await this.refreshInvalidatedQueries(changedTables, mutationId);
+    if (storageChanges.length > 0) {
+      await this.refreshAllActiveQueries();
+    }
+    if (changedTables.size > 0) {
+      await this.publishExternalChange({
+        scope: "database",
+        reason: "commit",
+        changedTables: [...changedTables]
+      });
+    }
+    await this.publishStorageChanges(storageChanges);
+    this.emitDevtools({
+      type: "mutation.committed",
+      runtimeId: this.runtimeId,
+      mutationId,
+      functionName: "__devtools__/mutation",
+      changedTables: [...changedTables],
+      durationMs: Date.now() - startedAt,
+      timestamp: Date.now()
+    });
+    return result;
+  }
+
+  async forceRefreshDevtools(reason: string): Promise<void> {
+    await this.refreshAllActiveQueries();
+    await this.publishExternalChange({
+      scope: "database",
+      reason: "reconcile"
+    });
+    this.notifyDevtoolsScopes(["all"]);
+    this.emitDevtools({
+      type: "log",
+      runtimeId: this.runtimeId,
+      level: "info",
+      message: reason,
+      timestamp: Date.now()
+    });
   }
 
   getRuntimeId(): string {
@@ -1975,6 +2117,62 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     }
   }
 
+  private async getSchemaTablesForDevtools(): Promise<
+    DevtoolsLiveQuerySnapshot["schemaTables"]
+  > {
+    const tables = [] as DevtoolsLiveQuerySnapshot["schemaTables"];
+
+    for (const name of this.options.schema.tableNames()) {
+      const table = this.getTableDefinition(name);
+      const validatorDesc = describeValidator(table.validator);
+      const fields =
+        validatorDesc.kind === "object"
+          ? Object.entries(validatorDesc.shape).map(
+              ([fieldName, fieldDesc]) => {
+                const desc = fieldDesc as {
+                  kind: string;
+                  inner?: { kind: string };
+                };
+                const optional = desc.kind === "optional";
+                return {
+                  name: fieldName,
+                  type: optional ? (desc.inner?.kind ?? "any") : desc.kind,
+                  optional
+                };
+              }
+            )
+          : [];
+
+      fields.unshift(
+        { name: "_id", type: "string", optional: false },
+        { name: "_creationTime", type: "number", optional: false }
+      );
+
+      let documentCount = 0;
+      try {
+        const countRow = await this.options.driver.get<{ count: number }>(
+          `SELECT COUNT(*) as count FROM ${quoteIdentifier(name)}`
+        );
+        documentCount = countRow?.count ?? 0;
+      } catch {
+        documentCount = 0;
+      }
+
+      tables.push({
+        name,
+        fields,
+        indexes: table.indexes.map((index) => ({
+          name: index.name,
+          fields: index.fields,
+          unique: false
+        })),
+        documentCount
+      });
+    }
+
+    return tables;
+  }
+
   private async collectQueryDependencies(
     functionName: string,
     args: JsonObject
@@ -2106,6 +2304,10 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     this.recentEvents.unshift(event);
     this.recentEvents.splice(24);
     this.options.devtools?.emit(event);
+    this.notifyDevtoolsScopes(devtoolsScopesForEvent(event));
+    for (const listener of this.devtoolsListeners) {
+      listener(event);
+    }
   }
 
   private createPluginContext(): SyncoreExperimentalPluginContext<TSchema> {
@@ -2204,6 +2406,31 @@ function sortValue(value: unknown): unknown {
     );
   }
   return value;
+}
+
+function devtoolsScopesForEvent(
+  event: SyncoreDevtoolsEvent
+): Set<DevtoolsLiveQueryScope> {
+  switch (event.type) {
+    case "runtime.connected":
+    case "runtime.disconnected":
+      return new Set(["runtime.summary", "runtime.activeQueries"]);
+    case "query.executed":
+    case "query.invalidated":
+      return new Set(["runtime.summary", "runtime.activeQueries"]);
+    case "mutation.committed":
+      return new Set([
+        "runtime.summary",
+        ...event.changedTables.map((table) => `table:${table}` as const)
+      ]);
+    case "scheduler.tick":
+      return new Set(["scheduler.jobs", "runtime.summary"]);
+    case "storage.updated":
+      return new Set(["runtime.summary"]);
+    case "action.completed":
+    case "log":
+      return new Set(["runtime.summary"]);
+  }
 }
 
 function omitSystemFields<TDocument extends object>(

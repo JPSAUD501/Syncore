@@ -65,26 +65,22 @@ export type SyncoreDevtoolsEvent =
       timestamp: number;
     };
 
-export interface SyncoreDevtoolsSnapshot {
+export interface SyncoreActiveQueryInfo {
+  id: string;
+  functionName: string;
+  dependencyKeys: string[];
+  lastRunAt: number;
+}
+
+export interface SyncoreRuntimeSummary {
   runtimeId: string;
   platform: string;
   appName?: string;
   origin?: string;
   sessionLabel?: string;
   connectedAt: number;
-  activeQueries: Array<{
-    id: string;
-    functionName: string;
-    dependencyKeys: string[];
-    lastRunAt: number;
-  }>;
-  pendingJobs: Array<{
-    id: string;
-    functionName: string;
-    runAt: number;
-    status: string;
-  }>;
-  recentEvents: SyncoreDevtoolsEvent[];
+  activeQueryCount: number;
+  recentEventCount: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -101,44 +97,64 @@ export type SyncoreDevtoolsMessage =
       sessionLabel?: string;
     }
   | { type: "event"; event: SyncoreDevtoolsEvent }
-  | { type: "snapshot"; snapshot: SyncoreDevtoolsSnapshot }
   | { type: "ping" }
   | { type: "pong" }
-  /* Responses to dashboard requests */
   | {
-      type: "response";
-      requestId: string;
+      type: "command.result";
+      commandId: string;
       runtimeId: string;
-      payload: SyncoreResponsePayload;
+      payload: SyncoreDevtoolsCommandResultPayload;
+    }
+  | {
+      type: "subscription.data";
+      subscriptionId: string;
+      runtimeId: string;
+      payload: SyncoreDevtoolsSubscriptionResultPayload;
+    }
+  | {
+      type: "subscription.error";
+      subscriptionId: string;
+      runtimeId: string;
+      error: string;
     };
 
 /* ------------------------------------------------------------------ */
 /*  Dashboard → Runtime requests                                       */
 /* ------------------------------------------------------------------ */
 
-export interface SyncoreDevtoolsRequest {
-  type: "request";
-  requestId: string;
+export interface SyncoreDevtoolsCommand {
+  type: "command";
+  commandId: string;
   targetRuntimeId: string;
-  payload: SyncoreRequestPayload;
+  payload: SyncoreDevtoolsCommandPayload;
 }
 
-export type SyncoreRequestPayload =
+export interface SyncoreDevtoolsSubscribe {
+  type: "subscribe";
+  subscriptionId: string;
+  targetRuntimeId: string;
+  payload: SyncoreDevtoolsSubscriptionPayload;
+}
+
+export interface SyncoreDevtoolsUnsubscribe {
+  type: "unsubscribe";
+  subscriptionId: string;
+  targetRuntimeId: string;
+}
+
+export type SyncoreDevtoolsClientMessage =
+  | { type: "ping" }
+  | SyncoreDevtoolsCommand
+  | SyncoreDevtoolsSubscribe
+  | SyncoreDevtoolsUnsubscribe;
+
+export type SyncoreDevtoolsCommandPayload =
   /* Functions */
-  | { kind: "fn.list" }
   | {
       kind: "fn.run";
       functionName: string;
       functionType: "query" | "mutation" | "action";
       args: Record<string, unknown>;
-    }
-  /* Data */
-  | {
-      kind: "data.query";
-      table: string;
-      filters?: DataFilter[];
-      limit?: number;
-      cursor?: string;
     }
   | { kind: "data.insert"; table: string; document: Record<string, unknown> }
   | {
@@ -148,13 +164,24 @@ export type SyncoreRequestPayload =
       fields: Record<string, unknown>;
     }
   | { kind: "data.delete"; table: string; id: string }
-  /* Schema */
-  | { kind: "schema.get" }
   /* SQL */
   | { kind: "sql.execute"; query: string }
   /* Scheduler */
-  | { kind: "scheduler.list" }
   | { kind: "scheduler.cancel"; jobId: string };
+
+export type SyncoreDevtoolsSubscriptionPayload =
+  | { kind: "runtime.summary" }
+  | { kind: "runtime.activeQueries" }
+  | { kind: "schema.tables" }
+  | {
+      kind: "data.table";
+      table: string;
+      filters?: DataFilter[];
+      limit?: number;
+      cursor?: string;
+    }
+  | { kind: "scheduler.jobs" }
+  | { kind: "functions.catalog" };
 
 export interface DataFilter {
   field: string;
@@ -174,8 +201,7 @@ export interface DataFilter {
 /*  Response payloads                                                   */
 /* ------------------------------------------------------------------ */
 
-export type SyncoreResponsePayload =
-  | { kind: "fn.list.result"; functions: FunctionDefinition[] }
+export type SyncoreDevtoolsCommandResultPayload =
   | {
       kind: "fn.run.result";
       result?: unknown;
@@ -183,18 +209,11 @@ export type SyncoreResponsePayload =
       durationMs: number;
     }
   | {
-      kind: "data.result";
-      rows: Record<string, unknown>[];
-      totalCount: number;
-      cursor?: string;
-    }
-  | {
       kind: "data.mutate.result";
       success: boolean;
       id?: string;
       error?: string;
     }
-  | { kind: "schema.result"; tables: TableSchema[] }
   | {
       kind: "sql.result";
       columns: string[];
@@ -202,9 +221,24 @@ export type SyncoreResponsePayload =
       rowsAffected: number;
       error?: string;
     }
-  | { kind: "scheduler.list.result"; jobs: SchedulerJob[] }
   | { kind: "scheduler.cancel.result"; success: boolean; error?: string }
   | { kind: "error"; message: string };
+
+export type SyncoreDevtoolsSubscriptionResultPayload =
+  | { kind: "runtime.summary.result"; summary: SyncoreRuntimeSummary }
+  | {
+      kind: "runtime.activeQueries.result";
+      activeQueries: SyncoreActiveQueryInfo[];
+    }
+  | { kind: "schema.tables.result"; tables: TableSchema[] }
+  | {
+      kind: "data.table.result";
+      rows: Record<string, unknown>[];
+      totalCount: number;
+      cursor?: string;
+    }
+  | { kind: "scheduler.jobs.result"; jobs: SchedulerJob[] }
+  | { kind: "functions.catalog.result"; functions: FunctionDefinition[] };
 
 /* ------------------------------------------------------------------ */
 /*  Shared data shapes                                                  */

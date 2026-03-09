@@ -1,8 +1,11 @@
 import {
   type AnySyncoreSchema,
-  createDevtoolsRequestHandler,
-  type DevtoolsRequestHandler,
+  createDevtoolsCommandHandler,
+  createDevtoolsSubscriptionHost,
+  type DevtoolsCommandHandler,
   type DevtoolsSink,
+  type DevtoolsSubscriptionHost,
+  type SyncoreRuntime,
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,
@@ -13,9 +16,9 @@ import {
   type StorageWriteInput
 } from "@syncore/core";
 import {
+  type SyncoreDevtoolsClientMessage,
   type SyncoreDevtoolsMessage,
-  type SyncoreDevtoolsRequest,
-  type SyncoreDevtoolsSnapshot
+  type SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 import {
   createWebPersistence,
@@ -214,9 +217,17 @@ export async function createWebSyncoreRuntime(
   });
 
   if (autoDevtools) {
-    autoDevtools.attachRuntime(() => runtime.getDevtoolsSnapshot());
-    autoDevtools.attachRequestHandler(
-      createDevtoolsRequestHandler({
+    autoDevtools.attachRuntime(runtime as SyncoreRuntime<AnySyncoreSchema>);
+    autoDevtools.attachCommandHandler(
+      createDevtoolsCommandHandler({
+        driver,
+        schema: options.schema,
+        functions: options.functions,
+        runtime
+      })
+    );
+    autoDevtools.attachSubscriptionHost(
+      createDevtoolsSubscriptionHost({
         driver,
         schema: options.schema,
         functions: options.functions,
@@ -340,8 +351,9 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
 }
 
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
-  attachRuntime(getSnapshot: () => SyncoreDevtoolsSnapshot): void;
-  attachRequestHandler(handler: DevtoolsRequestHandler): void;
+  attachRuntime(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+  attachCommandHandler(handler: DevtoolsCommandHandler): void;
+  attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
   dispose(): void;
 }
 
@@ -351,8 +363,9 @@ export function createBrowserWebSocketDevtoolsSink(
   let socket: WebSocket | undefined;
   let disposed = false;
   let connectTimer: ReturnType<typeof setTimeout> | undefined;
-  let getSnapshot: (() => SyncoreDevtoolsSnapshot) | undefined;
-  let onRequest: DevtoolsRequestHandler | undefined;
+  let getSummary: (() => SyncoreRuntimeSummary) | undefined;
+  let onCommand: DevtoolsCommandHandler | undefined;
+  let subscriptionHost: DevtoolsSubscriptionHost | undefined;
   const pendingMessages: SyncoreDevtoolsMessage[] = [];
   let latestHello:
     | {
@@ -379,12 +392,6 @@ export function createBrowserWebSocketDevtoolsSink(
             : {})
         });
       }
-      if (getSnapshot) {
-        sendNow({
-          type: "snapshot",
-          snapshot: withSnapshotMeta(getSnapshot(), options)
-        });
-      }
       flushPendingMessages();
     };
     socket.onmessage = (event) => {
@@ -393,33 +400,33 @@ export function createBrowserWebSocketDevtoolsSink(
       }
       const message = JSON.parse(event.data) as
         | SyncoreDevtoolsMessage
-        | SyncoreDevtoolsRequest;
+        | SyncoreDevtoolsClientMessage;
       if (message.type === "ping") {
         send({ type: "pong" });
-      } else if (message.type === "request" && onRequest) {
-        onRequest(message.payload)
+      } else if (message.type === "command" && onCommand) {
+        onCommand(message.payload)
           .then((responsePayload) => {
             const runtimeId =
-              latestHello?.runtimeId ?? getSnapshot?.().runtimeId;
+              latestHello?.runtimeId ?? getSummary?.().runtimeId;
             if (!runtimeId) {
               return;
             }
             send({
-              type: "response",
-              requestId: message.requestId,
+              type: "command.result",
+              commandId: message.commandId,
               runtimeId,
               payload: responsePayload
             });
           })
           .catch((err) => {
             const runtimeId =
-              latestHello?.runtimeId ?? getSnapshot?.().runtimeId;
+              latestHello?.runtimeId ?? getSummary?.().runtimeId;
             if (!runtimeId) {
               return;
             }
             send({
-              type: "response",
-              requestId: message.requestId,
+              type: "command.result",
+              commandId: message.commandId,
               runtimeId,
               payload: {
                 kind: "error",
@@ -427,6 +434,26 @@ export function createBrowserWebSocketDevtoolsSink(
               }
             });
           });
+      } else if (message.type === "subscribe" && subscriptionHost) {
+        void subscriptionHost.subscribe(
+          message.subscriptionId,
+          message.payload,
+          (payload) => {
+            const runtimeId =
+              latestHello?.runtimeId ?? getSummary?.().runtimeId;
+            if (!runtimeId) {
+              return;
+            }
+            send({
+              type: "subscription.data",
+              subscriptionId: message.subscriptionId,
+              runtimeId,
+              payload
+            });
+          }
+        );
+      } else if (message.type === "unsubscribe") {
+        subscriptionHost?.unsubscribe(message.subscriptionId);
       }
     };
     socket.onclose = scheduleReconnect;
@@ -489,41 +516,34 @@ export function createBrowserWebSocketDevtoolsSink(
         });
       }
       send({ type: "event", event });
-      if (getSnapshot) {
-        send({
-          type: "snapshot",
-          snapshot: withSnapshotMeta(getSnapshot(), options)
-        });
-      }
     },
-    attachRuntime(snapshotGetter) {
-      getSnapshot = snapshotGetter;
-      if (socket?.readyState === WebSocket.OPEN) {
-        send({
-          type: "snapshot",
-          snapshot: withSnapshotMeta(getSnapshot(), options)
-        });
-      }
+    attachRuntime(runtime) {
+      getSummary = () =>
+        withRuntimeSummaryMeta(runtime.getRuntimeSummary(), options);
     },
-    attachRequestHandler(handler) {
-      onRequest = handler;
+    attachCommandHandler(handler) {
+      onCommand = handler;
+    },
+    attachSubscriptionHost(host) {
+      subscriptionHost = host;
     },
     dispose() {
       disposed = true;
       if (connectTimer) {
         clearTimeout(connectTimer);
       }
+      subscriptionHost?.dispose();
       socket?.close();
     }
   };
 }
 
-function withSnapshotMeta(
-  snapshot: SyncoreDevtoolsSnapshot,
+function withRuntimeSummaryMeta(
+  summary: SyncoreRuntimeSummary,
   options: BrowserWebSocketDevtoolsSinkOptions
-): SyncoreDevtoolsSnapshot {
+): SyncoreRuntimeSummary {
   return {
-    ...snapshot,
+    ...summary,
     ...(options.appName ? { appName: options.appName } : {}),
     ...(options.origin ? { origin: options.origin } : {}),
     ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {})

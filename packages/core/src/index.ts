@@ -5,8 +5,9 @@
  * helpers, validators, and devtools types used by app code.
  */
 export type {
+  SyncoreActiveQueryInfo,
   SyncoreDevtoolsEvent,
-  SyncoreDevtoolsSnapshot
+  SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 export * from "@syncore/schema";
 export * from "./runtime/devtools.js";

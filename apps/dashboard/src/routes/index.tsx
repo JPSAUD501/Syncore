@@ -199,8 +199,7 @@ function getEventDetail(event: SyncoreDevtoolsEvent): string {
 /* ------------------------------------------------------------------ */
 
 function ActiveQueries() {
-  const snapshot = useActiveRuntime()?.snapshot ?? null;
-  const queries = snapshot?.activeQueries ?? [];
+  const queries = useActiveRuntime()?.activeQueries ?? [];
 
   // Keep relative timestamps ticking
   useRefreshTimer(1000);
@@ -248,7 +247,7 @@ function OverviewPage() {
   const mutationCount = activeRuntime?.mutationCount ?? 0;
   const actionCount = activeRuntime?.actionCount ?? 0;
   const errorCount = activeRuntime?.errorCount ?? 0;
-  const snapshot = activeRuntime?.snapshot ?? null;
+  const summary = activeRuntime?.summary ?? null;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
 
   // Track known event count for fade-in on new events
@@ -306,11 +305,11 @@ function OverviewPage() {
               {platform}
             </Badge>
           )}
-          {snapshot && (
+          {summary && (
             <div>
               <span className="text-text-tertiary">Active: </span>
               <span className="font-mono text-fn-query">
-                {snapshot.activeQueries.length} queries
+                {activeRuntime?.activeQueries.length ?? 0} queries
               </span>
             </div>
           )}
@@ -422,7 +421,7 @@ function OverviewPage() {
               Active Queries
             </h2>
             <Badge variant="secondary" className="tabular-nums">
-              {snapshot?.activeQueries.length ?? 0} watching
+              {activeRuntime?.activeQueries.length ?? 0} watching
             </Badge>
           </div>
           <ScrollArea className="max-h-[420px] p-3">

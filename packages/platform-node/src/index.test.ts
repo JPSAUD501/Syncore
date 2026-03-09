@@ -175,9 +175,9 @@ describe("Node Syncore runtime", () => {
     expect(messages.some((message) => message.includes('"type":"event"'))).toBe(
       true
     );
-    expect(
-      messages.some((message) => message.includes('"type":"snapshot"'))
-    ).toBe(true);
+    expect(messages.some((message) => message.includes('"type":"hello"'))).toBe(
+      true
+    );
 
     websocketServer.close();
     httpServer.close();

@@ -34,7 +34,7 @@ import { EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useConnection } from "@/hooks";
-import { useReactiveRuntimeData } from "@/hooks/useReactiveData";
+import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { TableSchema, DataFilter } from "@syncore/devtools-protocol";
@@ -95,24 +95,18 @@ function DataPage() {
   /*  Reactive schema fetch                                            */
   /* ---------------------------------------------------------------- */
 
-  const schemaFetcher = useCallback(async () => {
-    const res = await sendRequest({ kind: "schema.get" });
-    if (res.kind === "schema.result") {
-      return res.tables;
-    }
-    return [] as TableSchema[];
-  }, []);
+  const schemaSubscription = useDevtoolsSubscription(
+    connected ? { kind: "schema.tables" } : null,
+    { enabled: connected }
+  );
 
-  const {
-    data: tables,
-    loading: schemaLoading,
-    didJustChange: schemaChanged
-  } = useReactiveRuntimeData<TableSchema[]>(schemaFetcher, {
-    enabled: connected,
-    pollInterval: 3000
-  });
-
-  const tableList = useMemo(() => tables ?? [], [tables]);
+  const tableList = useMemo(
+    () =>
+      schemaSubscription.data?.kind === "schema.tables.result"
+        ? schemaSubscription.data.tables
+        : [],
+    [schemaSubscription.data]
+  );
 
   // Auto-select first table
   useEffect(() => {
@@ -125,43 +119,28 @@ function DataPage() {
   /*  Fetch table data (reactive via runtime events)                   */
   /* ---------------------------------------------------------------- */
 
-  const fetchData = useCallback(async () => {
-    if (!connected || !selectedTableRef.current) return;
-    setDataLoading(true);
-    try {
-      const payload: Parameters<typeof sendRequest>[0] = {
-        kind: "data.query",
-        table: selectedTableRef.current,
-        limit: 100
-      };
-      if (filters.length > 0) {
-        (payload as { filters?: typeof filters }).filters = filters;
-      }
-      const res = await sendRequest(payload);
-      if (res.kind === "data.result") {
-        setRows(res.rows);
-        setTotalCount(res.totalCount);
-      }
-    } catch {
-      /* runtime may not support data.query yet */
-    } finally {
-      setDataLoading(false);
-    }
-  }, [connected, filters]);
+  const dataSubscription = useDevtoolsSubscription(
+    connected && selectedTable
+      ? {
+          kind: "data.table",
+          table: selectedTable,
+          ...(filters.length > 0 ? { filters } : {}),
+          limit: 100
+        }
+      : null,
+    { enabled: connected && !!selectedTable }
+  );
 
-  // Re-fetch data reactively when table or filters change
   useEffect(() => {
-    if (selectedTable && connected) {
-      void fetchData();
+    if (dataSubscription.data?.kind === "data.table.result") {
+      setRows(dataSubscription.data.rows);
+      setTotalCount(dataSubscription.data.totalCount);
     }
-  }, [selectedTable, fetchData, connected]);
+  }, [dataSubscription.data]);
 
-  // Auto-poll data for the selected table
   useEffect(() => {
-    if (!selectedTable || !connected) return;
-    const timer = setInterval(() => void fetchData(), 2000);
-    return () => clearInterval(timer);
-  }, [selectedTable, connected, fetchData]);
+    setDataLoading(dataSubscription.loading);
+  }, [dataSubscription.loading]);
 
   /* ---------------------------------------------------------------- */
   /*  Delete document                                                  */
@@ -182,7 +161,6 @@ function DataPage() {
           title: "Document deleted",
           description: `${id} was removed from ${selectedTable}.`
         });
-        void fetchData();
       } catch (err) {
         pushToast({
           tone: "error",
@@ -191,7 +169,7 @@ function DataPage() {
         });
       }
     },
-    [connected, selectedTable, fetchData, pushToast]
+    [connected, selectedTable, pushToast]
   );
 
   const handleDeleteMany = useCallback(
@@ -215,9 +193,8 @@ function DataPage() {
         title: "Documents deleted",
         description: `${ids.length} document${ids.length === 1 ? "" : "s"} removed from ${selectedTable}.`
       });
-      await fetchData();
     },
-    [connected, selectedTable, fetchData, pushToast]
+    [connected, selectedTable, pushToast]
   );
 
   const handleInsert = useCallback(
@@ -241,9 +218,8 @@ function DataPage() {
           description: `A new document was added to ${selectedTable}.`
         });
       }
-      await fetchData();
     },
-    [connected, selectedTable, fetchData, pushToast]
+    [connected, selectedTable, pushToast]
   );
 
   const handlePatch = useCallback(
@@ -263,9 +239,8 @@ function DataPage() {
         title: "Document updated",
         description: `${id} was updated.`
       });
-      await fetchData();
     },
-    [connected, selectedTable, fetchData, pushToast]
+    [connected, selectedTable, pushToast]
   );
 
   const handleFieldEdit = useCallback(
@@ -495,7 +470,7 @@ function DataPage() {
     [tableList, tableSearch]
   );
 
-  const loading = schemaLoading || dataLoading;
+  const loading = schemaSubscription.loading || dataLoading;
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
@@ -510,10 +485,10 @@ function DataPage() {
             <h2 className="text-[13px] font-bold text-text-primary flex-1">
               Tables
             </h2>
-            {schemaLoading && (
+            {schemaSubscription.loading && (
               <Loader2 size={12} className="animate-spin text-text-tertiary" />
             )}
-            {schemaChanged && (
+            {schemaSubscription.data && (
               <Circle
                 size={6}
                 fill="var(--color-accent)"

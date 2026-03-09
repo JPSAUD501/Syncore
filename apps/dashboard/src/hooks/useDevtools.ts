@@ -10,7 +10,6 @@ export function useDevtools() {
   const activeRuntime = useActiveRuntime();
   const connected = useDevtoolsStore((s) => s.connected);
   const events = useMemo(() => activeRuntime?.events ?? [], [activeRuntime]);
-  const snapshot = activeRuntime?.snapshot ?? null;
   const queryCount = activeRuntime?.queryCount ?? 0;
   const mutationCount = activeRuntime?.mutationCount ?? 0;
   const actionCount = activeRuntime?.actionCount ?? 0;
@@ -94,7 +93,8 @@ export function useDevtools() {
   return {
     connected,
     events,
-    snapshot,
+    summary: activeRuntime?.summary ?? null,
+    activeQueries: activeRuntime?.activeQueries ?? [],
     queryCount,
     mutationCount,
     actionCount,

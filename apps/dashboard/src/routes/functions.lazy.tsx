@@ -29,7 +29,7 @@ import {
 } from "@/components/shared";
 import type { FunctionType } from "@/components/shared/FunctionBadge";
 import { useDevtools } from "@/hooks";
-import { useReactiveRuntimeData } from "@/hooks/useReactiveData";
+import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
 import type { FunctionDefinition } from "@syncore/devtools-protocol";
@@ -66,19 +66,16 @@ function FunctionsPage() {
   /*  Reactive function list fetch                                     */
   /* ---------------------------------------------------------------- */
 
-  const fetchFunctions = useCallback(async () => {
-    const res = await sendRequest({ kind: "fn.list" });
-    if (res.kind === "fn.list.result") {
-      return res.functions;
-    }
-    return [] as FunctionDefinition[];
-  }, []);
+  const functionsSubscription = useDevtoolsSubscription(
+    connected ? { kind: "functions.catalog" } : null,
+    { enabled: connected }
+  );
 
-  const { data: registeredFunctions, loading: loadingFunctions } =
-    useReactiveRuntimeData<FunctionDefinition[]>(fetchFunctions, {
-      enabled: connected,
-      pollInterval: 5000
-    });
+  const registeredFunctions =
+    functionsSubscription.data?.kind === "functions.catalog.result"
+      ? functionsSubscription.data.functions
+      : null;
+  const loadingFunctions = functionsSubscription.loading;
 
   const fnList = useMemo(
     () => registeredFunctions ?? [],
