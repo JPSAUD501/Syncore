@@ -33,16 +33,18 @@ export function DataTable({
     value: unknown;
   } | null>(null);
 
-  // Track per-row changes for highlight animations
-  const { isChanged, isNew } = useTrackChanges(
-    rows,
-    (row) => getRowId(row, rows.indexOf(row)),
-    (row) => JSON.stringify(row)
-  );
-  const visibleRowIds = useMemo(
+  const rowIds = useMemo(
     () => rows.map((row, idx) => getRowId(row, idx)),
     [rows]
   );
+
+  // Track per-row changes for highlight animations
+  const { isChanged, isNew } = useTrackChanges(
+    rows,
+    (_row, index) => rowIds[index] ?? `row-${index}`,
+    (row) => JSON.stringify(row)
+  );
+  const visibleRowIds = useMemo(() => rowIds, [rowIds]);
   const selectedIds = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const allVisibleSelected =
     visibleRowIds.length > 0 &&

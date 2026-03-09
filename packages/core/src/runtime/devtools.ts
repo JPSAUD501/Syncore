@@ -347,11 +347,20 @@ async function resolveSubscriptionPayload(
         kind: "runtime.activeQueries.result",
         activeQueries: runtime.getActiveQueryInfos()
       };
-    case "schema.tables":
+    case "schema.tables": {
+      const tables = await getSchemaTables(driver, schema);
+      console.debug("[devtools] schema.tables", {
+        runtimeId: runtime.getRuntimeId(),
+        tables: tables.map((table) => ({
+          name: table.name,
+          documentCount: table.documentCount
+        }))
+      });
       return {
         kind: "schema.tables.result",
-        tables: await getSchemaTables(driver, schema)
+        tables
       };
+    }
     case "data.table": {
       const result = await queryTable(
         driver,
@@ -359,6 +368,15 @@ async function resolveSubscriptionPayload(
         payload.filters,
         payload.limit
       );
+      console.debug("[devtools] data.table", {
+        runtimeId: runtime.getRuntimeId(),
+        table: payload.table,
+        filters: payload.filters ?? [],
+        limit: payload.limit,
+        totalCount: result.totalCount,
+        rowCount: result.rows.length,
+        firstRow: result.rows[0] ?? null
+      });
       return {
         kind: "data.table.result",
         rows: result.rows,

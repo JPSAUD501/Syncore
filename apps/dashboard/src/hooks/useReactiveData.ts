@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { subscribe, useActiveRuntime } from "@/lib/store";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { subscribe, useActiveRuntime, useDevtoolsStore } from "@/lib/store";
 import type {
   SyncoreDevtoolsSubscriptionPayload,
   SyncoreDevtoolsSubscriptionResultPayload
@@ -7,22 +7,21 @@ import type {
 
 export function useTrackChanges<T>(
   items: T[],
-  keyFn: (item: T) => string,
+  keyFn: (item: T, index: number) => string,
   hashFn?: (item: T) => string
 ) {
   const [changedKeys, setChangedKeys] = useState<Set<string>>(new Set());
   const [newKeys, setNewKeys] = useState<Set<string>>(new Set());
-  const [previousHashes, setPreviousHashes] = useState<Map<string, string>>(
-    new Map()
-  );
+  const previousHashesRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
+    const previousHashes = previousHashesRef.current;
     const nextHashes = new Map<string, string>();
     const changed = new Set<string>();
     const added = new Set<string>();
 
-    for (const item of items) {
-      const key = keyFn(item);
+    for (const [index, item] of items.entries()) {
+      const key = keyFn(item, index);
       const hash = hashFn ? hashFn(item) : JSON.stringify(item);
       nextHashes.set(key, hash);
       if (!previousHashes.has(key)) {
@@ -32,18 +31,18 @@ export function useTrackChanges<T>(
       }
     }
 
-    setPreviousHashes(nextHashes);
-    setChangedKeys(changed);
-    setNewKeys(added);
+    previousHashesRef.current = nextHashes;
 
     if (changed.size > 0 || added.size > 0) {
+      setChangedKeys(changed);
+      setNewKeys(added);
       const timer = setTimeout(() => {
         setChangedKeys(new Set());
         setNewKeys(new Set());
       }, 1200);
       return () => clearTimeout(timer);
     }
-  }, [hashFn, items, keyFn, previousHashes]);
+  }, [hashFn, items, keyFn]);
 
   return {
     isChanged: (key: string) => changedKeys.has(key),
@@ -53,18 +52,19 @@ export function useTrackChanges<T>(
 
 export function useDidJustChange(value: unknown): boolean {
   const [didChange, setDidChange] = useState(false);
-  const [previousValue, setPreviousValue] = useState<string | null>(null);
+  const previousValueRef = useRef<string | null>(null);
 
   useEffect(() => {
     const serialized = JSON.stringify(value);
+    const previousValue = previousValueRef.current;
     if (previousValue !== null && previousValue !== serialized) {
       setDidChange(true);
       const timer = setTimeout(() => setDidChange(false), 1200);
-      setPreviousValue(serialized);
+      previousValueRef.current = serialized;
       return () => clearTimeout(timer);
     }
-    setPreviousValue(serialized);
-  }, [previousValue, value]);
+    previousValueRef.current = serialized;
+  }, [value]);
 
   return didChange;
 }
@@ -76,27 +76,45 @@ export function useDevtoolsSubscription<
   options?: { enabled?: boolean }
 ) {
   const enabled = options?.enabled ?? true;
+  const selectedRuntimeId = useDevtoolsStore(
+    (state) => state.selectedRuntimeId
+  );
+  const payloadRef = useRef<SyncoreDevtoolsSubscriptionPayload | null>(payload);
+  const payloadKey = JSON.stringify(payload);
+  payloadRef.current = payload;
   const [data, setData] = useState<TResult | null>(null);
   const [loading, setLoading] = useState(Boolean(payload) && enabled);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!payload || !enabled) {
+    const nextPayload = payloadRef.current;
+    if (!nextPayload || !enabled || !selectedRuntimeId) {
+      setData(null);
       setLoading(false);
       return;
     }
 
+    setData(null);
     setLoading(true);
     setError(null);
-    const unsubscribe = subscribe(payload, (nextPayload) => {
-      setData(nextPayload as TResult);
-      setLoading(false);
-    });
+    const unsubscribe = subscribe(
+      nextPayload,
+      (nextPayload) => {
+        setData(nextPayload as TResult);
+        setLoading(false);
+      },
+      {
+        onError: (message) => {
+          setError(message);
+          setLoading(false);
+        }
+      }
+    );
 
     return () => {
       unsubscribe();
     };
-  }, [enabled, payload ? JSON.stringify(payload) : null]);
+  }, [enabled, payloadKey, selectedRuntimeId]);
 
   return {
     data,

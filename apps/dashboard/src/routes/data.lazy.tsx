@@ -35,9 +35,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { useConnection } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
+import { useActiveRuntime } from "@/lib/store";
 import { sendRequest } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import type { TableSchema, DataFilter } from "@syncore/devtools-protocol";
+import type { DataFilter } from "@syncore/devtools-protocol";
 import {
   Download,
   Plus,
@@ -55,6 +56,7 @@ export const Route = createLazyFileRoute("/data")({
 
 function DataPage() {
   const { connected } = useConnection();
+  const activeRuntime = useActiveRuntime();
   const { pushToast } = useToast();
 
   /* ---------------------------------------------------------------- */
@@ -133,13 +135,21 @@ function DataPage() {
 
   useEffect(() => {
     if (dataSubscription.data?.kind === "data.table.result") {
-      setRows(dataSubscription.data.rows);
-      setTotalCount(dataSubscription.data.totalCount);
+      const nextRows = dataSubscription.data.rows;
+      const nextTotalCount = dataSubscription.data.totalCount;
+      setRows((current) =>
+        shallowEqualRows(current, nextRows) ? current : nextRows
+      );
+      setTotalCount((current) =>
+        current === nextTotalCount ? current : nextTotalCount
+      );
     }
   }, [dataSubscription.data]);
 
   useEffect(() => {
-    setDataLoading(dataSubscription.loading);
+    setDataLoading((current) =>
+      current === dataSubscription.loading ? current : dataSubscription.loading
+    );
   }, [dataSubscription.loading]);
 
   /* ---------------------------------------------------------------- */
@@ -471,6 +481,14 @@ function DataPage() {
   );
 
   const loading = schemaSubscription.loading || dataLoading;
+  const dataError =
+    typeof dataSubscription.error === "string"
+      ? dataSubscription.error
+      : typeof schemaSubscription.error === "string"
+        ? schemaSubscription.error
+        : typeof activeRuntime?.lastSubscriptionError === "string"
+          ? activeRuntime.lastSubscriptionError
+          : null;
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
@@ -589,6 +607,20 @@ function DataPage() {
                   />
                   <span className="text-[10px] text-text-tertiary">Live</span>
                 </div>
+                {dataError && (
+                  <Badge variant="destructive" className="ml-2 max-w-[28rem]">
+                    <span className="truncate">{dataError}</span>
+                  </Badge>
+                )}
+                {activeRuntime && (
+                  <Badge
+                    variant="outline"
+                    className="ml-2 text-[9px] font-mono"
+                  >
+                    {activeRuntime.platform}:
+                    {activeRuntime.runtimeId.slice(0, 8)}
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center gap-1.5 overflow-x-auto">
                 <Button
@@ -989,4 +1021,22 @@ function getDocumentId(document: Record<string, unknown>): string {
     return String(candidate);
   }
   return "unknown";
+}
+
+function shallowEqualRows(
+  left: Record<string, unknown>[],
+  right: Record<string, unknown>[]
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (JSON.stringify(left[index]) !== JSON.stringify(right[index])) {
+      return false;
+    }
+  }
+  return true;
 }

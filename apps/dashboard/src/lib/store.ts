@@ -16,6 +16,19 @@ const HUB_RUNTIME_ID = "syncore-dev-hub";
 const WS_URL = "ws://127.0.0.1:4311";
 const RECONNECT_DELAY = 2000;
 const REQUEST_TIMEOUT = 10_000;
+const DEBUG_DEVTOOLS = false;
+const debugCounters = new Map<string, number>();
+
+function debugLog(key: string, ...args: unknown[]) {
+  if (!DEBUG_DEVTOOLS) {
+    return;
+  }
+  const count = (debugCounters.get(key) ?? 0) + 1;
+  debugCounters.set(key, count);
+  if (count <= 20 || count % 50 === 0) {
+    console.debug(...args, count > 20 ? { count } : undefined);
+  }
+}
 
 interface RuntimeMeta {
   runtimeId: string;
@@ -40,6 +53,7 @@ interface RuntimeState extends RuntimeMeta {
   actionCount: number;
   errorCount: number;
   liveQueryVersion: number;
+  lastSubscriptionError: string | null;
 }
 
 const EMPTY_RUNTIME_STATE = {
@@ -50,7 +64,8 @@ const EMPTY_RUNTIME_STATE = {
   mutationCount: 0,
   actionCount: 0,
   errorCount: 0,
-  liveQueryVersion: 0
+  liveQueryVersion: 0,
+  lastSubscriptionError: null
 } satisfies Pick<
   RuntimeState,
   | "events"
@@ -61,6 +76,7 @@ const EMPTY_RUNTIME_STATE = {
   | "actionCount"
   | "errorCount"
   | "liveQueryVersion"
+  | "lastSubscriptionError"
 >;
 
 /* ------------------------------------------------------------------ */
@@ -77,6 +93,7 @@ interface PendingRequest {
 interface SubscriptionRecord {
   runtimeId: string;
   listeners: Set<(payload: SyncoreDevtoolsSubscriptionResultPayload) => void>;
+  errorListeners: Set<(message: string) => void>;
   payload: SyncoreDevtoolsSubscriptionPayload;
 }
 
@@ -88,15 +105,6 @@ interface DevtoolsState {
   _setConnected: (v: boolean) => void;
   selectRuntime: (runtimeId: string | null) => void;
   clearEvents: (runtimeId?: string) => void;
-}
-
-export interface ActiveRuntimeView extends RuntimeState {
-  pendingJobs: Array<{
-    id: string;
-    functionName: string;
-    runAt: number;
-    status: string;
-  }>;
 }
 
 function createRuntimeState(meta: RuntimeMeta): RuntimeState {
@@ -133,16 +141,24 @@ function getActiveRuntime(state: DevtoolsState): RuntimeState | null {
   return state.runtimes[selectedRuntimeId] ?? null;
 }
 
-function toActiveRuntimeView(
-  runtime: RuntimeState | null
-): ActiveRuntimeView | null {
-  if (!runtime) {
-    return null;
+function resolveSelectedRuntimeId(
+  runtimes: Record<string, RuntimeState>,
+  currentSelectedRuntimeId: string | null,
+  preferredRuntimeId?: string
+): string | null {
+  if (
+    currentSelectedRuntimeId &&
+    runtimes[currentSelectedRuntimeId]?.connected === true
+  ) {
+    return currentSelectedRuntimeId;
   }
-  return {
-    ...runtime,
-    pendingJobs: []
-  };
+  if (preferredRuntimeId && runtimes[preferredRuntimeId]?.connected === true) {
+    return preferredRuntimeId;
+  }
+  return (
+    sortRuntimes(runtimes).find((runtime) => runtime.connected)?.runtimeId ??
+    null
+  );
 }
 
 function sortRuntimes(runtimes: Record<string, RuntimeState>): RuntimeState[] {
@@ -189,12 +205,17 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
             ...(msg.origin ? { origin: msg.origin } : {}),
             ...(msg.sessionLabel ? { sessionLabel: msg.sessionLabel } : {})
           });
+          const runtimes = {
+            ...state.runtimes,
+            [msg.runtimeId]: nextRuntime
+          };
           return {
-            runtimes: {
-              ...state.runtimes,
-              [msg.runtimeId]: nextRuntime
-            },
-            selectedRuntimeId: state.selectedRuntimeId ?? msg.runtimeId
+            runtimes,
+            selectedRuntimeId: resolveSelectedRuntimeId(
+              runtimes,
+              state.selectedRuntimeId,
+              msg.runtimeId
+            )
           };
         });
         break;
@@ -232,14 +253,20 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               baseRuntime.errorCount +
               (e.type === "log" && e.level === "error" ? 1 : 0) +
               (e.type === "action.completed" && e.error ? 1 : 0),
-            liveQueryVersion: baseRuntime.liveQueryVersion + 1
+            liveQueryVersion: baseRuntime.liveQueryVersion + 1,
+            lastSubscriptionError: null
+          };
+          const runtimes = {
+            ...state.runtimes,
+            [runtimeId]: nextRuntime
           };
           return {
-            runtimes: {
-              ...state.runtimes,
-              [runtimeId]: nextRuntime
-            },
-            selectedRuntimeId: state.selectedRuntimeId ?? runtimeId
+            runtimes,
+            selectedRuntimeId: resolveSelectedRuntimeId(
+              runtimes,
+              state.selectedRuntimeId,
+              e.type === "runtime.disconnected" ? undefined : runtimeId
+            )
           };
         });
         break;
@@ -270,7 +297,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
           }
           const nextRuntime = {
             ...runtime,
-            liveQueryVersion: runtime.liveQueryVersion + 1
+            liveQueryVersion: runtime.liveQueryVersion + 1,
+            lastSubscriptionError: null
           };
           switch (msg.payload.kind) {
             case "runtime.summary.result":
@@ -284,6 +312,32 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
             runtimes: {
               ...state.runtimes,
               [msg.runtimeId]: nextRuntime
+            }
+          };
+        });
+        break;
+      }
+
+      case "subscription.error": {
+        const subscription = subscriptions.get(msg.subscriptionId);
+        if (!subscription || subscription.runtimeId !== msg.runtimeId) {
+          break;
+        }
+        for (const listener of subscription.errorListeners) {
+          listener(msg.error);
+        }
+        set((state) => {
+          const runtime = state.runtimes[msg.runtimeId];
+          if (!runtime) {
+            return state;
+          }
+          return {
+            runtimes: {
+              ...state.runtimes,
+              [msg.runtimeId]: {
+                ...runtime,
+                lastSubscriptionError: msg.error
+              }
             }
           };
         });
@@ -315,9 +369,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
 }));
 
 export function useActiveRuntime() {
-  return useDevtoolsStore((state) =>
-    toActiveRuntimeView(getActiveRuntime(state))
-  );
+  return useDevtoolsStore((state) => getActiveRuntime(state));
 }
 
 export function useRuntimeList() {
@@ -383,6 +435,12 @@ export function sendRequest(
       payload
     };
 
+    debugLog("send-command", "[dashboard] send command", {
+      commandId,
+      targetRuntimeId,
+      payload
+    });
+
     ws.send(JSON.stringify(request));
   });
 }
@@ -404,7 +462,8 @@ export async function request<
 
 export function subscribe(
   payload: SyncoreDevtoolsSubscriptionPayload,
-  listener: (payload: SyncoreDevtoolsSubscriptionResultPayload) => void
+  listener: (payload: SyncoreDevtoolsSubscriptionResultPayload) => void,
+  options?: { onError?: (message: string) => void }
 ): () => void {
   const state = useDevtoolsStore.getState();
   const targetRuntimeId = state.selectedRuntimeId;
@@ -416,6 +475,7 @@ export function subscribe(
   subscriptions.set(subscriptionId, {
     runtimeId: targetRuntimeId,
     listeners: new Set([listener]),
+    errorListeners: new Set(options?.onError ? [options.onError] : []),
     payload
   });
 
@@ -425,6 +485,11 @@ export function subscribe(
     targetRuntimeId,
     payload
   };
+  debugLog("subscribe", "[dashboard] subscribe", {
+    subscriptionId,
+    targetRuntimeId,
+    payload
+  });
   ws.send(JSON.stringify(message));
 
   return () => {
@@ -435,6 +500,11 @@ export function subscribe(
         subscriptionId,
         targetRuntimeId
       };
+      debugLog("unsubscribe", "[dashboard] unsubscribe", {
+        subscriptionId,
+        targetRuntimeId,
+        payload
+      });
       ws.send(JSON.stringify(unsubscribeMessage));
     }
   };
@@ -446,14 +516,16 @@ export function subscribe(
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let connectionStarted = false;
 
 function connect() {
-  if (ws) return;
+  if (ws || !connectionStarted) return;
 
   const socket = new WebSocket(WS_URL);
   ws = socket;
 
   socket.onopen = () => {
+    debugLog("ws-open", "[dashboard] websocket open", { url: WS_URL });
     useDevtoolsStore.getState()._setConnected(true);
   };
 
@@ -461,6 +533,14 @@ function connect() {
     if (typeof e.data !== "string") return;
     try {
       const msg = JSON.parse(e.data) as SyncoreDevtoolsMessage;
+      if (
+        msg.type === "hello" ||
+        msg.type === "subscription.data" ||
+        msg.type === "subscription.error" ||
+        msg.type === "command.result"
+      ) {
+        debugLog(`ws-message:${msg.type}`, "[dashboard] ws message", msg);
+      }
       useDevtoolsStore.getState()._handleMessage(msg);
     } catch {
       /* ignore malformed messages */
@@ -469,6 +549,9 @@ function connect() {
 
   socket.onclose = () => {
     ws = null;
+    debugLog("ws-close", "[dashboard] websocket close", {
+      reconnecting: connectionStarted
+    });
     useDevtoolsStore.getState()._setConnected(false);
     // Reject all pending requests
     for (const [, pending] of pendingRequests) {
@@ -476,7 +559,9 @@ function connect() {
       pending.reject(new Error("WebSocket disconnected"));
     }
     pendingRequests.clear();
-    scheduleReconnect();
+    if (connectionStarted) {
+      scheduleReconnect();
+    }
   };
 
   socket.onerror = () => {
@@ -494,11 +579,13 @@ function scheduleReconnect() {
 
 /** Start the WebSocket connection. Call once at app boot. */
 export function initDevtoolsConnection() {
+  connectionStarted = true;
   connect();
 }
 
 /** Tear down the WebSocket connection. */
 export function destroyDevtoolsConnection() {
+  connectionStarted = false;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
