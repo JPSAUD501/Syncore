@@ -430,6 +430,9 @@ importers:
       fake-indexeddb:
         specifier: ^6.2.5
         version: 6.2.5
+      sql.js:
+        specifier: ^1.14.1
+        version: 1.14.1
       vitest:
         specifier: ^3.0.8
         version: 3.2.4(@types/node@22.19.15)(jsdom@26.1.0)(lightningcss@1.31.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)

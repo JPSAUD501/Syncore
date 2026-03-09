@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.5",
+    "sql.js": "^1.14.1",
     "vitest": "^3.0.8"
   },
   "scripts": {
