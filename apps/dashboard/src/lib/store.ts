@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type {
   SyncoreDevtoolsEvent,
   SyncoreDevtoolsMessage,
@@ -267,7 +268,7 @@ export function useActiveRuntime() {
 }
 
 export function useRuntimeList() {
-  return useDevtoolsStore((state) => sortRuntimes(state.runtimes));
+  return useDevtoolsStore(useShallow((state) => sortRuntimes(state.runtimes)));
 }
 
 export function useConnectedRuntimeCount() {

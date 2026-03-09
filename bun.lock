@@ -70,7 +70,7 @@
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "sql.js": "^1.13.0",
-        "syncore": "workspace:*",
+        "syncorejs": "workspace:*",
       },
       "devDependencies": {
         "@vitejs/plugin-react": "^4.3.4",
@@ -81,10 +81,9 @@
     "examples/electron": {
       "name": "syncore-example-electron",
       "dependencies": {
-        "@syncore/react": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
-        "syncore": "workspace:*",
+        "syncorejs": "workspace:*",
       },
       "devDependencies": {
         "@types/react": "^19.0.10",
@@ -102,18 +101,17 @@
         "expo": "^55.0.0",
         "react": "^19.0.0",
         "react-native": "^0.82.0",
-        "syncore": "workspace:*",
+        "syncorejs": "workspace:*",
       },
     },
     "examples/next-pwa": {
       "name": "syncore-example-next-pwa",
       "dependencies": {
-        "@syncore/next": "workspace:*",
         "next": "^15.2.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "sql.js": "^1.13.0",
-        "syncore": "workspace:*",
+        "syncorejs": "workspace:*",
       },
       "devDependencies": {
         "concurrently": "^9.1.2",
@@ -122,11 +120,9 @@
     "examples/sveltekit": {
       "name": "syncore-example-sveltekit",
       "dependencies": {
-        "@syncore/platform-web": "workspace:*",
-        "@syncore/svelte": "workspace:*",
         "sql.js": "^1.13.0",
         "svelte": "^5.0.0",
-        "syncore": "workspace:*",
+        "syncorejs": "workspace:*",
       },
       "devDependencies": {
         "@sveltejs/vite-plugin-svelte": "^5.0.0",
@@ -139,7 +135,7 @@
       "name": "@syncore/cli",
       "version": "0.1.0",
       "bin": {
-        "syncore": "./dist/index.mjs",
+        "syncorejs": "./dist/index.mjs",
       },
       "dependencies": {
         "@syncore/core": "workspace:*",
@@ -248,12 +244,19 @@
       },
     },
     "packages/syncore": {
-      "name": "syncore",
+      "name": "syncorejs",
       "version": "0.1.0",
       "bin": {
-        "syncore": "./dist/cli.js",
+        "syncorejs": "dist/cli.js",
       },
       "dependencies": {
+        "commander": "^13.1.0",
+        "date-fns-tz": "^3.2.0",
+        "sql.js": "^1.14.1",
+        "tsx": "^4.19.3",
+        "ws": "^8.18.0",
+      },
+      "devDependencies": {
         "@syncore/core": "workspace:*",
         "@syncore/devtools-protocol": "workspace:*",
         "@syncore/next": "workspace:*",
@@ -264,6 +267,22 @@
         "@syncore/schema": "workspace:*",
         "@syncore/svelte": "workspace:*",
       },
+      "peerDependencies": {
+        "expo-file-system": "^55.0.10",
+        "expo-sqlite": "^55.0.10",
+        "next": "^15.0.0",
+        "react": "^18.3.0 || ^19.0.0",
+        "react-dom": "^18.3.0 || ^19.0.0",
+        "svelte": "^5.0.0",
+      },
+      "optionalPeers": [
+        "expo-file-system",
+        "expo-sqlite",
+        "next",
+        "react",
+        "react-dom",
+        "svelte",
+      ],
     },
     "packages/testing": {
       "name": "@syncore/testing",
@@ -276,7 +295,7 @@
         "@syncore/react": "workspace:*",
         "@syncore/schema": "workspace:*",
         "@syncore/svelte": "workspace:*",
-        "syncore": "workspace:*",
+        "syncorejs": "workspace:*",
       },
       "devDependencies": {
         "fake-indexeddb": "^6.2.5",
@@ -2457,8 +2476,6 @@
 
     "symbol-tree": ["symbol-tree@3.2.4", "", {}, "sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw=="],
 
-    "syncore": ["syncore@workspace:packages/syncore"],
-
     "syncore-example-browser-esm": ["syncore-example-browser-esm@workspace:examples/browser-esm"],
 
     "syncore-example-electron": ["syncore-example-electron@workspace:examples/electron"],
@@ -2468,6 +2485,8 @@
     "syncore-example-next-pwa": ["syncore-example-next-pwa@workspace:examples/next-pwa"],
 
     "syncore-example-sveltekit": ["syncore-example-sveltekit@workspace:examples/sveltekit"],
+
+    "syncorejs": ["syncorejs@workspace:packages/syncore"],
 
     "tailwind-merge": ["tailwind-merge@3.5.0", "", {}, "sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A=="],
 
