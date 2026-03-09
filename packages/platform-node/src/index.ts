@@ -26,7 +26,6 @@ import {
   type StorageWriteInput,
   type SyncoreCapabilities,
   type SyncoreExperimentalPlugin,
-  type SyncoreRuntime,
   SyncoreRuntime,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,

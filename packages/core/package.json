@@ -29,6 +29,7 @@
     "@syncore/schema": "workspace:*",
     "commander": "^13.1.0",
     "date-fns-tz": "^3.2.0",
+    "node-sql-parser": "^5.4.0",
     "tsx": "^4.19.3",
     "ws": "^8.18.0"
   }

@@ -5,20 +5,22 @@
 ```ts
 
 import { AnySyncoreSchema } from '@syncore/core';
-import { DevtoolsRequestHandler } from '@syncore/core';
+import { DevtoolsCommandHandler } from '@syncore/core';
 import { DevtoolsSink } from '@syncore/core';
+import { DevtoolsSubscriptionHost } from '@syncore/core';
 import { FunctionReference } from '@syncore/core';
 import { SchedulerOptions } from '@syncore/core';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
 import * as _syncore_core0 from '@syncore/core';
+import { SyncoreActiveQueryInfo } from '@syncore/devtools-protocol';
 import { SyncoreCapabilities } from '@syncore/core';
 import { SyncoreClient } from '@syncore/core';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
-import { SyncoreDevtoolsSnapshot } from '@syncore/devtools-protocol';
 import { SyncoreExperimentalPlugin } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
+import { SyncoreRuntimeSummary } from '@syncore/devtools-protocol';
 import { SyncoreSqlDriver } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 import { SyncoreWatch } from '@syncore/core';
@@ -196,9 +198,11 @@ export type NodeSyncoreSchema = AnySyncoreSchema;
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
     // (undocumented)
-    attachRequestHandler(handler: DevtoolsRequestHandler): void;
+    attachCommandHandler(handler: DevtoolsCommandHandler): void;
     // (undocumented)
-    attachRuntime(getSnapshot: () => SyncoreDevtoolsSnapshot): void;
+    attachRuntime(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+    // (undocumented)
+    attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
     // (undocumented)
     dispose(): void;
 }
@@ -222,9 +226,9 @@ export type RendererQueryWatch<TValue> = SyncoreWatch<TValue> & {
     dispose(): void;
 };
 
-export { SyncoreDevtoolsEvent }
+export { SyncoreActiveQueryInfo }
 
-export { SyncoreDevtoolsSnapshot }
+export { SyncoreDevtoolsEvent }
 
 // @public (undocumented)
 export interface SyncoreElectronBridgeWindow {
@@ -294,6 +298,8 @@ export class SyncoreRendererClient implements SyncoreClient {
     // (undocumented)
     watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): RendererQueryWatch<TResult>;
 }
+
+export { SyncoreRuntimeSummary }
 
 // @public (undocumented)
 export interface SyncoreWindowBridge {

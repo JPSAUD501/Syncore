@@ -52,6 +52,95 @@ export interface SchedulerJob {
 }
 
 // @public (undocumented)
+export interface SyncoreActiveQueryInfo {
+    // (undocumented)
+    dependencyKeys: string[];
+    // (undocumented)
+    functionName: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    lastRunAt: number;
+}
+
+// @public (undocumented)
+export type SyncoreDevtoolsClientMessage = {
+    type: "ping";
+} | SyncoreDevtoolsCommand | SyncoreDevtoolsSubscribe | SyncoreDevtoolsUnsubscribe;
+
+// @public (undocumented)
+export interface SyncoreDevtoolsCommand {
+    // (undocumented)
+    commandId: string;
+    // (undocumented)
+    payload: SyncoreDevtoolsCommandPayload;
+    // (undocumented)
+    targetRuntimeId: string;
+    // (undocumented)
+    type: "command";
+}
+
+// @public (undocumented)
+export type SyncoreDevtoolsCommandPayload = {
+    kind: "fn.run";
+    functionName: string;
+    functionType: "query" | "mutation" | "action";
+    args: Record<string, unknown>;
+} | {
+    kind: "data.insert";
+    table: string;
+    document: Record<string, unknown>;
+} | {
+    kind: "data.patch";
+    table: string;
+    id: string;
+    fields: Record<string, unknown>;
+} | {
+    kind: "data.delete";
+    table: string;
+    id: string;
+} | {
+    kind: "sql.read";
+    query: string;
+} | {
+    kind: "sql.write";
+    query: string;
+} | {
+    kind: "scheduler.cancel";
+    jobId: string;
+};
+
+// @public (undocumented)
+export type SyncoreDevtoolsCommandResultPayload = {
+    kind: "fn.run.result";
+    result?: unknown;
+    error?: string;
+    durationMs: number;
+} | {
+    kind: "data.mutate.result";
+    success: boolean;
+    id?: string;
+    error?: string;
+} | {
+    kind: "sql.read.result";
+    columns: string[];
+    rows: unknown[][];
+    error?: string;
+} | {
+    kind: "sql.write.result";
+    rowsAffected: number;
+    error?: string;
+    invalidationScopes: string[];
+} | {
+    kind: "scheduler.cancel.result";
+    success: boolean;
+    error?: string;
+} | {
+    kind: "error";
+    message: string;
+};
+
+// @public (undocumented)
 export type SyncoreDevtoolsEvent = {
     type: "runtime.connected";
     runtimeId: string;
@@ -122,40 +211,102 @@ export type SyncoreDevtoolsMessage = {
     type: "event";
     event: SyncoreDevtoolsEvent;
 } | {
-    type: "snapshot";
-    snapshot: SyncoreDevtoolsSnapshot;
-} | {
     type: "ping";
 } | {
     type: "pong";
 } | {
-    type: "response";
-    requestId: string;
+    type: "command.result";
+    commandId: string;
     runtimeId: string;
-    payload: SyncoreResponsePayload;
+    payload: SyncoreDevtoolsCommandResultPayload;
+} | {
+    type: "subscription.data";
+    subscriptionId: string;
+    runtimeId: string;
+    payload: SyncoreDevtoolsSubscriptionResultPayload;
+} | {
+    type: "subscription.error";
+    subscriptionId: string;
+    runtimeId: string;
+    error: string;
 };
 
 // @public (undocumented)
-export interface SyncoreDevtoolsRequest {
+export interface SyncoreDevtoolsSubscribe {
     // (undocumented)
-    payload: SyncoreRequestPayload;
+    payload: SyncoreDevtoolsSubscriptionPayload;
     // (undocumented)
-    requestId: string;
+    subscriptionId: string;
     // (undocumented)
     targetRuntimeId: string;
     // (undocumented)
-    type: "request";
+    type: "subscribe";
 }
 
 // @public (undocumented)
-export interface SyncoreDevtoolsSnapshot {
+export type SyncoreDevtoolsSubscriptionPayload = {
+    kind: "runtime.summary";
+} | {
+    kind: "runtime.activeQueries";
+} | {
+    kind: "schema.tables";
+} | {
+    kind: "data.table";
+    table: string;
+    filters?: DataFilter[];
+    limit?: number;
+    cursor?: string;
+} | {
+    kind: "scheduler.jobs";
+} | {
+    kind: "functions.catalog";
+} | {
+    kind: "sql.watch";
+    query: string;
+};
+
+// @public (undocumented)
+export type SyncoreDevtoolsSubscriptionResultPayload = {
+    kind: "runtime.summary.result";
+    summary: SyncoreRuntimeSummary;
+} | {
+    kind: "runtime.activeQueries.result";
+    activeQueries: SyncoreActiveQueryInfo[];
+} | {
+    kind: "schema.tables.result";
+    tables: TableSchema[];
+} | {
+    kind: "data.table.result";
+    rows: Record<string, unknown>[];
+    totalCount: number;
+    cursor?: string;
+} | {
+    kind: "scheduler.jobs.result";
+    jobs: SchedulerJob[];
+} | {
+    kind: "functions.catalog.result";
+    functions: FunctionDefinition[];
+} | {
+    kind: "sql.watch.result";
+    columns: string[];
+    rows: unknown[][];
+    observedTables: string[];
+};
+
+// @public (undocumented)
+export interface SyncoreDevtoolsUnsubscribe {
     // (undocumented)
-    activeQueries: Array<{
-        id: string;
-        functionName: string;
-        dependencyKeys: string[];
-        lastRunAt: number;
-    }>;
+    subscriptionId: string;
+    // (undocumented)
+    targetRuntimeId: string;
+    // (undocumented)
+    type: "unsubscribe";
+}
+
+// @public (undocumented)
+export interface SyncoreRuntimeSummary {
+    // (undocumented)
+    activeQueryCount: number;
     // (undocumented)
     appName?: string;
     // (undocumented)
@@ -163,100 +314,14 @@ export interface SyncoreDevtoolsSnapshot {
     // (undocumented)
     origin?: string;
     // (undocumented)
-    pendingJobs: Array<{
-        id: string;
-        functionName: string;
-        runAt: number;
-        status: string;
-    }>;
-    // (undocumented)
     platform: string;
     // (undocumented)
-    recentEvents: SyncoreDevtoolsEvent[];
+    recentEventCount: number;
     // (undocumented)
     runtimeId: string;
     // (undocumented)
     sessionLabel?: string;
 }
-
-// @public (undocumented)
-export type SyncoreRequestPayload = {
-    kind: "fn.list";
-} | {
-    kind: "fn.run";
-    functionName: string;
-    functionType: "query" | "mutation" | "action";
-    args: Record<string, unknown>;
-} | {
-    kind: "data.query";
-    table: string;
-    filters?: DataFilter[];
-    limit?: number;
-    cursor?: string;
-} | {
-    kind: "data.insert";
-    table: string;
-    document: Record<string, unknown>;
-} | {
-    kind: "data.patch";
-    table: string;
-    id: string;
-    fields: Record<string, unknown>;
-} | {
-    kind: "data.delete";
-    table: string;
-    id: string;
-} | {
-    kind: "schema.get";
-} | {
-    kind: "sql.execute";
-    query: string;
-} | {
-    kind: "scheduler.list";
-} | {
-    kind: "scheduler.cancel";
-    jobId: string;
-};
-
-// @public (undocumented)
-export type SyncoreResponsePayload = {
-    kind: "fn.list.result";
-    functions: FunctionDefinition[];
-} | {
-    kind: "fn.run.result";
-    result?: unknown;
-    error?: string;
-    durationMs: number;
-} | {
-    kind: "data.result";
-    rows: Record<string, unknown>[];
-    totalCount: number;
-    cursor?: string;
-} | {
-    kind: "data.mutate.result";
-    success: boolean;
-    id?: string;
-    error?: string;
-} | {
-    kind: "schema.result";
-    tables: TableSchema[];
-} | {
-    kind: "sql.result";
-    columns: string[];
-    rows: unknown[][];
-    rowsAffected: number;
-    error?: string;
-} | {
-    kind: "scheduler.list.result";
-    jobs: SchedulerJob[];
-} | {
-    kind: "scheduler.cancel.result";
-    success: boolean;
-    error?: string;
-} | {
-    kind: "error";
-    message: string;
-};
 
 // @public (undocumented)
 export interface TableField {

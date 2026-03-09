@@ -5,7 +5,6 @@ import {
   type DevtoolsCommandHandler,
   type DevtoolsSink,
   type DevtoolsSubscriptionHost,
-  type SyncoreRuntime,
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,

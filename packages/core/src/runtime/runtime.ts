@@ -854,6 +854,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private schedulerTimer: ReturnType<typeof setInterval> | undefined;
   private readonly recurringJobs: RecurringJobDefinition[];
   private readonly schedulerPollIntervalMs: number;
+  private readonly driverDatabasePath: string | undefined;
   private started = false;
 
   constructor(private readonly options: SyncoreRuntimeOptions<TSchema>) {
@@ -862,6 +863,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     this.recurringJobs = options.scheduler?.recurringJobs ?? [];
     this.schedulerPollIntervalMs = options.scheduler?.pollIntervalMs ?? 1000;
     this.capabilities = Object.freeze(this.buildCapabilities());
+    this.driverDatabasePath = inferDriverDatabasePath(options.driver);
     this.options.devtools?.attachRuntime?.(
       this as unknown as SyncoreRuntime<AnySyncoreSchema>
     );
@@ -960,6 +962,10 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
       dependencyKeys: [...query.dependencyKeys],
       lastRunAt: query.lastRunAt
     }));
+  }
+
+  getDriverDatabasePath(): string | undefined {
+    return this.driverDatabasePath;
   }
 
   subscribeToDevtoolsEvents(
@@ -2431,6 +2437,11 @@ function devtoolsScopesForEvent(
     case "log":
       return new Set(["runtime.summary"]);
   }
+}
+
+function inferDriverDatabasePath(driver: SyncoreSqlDriver): string | undefined {
+  const candidate = driver as { filename?: string; databasePath?: string };
+  return candidate.databasePath ?? candidate.filename;
 }
 
 function omitSystemFields<TDocument extends object>(

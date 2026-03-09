@@ -165,7 +165,8 @@ export type SyncoreDevtoolsCommandPayload =
     }
   | { kind: "data.delete"; table: string; id: string }
   /* SQL */
-  | { kind: "sql.execute"; query: string }
+  | { kind: "sql.read"; query: string }
+  | { kind: "sql.write"; query: string }
   /* Scheduler */
   | { kind: "scheduler.cancel"; jobId: string };
 
@@ -181,7 +182,8 @@ export type SyncoreDevtoolsSubscriptionPayload =
       cursor?: string;
     }
   | { kind: "scheduler.jobs" }
-  | { kind: "functions.catalog" };
+  | { kind: "functions.catalog" }
+  | { kind: "sql.watch"; query: string };
 
 export interface DataFilter {
   field: string;
@@ -215,11 +217,16 @@ export type SyncoreDevtoolsCommandResultPayload =
       error?: string;
     }
   | {
-      kind: "sql.result";
+      kind: "sql.read.result";
       columns: string[];
       rows: unknown[][];
+      error?: string;
+    }
+  | {
+      kind: "sql.write.result";
       rowsAffected: number;
       error?: string;
+      invalidationScopes: string[];
     }
   | { kind: "scheduler.cancel.result"; success: boolean; error?: string }
   | { kind: "error"; message: string };
@@ -238,7 +245,13 @@ export type SyncoreDevtoolsSubscriptionResultPayload =
       cursor?: string;
     }
   | { kind: "scheduler.jobs.result"; jobs: SchedulerJob[] }
-  | { kind: "functions.catalog.result"; functions: FunctionDefinition[] };
+  | { kind: "functions.catalog.result"; functions: FunctionDefinition[] }
+  | {
+      kind: "sql.watch.result";
+      columns: string[];
+      rows: unknown[][];
+      observedTables: string[];
+    };
 
 /* ------------------------------------------------------------------ */
 /*  Shared data shapes                                                  */

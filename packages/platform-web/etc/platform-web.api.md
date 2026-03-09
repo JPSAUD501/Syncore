@@ -5,17 +5,21 @@
 ```ts
 
 import { AnySyncoreSchema } from '@syncore/core';
-import { DevtoolsRequestHandler } from '@syncore/core';
+import { DevtoolsCommandHandler } from '@syncore/core';
 import { DevtoolsSink } from '@syncore/core';
+import { DevtoolsSubscriptionHost } from '@syncore/core';
 import { FunctionReference } from '@syncore/core';
+import { default as initSqlJs_2 } from 'sql.js';
 import { SchedulerOptions } from '@syncore/core';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
 import * as _syncore_core0 from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
 import { SyncoreClient } from '@syncore/core';
-import { SyncoreDevtoolsSnapshot } from '@syncore/devtools-protocol';
 import { SyncoreExperimentalPlugin } from '@syncore/core';
+import { SyncoreExternalChangeApplier } from '@syncore/core';
+import { SyncoreExternalChangeEvent } from '@syncore/core';
+import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
@@ -40,6 +44,23 @@ export interface AttachWebWorkerRuntimeOptions {
     endpoint: SyncoreWorkerMessageEndpoint;
 }
 
+// @public (undocumented)
+export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChangeSignal {
+    constructor(options: BroadcastChannelExternalChangeSignalOptions);
+    // (undocumented)
+    close(): void;
+    // (undocumented)
+    publish(event: SyncoreExternalChangeEvent): void;
+    // (undocumented)
+    subscribe(listener: (event: SyncoreExternalChangeEvent) => void): () => void;
+}
+
+// @public (undocumented)
+export interface BroadcastChannelExternalChangeSignalOptions {
+    // (undocumented)
+    channelName: string;
+}
+
 // @public
 export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
     constructor(persistence: SyncoreWebPersistence, namespace: string);
@@ -61,9 +82,11 @@ export type BrowserSyncoreSchema = WebSyncoreSchema;
 // @public (undocumented)
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
     // (undocumented)
-    attachRequestHandler(handler: DevtoolsRequestHandler): void;
+    attachCommandHandler(handler: DevtoolsCommandHandler): void;
     // (undocumented)
-    attachRuntime(getSnapshot: () => SyncoreDevtoolsSnapshot): void;
+    attachRuntime(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+    // (undocumented)
+    attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
     // (undocumented)
     dispose(): void;
 }
@@ -100,6 +123,19 @@ export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOp
 // @public
 export type CreateBrowserWorkerRuntimeOptions = CreateWebWorkerRuntimeOptions;
 
+// @public (undocumented)
+export function createDefaultSyncChannelName(databaseName: string): string;
+
+// @public (undocumented)
+export function createExpoWebExternalChangeSupport(options: {
+    databaseName: string;
+    locateFile?: (fileName: string) => string;
+    wasmUrl?: string;
+    persistenceDatabaseName?: string;
+    opfsRootDirectoryName?: string;
+    persistenceMode?: WebPersistenceMode;
+}): Promise<WebExternalChangeSupport>;
+
 // @public
 export function createManagedWebWorkerClient(options: {
     createWorker: () => Worker;
@@ -107,6 +143,13 @@ export function createManagedWebWorkerClient(options: {
 
 // @public
 export function createSyncoreWebWorkerClient(options: CreateWebWorkerClientProviderOptions): ManagedWebWorkerClient;
+
+// @public (undocumented)
+export function createWebExternalChangeSupport(options: {
+    databaseName: string;
+    persistence: SyncoreWebPersistence;
+    driver: CreateWebRuntimeOptions["driver"] | undefined;
+}): WebExternalChangeSupport;
 
 // @public (undocumented)
 export function createWebPersistence(options?: CreateWebPersistenceOptions): Promise<SyncoreWebPersistence>;
@@ -189,6 +232,30 @@ export interface ManagedWebWorkerClient {
 export interface OpfsPersistenceOptions {
     // (undocumented)
     rootDirectoryName?: string;
+}
+
+// @public (undocumented)
+export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier {
+    constructor(options: SqlJsExternalChangeApplierOptions);
+    // (undocumented)
+    applyExternalChange(event: SyncoreExternalChangeEvent): Promise<{
+        databaseChanged: boolean;
+        storageChanged: boolean;
+    }>;
+}
+
+// @public (undocumented)
+export interface SqlJsExternalChangeApplierOptions {
+    // Warning: (ae-forgotten-export) The symbol "SqlJsDatabase" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    createDatabase: (bytes?: Uint8Array) => SqlJsDatabase;
+    // (undocumented)
+    databaseName: string;
+    // (undocumented)
+    persistence: SyncoreWebPersistence;
+    // (undocumented)
+    replaceDatabase(database: SqlJsDatabase): void;
 }
 
 // @public (undocumented)
@@ -284,6 +351,14 @@ export interface SyncoreWorkerMessageEndpoint {
     postMessage(message: unknown): void;
     // (undocumented)
     removeEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
+}
+
+// @public (undocumented)
+export interface WebExternalChangeSupport {
+    // (undocumented)
+    applier?: SqlJsExternalChangeApplier;
+    // (undocumented)
+    signal: BroadcastChannelExternalChangeSignal;
 }
 
 // @public (undocumented)

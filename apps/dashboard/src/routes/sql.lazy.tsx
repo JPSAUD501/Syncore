@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmptyState } from "@/components/shared";
 import { useConnection } from "@/hooks";
+import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
 
@@ -34,8 +35,11 @@ export const Route = createLazyFileRoute("/sql")({
 interface QueryResult {
   columns: string[];
   rows: unknown[][];
-  rowsAffected: number;
   durationMs: number;
+  mode: "read" | "write" | "live";
+  rowsAffected?: number;
+  observedTables?: string[];
+  invalidationScopes?: string[];
   error?: string;
 }
 
@@ -44,8 +48,11 @@ interface HistoryEntry {
   timestamp: number;
   durationMs: number;
   rowCount: number;
+  mode: "read" | "write" | "live";
   error?: string;
 }
+
+type SqlMode = "read" | "write" | "live";
 
 const STORAGE_KEY = "syncore-sql-history";
 
@@ -152,6 +159,7 @@ const substrateHighlight = EditorView.baseTheme({
 function SqlPage() {
   const { connected } = useConnection();
   const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<SqlMode>("read");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
@@ -177,6 +185,32 @@ function SqlPage() {
     }
   }, [history]);
 
+  const liveStartedAtRef = useRef<number | null>(null);
+
+  const liveSubscription = useDevtoolsSubscription(
+    connected && mode === "live" && query.trim()
+      ? { kind: "sql.watch", query: query.trim() }
+      : null,
+    {
+      enabled: connected && mode === "live" && query.trim().length > 0
+    }
+  );
+
+  useEffect(() => {
+    if (liveSubscription.data?.kind === "sql.watch.result") {
+      setResult({
+        columns: liveSubscription.data.columns,
+        rows: liveSubscription.data.rows,
+        durationMs:
+          liveStartedAtRef.current === null
+            ? 0
+            : performance.now() - liveStartedAtRef.current,
+        mode: "live",
+        observedTables: liveSubscription.data.observedTables
+      });
+    }
+  }, [liveSubscription.data]);
+
   /* ---------------------------------------------------------------- */
   /*  Execute query                                                    */
   /* ---------------------------------------------------------------- */
@@ -185,23 +219,26 @@ function SqlPage() {
     async (sql?: string) => {
       const queryText = sql ?? query.trim();
       if (!queryText || !connected) return;
+      if (mode === "live") {
+        return;
+      }
 
       setLoading(true);
       const startTime = performance.now();
 
       try {
         const res = await sendRequest({
-          kind: "sql.execute",
+          kind: mode === "write" ? "sql.write" : "sql.read",
           query: queryText
         });
         const durationMs = performance.now() - startTime;
 
-        if (res.kind === "sql.result") {
+        if (res.kind === "sql.read.result") {
           const queryResult: QueryResult = {
             columns: res.columns,
             rows: res.rows,
-            rowsAffected: res.rowsAffected,
-            durationMs
+            durationMs,
+            mode: "read"
           };
 
           if (res.error) {
@@ -215,9 +252,29 @@ function SqlPage() {
             query: queryText,
             timestamp: Date.now(),
             durationMs,
-            rowCount: res.rows.length
+            rowCount: res.rows.length,
+            mode: "read"
           };
           if (res.error) entry.error = res.error;
+          setHistory((prev) => [entry, ...prev.slice(0, 49)]);
+        } else if (res.kind === "sql.write.result") {
+          setResult({
+            columns: [],
+            rows: [],
+            rowsAffected: res.rowsAffected,
+            durationMs,
+            mode: "write",
+            invalidationScopes: res.invalidationScopes,
+            ...(res.error ? { error: res.error } : {})
+          });
+          const entry: HistoryEntry = {
+            query: queryText,
+            timestamp: Date.now(),
+            durationMs,
+            rowCount: 0,
+            mode: "write",
+            ...(res.error ? { error: res.error } : {})
+          };
           setHistory((prev) => [entry, ...prev.slice(0, 49)]);
         }
       } catch (err) {
@@ -226,16 +283,63 @@ function SqlPage() {
         setResult({
           columns: [],
           rows: [],
-          rowsAffected: 0,
           durationMs,
+          mode,
           error: errorMsg
         });
       } finally {
         setLoading(false);
       }
     },
-    [query, connected]
+    [query, connected, mode]
   );
+
+  useEffect(() => {
+    if (mode !== "live") {
+      liveStartedAtRef.current = null;
+      return;
+    }
+    const queryText = query.trim();
+    if (!queryText) {
+      liveStartedAtRef.current = null;
+      setResult(null);
+      return;
+    }
+    if (liveStartedAtRef.current === null) {
+      liveStartedAtRef.current = performance.now();
+    }
+    setResult((prev) =>
+      prev?.mode === "live"
+        ? prev
+        : {
+            columns: [],
+            rows: [],
+            durationMs: 0,
+            mode: "live"
+          }
+    );
+    setLoading(liveSubscription.loading);
+    if (liveSubscription.data?.kind === "sql.watch.result") {
+      const liveRows = liveSubscription.data.rows;
+      const durationMs =
+        liveStartedAtRef.current === null
+          ? 0
+          : performance.now() - liveStartedAtRef.current;
+      setHistory((prev) => {
+        const nextEntry: HistoryEntry = {
+          query: queryText,
+          timestamp: Date.now(),
+          durationMs,
+          rowCount: liveRows.length,
+          mode: "live"
+        };
+        if (prev[0]?.query === queryText && prev[0]?.mode === "live") {
+          return [nextEntry, ...prev.slice(1, 49)];
+        }
+        return [nextEntry, ...prev.slice(0, 49)];
+      });
+    }
+  }, [liveSubscription.data, liveSubscription.loading, mode, query]);
 
   /* ---------------------------------------------------------------- */
   /*  Clear history                                                    */
@@ -297,7 +401,11 @@ function SqlPage() {
               onChange={setQuery}
               extensions={extensions}
               height="160px"
-              placeholder="SELECT * FROM users LIMIT 10;"
+              placeholder={
+                mode === "write"
+                  ? 'UPDATE "tasks" SET _json = json_set(_json, "$.done", true) WHERE _id = "...";'
+                  : 'SELECT * FROM "tasks" LIMIT 10;'
+              }
               basicSetup={{
                 lineNumbers: true,
                 foldGutter: false,
@@ -313,22 +421,42 @@ function SqlPage() {
           </div>
 
           <div className="flex items-center gap-2 mt-3">
-            <Button
-              onClick={() => void executeQuery()}
-              disabled={!connected || loading || !query.trim()}
-              size="sm"
-              className="gap-1.5 px-4"
-            >
-              {loading ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Play size={13} />
-              )}
-              {loading ? "Executing..." : "Execute"}
-            </Button>
+            {mode !== "live" && (
+              <Button
+                onClick={() => void executeQuery()}
+                disabled={!connected || loading || !query.trim()}
+                size="sm"
+                className="gap-1.5 px-4"
+              >
+                {loading ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Play size={13} />
+                )}
+                {loading ? "Executing..." : mode === "write" ? "Write" : "Read"}
+              </Button>
+            )}
+
+            <div className="flex items-center gap-1 rounded-md border border-border bg-bg-surface p-0.5">
+              {(["read", "live", "write"] as const).map((nextMode) => (
+                <button
+                  key={nextMode}
+                  type="button"
+                  onClick={() => setMode(nextMode)}
+                  className={cn(
+                    "px-2.5 py-1 rounded text-[10px] uppercase tracking-wide transition-colors",
+                    mode === nextMode
+                      ? "bg-accent text-bg-deep"
+                      : "text-text-tertiary hover:text-text-primary"
+                  )}
+                >
+                  {nextMode}
+                </button>
+              ))}
+            </div>
 
             <span className="text-[10px] text-text-tertiary">
-              Ctrl+Enter to run
+              {mode === "live" ? "Live updates enabled" : "Ctrl+Enter to run"}
             </span>
 
             {result && !result.error && (
@@ -341,6 +469,12 @@ function SqlPage() {
                   <Clock size={10} />
                   {formatDuration(result.durationMs)}
                 </span>
+                {result.mode === "live" && (
+                  <span className="flex items-center gap-1 text-success">
+                    <Sparkles size={10} />
+                    live
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -348,7 +482,11 @@ function SqlPage() {
 
         {/* Results area */}
         <div className="flex-1 min-h-0 flex flex-col">
-          {result ? (
+          {mode === "live" && liveSubscription.loading && !result ? (
+            <div className="p-4 text-[12px] text-text-tertiary">
+              Subscribing...
+            </div>
+          ) : result ? (
             result.error ? (
               <div className="p-4 animate-fade-in">
                 <div className="rounded-md border border-error/20 bg-error/5 p-4">
@@ -373,7 +511,7 @@ function SqlPage() {
             <EmptyState
               icon={Terminal}
               title="Run a query"
-              description="Write SQL and press Ctrl+Enter or click Execute to see results. Use PRAGMA shortcuts on the right for common operations."
+              description="Use Read for one-off queries, Live for reactive readonly queries, and Write for mutations."
               className="h-full"
             />
           )}
@@ -399,7 +537,7 @@ function SqlPage() {
                   setQuery(shortcut.query);
                   void executeQuery(shortcut.query);
                 }}
-                disabled={!connected}
+                disabled={!connected || mode === "live"}
                 className={cn(
                   "flex items-center gap-2 w-full px-2 py-1.5 rounded text-[11px] text-text-secondary",
                   "hover:bg-bg-surface hover:text-text-primary transition-colors",
@@ -488,12 +626,26 @@ function ResultsTable({ result }: { result: QueryResult }) {
     return (
       <div className="p-4 text-center animate-fade-in">
         <p className="text-[12px] text-text-secondary">
-          Query executed successfully.{" "}
-          {result.rowsAffected > 0 && `${result.rowsAffected} rows affected.`}
+          {result.mode === "live"
+            ? "Live query active."
+            : "Query executed successfully."}{" "}
+          {typeof result.rowsAffected === "number" && result.rowsAffected > 0
+            ? `${result.rowsAffected} rows affected.`
+            : ""}
         </p>
         <p className="text-[10px] text-text-tertiary mt-1">
           {formatDuration(result.durationMs)}
         </p>
+        {result.invalidationScopes && result.invalidationScopes.length > 0 && (
+          <p className="text-[10px] text-text-tertiary mt-1">
+            Invalidated: {result.invalidationScopes.join(", ")}
+          </p>
+        )}
+        {result.observedTables && result.observedTables.length > 0 && (
+          <p className="text-[10px] text-text-tertiary mt-1">
+            Watching: {result.observedTables.join(", ")}
+          </p>
+        )}
       </div>
     );
   }

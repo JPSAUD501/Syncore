@@ -10,7 +10,7 @@ import { describeValidator } from "@syncore/schema";
 import type { TableDefinition, Validator } from "@syncore/schema";
 import type {
   AnySyncoreSchema,
-  type DevtoolsLiveQueryScope,
+  DevtoolsLiveQueryScope,
   SyncoreRuntimeOptions,
   SyncoreSqlDriver
 } from "./runtime.js";
@@ -151,42 +151,56 @@ export function createDevtoolsCommandHandler(
         }
       }
 
-      case "sql.execute": {
+      case "sql.read": {
         try {
-          const trimmed = payload.query.trim().toUpperCase();
-          if (
-            trimmed.startsWith("SELECT") ||
-            trimmed.startsWith("PRAGMA") ||
-            trimmed.startsWith("EXPLAIN")
-          ) {
-            const rows = await driver.all<Record<string, unknown>>(
-              payload.query
-            );
-            const columns = rows.length > 0 ? Object.keys(rows[0]!) : [];
-            return {
-              kind: "sql.result",
-              columns,
-              rows: rows.map((row) => columns.map((column) => row[column])),
-              rowsAffected: 0
-            };
+          const { runReadonlyQuery } = await loadDevtoolsSqlModule();
+          const databasePath = runtime.getDriverDatabasePath();
+          if (!databasePath) {
+            throw new Error("SQL Read requires a file-backed database path.");
           }
+          const { columns, rows } = runReadonlyQuery(
+            databasePath,
+            payload.query
+          );
+          return {
+            kind: "sql.read.result",
+            columns,
+            rows
+          };
+        } catch (error) {
+          return {
+            kind: "sql.read.result",
+            columns: [],
+            rows: [],
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
 
+      case "sql.write": {
+        try {
+          const { analyzeSqlStatement } = await loadDevtoolsSqlModule();
+          const analysis = analyzeSqlStatement(payload.query);
+          if (analysis.mode === "read") {
+            throw new Error(
+              "Use SQL Read or SQL Live for read-only statements."
+            );
+          }
           const result = await driver.run(payload.query);
+          runtime.notifyDevtoolsScopes(analysis.observedScopes);
           await runtime.forceRefreshDevtools(
             "SQL write executed from devtools dashboard."
           );
           return {
-            kind: "sql.result",
-            columns: [],
-            rows: [],
-            rowsAffected: result.changes
+            kind: "sql.write.result",
+            rowsAffected: result.changes,
+            invalidationScopes: [...analysis.observedScopes]
           };
         } catch (error) {
           return {
-            kind: "sql.result",
-            columns: [],
-            rows: [],
+            kind: "sql.write.result",
             rowsAffected: 0,
+            invalidationScopes: [],
             error: error instanceof Error ? error.message : String(error)
           };
         }
@@ -335,6 +349,23 @@ async function resolveSubscriptionPayload(
         kind: "functions.catalog.result",
         functions: listFunctions(functions)
       };
+    case "sql.watch": {
+      const { runReadonlyQuery } = await loadDevtoolsSqlModule();
+      const databasePath = runtime.getDriverDatabasePath();
+      if (!databasePath) {
+        throw new Error("SQL Live requires a file-backed database path.");
+      }
+      const { columns, rows, observedTables } = runReadonlyQuery(
+        databasePath,
+        payload.query
+      );
+      return {
+        kind: "sql.watch.result",
+        columns,
+        rows,
+        observedTables
+      };
+    }
   }
 }
 
@@ -609,11 +640,22 @@ function scopesForSubscription(
     case "schema.tables":
       return new Set(["schema.tables"]);
     case "data.table":
-      return new Set([`table:${payload.table}`]);
+      return new Set<DevtoolsInvalidationScope>([`table:${payload.table}`]);
     case "scheduler.jobs":
       return new Set(["scheduler.jobs"]);
     case "functions.catalog":
       return new Set(["all"]);
+    case "sql.watch": {
+      try {
+        const { analyzeSqlStatement, ensureSqlMode } =
+          getDevtoolsSqlModuleSync();
+        const analysis = analyzeSqlStatement(payload.query);
+        ensureSqlMode(analysis, "watch");
+        return new Set<DevtoolsInvalidationScope>(analysis.observedScopes);
+      } catch {
+        return new Set<DevtoolsInvalidationScope>(["all"]);
+      }
+    }
   }
 }
 
@@ -630,4 +672,20 @@ function intersects(
     }
   }
   return false;
+}
+
+let cachedDevtoolsSqlModule: typeof import("./devtools-sql.js") | undefined;
+
+async function loadDevtoolsSqlModule(): Promise<
+  typeof import("./devtools-sql.js")
+> {
+  cachedDevtoolsSqlModule ??= await import("./devtools-sql.js");
+  return cachedDevtoolsSqlModule;
+}
+
+function getDevtoolsSqlModuleSync(): typeof import("./devtools-sql.js") {
+  if (!cachedDevtoolsSqlModule) {
+    throw new Error("Devtools SQL module is not loaded yet.");
+  }
+  return cachedDevtoolsSqlModule;
 }

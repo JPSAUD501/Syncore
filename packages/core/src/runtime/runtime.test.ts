@@ -28,12 +28,19 @@ import {
   type SyncoreStorageAdapter
 } from "./runtime.js";
 import { createDevtoolsSubscriptionHost } from "./devtools.js";
+import {
+  analyzeSqlStatement,
+  ensureSqlMode,
+  runReadonlyQuery
+} from "./devtools-sql.js";
 
 class TestSqliteDriver implements SyncoreSqlDriver {
   private readonly database: DatabaseSync;
   private transactionDepth = 0;
+  readonly filename: string;
 
   constructor(filename: string) {
+    this.filename = filename;
     this.database = new DatabaseSync(filename);
   }
 
@@ -728,6 +735,15 @@ describe("SyncoreRuntime schema + scheduler", () => {
       }
     );
 
+    await host.subscribe(
+      "sql-watch",
+      { kind: "sql.watch", query: 'SELECT _id FROM "tasks" LIMIT 10' },
+      () => {
+        // Warm the lazy SQL module so scope analysis is available synchronously.
+      }
+    );
+    host.unsubscribe("sql-watch");
+
     await runtime
       .createClient()
       .mutation(
@@ -765,6 +781,44 @@ describe("SyncoreRuntime schema + scheduler", () => {
     host.dispose();
     await hostDriver.close();
     await runtime.stop();
+  });
+
+  it("analyzes SQL for read, write, and watch flows without regex", async () => {
+    const databasePath = path.join(rootDirectory, "sql-analysis.db");
+    const driver = new TestSqliteDriver(databasePath);
+    await driver.exec(
+      'CREATE TABLE "tasks" (_id TEXT PRIMARY KEY, _creationTime INTEGER, _json TEXT)'
+    );
+    await driver.run(
+      'INSERT INTO "tasks" (_id, _creationTime, _json) VALUES (?, ?, ?)',
+      ["task-1", Date.now(), JSON.stringify({ text: "hello", done: false })]
+    );
+
+    const selectAnalysis = analyzeSqlStatement(
+      'SELECT _id, _json FROM "tasks" LIMIT 10'
+    );
+    expect(selectAnalysis.mode).toBe("read");
+    expect(selectAnalysis.readTables).toEqual(["tasks"]);
+
+    const updateAnalysis = analyzeSqlStatement(
+      'UPDATE "tasks" SET _json = json_set(_json, "$.done", true)'
+    );
+    expect(updateAnalysis.mode).toBe("write");
+    expect(updateAnalysis.writeTables).toEqual(["tasks"]);
+
+    expect(() => ensureSqlMode(updateAnalysis, "watch")).toThrow(
+      /read-only SQL/i
+    );
+
+    const queryResult = runReadonlyQuery(
+      databasePath,
+      'SELECT _id, _json FROM "tasks" LIMIT 10'
+    );
+    expect(queryResult.columns).toEqual(["_id", "_json"]);
+    expect(queryResult.rows).toHaveLength(1);
+    expect(queryResult.observedTables).toEqual(["tasks"]);
+
+    await driver.close();
   });
 
   it("reconciles interrupted staged storage writes on restart", async () => {

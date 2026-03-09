@@ -13,6 +13,8 @@ import { StorageWriteInput } from '@syncore/core';
 import * as _syncore_core0 from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
 import { SyncoreExperimentalPlugin } from '@syncore/core';
+import { SyncoreExternalChangeApplier } from '@syncore/core';
+import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreSqlDriver } from '@syncore/core';
@@ -26,6 +28,8 @@ export interface CreateExpoRuntimeOptions {
     devtools?: DevtoolsSink;
     driver?: SyncoreSqlDriver;
     experimentalPlugins?: Array<SyncoreExperimentalPlugin<ExpoSyncoreSchema>>;
+    externalChangeApplier?: SyncoreExternalChangeApplier;
+    externalChangeSignal?: SyncoreExternalChangeSignal;
     functions: SyncoreRuntimeOptions<ExpoSyncoreSchema>["functions"];
     platform?: string;
     scheduler?: SchedulerOptions;
@@ -58,7 +62,10 @@ export class ExpoFileStorageAdapter implements SyncoreStorageAdapter {
 
 // @public
 export class ExpoSqliteDriver implements SyncoreSqlDriver {
-    constructor(database: SQLiteDatabase);
+    constructor(database: SQLiteDatabase, options?: {
+        databaseName?: string;
+        databaseDirectory?: string;
+    });
     // (undocumented)
     all<T>(sql: string, params?: unknown[]): Promise<T[]>;
     // (undocumented)
@@ -67,6 +74,8 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
     exec(sql: string): Promise<void>;
     // (undocumented)
     get<T>(sql: string, params?: unknown[]): Promise<T | undefined>;
+    // (undocumented)
+    reopen(): Promise<void>;
     // (undocumented)
     run(sql: string, params?: unknown[]): Promise<{
         changes: number;
@@ -81,7 +90,7 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
 // @public
 export interface ExpoSyncoreBootstrap {
     getClient(): Promise<ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>>;
-    getRuntime(): SyncoreRuntime<ExpoSyncoreSchema>;
+    getRuntime(): never;
     reset(): Promise<void>;
     stop(): Promise<void>;
 }
