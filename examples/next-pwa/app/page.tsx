@@ -4,7 +4,7 @@ import { SyncoreNextProvider } from "syncorejs/next";
 import { BookmarksScreen } from "./bookmarks-screen";
 
 const createWorker = () =>
-  new Worker(new URL("./syncore.worker.js", import.meta.url), {
+  new Worker(new URL("./syncore.worker", import.meta.url), {
     type: "module"
   });
 

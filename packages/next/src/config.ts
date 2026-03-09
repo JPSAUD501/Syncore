@@ -1,7 +1,7 @@
 const WORKER_NAME = "syncore-worker";
 
 function joinAppWorkerPath(dir: string) {
-  return `${dir.replace(/[\\/]$/, "")}/app/syncore.worker.js`;
+  return `${dir.replace(/[\\/]$/, "")}/app/syncore.worker`;
 }
 
 /**
@@ -73,10 +73,8 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
         const workerPath = joinAppWorkerPath(ctx.dir);
         nextConfig.entry = async () => {
           const entries = await entry();
-          const mainAppEntry = entries["main-app"];
           return {
             ...entries,
-            ...(mainAppEntry && !entries.main ? { main: mainAppEntry } : {}),
             [WORKER_NAME]: {
               import: workerPath,
               filename: "static/chunks/[name].js"

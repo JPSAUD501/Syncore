@@ -134,6 +134,37 @@ export interface SyncoreSqlDriver {
   close?(): Promise<void>;
 }
 
+export type SyncoreExternalChangeScope = "database" | "storage" | "all";
+
+export type SyncoreExternalChangeReason =
+  | "commit"
+  | "storage-put"
+  | "storage-delete"
+  | "reconcile";
+
+export interface SyncoreExternalChangeEvent {
+  sourceId: string;
+  scope: SyncoreExternalChangeScope;
+  reason: SyncoreExternalChangeReason;
+  timestamp: number;
+  revision?: string;
+  changedTables?: string[];
+  storageIds?: string[];
+}
+
+export interface SyncoreExternalChangeSignal {
+  subscribe(listener: (event: SyncoreExternalChangeEvent) => void): () => void;
+  publish(event: SyncoreExternalChangeEvent): void | Promise<void>;
+  close?(): void | Promise<void>;
+}
+
+export interface SyncoreExternalChangeApplier {
+  applyExternalChange(event: SyncoreExternalChangeEvent): Promise<{
+    databaseChanged: boolean;
+    storageChanged: boolean;
+  }>;
+}
+
 /**
  * The binary or text payload written through Syncore storage APIs.
  */
@@ -207,6 +238,8 @@ export interface SyncoreRuntimeOptions<TSchema extends AnySyncoreSchema> {
   functions: SyncoreFunctionRegistry;
   driver: SyncoreSqlDriver;
   storage: SyncoreStorageAdapter;
+  externalChangeSignal?: SyncoreExternalChangeSignal;
+  externalChangeApplier?: SyncoreExternalChangeApplier;
   capabilities?: SyncoreCapabilities;
   experimentalPlugins?: Array<SyncoreExperimentalPlugin<TSchema>>;
   platform?: string;
@@ -609,6 +642,13 @@ type ExecuteQueryBuilderOptions = {
 type RuntimeExecutionState = {
   mutationDepth: number;
   changedTables: Set<string>;
+  storageChanges: Array<{
+    storageId: string;
+    reason: Extract<
+      SyncoreExternalChangeReason,
+      "storage-put" | "storage-delete"
+    >;
+  }>;
   dependencyCollector?: Set<DependencyKey>;
 };
 
@@ -766,6 +806,15 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private readonly activeQueries = new Map<string, ActiveQueryRecord>();
   private readonly disabledSearchIndexes = new Set<string>();
   private readonly recentEvents: SyncoreDevtoolsEvent[] = [];
+  private readonly externalChangeSourceId = generateId();
+  private detachExternalChangeListener: (() => void) | undefined;
+  private pendingExternalChangePromise: Promise<void> | undefined;
+  private queuedExternalChange:
+    | {
+        databaseChanged: boolean;
+        storageChanged: boolean;
+      }
+    | undefined;
   private schedulerTimer: ReturnType<typeof setInterval> | undefined;
   private readonly recurringJobs: RecurringJobDefinition[];
   private readonly schedulerPollIntervalMs: number;
@@ -791,6 +840,10 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     await this.applySchema();
     await this.syncRecurringJobs();
     await this.runPluginHook("onStart");
+    this.detachExternalChangeListener =
+      this.options.externalChangeSignal?.subscribe((event) => {
+        void this.handleExternalChangeEvent(event);
+      });
     this.schedulerTimer = setInterval(() => {
       void this.processDueJobs();
     }, this.schedulerPollIntervalMs);
@@ -814,6 +867,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     if (this.started) {
       await this.runPluginHook("onStop");
     }
+    this.detachExternalChangeListener?.();
+    this.detachExternalChangeListener = undefined;
     await this.options.driver.close?.();
     if (this.started) {
       this.emitDevtools({
@@ -871,6 +926,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     const result = await this.invokeFunction<TResult>(definition, args, {
       mutationDepth: 0,
       changedTables: new Set<string>(),
+      storageChanges: [],
       dependencyCollector
     });
 
@@ -895,15 +951,34 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     const mutationId = generateId();
     const startedAt = Date.now();
     const changedTables = new Set<string>();
+    const storageChanges: Array<{
+      storageId: string;
+      reason: Extract<
+        SyncoreExternalChangeReason,
+        "storage-put" | "storage-delete"
+      >;
+    }> = [];
 
     const result = await this.options.driver.withTransaction(async () =>
       this.invokeFunction<TResult>(definition, args, {
         mutationDepth: 1,
-        changedTables
+        changedTables,
+        storageChanges
       })
     );
 
     await this.refreshInvalidatedQueries(changedTables, mutationId);
+    if (storageChanges.length > 0) {
+      await this.refreshAllActiveQueries();
+    }
+    if (changedTables.size > 0) {
+      await this.publishExternalChange({
+        scope: "database",
+        reason: "commit",
+        changedTables: [...changedTables]
+      });
+    }
+    await this.publishStorageChanges(storageChanges);
 
     this.emitDevtools({
       type: "mutation.committed",
@@ -929,7 +1004,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     try {
       const result = await this.invokeFunction<TResult>(definition, args, {
         mutationDepth: 0,
-        changedTables: new Set<string>()
+        changedTables: new Set<string>(),
+        storageChanges: []
       });
       this.emitDevtools({
         type: "action.completed",
@@ -1134,7 +1210,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
       kind === "mutation"
         ? this.createDatabaseWriter(state)
         : this.createDatabaseReader(state);
-    const storage = this.createStorageApi();
+    const storage = this.createStorageApi(state);
     const scheduler = this.createSchedulerApi();
 
     return {
@@ -1160,7 +1236,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
                 normalizedArgs as JsonObject,
                 {
                   mutationDepth: state.mutationDepth + 1,
-                  changedTables: state.changedTables
+                  changedTables: state.changedTables,
+                  storageChanges: state.storageChanges
                 }
               )
           );
@@ -1299,7 +1376,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     };
   }
 
-  private createStorageApi(): SyncoreStorageApi {
+  private createStorageApi(state: RuntimeExecutionState): SyncoreStorageApi {
     return {
       put: async (input) => {
         const id = generateId();
@@ -1332,6 +1409,10 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
           storageId: id,
           operation: "put",
           timestamp: Date.now()
+        });
+        state.storageChanges.push({
+          storageId: id,
+          reason: "storage-put"
         });
         return id;
       },
@@ -1377,6 +1458,10 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
           storageId: id,
           operation: "delete",
           timestamp: Date.now()
+        });
+        state.storageChanges.push({
+          storageId: id,
+          reason: "storage-delete"
         });
       }
     };
@@ -1802,6 +1887,94 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     }
   }
 
+  private async handleExternalChangeEvent(
+    event: SyncoreExternalChangeEvent
+  ): Promise<void> {
+    if (event.sourceId === this.externalChangeSourceId) {
+      return;
+    }
+    const result = this.options.externalChangeApplier
+      ? await this.options.externalChangeApplier.applyExternalChange(event)
+      : {
+          databaseChanged: event.scope === "database" || event.scope === "all",
+          storageChanged: event.scope === "storage" || event.scope === "all"
+        };
+    await this.processExternalChangeResult(result);
+  }
+
+  private async processExternalChangeResult(result: {
+    databaseChanged: boolean;
+    storageChanged: boolean;
+  }): Promise<void> {
+    if (!result.databaseChanged && !result.storageChanged) {
+      return;
+    }
+    if (this.pendingExternalChangePromise) {
+      this.queuedExternalChange = {
+        databaseChanged:
+          (this.queuedExternalChange?.databaseChanged ?? false) ||
+          result.databaseChanged,
+        storageChanged:
+          (this.queuedExternalChange?.storageChanged ?? false) ||
+          result.storageChanged
+      };
+      return this.pendingExternalChangePromise;
+    }
+
+    this.pendingExternalChangePromise = (async () => {
+      const shouldRefreshQueries =
+        result.databaseChanged || result.storageChanged;
+      if (shouldRefreshQueries) {
+        await this.refreshAllActiveQueries();
+      }
+    })();
+
+    try {
+      await this.pendingExternalChangePromise;
+    } finally {
+      this.pendingExternalChangePromise = undefined;
+      const queued = this.queuedExternalChange;
+      this.queuedExternalChange = undefined;
+      if (queued) {
+        await this.processExternalChangeResult(queued);
+      }
+    }
+  }
+
+  private async publishExternalChange(
+    event: Omit<SyncoreExternalChangeEvent, "sourceId" | "timestamp">
+  ): Promise<void> {
+    await this.options.externalChangeSignal?.publish({
+      ...event,
+      sourceId: this.externalChangeSourceId,
+      timestamp: Date.now()
+    });
+  }
+
+  private async publishStorageChanges(
+    storageChanges: Array<{
+      storageId: string;
+      reason: Extract<
+        SyncoreExternalChangeReason,
+        "storage-put" | "storage-delete"
+      >;
+    }>
+  ): Promise<void> {
+    for (const change of storageChanges) {
+      await this.publishExternalChange({
+        scope: "storage",
+        reason: change.reason,
+        storageIds: [change.storageId]
+      });
+    }
+  }
+
+  private async refreshAllActiveQueries(): Promise<void> {
+    for (const query of this.activeQueries.values()) {
+      await this.rerunActiveQuery(query);
+    }
+  }
+
   private async collectQueryDependencies(
     functionName: string,
     args: JsonObject
@@ -1814,6 +1987,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     await this.invokeFunction(definition, args, {
       mutationDepth: 0,
       changedTables: new Set<string>(),
+      storageChanges: [],
       dependencyCollector
     });
     return dependencyCollector;

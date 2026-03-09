@@ -4,10 +4,10 @@ import {
   XCircle,
   CheckCircle2,
   AlertCircle,
-  RefreshCw,
   Loader2,
   CalendarClock,
-  Timer
+  Timer,
+  Circle
 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
 import { useSnapshot, useConnection } from "@/hooks";
+import { useReactiveRuntimeData } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration, formatRelativeTime } from "@/lib/utils";
 import type { SchedulerJob } from "@syncore/devtools-protocol";
@@ -28,28 +29,29 @@ export const Route = createLazyFileRoute("/scheduler")({
 function SchedulerPage() {
   const { connected } = useConnection();
   const { pendingJobs } = useSnapshot();
-  const [jobs, setJobs] = useState<SchedulerJob[]>([]);
-  const [loading, setLoading] = useState(false);
   const [selectedJob, setSelectedJob] = useState<SchedulerJob | null>(null);
 
   /* ---------------------------------------------------------------- */
-  /*  Fetch jobs from runtime                                          */
+  /*  Reactive job list fetch                                          */
   /* ---------------------------------------------------------------- */
 
   const fetchJobs = useCallback(async () => {
-    if (!connected) return;
-    setLoading(true);
-    try {
-      const res = await sendRequest({ kind: "scheduler.list" });
-      if (res.kind === "scheduler.list.result") {
-        setJobs(res.jobs);
-      }
-    } catch {
-      /* runtime may not support scheduler.list yet */
-    } finally {
-      setLoading(false);
+    const res = await sendRequest({ kind: "scheduler.list" });
+    if (res.kind === "scheduler.list.result") {
+      return res.jobs;
     }
-  }, [connected]);
+    return [] as SchedulerJob[];
+  }, []);
+
+  const { data: fetchedJobs, loading } = useReactiveRuntimeData<SchedulerJob[]>(
+    fetchJobs,
+    {
+      enabled: connected,
+      pollInterval: 2000
+    }
+  );
+
+  const jobs = useMemo(() => fetchedJobs ?? [], [fetchedJobs]);
 
   /* ---------------------------------------------------------------- */
   /*  Cancel job                                                       */
@@ -61,11 +63,6 @@ function SchedulerPage() {
       try {
         const res = await sendRequest({ kind: "scheduler.cancel", jobId });
         if (res.kind === "scheduler.cancel.result" && res.success) {
-          setJobs((prev) =>
-            prev.map((j) =>
-              j.id === jobId ? { ...j, status: "cancelled" as const } : j
-            )
-          );
           if (selectedJob?.id === jobId) {
             setSelectedJob((prev) =>
               prev ? { ...prev, status: "cancelled" as const } : null
@@ -144,16 +141,18 @@ function SchedulerPage() {
           <h2 className="text-[14px] font-bold text-text-primary flex-1">
             Scheduler
           </h2>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => void fetchJobs()}
-            disabled={!connected || loading}
-            className="gap-1"
-          >
-            <RefreshCw size={11} className={cn(loading && "animate-spin")} />
-            Refresh
-          </Button>
+          {loading && (
+            <Loader2 size={12} className="animate-spin text-text-tertiary" />
+          )}
+          <div className="flex items-center gap-1.5">
+            <Circle
+              size={5}
+              fill="var(--color-success)"
+              stroke="none"
+              className="animate-live-dot"
+            />
+            <span className="text-[10px] text-text-tertiary">Live</span>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -275,7 +274,7 @@ function JobList({
             key={job.id}
             onClick={() => onSelect(job)}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors cursor-pointer",
+              "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors cursor-pointer animate-fade-in",
               selectedJob?.id === job.id
                 ? "bg-accent/8 border border-accent/15"
                 : "hover:bg-bg-surface/50 border border-transparent"
@@ -346,7 +345,7 @@ function JobDetailPanel({
   onCancel: (id: string) => void;
 }) {
   return (
-    <div className="w-96 border-l border-border flex flex-col bg-bg-base">
+    <div className="w-96 border-l border-border flex flex-col bg-bg-base hidden lg:flex">
       {/* Header */}
       <div className="p-3 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">

@@ -135,17 +135,19 @@ function hasError(event: SyncoreDevtoolsEvent): boolean {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Log entry component                                                */
+/*  Log entry component with fade-in animation                         */
 /* ------------------------------------------------------------------ */
 
 function LogEntry({
   event,
   isSelected,
-  onClick
+  onClick,
+  isNew
 }: {
   event: SyncoreDevtoolsEvent;
   isSelected: boolean;
   onClick: () => void;
+  isNew: boolean;
 }) {
   const color = EVENT_COLORS[event.type];
   const Icon = EVENT_ICONS[event.type];
@@ -161,7 +163,8 @@ function LogEntry({
         "flex items-center gap-2.5 w-full px-4 py-2 text-left transition-colors outline-none",
         "hover:bg-bg-elevated/50",
         isSelected && "bg-bg-elevated border-l-2 border-l-accent",
-        errored && "bg-error/3"
+        errored && "bg-error/3",
+        isNew && "animate-fade-in"
       )}
     >
       <Icon size={12} className={cn(color, "shrink-0")} />
@@ -336,12 +339,17 @@ function LogsPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const [pausedEvents, setPausedEvents] = useState<SyncoreDevtoolsEvent[]>([]);
 
+  // Track known count for fade-in animations on new entries
+  const prevCountRef = useRef(0);
+  const knownCount = prevCountRef.current;
+
   // When paused, buffer events
   const displayEvents = paused ? pausedEvents : events;
 
   useEffect(() => {
     if (!paused) {
       setPausedEvents(events);
+      prevCountRef.current = events.length;
     }
   }, [paused, events]);
 
@@ -395,9 +403,9 @@ function LogsPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)]">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 pb-3 shrink-0">
+      <div className="flex items-center gap-2 pb-3 shrink-0 flex-wrap">
         {/* Search */}
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 max-w-sm min-w-48">
           <Search
             size={13}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
@@ -467,10 +475,23 @@ function LogsPage() {
           Latest
         </Button>
 
-        {/* Event count */}
-        <Badge variant="secondary" className="ml-auto tabular-nums">
-          {filteredEvents.length} events
-        </Badge>
+        {/* Live indicator + Event count */}
+        <div className="flex items-center gap-2 ml-auto">
+          {!paused && (
+            <div className="flex items-center gap-1.5">
+              <Circle
+                size={5}
+                fill="var(--color-success)"
+                stroke="none"
+                className="animate-live-dot"
+              />
+              <span className="text-[10px] text-text-tertiary">Live</span>
+            </div>
+          )}
+          <Badge variant="secondary" className="tabular-nums">
+            {filteredEvents.length} events
+          </Badge>
+        </div>
       </div>
 
       {/* Filter chips */}
@@ -528,6 +549,7 @@ function LogsPage() {
                   key={`${event.type}-${event.timestamp}-${i}`}
                   event={event}
                   isSelected={selectedIndex === i}
+                  isNew={i >= knownCount}
                   onClick={() =>
                     setSelectedIndex(selectedIndex === i ? null : i)
                   }
@@ -539,7 +561,7 @@ function LogsPage() {
 
         {/* Detail panel */}
         {selectedEvent && (
-          <div className="w-[40%] shrink-0 border-l border-border bg-bg-base overflow-y-auto">
+          <div className="w-[40%] shrink-0 border-l border-border bg-bg-base overflow-y-auto hidden md:block">
             <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-surface">
               <span className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
                 Event Detail

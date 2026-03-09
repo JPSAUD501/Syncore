@@ -39,6 +39,39 @@ describe("@syncore/next", () => {
     expect("headers" in wrapped).toBe(false);
   });
 
+  it("adds only the worker entry for static export builds", async () => {
+    const wrapped = withSyncoreNext({ output: "export" });
+    const webpack = (
+      wrapped as {
+        webpack: (
+          config: Record<string, unknown>,
+          context: Record<string, unknown>
+        ) => Record<string, unknown>;
+      }
+    ).webpack;
+
+    const configured = webpack(
+      {
+        experiments: {},
+        entry: async () => ({
+          "main-app": { import: "./app.js" }
+        })
+      },
+      {
+        dir: process.cwd(),
+        dev: false,
+        isServer: false
+      }
+    );
+
+    const entries = await (
+      configured.entry as () => Promise<Record<string, unknown>>
+    )();
+    expect(entries).toHaveProperty("main-app");
+    expect(entries).not.toHaveProperty("main");
+    expect(entries).toHaveProperty("syncore-worker");
+  });
+
   it("returns the worker url", () => {
     expect(getSyncoreWorkerUrl()).toBe(
       "/_next/static/chunks/syncore-worker.js"

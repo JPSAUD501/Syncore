@@ -18,9 +18,10 @@ export class SqlJsDriver implements SyncoreSqlDriver {
   private closed = false;
 
   constructor(
-    private readonly database: SqlJsDatabase,
+    private database: SqlJsDatabase,
     private readonly persistence: SyncoreWebPersistence,
-    private readonly databaseName: string
+    private readonly databaseName: string,
+    private readonly createDatabase: (bytes?: Uint8Array) => SqlJsDatabase
   ) {}
 
   static async create(options: CreateSqlJsDriverOptions): Promise<SqlJsDriver> {
@@ -38,7 +39,12 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     const database = existingBytes
       ? new SQL.Database(existingBytes)
       : new SQL.Database();
-    return new SqlJsDriver(database, persistence, options.databaseName);
+    return new SqlJsDriver(
+      database,
+      persistence,
+      options.databaseName,
+      (bytes) => (bytes ? new SQL.Database(bytes) : new SQL.Database())
+    );
   }
 
   async exec(sql: string): Promise<void> {
@@ -144,6 +150,23 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     this.closed = true;
   }
 
+  async reloadFromPersistence(): Promise<boolean> {
+    this.ensureOpen();
+    const bytes = await this.persistence.loadDatabase(this.databaseName);
+    if (!bytes) {
+      return false;
+    }
+    const nextDatabase = this.createDatabase(bytes);
+    const previousDatabase = this.database;
+    this.database = nextDatabase;
+    previousDatabase.close();
+    return true;
+  }
+
+  createDatabaseFromBytes(bytes?: Uint8Array): SqlJsDatabase {
+    return this.createDatabase(bytes);
+  }
+
   private async persistIfNeeded(): Promise<void> {
     if (this.transactionDepth === 0) {
       await this.persistNow();
@@ -162,6 +185,13 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     if (this.closed) {
       throw new Error("The sql.js driver is already closed.");
     }
+  }
+
+  replaceDatabase(database: SqlJsDatabase): void {
+    this.ensureOpen();
+    const previousDatabase = this.database;
+    this.database = database;
+    previousDatabase.close();
   }
 }
 

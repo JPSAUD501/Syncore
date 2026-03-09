@@ -76,17 +76,19 @@ const PRAGMA_SHORTCUTS: Array<{ label: string; query: string }> = [
 const substrateTheme = EditorView.theme(
   {
     "&": {
-      backgroundColor: "var(--color-bg-base)",
+      backgroundColor: "var(--color-bg-deep)",
       color: "var(--color-text-code)",
-      fontSize: "12px",
+      fontSize: "13px",
       fontFamily: "'Fira Code', 'JetBrains Mono', monospace"
     },
     ".cm-content": {
       caretColor: "var(--color-accent)",
-      padding: "8px 0"
+      padding: "12px 0",
+      lineHeight: "1.6"
     },
     ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: "var(--color-accent)"
+      borderLeftColor: "var(--color-accent)",
+      borderLeftWidth: "2px"
     },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
       {
@@ -96,10 +98,11 @@ const substrateTheme = EditorView.theme(
       backgroundColor: "rgba(212, 168, 83, 0.05)"
     },
     ".cm-gutters": {
-      backgroundColor: "var(--color-bg-surface)",
+      backgroundColor: "var(--color-bg-base)",
       color: "var(--color-text-tertiary)",
       borderRight: "1px solid rgba(212, 168, 83, 0.08)",
-      fontSize: "10px"
+      fontSize: "11px",
+      minWidth: "40px"
     },
     ".cm-activeLineGutter": {
       backgroundColor: "rgba(212, 168, 83, 0.08)",
@@ -123,16 +126,14 @@ const substrateTheme = EditorView.theme(
       }
     },
     "&.cm-focused": {
-      outline: "2px solid rgba(212, 168, 83, 0.3)",
-      outlineOffset: "-1px",
-      borderRadius: "6px"
+      outline: "none"
     }
   },
   { dark: true }
 );
 
 const substrateHighlight = EditorView.baseTheme({
-  ".cm-keyword": { color: "#d4a853" },
+  ".cm-keyword": { color: "#d4a853", fontWeight: "500" },
   ".cm-operator": { color: "#a69e90" },
   ".cm-string": { color: "#4ade80" },
   ".cm-number": { color: "#60a5fa" },
@@ -277,9 +278,9 @@ function SqlPage() {
     <div className="flex h-[calc(100vh-7rem)]">
       {/* ---- Main content ---- */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Editor area */}
+        {/* Editor area — enhanced with sql-editor-wrapper */}
         <div className="p-4 border-b border-border">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <Terminal size={14} className="text-accent" />
             <h2 className="text-[13px] font-bold text-text-primary flex-1">
               SQL Console
@@ -289,13 +290,13 @@ function SqlPage() {
             </Badge>
           </div>
 
-          <div className="rounded-md border border-border overflow-hidden">
+          <div className="sql-editor-wrapper">
             <CodeMirror
               ref={editorRef}
               value={query}
               onChange={setQuery}
               extensions={extensions}
-              height="128px"
+              height="160px"
               placeholder="SELECT * FROM users LIMIT 10;"
               basicSetup={{
                 lineNumbers: true,
@@ -311,12 +312,12 @@ function SqlPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-3">
             <Button
               onClick={() => void executeQuery()}
               disabled={!connected || loading || !query.trim()}
               size="sm"
-              className="gap-1.5"
+              className="gap-1.5 px-4"
             >
               {loading ? (
                 <Loader2 size={13} className="animate-spin" />
@@ -331,7 +332,7 @@ function SqlPage() {
             </span>
 
             {result && !result.error && (
-              <div className="ml-auto flex items-center gap-3 text-[11px] text-text-tertiary">
+              <div className="ml-auto flex items-center gap-3 text-[11px] text-text-tertiary animate-fade-in">
                 <span className="flex items-center gap-1">
                   <Table2 size={10} />
                   {result.rows.length} rows
@@ -349,7 +350,7 @@ function SqlPage() {
         <div className="flex-1 min-h-0 flex flex-col">
           {result ? (
             result.error ? (
-              <div className="p-4">
+              <div className="p-4 animate-fade-in">
                 <div className="rounded-md border border-error/20 bg-error/5 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle size={14} className="text-error" />
@@ -380,7 +381,7 @@ function SqlPage() {
       </div>
 
       {/* ---- Right sidebar: PRAGMA shortcuts + history ---- */}
-      <div className="w-64 shrink-0 border-l border-border flex flex-col">
+      <div className="w-64 shrink-0 border-l border-border flex flex-col hidden lg:flex">
         {/* PRAGMA shortcuts */}
         <div className="p-3 border-b border-border">
           <div className="flex items-center gap-2 mb-2">
@@ -485,7 +486,7 @@ function SqlPage() {
 function ResultsTable({ result }: { result: QueryResult }) {
   if (result.columns.length === 0 && result.rows.length === 0) {
     return (
-      <div className="p-4 text-center">
+      <div className="p-4 text-center animate-fade-in">
         <p className="text-[12px] text-text-secondary">
           Query executed successfully.{" "}
           {result.rowsAffected > 0 && `${result.rowsAffected} rows affected.`}
@@ -499,7 +500,7 @@ function ResultsTable({ result }: { result: QueryResult }) {
 
   return (
     <ScrollArea className="flex-1">
-      <div className="min-w-full">
+      <div className="min-w-full animate-fade-in">
         {/* Header */}
         <div className="flex border-b border-border bg-bg-surface/50 sticky top-0 z-10">
           <div className="w-12 shrink-0 px-2 py-2 text-[10px] uppercase tracking-wider font-semibold text-text-tertiary border-r border-border text-center">

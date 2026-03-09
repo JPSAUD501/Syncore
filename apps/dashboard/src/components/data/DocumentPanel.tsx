@@ -4,14 +4,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { JsonViewer } from "@/components/shared";
-import { X, Copy, Check, Trash2, Edit } from "lucide-react";
+import { X, Copy, Check, Trash2, Edit, CopyPlus } from "lucide-react";
 import { useState, useCallback } from "react";
 
 interface DocumentPanelProps {
   document: Record<string, unknown> | null;
   onClose: () => void;
   onDelete?: (id: string) => void;
-  onEdit?: (id: string, field: string, value: unknown) => void;
+  onEditField?: (id: string, field: string, value: unknown) => void;
+  onEditDocument?: (document: Record<string, unknown>) => void;
+  onDuplicate?: (document: Record<string, unknown>) => void;
   className?: string;
 }
 
@@ -19,6 +21,9 @@ export function DocumentPanel({
   document,
   onClose,
   onDelete,
+  onEditField,
+  onEditDocument,
+  onDuplicate,
   className
 }: DocumentPanelProps) {
   const [copied, setCopied] = useState(false);
@@ -67,6 +72,26 @@ export function DocumentPanel({
               <Copy size={11} />
             )}
           </Button>
+          {onDuplicate && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onDuplicate(document)}
+              title="Duplicate document"
+            >
+              <CopyPlus size={11} />
+            </Button>
+          )}
+          {onEditDocument && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onEditDocument(document)}
+              title="Edit document JSON"
+            >
+              <Edit size={11} />
+            </Button>
+          )}
           {onDelete && (
             <Button
               variant="ghost"
@@ -115,6 +140,8 @@ export function DocumentPanel({
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    onClick={() => onEditField?.(docId, key, value)}
+                    disabled={!onEditField}
                     className="opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Edit field"
                   >

@@ -162,3 +162,140 @@ button {
   color: inherit;
   cursor: pointer;
 }
+
+/* ================================================================== */
+/*  Reactivity highlight animations (Convex-inspired)                  */
+/* ================================================================== */
+
+@keyframes highlight {
+  0% {
+    background-color: transparent;
+  }
+  15% {
+    background-color: oklch(0.72 0.12 70 / 0.12);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes highlightBorder {
+  0% {
+    border-color: var(--color-border);
+  }
+  15% {
+    border-color: var(--color-accent);
+  }
+  100% {
+    border-color: var(--color-border);
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInCell {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.72 0.12 70 / 0);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px oklch(0.72 0.12 70 / 0.15);
+  }
+}
+
+.animate-highlight {
+  animation: highlight 1.2s ease-out;
+}
+
+.animate-highlight-border {
+  animation: highlightBorder 1.2s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-fade-in-cell {
+  animation: fadeInCell 0.4s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* Live indicator dot */
+@keyframes liveDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.animate-live-dot {
+  animation: liveDot 1.5s ease-in-out infinite;
+}
+
+/* ================================================================== */
+/*  Responsive sidebar                                                 */
+/* ================================================================== */
+
+@media (max-width: 768px) {
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+  }
+}
+
+/* ================================================================== */
+/*  SQL Console editor enhanced styling                                */
+/* ================================================================== */
+
+.sql-editor-wrapper {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sql-editor-wrapper:focus-within {
+  border-color: oklch(0.72 0.12 70 / 0.25);
+  box-shadow:
+    0 0 0 3px oklch(0.72 0.12 70 / 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.sql-editor-wrapper .cm-editor {
+  background: transparent !important;
+}
+
+.sql-editor-wrapper .cm-editor.cm-focused {
+  outline: none !important;
+}

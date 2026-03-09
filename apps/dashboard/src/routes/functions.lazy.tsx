@@ -9,9 +9,9 @@ import {
   Clock,
   Activity,
   Search,
-  RefreshCw,
   XCircle,
-  CheckCircle2
+  CheckCircle2,
+  Circle
 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
 } from "@/components/shared";
 import type { FunctionType } from "@/components/shared/FunctionBadge";
 import { useDevtools } from "@/hooks";
+import { useReactiveRuntimeData } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
 import type { FunctionDefinition } from "@syncore/devtools-protocol";
@@ -56,33 +57,33 @@ function FunctionsPage() {
   const { connected, functionMetrics, functionEvents } = useDevtools();
   const [search, setSearch] = useState("");
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
-  const [registeredFunctions, setRegisteredFunctions] = useState<
-    FunctionDefinition[]
-  >([]);
-  const [loadingFunctions, setLoadingFunctions] = useState(false);
   const [runResult, setRunResult] = useState<FunctionRunResult>({
     status: "idle"
   });
   const [argsText, setArgsText] = useState("{}");
 
   /* ---------------------------------------------------------------- */
-  /*  Fetch function list from runtime                                 */
+  /*  Reactive function list fetch                                     */
   /* ---------------------------------------------------------------- */
 
   const fetchFunctions = useCallback(async () => {
-    if (!connected) return;
-    setLoadingFunctions(true);
-    try {
-      const res = await sendRequest({ kind: "fn.list" });
-      if (res.kind === "fn.list.result") {
-        setRegisteredFunctions(res.functions);
-      }
-    } catch {
-      /* ignore — runtime may not support fn.list yet */
-    } finally {
-      setLoadingFunctions(false);
+    const res = await sendRequest({ kind: "fn.list" });
+    if (res.kind === "fn.list.result") {
+      return res.functions;
     }
-  }, [connected]);
+    return [] as FunctionDefinition[];
+  }, []);
+
+  const { data: registeredFunctions, loading: loadingFunctions } =
+    useReactiveRuntimeData<FunctionDefinition[]>(fetchFunctions, {
+      enabled: connected,
+      pollInterval: 5000
+    });
+
+  const fnList = useMemo(
+    () => registeredFunctions ?? [],
+    [registeredFunctions]
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Build combined function list (registered + observed from events)  */
@@ -105,7 +106,7 @@ function FunctionsPage() {
     >();
 
     // Seed from registered functions
-    for (const fn of registeredFunctions) {
+    for (const fn of fnList) {
       const entry: {
         name: string;
         type: FunctionType;
@@ -161,7 +162,7 @@ function FunctionsPage() {
     }
 
     return Array.from(map.values());
-  }, [registeredFunctions, functionMetrics]);
+  }, [fnList, functionMetrics]);
 
   /* ---------------------------------------------------------------- */
   /*  Group by file for tree view                                      */
@@ -266,24 +267,24 @@ function FunctionsPage() {
   return (
     <div className="flex h-[calc(100vh-7rem)]">
       {/* ---- Left sidebar: file tree ---- */}
-      <div className="w-72 shrink-0 border-r border-border flex flex-col">
+      <div className="w-72 shrink-0 border-r border-border flex flex-col hidden md:flex">
         <div className="p-3 border-b border-border">
           <div className="flex items-center gap-2 mb-2">
             <h2 className="text-[13px] font-bold text-text-primary flex-1">
               Functions
             </h2>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => void fetchFunctions()}
-              disabled={!connected || loadingFunctions}
-              title="Refresh function list"
-            >
-              <RefreshCw
-                size={12}
-                className={cn(loadingFunctions && "animate-spin")}
+            {loadingFunctions && (
+              <Loader2 size={12} className="animate-spin text-text-tertiary" />
+            )}
+            <div className="flex items-center gap-1.5">
+              <Circle
+                size={5}
+                fill="var(--color-success)"
+                stroke="none"
+                className="animate-live-dot"
               />
-            </Button>
+              <span className="text-[10px] text-text-tertiary">Live</span>
+            </div>
           </div>
           <div className="relative">
             <Search
@@ -353,7 +354,7 @@ function FunctionsPage() {
                   {selectedFunction.name}
                 </h2>
               </div>
-              <div className="flex items-center gap-4 text-[11px] text-text-tertiary">
+              <div className="flex items-center gap-4 text-[11px] text-text-tertiary flex-wrap">
                 <span className="flex items-center gap-1">
                   <FileCode size={11} />
                   {selectedFunction.file}
@@ -669,7 +670,7 @@ function FunctionLogs({
           return (
             <div
               key={`${event.timestamp}-${i}`}
-              className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-bg-surface/50 transition-colors"
+              className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-bg-surface/50 transition-colors animate-fade-in"
             >
               {fnType && (
                 <FunctionBadge

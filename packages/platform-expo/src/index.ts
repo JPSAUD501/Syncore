@@ -7,6 +7,8 @@ import {
 import {
   type AnySyncoreSchema,
   type DevtoolsSink,
+  type SyncoreExternalChangeApplier,
+  type SyncoreExternalChangeSignal,
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,
@@ -17,6 +19,10 @@ import {
   type StorageObject,
   type StorageWriteInput
 } from "@syncore/core";
+import {
+  BroadcastChannelExternalChangeSignal,
+  createDefaultSyncChannelName
+} from "@syncore/platform-web";
 
 export type ExpoSyncoreSchema = AnySyncoreSchema;
 
@@ -62,14 +68,20 @@ export interface CreateExpoRuntimeOptions {
 
   /** Optional scheduler configuration for jobs and recurring work. */
   scheduler?: SchedulerOptions;
+
+  /** Optional shared signal used to synchronize browser instances. */
+  externalChangeSignal?: SyncoreExternalChangeSignal;
+
+  /** Optional applier used to reconcile browser-side external changes. */
+  externalChangeApplier?: SyncoreExternalChangeApplier;
 }
 
 /**
  * A reusable bootstrap that lazily creates, starts, and stops an Expo Syncore runtime.
  */
 export interface ExpoSyncoreBootstrap {
-  /** Return the local runtime instance, creating it if needed. */
-  getRuntime(): SyncoreRuntime<ExpoSyncoreSchema>;
+  /** Synchronous access is unavailable; use `getClient()` instead. */
+  getRuntime(): never;
 
   /** Start the runtime if needed and return a ready client. */
   getClient(): Promise<
@@ -101,19 +113,49 @@ export function createExpoSyncoreRuntime(
         options.databaseName ?? "syncore.db",
         undefined,
         databaseDirectory
-      )
+      ),
+      {
+        databaseName: options.databaseName ?? "syncore.db",
+        ...(databaseDirectory ? { databaseDirectory } : {})
+      }
     );
   const storage =
     options.storage ??
     new ExpoFileStorageAdapter(
       options.storageDirectoryName ?? "syncore-storage"
     );
+  const isWebEnvironment =
+    typeof window !== "undefined" && typeof document !== "undefined";
+  const webExternalChangeSignal =
+    isWebEnvironment && !options.externalChangeSignal
+      ? new BroadcastChannelExternalChangeSignal({
+          channelName: createDefaultSyncChannelName(
+            options.databaseName ?? "syncore.db"
+          )
+        })
+      : undefined;
+  const webExternalChangeApplier =
+    isWebEnvironment &&
+    !options.externalChangeApplier &&
+    driver instanceof ExpoSqliteDriver
+      ? new ExpoWebExternalChangeApplier(driver)
+      : undefined;
 
   return new SyncoreRuntime({
     schema: options.schema,
     functions: options.functions,
     driver,
     storage,
+    ...(isWebEnvironment && options.externalChangeSignal
+      ? { externalChangeSignal: options.externalChangeSignal }
+      : isWebEnvironment && webExternalChangeSignal
+        ? { externalChangeSignal: webExternalChangeSignal }
+        : {}),
+    ...(isWebEnvironment && options.externalChangeApplier
+      ? { externalChangeApplier: options.externalChangeApplier }
+      : isWebEnvironment && webExternalChangeApplier
+        ? { externalChangeApplier: webExternalChangeApplier }
+        : {}),
     platform: options.platform ?? "expo",
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
     ...(options.devtools ? { devtools: options.devtools } : {}),
@@ -151,7 +193,9 @@ export function createExpoSyncoreBootstrap(
 
   return {
     getRuntime() {
-      return ensureRuntime();
+      throw new Error(
+        "createExpoSyncoreBootstrap().getRuntime() is not available synchronously. Use getClient() instead."
+      );
     },
     async getClient() {
       if (!started) {
@@ -185,8 +229,19 @@ export function createExpoSyncoreBootstrap(
 export class ExpoSqliteDriver implements SyncoreSqlDriver {
   private transactionDepth = 0;
   private closed = false;
+  private readonly databaseName: string;
+  private readonly databaseDirectory: string | undefined;
 
-  constructor(private readonly database: SQLiteDatabase) {}
+  constructor(
+    private database: SQLiteDatabase,
+    options?: {
+      databaseName?: string;
+      databaseDirectory?: string;
+    }
+  ) {
+    this.databaseName = options?.databaseName ?? "syncore.db";
+    this.databaseDirectory = options?.databaseDirectory;
+  }
 
   async exec(sql: string): Promise<void> {
     this.ensureOpen();
@@ -269,6 +324,30 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
     if (this.closed) {
       throw new Error("The Expo SQLite driver is already closed.");
     }
+  }
+
+  async reopen(): Promise<void> {
+    this.ensureOpen();
+    await this.database.closeAsync();
+    this.database = openDatabaseSync(
+      this.databaseName,
+      undefined,
+      this.databaseDirectory
+    );
+  }
+}
+
+class ExpoWebExternalChangeApplier implements SyncoreExternalChangeApplier {
+  constructor(private readonly driver: ExpoSqliteDriver) {}
+
+  async applyExternalChange(event: { scope: "database" | "storage" | "all" }) {
+    if (event.scope === "database" || event.scope === "all") {
+      await this.driver.reopen();
+    }
+    return {
+      databaseChanged: event.scope === "database" || event.scope === "all",
+      storageChanged: event.scope === "storage" || event.scope === "all"
+    };
   }
 }
 

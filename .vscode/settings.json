@@ -3,6 +3,7 @@
     "codegen",
     "indexeddb",
     "opfs",
+    "Savepoint",
     "sqljs",
     "syncore",
     "Syncore",

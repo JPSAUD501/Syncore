@@ -1,6 +1,9 @@
 export { DataTable } from "./DataTable";
+export { ConfirmActionDialog } from "./ConfirmActionDialog";
 export { DataFilters } from "./DataFilters";
 export { CellEditor } from "./CellEditor";
 export { DocumentPanel } from "./DocumentPanel";
+export { DocumentEditorDialog } from "./DocumentEditorDialog";
+export { ImportDocumentsDialog } from "./ImportDocumentsDialog";
 export { SchemaViewer } from "./SchemaViewer";
 export { IndexesViewer } from "./IndexesViewer";

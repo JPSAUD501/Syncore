@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@syncore/core": "workspace:*",
+    "@syncore/platform-web": "workspace:*",
     "@syncore/schema": "workspace:*",
     "expo-file-system": "^55.0.10",
     "expo-sqlite": "^55.0.10"

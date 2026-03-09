@@ -15,6 +15,9 @@ import { defineSchema, defineTable, v } from "../../../schema/src/index.js";
 import { mutation, query } from "./functions.js";
 import {
   createFunctionReference,
+  type SyncoreExternalChangeApplier,
+  type SyncoreExternalChangeEvent,
+  type SyncoreExternalChangeSignal,
   type QueryCtx,
   type SyncoreExperimentalPlugin,
   type MutationCtx,
@@ -178,6 +181,39 @@ class InterruptingStorageAdapter extends TestStorageAdapter {
   ): Promise<StorageObject> {
     const object = await super.put(id, input);
     throw new Error(`Simulated crash after writing ${object.id}`);
+  }
+}
+
+class TestExternalChangeSignal implements SyncoreExternalChangeSignal {
+  readonly publishedEvents: SyncoreExternalChangeEvent[] = [];
+  private readonly listeners = new Set<
+    (event: SyncoreExternalChangeEvent) => void
+  >();
+
+  subscribe(listener: (event: SyncoreExternalChangeEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  publish(event: SyncoreExternalChangeEvent): void {
+    this.publishedEvents.push(event);
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+}
+
+class TestExternalChangeApplier implements SyncoreExternalChangeApplier {
+  readonly appliedEvents: SyncoreExternalChangeEvent[] = [];
+
+  async applyExternalChange(event: SyncoreExternalChangeEvent) {
+    this.appliedEvents.push(event);
+    return {
+      databaseChanged: event.scope === "database" || event.scope === "all",
+      storageChanged: event.scope === "storage" || event.scope === "all"
+    };
   }
 }
 
@@ -424,6 +460,203 @@ describe("SyncoreRuntime schema + scheduler", () => {
     expect(lifecycleEvents).toEqual(["start", "stop"]);
   });
 
+  it("publishes external change events for database and storage writes", async () => {
+    const databasePath = path.join(rootDirectory, "external-events.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const signal = new TestExternalChangeSignal();
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: v.string(),
+        done: v.boolean()
+      }),
+      files: defineTable({
+        label: v.string()
+      })
+    });
+
+    const functions = {
+      "tasks/create": mutation({
+        args: { text: v.string() },
+        returns: v.string(),
+        handler: async (ctx, args) =>
+          (ctx as MutationCtx).db.insert("tasks", {
+            text: (args as { text: string }).text,
+            done: false
+          })
+      }),
+      "files/write": mutation({
+        args: {
+          label: v.string(),
+          body: v.string()
+        },
+        returns: v.string(),
+        handler: async (ctx, args) =>
+          (ctx as MutationCtx).storage.put({
+            fileName: `${(args as { label: string }).label}.txt`,
+            contentType: "text/plain",
+            data: (args as { body: string }).body
+          })
+      }),
+      "files/remove": mutation({
+        args: { id: v.string() },
+        returns: v.null(),
+        handler: async (ctx, args) => {
+          await (ctx as MutationCtx).storage.delete(
+            (args as { id: string }).id
+          );
+          return null;
+        }
+      })
+    };
+
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath),
+      externalChangeSignal: signal
+    });
+
+    await runtime.start();
+    const client = runtime.createClient();
+
+    await client.mutation(
+      createFunctionReference<"mutation", { text: string }, string>(
+        "mutation",
+        "tasks/create"
+      ),
+      { text: "hello" }
+    );
+
+    const fileId = await client.mutation(
+      createFunctionReference<
+        "mutation",
+        { label: string; body: string },
+        string
+      >("mutation", "files/write"),
+      { label: "note", body: "body" }
+    );
+
+    await client.mutation(
+      createFunctionReference<"mutation", { id: string }, null>(
+        "mutation",
+        "files/remove"
+      ),
+      { id: fileId }
+    );
+
+    await runtime.stop();
+
+    expect(signal.publishedEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          scope: "database",
+          reason: "commit",
+          changedTables: ["tasks"]
+        }),
+        expect.objectContaining({
+          scope: "storage",
+          reason: "storage-put",
+          storageIds: [fileId]
+        }),
+        expect.objectContaining({
+          scope: "storage",
+          reason: "storage-delete",
+          storageIds: [fileId]
+        })
+      ])
+    );
+  });
+
+  it("reruns watched queries after receiving an external change event", async () => {
+    const databasePath = path.join(rootDirectory, "external-reload.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const signal = new TestExternalChangeSignal();
+    const applier = new TestExternalChangeApplier();
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: v.string(),
+        done: v.boolean()
+      })
+    });
+
+    const functions = {
+      "tasks/list": query({
+        args: {},
+        returns: v.array(v.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("tasks").collect()
+      }),
+      "tasks/create": mutation({
+        args: { text: v.string() },
+        returns: v.string(),
+        handler: async (ctx, args) =>
+          (ctx as MutationCtx).db.insert("tasks", {
+            text: (args as { text: string }).text,
+            done: false
+          })
+      })
+    };
+
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath),
+      externalChangeSignal: signal,
+      externalChangeApplier: applier
+    });
+
+    await runtime.start();
+    const client = runtime.createClient();
+    const watch = client.watchQuery(
+      createFunctionReference<
+        "query",
+        Record<never, never>,
+        Array<{ text: string }>
+      >("query", "tasks/list")
+    );
+
+    await waitFor(
+      () => Array.isArray(watch.localQueryResult()),
+      "initial watch"
+    );
+
+    const externalWriter = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath)
+    });
+    await externalWriter.start();
+    await externalWriter
+      .createClient()
+      .mutation(
+        createFunctionReference<"mutation", { text: string }, string>(
+          "mutation",
+          "tasks/create"
+        ),
+        { text: "from elsewhere" }
+      );
+    await externalWriter.stop();
+
+    signal.publish({
+      sourceId: "external-runtime",
+      scope: "database",
+      reason: "commit",
+      changedTables: ["tasks"],
+      timestamp: Date.now()
+    });
+
+    await waitFor(
+      () => watch.localQueryResult()?.[0]?.text === "from elsewhere",
+      "watch refresh after external change"
+    );
+
+    expect(applier.appliedEvents).toHaveLength(1);
+    watch.dispose?.();
+    await runtime.stop();
+  });
+
   it("reconciles interrupted staged storage writes on restart", async () => {
     const databasePath = path.join(rootDirectory, "storage-recovery.db");
     const storagePath = path.join(rootDirectory, "storage");
@@ -582,5 +815,18 @@ async function readDirectorySafe(directory: string): Promise<string[]> {
     return await readdir(directory);
   } catch {
     return [];
+  }
+}
+
+async function waitFor(
+  predicate: () => boolean,
+  message: string
+): Promise<void> {
+  const deadline = Date.now() + 1500;
+  while (!predicate()) {
+    if (Date.now() > deadline) {
+      throw new Error(message);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }

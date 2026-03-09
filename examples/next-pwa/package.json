@@ -11,7 +11,7 @@
     "build": "bun run build:deps && bun run clean && bun run copy:sqljs-wasm && next build",
     "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true});require('node:fs').rmSync('public/sql-wasm.wasm',{force:true})\"",
     "copy:sqljs-wasm": "node ./scripts/copy-sqljs-wasm.mjs",
-    "lint": "eslint app syncore next.config.ts --ext .ts,.tsx --ignore-pattern app/syncore.worker.js",
+    "lint": "eslint app syncore next.config.ts --ext .ts,.tsx",
     "prebuild": "bun run syncorejs:codegen",
     "predev": "bun run syncorejs:codegen",
     "prelint": "bun run syncorejs:codegen",

@@ -6,12 +6,14 @@ import {
   ScrollText,
   Clock,
   Terminal,
-  Circle
+  Circle,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConnectedRuntimeCount, useDevtoolsStore } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { to: "/", label: "Overview", icon: Activity },
@@ -22,10 +24,18 @@ const NAV_ITEMS = [
   { to: "/sql", label: "SQL Console", icon: Terminal }
 ] as const;
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed?: boolean;
+  onClose?: (() => void) | undefined;
+  onNavClick?: (() => void) | undefined;
+}
+
+export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
   const location = useRouterState({ select: (s) => s.location });
   const connected = useDevtoolsStore((s) => s.connected);
   const connectedRuntimeCount = useConnectedRuntimeCount();
+
+  if (collapsed) return null;
 
   return (
     <aside className="flex flex-col h-screen border-r border-border bg-bg-base/80 backdrop-blur-sm w-[220px] shrink-0">
@@ -34,7 +44,7 @@ export function Sidebar() {
         <div className="grid place-items-center w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-amber-700 text-bg-deep font-bold text-sm shadow-sm shadow-accent/20">
           S
         </div>
-        <div>
+        <div className="flex-1">
           <div className="font-bold text-sm text-text-primary leading-tight">
             Syncore
           </div>
@@ -42,6 +52,17 @@ export function Sidebar() {
             Dev Dashboard
           </div>
         </div>
+        {/* Close button for mobile overlay */}
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onClose}
+            className="md:hidden"
+          >
+            <X size={14} />
+          </Button>
+        )}
       </div>
 
       <Separator className="mx-4" />
@@ -58,6 +79,7 @@ export function Sidebar() {
             <Link
               key={item.to}
               to={item.to}
+              onClick={onNavClick}
               className={cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors duration-150",
                 "hover:bg-bg-surface hover:text-text-primary",

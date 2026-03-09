@@ -25,8 +25,28 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
+  checks: {
+    pluginTimings: false
+  },
   deps: {
-    neverBundle: ["node:fs", "node:path", "node:url", "vite"]
+    neverBundle: [
+      "commander",
+      "next",
+      "node:fs",
+      "node:fs/promises",
+      "node:http",
+      "node:net",
+      "node:path",
+      "node:sqlite",
+      "node:url",
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "tsx",
+      "tsx/esm/api",
+      "vite",
+      "ws"
+    ]
   },
   hooks: {
     "build:done": async () => {

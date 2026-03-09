@@ -24,14 +24,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useDidJustChange, useRefreshTimer } from "@/hooks";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
+import { useRef, useEffect } from "react";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage
 });
 
 /* ------------------------------------------------------------------ */
-/*  Stat card                                                          */
+/*  Stat card with highlight animation                                 */
 /* ------------------------------------------------------------------ */
 
 function StatCard({
@@ -47,8 +49,15 @@ function StatCard({
   color: string;
   subtitle?: string;
 }) {
+  const changed = useDidJustChange(value);
+
   return (
-    <div className="group flex flex-col gap-1.5 p-4 rounded-lg bg-bg-surface border border-border hover:border-border-hover transition-colors">
+    <div
+      className={cn(
+        "group flex flex-col gap-1.5 p-4 rounded-lg bg-bg-surface border border-border hover:border-border-hover transition-colors",
+        changed && "animate-highlight"
+      )}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wider text-text-tertiary font-medium">
           {label}
@@ -193,6 +202,9 @@ function ActiveQueries() {
   const snapshot = useActiveRuntime()?.snapshot ?? null;
   const queries = snapshot?.activeQueries ?? [];
 
+  // Keep relative timestamps ticking
+  useRefreshTimer(1000);
+
   if (queries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-text-tertiary">
@@ -207,7 +219,7 @@ function ActiveQueries() {
       {queries.map((q) => (
         <div
           key={q.id}
-          className="flex items-center justify-between px-3 py-2 rounded-md bg-bg-base text-[12px] border border-border hover:border-border-hover transition-colors"
+          className="flex items-center justify-between px-3 py-2 rounded-md bg-bg-base text-[12px] border border-border hover:border-border-hover transition-colors animate-fade-in"
         >
           <span className="font-mono text-fn-query truncate mr-3">
             {q.functionName}
@@ -239,11 +251,18 @@ function OverviewPage() {
   const snapshot = activeRuntime?.snapshot ?? null;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
 
+  // Track known event count for fade-in on new events
+  const prevEventCountRef = useRef(events.length);
+  const newEventOffset = prevEventCountRef.current;
+  useEffect(() => {
+    prevEventCountRef.current = events.length;
+  }, [events.length]);
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Connection banner */}
       {!connected && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-warning/5 border border-warning/20 text-warning text-[13px]">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-warning/5 border border-warning/20 text-warning text-[13px] animate-fade-in">
           <AlertTriangle size={15} />
           <span>
             Waiting for runtime connection on{" "}
@@ -260,7 +279,7 @@ function OverviewPage() {
       )}
 
       {connected && connectedRuntimeCount === 0 && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-info/5 border border-info/20 text-info text-[13px]">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-info/5 border border-info/20 text-info text-[13px] animate-fade-in">
           <Activity size={15} />
           <span>
             Dashboard connected to the devtools hub. Start a Syncore runtime in
@@ -271,7 +290,7 @@ function OverviewPage() {
 
       {/* Runtime info strip */}
       {connected && runtimeId && (
-        <div className="flex items-center gap-4 text-[12px] text-text-secondary">
+        <div className="flex items-center gap-4 text-[12px] text-text-secondary flex-wrap">
           <Badge variant="success" className="gap-1.5">
             <Circle size={5} fill="currentColor" stroke="none" />
             Connected
@@ -298,8 +317,8 @@ function OverviewPage() {
         </div>
       )}
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* Stats grid — responsive */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           label="Queries"
           value={queryCount}
@@ -330,10 +349,10 @@ function OverviewPage() {
         />
       </div>
 
-      {/* Two column: activity + active queries */}
-      <div className="grid grid-cols-5 gap-4">
+      {/* Two column: activity + active queries — responsive */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Recent Activity */}
-        <div className="col-span-3 flex flex-col rounded-lg bg-bg-surface border border-border overflow-hidden">
+        <div className="lg:col-span-3 flex flex-col rounded-lg bg-bg-surface border border-border overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <h2 className="text-[13px] font-bold text-text-primary">
               Recent Activity
@@ -366,15 +385,19 @@ function OverviewPage() {
                 {events.slice(0, 50).map((event, i) => {
                   const config = getEventConfig(event.type);
                   const detail = getEventDetail(event);
+                  const isNew = i >= newEventOffset;
                   return (
                     <div
                       key={`${event.type}-${event.timestamp}-${i}`}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-bg-elevated/50 transition-colors"
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-2.5 hover:bg-bg-elevated/50 transition-colors",
+                        isNew && "animate-fade-in"
+                      )}
                     >
                       <config.icon size={13} className={config.color} />
                       <Badge
                         variant={config.badgeVariant}
-                        className="w-20 justify-center text-[10px]"
+                        className="w-20 justify-center text-[10px] shrink-0"
                       >
                         {config.label}
                       </Badge>
@@ -393,7 +416,7 @@ function OverviewPage() {
         </div>
 
         {/* Active Queries */}
-        <div className="col-span-2 flex flex-col rounded-lg bg-bg-surface border border-border overflow-hidden">
+        <div className="lg:col-span-2 flex flex-col rounded-lg bg-bg-surface border border-border overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <h2 className="text-[13px] font-bold text-text-primary">
               Active Queries
