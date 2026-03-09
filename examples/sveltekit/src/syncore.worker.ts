@@ -8,8 +8,8 @@ void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
-  databaseName: "syncore-sveltekit-example",
-  persistenceDatabaseName: "syncore-sveltekit-example",
+  databaseName: "syncore-habits",
+  persistenceDatabaseName: "syncore-habits",
   locateFile: () => "/sql-wasm.wasm",
   platform: "browser-worker"
 });

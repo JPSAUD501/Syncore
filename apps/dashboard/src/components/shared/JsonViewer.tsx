@@ -29,7 +29,7 @@ export function JsonViewer({
   }, [data]);
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(jsonString).then(() => {
+    void navigator.clipboard.writeText(jsonString).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -87,6 +87,10 @@ function JsonNode({
   keyName?: string;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded && depth < maxDepth);
+  const objectData =
+    typeof data === "object" && data !== null && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : null;
 
   if (data === null) {
     return (
@@ -164,7 +168,7 @@ function JsonNode({
         </button>
         {expanded && (
           <div className="ml-4 border-l border-border/50 pl-2">
-            {data.map((item, i) => (
+            {data.map((item: unknown, i) => (
               <div key={i} className="py-0.5">
                 <JsonNode
                   data={item}
@@ -186,8 +190,8 @@ function JsonNode({
     );
   }
 
-  if (typeof data === "object") {
-    const entries = Object.entries(data as Record<string, unknown>);
+  if (objectData) {
+    const entries = Object.entries(objectData);
     if (entries.length === 0) {
       return (
         <span className="inline-flex gap-1">
@@ -241,10 +245,19 @@ function JsonNode({
     );
   }
 
+  if (typeof data === "bigint") {
+    return (
+      <span className="inline-flex gap-1">
+        {keyName !== undefined && <JsonKey name={keyName} />}
+        <span className="text-text-secondary">{String(data)}</span>
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex gap-1">
       {keyName !== undefined && <JsonKey name={keyName} />}
-      <span className="text-text-secondary">{String(data)}</span>
+      <span className="text-text-secondary">[unsupported]</span>
     </span>
   );
 }

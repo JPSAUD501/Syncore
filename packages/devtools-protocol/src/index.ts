@@ -68,6 +68,9 @@ export type SyncoreDevtoolsEvent =
 export interface SyncoreDevtoolsSnapshot {
   runtimeId: string;
   platform: string;
+  appName?: string;
+  origin?: string;
+  sessionLabel?: string;
   connectedAt: number;
   activeQueries: Array<{
     id: string;
@@ -89,13 +92,25 @@ export interface SyncoreDevtoolsSnapshot {
 /* ------------------------------------------------------------------ */
 
 export type SyncoreDevtoolsMessage =
-  | { type: "hello"; runtimeId: string; platform: string }
+  | {
+      type: "hello";
+      runtimeId: string;
+      platform: string;
+      appName?: string;
+      origin?: string;
+      sessionLabel?: string;
+    }
   | { type: "event"; event: SyncoreDevtoolsEvent }
   | { type: "snapshot"; snapshot: SyncoreDevtoolsSnapshot }
   | { type: "ping" }
   | { type: "pong" }
   /* Responses to dashboard requests */
-  | { type: "response"; requestId: string; payload: SyncoreResponsePayload };
+  | {
+      type: "response";
+      requestId: string;
+      runtimeId: string;
+      payload: SyncoreResponsePayload;
+    };
 
 /* ------------------------------------------------------------------ */
 /*  Dashboard → Runtime requests                                       */
@@ -104,6 +119,7 @@ export type SyncoreDevtoolsMessage =
 export interface SyncoreDevtoolsRequest {
   type: "request";
   requestId: string;
+  targetRuntimeId: string;
   payload: SyncoreRequestPayload;
 }
 

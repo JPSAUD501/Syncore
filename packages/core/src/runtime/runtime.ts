@@ -29,6 +29,8 @@ import {
 } from "./functions.js";
 import { generateId } from "./id.js";
 
+const DEFAULT_MISFIRE_POLICY: MisfirePolicy = { type: "catch_up" };
+
 export interface RegisteredSyncoreFunction {
   kind: SyncoreFunctionKind;
   argsValidator: Validator<unknown>;
@@ -855,6 +857,10 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     };
   }
 
+  getRuntimeId(): string {
+    return this.runtimeId;
+  }
+
   async runQuery<TArgs, TResult>(
     reference: FunctionReference<"query", TArgs, TResult>,
     args: JsonObject = {}
@@ -1240,8 +1246,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
           throw new Error(`Document "${id}" does not exist in "${tableName}".`);
         }
         const merged: JsonObject = { ...omitSystemFields(current), ...value };
-        for (const [key, fieldValue] of Object.entries(merged)) {
-          if (fieldValue === undefined) {
+        for (const key of Object.keys(merged)) {
+          if (merged[key] === undefined) {
             delete merged[key];
           }
         }
@@ -1379,8 +1385,9 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private createSchedulerApi(): SchedulerApi {
     return {
       runAfter: async (delayMs, reference, ...args) => {
-        const [functionArgs, misfirePolicy = { type: "catch_up" }] =
-          splitSchedulerArgs(args);
+        const schedulerArgs = splitSchedulerArgs(args);
+        const functionArgs = schedulerArgs[0];
+        const misfirePolicy = schedulerArgs[1] ?? DEFAULT_MISFIRE_POLICY;
         return this.scheduleJob(
           Date.now() + delayMs,
           reference,
@@ -1389,8 +1396,9 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         );
       },
       runAt: async (timestamp, reference, ...args) => {
-        const [functionArgs, misfirePolicy = { type: "catch_up" }] =
-          splitSchedulerArgs(args);
+        const schedulerArgs = splitSchedulerArgs(args);
+        const functionArgs = schedulerArgs[0];
+        const misfirePolicy = schedulerArgs[1] ?? DEFAULT_MISFIRE_POLICY;
         const value =
           timestamp instanceof Date ? timestamp.getTime() : timestamp;
         return this.scheduleJob(value, reference, functionArgs, misfirePolicy);

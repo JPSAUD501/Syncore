@@ -1,4 +1,4 @@
-import { useDevtoolsStore } from "@/lib/store";
+import { useActiveRuntime, useDevtoolsStore } from "@/lib/store";
 import { useMemo } from "react";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 
@@ -7,13 +7,14 @@ import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
  * Provides derived data from the event stream for dashboard panels.
  */
 export function useDevtools() {
-  const events = useDevtoolsStore((s) => s.events);
+  const activeRuntime = useActiveRuntime();
   const connected = useDevtoolsStore((s) => s.connected);
-  const snapshot = useDevtoolsStore((s) => s.snapshot);
-  const queryCount = useDevtoolsStore((s) => s.queryCount);
-  const mutationCount = useDevtoolsStore((s) => s.mutationCount);
-  const actionCount = useDevtoolsStore((s) => s.actionCount);
-  const errorCount = useDevtoolsStore((s) => s.errorCount);
+  const events = useMemo(() => activeRuntime?.events ?? [], [activeRuntime]);
+  const snapshot = activeRuntime?.snapshot ?? null;
+  const queryCount = activeRuntime?.queryCount ?? 0;
+  const mutationCount = activeRuntime?.mutationCount ?? 0;
+  const actionCount = activeRuntime?.actionCount ?? 0;
+  const errorCount = activeRuntime?.errorCount ?? 0;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
 
   const functionEvents = useMemo(() => {

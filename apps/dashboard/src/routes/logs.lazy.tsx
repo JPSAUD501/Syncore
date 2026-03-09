@@ -1,5 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useDevtoolsStore } from "@/lib/store";
+import { useActiveRuntime } from "@/lib/store";
 import { cn, formatTime, formatDuration } from "@/lib/utils";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -326,7 +326,8 @@ function DetailRow({
 /* ------------------------------------------------------------------ */
 
 function LogsPage() {
-  const events = useDevtoolsStore((s) => s.events);
+  const activeRuntime = useActiveRuntime();
+  const events = useMemo(() => activeRuntime?.events ?? [], [activeRuntime]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
   const [searchText, setSearchText] = useState("");
@@ -354,12 +355,14 @@ function LogsPage() {
     let result = displayEvents;
 
     if (activeFilters.size > 0) {
-      result = result.filter((e) => activeFilters.has(e.type));
+      result = result.filter((e: SyncoreDevtoolsEvent) =>
+        activeFilters.has(e.type)
+      );
     }
 
     if (searchText.trim()) {
       const query = searchText.toLowerCase();
-      result = result.filter((e) => {
+      result = result.filter((e: SyncoreDevtoolsEvent) => {
         const summary = getEventSummary(e).toLowerCase();
         return summary.includes(query) || e.type.toLowerCase().includes(query);
       });
@@ -520,7 +523,7 @@ function LogsPage() {
             </div>
           ) : (
             <div className="divide-y divide-border/50">
-              {filteredEvents.map((event, i) => (
+              {filteredEvents.map((event: SyncoreDevtoolsEvent, i: number) => (
                 <LogEntry
                   key={`${event.type}-${event.timestamp}-${i}`}
                   event={event}

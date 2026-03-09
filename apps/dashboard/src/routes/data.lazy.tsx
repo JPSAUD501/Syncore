@@ -102,7 +102,7 @@ function DataPage() {
 
   useEffect(() => {
     if (selectedTable) {
-      fetchData();
+      void fetchData();
     }
   }, [selectedTable, fetchData]);
 
@@ -120,7 +120,7 @@ function DataPage() {
           id
         });
         setSelectedDoc(null);
-        fetchData();
+        void fetchData();
       } catch {
         /* ignore */
       }
@@ -169,7 +169,7 @@ function DataPage() {
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={fetchSchema}
+              onClick={() => void fetchSchema()}
               disabled={!connected || loading}
               title="Refresh schema"
             >
@@ -205,7 +205,7 @@ function DataPage() {
                   <Button
                     variant="ghost"
                     size="xs"
-                    onClick={fetchSchema}
+                    onClick={() => void fetchSchema()}
                     className="mt-2"
                   >
                     Load Schema
@@ -272,7 +272,7 @@ function DataPage() {
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={fetchData}
+                onClick={() => void fetchData()}
                 disabled={!connected}
                 className="gap-1"
               >
@@ -328,9 +328,7 @@ function DataPage() {
                         columns={columns}
                         rows={rows}
                         selectedRowId={
-                          selectedDoc
-                            ? String(selectedDoc._id ?? selectedDoc.id ?? null)
-                            : null
+                          selectedDoc ? getDocumentId(selectedDoc) : null
                         }
                         onRowClick={setSelectedDoc}
                         className="h-full"
@@ -343,7 +341,7 @@ function DataPage() {
                     <DocumentPanel
                       document={selectedDoc}
                       onClose={() => setSelectedDoc(null)}
-                      onDelete={handleDelete}
+                      onDelete={(id) => void handleDelete(id)}
                     />
                   )}
                 </div>
@@ -369,4 +367,16 @@ function DataPage() {
       </div>
     </div>
   );
+}
+
+function getDocumentId(document: Record<string, unknown>): string {
+  const candidate = document._id ?? document.id;
+  if (
+    typeof candidate === "string" ||
+    typeof candidate === "number" ||
+    typeof candidate === "bigint"
+  ) {
+    return String(candidate);
+  }
+  return "unknown";
 }

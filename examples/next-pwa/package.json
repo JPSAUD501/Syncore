@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "syncore:dev": "pnpm --dir ../../packages/cli exec tsx src/index.ts dev",
     "syncore:codegen": "pnpm --dir ../../packages/cli exec tsx src/index.ts codegen",
     "build:deps": "pnpm --filter syncore build:standalone",
-    "dev": "pnpm run build:deps && pnpm run copy:sqljs-wasm && next dev",
+    "dev": "pnpm run build:deps && pnpm run copy:sqljs-wasm && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"pnpm run syncore:dev\" \"pnpm run dev:app\"",
+    "dev:app": "next dev",
     "build": "pnpm run build:deps && pnpm run clean && pnpm run copy:sqljs-wasm && next build",
     "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true});require('node:fs').rmSync('public/sql-wasm.wasm',{force:true})\"",
     "copy:sqljs-wasm": "node ./scripts/copy-sqljs-wasm.mjs",
@@ -23,5 +25,8 @@
     "react-dom": "^19.0.0",
     "sql.js": "^1.13.0",
     "syncore": "workspace:*"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }

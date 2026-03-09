@@ -9,7 +9,7 @@ import {
   Circle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDevtoolsStore } from "@/lib/store";
+import { useConnectedRuntimeCount, useDevtoolsStore } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
@@ -25,6 +25,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const location = useRouterState({ select: (s) => s.location });
   const connected = useDevtoolsStore((s) => s.connected);
+  const connectedRuntimeCount = useConnectedRuntimeCount();
 
   return (
     <aside className="flex flex-col h-screen border-r border-border bg-bg-base/80 backdrop-blur-sm w-[220px] shrink-0">
@@ -81,7 +82,13 @@ export function Sidebar() {
             stroke="none"
             className={cn(connected && "animate-pulse")}
           />
-          <span>{connected ? "Runtime connected" : "Disconnected"}</span>
+          <span>
+            {connected
+              ? connectedRuntimeCount > 0
+                ? `${connectedRuntimeCount} runtime(s) connected`
+                : "Hub connected"
+              : "Disconnected"}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <Badge variant="secondary" className="text-[10px] py-0">

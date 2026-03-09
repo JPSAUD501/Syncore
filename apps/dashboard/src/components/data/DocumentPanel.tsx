@@ -25,7 +25,7 @@ export function DocumentPanel({
 
   const handleCopy = useCallback(() => {
     if (!document) return;
-    navigator.clipboard
+    void navigator.clipboard
       .writeText(JSON.stringify(document, null, 2))
       .then(() => {
         setCopied(true);
@@ -35,7 +35,7 @@ export function DocumentPanel({
 
   if (!document) return null;
 
-  const docId = String(document._id ?? document.id ?? "unknown");
+  const docId = getDocumentId(document);
 
   return (
     <div
@@ -135,4 +135,16 @@ function inferType(value: unknown): string {
   if (value === undefined) return "undefined";
   if (Array.isArray(value)) return `array(${value.length})`;
   return typeof value;
+}
+
+function getDocumentId(document: Record<string, unknown>): string {
+  const candidate = document._id ?? document.id;
+  if (
+    typeof candidate === "string" ||
+    typeof candidate === "number" ||
+    typeof candidate === "bigint"
+  ) {
+    return String(candidate);
+  }
+  return "unknown";
 }

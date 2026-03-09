@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useDevtoolsStore } from "@/lib/store";
+import {
+  useActiveRuntime,
+  useConnectedRuntimeCount,
+  useDevtoolsStore
+} from "@/lib/store";
 import {
   formatTime,
   formatDuration,
@@ -186,7 +190,7 @@ function getEventDetail(event: SyncoreDevtoolsEvent): string {
 /* ------------------------------------------------------------------ */
 
 function ActiveQueries() {
-  const snapshot = useDevtoolsStore((s) => s.snapshot);
+  const snapshot = useActiveRuntime()?.snapshot ?? null;
   const queries = snapshot?.activeQueries ?? [];
 
   if (queries.length === 0) {
@@ -223,14 +227,16 @@ function ActiveQueries() {
 
 function OverviewPage() {
   const connected = useDevtoolsStore((s) => s.connected);
-  const runtimeId = useDevtoolsStore((s) => s.runtimeId);
-  const platform = useDevtoolsStore((s) => s.platform);
-  const events = useDevtoolsStore((s) => s.events);
-  const queryCount = useDevtoolsStore((s) => s.queryCount);
-  const mutationCount = useDevtoolsStore((s) => s.mutationCount);
-  const actionCount = useDevtoolsStore((s) => s.actionCount);
-  const errorCount = useDevtoolsStore((s) => s.errorCount);
-  const snapshot = useDevtoolsStore((s) => s.snapshot);
+  const activeRuntime = useActiveRuntime();
+  const connectedRuntimeCount = useConnectedRuntimeCount();
+  const runtimeId = activeRuntime?.runtimeId ?? null;
+  const platform = activeRuntime?.platform ?? null;
+  const events = activeRuntime?.events ?? [];
+  const queryCount = activeRuntime?.queryCount ?? 0;
+  const mutationCount = activeRuntime?.mutationCount ?? 0;
+  const actionCount = activeRuntime?.actionCount ?? 0;
+  const errorCount = activeRuntime?.errorCount ?? 0;
+  const snapshot = activeRuntime?.snapshot ?? null;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
 
   return (
@@ -249,6 +255,16 @@ function OverviewPage() {
               syncore dev
             </code>
             .
+          </span>
+        </div>
+      )}
+
+      {connected && connectedRuntimeCount === 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-info/5 border border-info/20 text-info text-[13px]">
+          <Activity size={15} />
+          <span>
+            Dashboard connected to the devtools hub. Start a Syncore runtime in
+            development mode to see it here.
           </span>
         </div>
       )}
@@ -330,7 +346,7 @@ function OverviewPage() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={clearEvents}
+                  onClick={() => clearEvents()}
                   className="text-text-tertiary hover:text-error"
                   title="Clear events"
                 >

@@ -9,35 +9,45 @@
 
 import { createFunctionReferenceFor } from "syncore";
 import type { FunctionReferenceFor } from "syncore";
-import type { create as tasks__create } from "../functions/tasks.js";
-import type { list as tasks__list } from "../functions/tasks.js";
-import type { toggleDone as tasks__toggleDone } from "../functions/tasks.js";
+import type { getByDate as entries__getByDate } from "../functions/entries.js";
+import type { list as entries__list } from "../functions/entries.js";
+import type { remove as entries__remove } from "../functions/entries.js";
+import type { search as entries__search } from "../functions/entries.js";
+import type { upsert as entries__upsert } from "../functions/entries.js";
 
 /**
- * Type-safe references to functions exported from `syncore/functions/tasks.ts`.
+ * Type-safe references to functions exported from `syncore/functions/entries.ts`.
  */
-export interface SyncoreApi__tasks {
+export interface SyncoreApi__entries {
   /**
-   * Reference to the public Syncore mutation `tasks/create`.
+   * Reference to the public Syncore query `entries/getByDate`.
    */
-  readonly create: FunctionReferenceFor<typeof tasks__create>;
+  readonly getByDate: FunctionReferenceFor<typeof entries__getByDate>;
   /**
-   * Reference to the public Syncore query `tasks/list`.
+   * Reference to the public Syncore query `entries/list`.
    */
-  readonly list: FunctionReferenceFor<typeof tasks__list>;
+  readonly list: FunctionReferenceFor<typeof entries__list>;
   /**
-   * Reference to the public Syncore mutation `tasks/toggleDone`.
+   * Reference to the public Syncore mutation `entries/remove`.
    */
-  readonly toggleDone: FunctionReferenceFor<typeof tasks__toggleDone>;
+  readonly remove: FunctionReferenceFor<typeof entries__remove>;
+  /**
+   * Reference to the public Syncore query `entries/search`.
+   */
+  readonly search: FunctionReferenceFor<typeof entries__search>;
+  /**
+   * Reference to the public Syncore mutation `entries/upsert`.
+   */
+  readonly upsert: FunctionReferenceFor<typeof entries__upsert>;
 }
 /**
  * Type-safe references to every public Syncore function in this app.
  */
 export interface SyncoreApi {
   /**
-   * Functions exported from `syncore/functions/tasks.ts`.
+   * Functions exported from `syncore/functions/entries.ts`.
    */
-  readonly tasks: SyncoreApi__tasks;
+  readonly entries: SyncoreApi__entries;
 }
 
 /**
@@ -48,4 +58,4 @@ export interface SyncoreApi {
  * const listTasks = api.tasks.list;
  * ```
  */
-export const api: SyncoreApi = { tasks: { create: createFunctionReferenceFor<typeof tasks__create>("mutation", "tasks/create"), list: createFunctionReferenceFor<typeof tasks__list>("query", "tasks/list"), toggleDone: createFunctionReferenceFor<typeof tasks__toggleDone>("mutation", "tasks/toggleDone") } } as const;
+export const api: SyncoreApi = { entries: { getByDate: createFunctionReferenceFor<typeof entries__getByDate>("query", "entries/getByDate"), list: createFunctionReferenceFor<typeof entries__list>("query", "entries/list"), remove: createFunctionReferenceFor<typeof entries__remove>("mutation", "entries/remove"), search: createFunctionReferenceFor<typeof entries__search>("query", "entries/search"), upsert: createFunctionReferenceFor<typeof entries__upsert>("mutation", "entries/upsert") } } as const;

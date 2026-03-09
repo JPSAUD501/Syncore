@@ -1,12 +1,11 @@
-import { useDevtoolsStore } from "@/lib/store";
-import type { SyncoreDevtoolsSnapshot } from "@syncore/devtools-protocol";
+import { useActiveRuntime } from "@/lib/store";
 
 /**
  * Hook to access the latest runtime snapshot data.
  * Returns the snapshot and convenience accessors for sub-fields.
  */
 export function useSnapshot() {
-  const snapshot = useDevtoolsStore((s) => s.snapshot);
+  const snapshot = useActiveRuntime()?.snapshot ?? null;
 
   return {
     snapshot,

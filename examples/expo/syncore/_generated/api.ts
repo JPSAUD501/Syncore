@@ -10,12 +10,13 @@
 import { createFunctionReferenceFor } from "syncore";
 import type { FunctionReferenceFor } from "syncore";
 import type { create as notes__create } from "../functions/notes";
-import type { createFromScheduler as notes__createFromScheduler } from "../functions/notes";
+import type { get as notes__get } from "../functions/notes";
 import type { list as notes__list } from "../functions/notes";
-import type { resetAll as notes__resetAll } from "../functions/notes";
-import type { scheduleCreateCatchUp as notes__scheduleCreateCatchUp } from "../functions/notes";
-import type { scheduleCreateSkip as notes__scheduleCreateSkip } from "../functions/notes";
-import type { togglePinned as notes__togglePinned } from "../functions/notes";
+import type { remove as notes__remove } from "../functions/notes";
+import type { scheduleAutoSave as notes__scheduleAutoSave } from "../functions/notes";
+import type { search as notes__search } from "../functions/notes";
+import type { togglePin as notes__togglePin } from "../functions/notes";
+import type { update as notes__update } from "../functions/notes";
 
 /**
  * Type-safe references to functions exported from `syncore/functions/notes.ts`.
@@ -26,29 +27,33 @@ export interface SyncoreApi__notes {
    */
   readonly create: FunctionReferenceFor<typeof notes__create>;
   /**
-   * Reference to the public Syncore mutation `notes/createFromScheduler`.
+   * Reference to the public Syncore query `notes/get`.
    */
-  readonly createFromScheduler: FunctionReferenceFor<typeof notes__createFromScheduler>;
+  readonly get: FunctionReferenceFor<typeof notes__get>;
   /**
    * Reference to the public Syncore query `notes/list`.
    */
   readonly list: FunctionReferenceFor<typeof notes__list>;
   /**
-   * Reference to the public Syncore mutation `notes/resetAll`.
+   * Reference to the public Syncore mutation `notes/remove`.
    */
-  readonly resetAll: FunctionReferenceFor<typeof notes__resetAll>;
+  readonly remove: FunctionReferenceFor<typeof notes__remove>;
   /**
-   * Reference to the public Syncore mutation `notes/scheduleCreateCatchUp`.
+   * Reference to the public Syncore mutation `notes/scheduleAutoSave`.
    */
-  readonly scheduleCreateCatchUp: FunctionReferenceFor<typeof notes__scheduleCreateCatchUp>;
+  readonly scheduleAutoSave: FunctionReferenceFor<typeof notes__scheduleAutoSave>;
   /**
-   * Reference to the public Syncore mutation `notes/scheduleCreateSkip`.
+   * Reference to the public Syncore query `notes/search`.
    */
-  readonly scheduleCreateSkip: FunctionReferenceFor<typeof notes__scheduleCreateSkip>;
+  readonly search: FunctionReferenceFor<typeof notes__search>;
   /**
-   * Reference to the public Syncore mutation `notes/togglePinned`.
+   * Reference to the public Syncore mutation `notes/togglePin`.
    */
-  readonly togglePinned: FunctionReferenceFor<typeof notes__togglePinned>;
+  readonly togglePin: FunctionReferenceFor<typeof notes__togglePin>;
+  /**
+   * Reference to the public Syncore mutation `notes/update`.
+   */
+  readonly update: FunctionReferenceFor<typeof notes__update>;
 }
 /**
  * Type-safe references to every public Syncore function in this app.
@@ -68,4 +73,4 @@ export interface SyncoreApi {
  * const listTasks = api.tasks.list;
  * ```
  */
-export const api: SyncoreApi = { notes: { create: createFunctionReferenceFor<typeof notes__create>("mutation", "notes/create"), createFromScheduler: createFunctionReferenceFor<typeof notes__createFromScheduler>("mutation", "notes/createFromScheduler"), list: createFunctionReferenceFor<typeof notes__list>("query", "notes/list"), resetAll: createFunctionReferenceFor<typeof notes__resetAll>("mutation", "notes/resetAll"), scheduleCreateCatchUp: createFunctionReferenceFor<typeof notes__scheduleCreateCatchUp>("mutation", "notes/scheduleCreateCatchUp"), scheduleCreateSkip: createFunctionReferenceFor<typeof notes__scheduleCreateSkip>("mutation", "notes/scheduleCreateSkip"), togglePinned: createFunctionReferenceFor<typeof notes__togglePinned>("mutation", "notes/togglePinned") } } as const;
+export const api: SyncoreApi = { notes: { create: createFunctionReferenceFor<typeof notes__create>("mutation", "notes/create"), get: createFunctionReferenceFor<typeof notes__get>("query", "notes/get"), list: createFunctionReferenceFor<typeof notes__list>("query", "notes/list"), remove: createFunctionReferenceFor<typeof notes__remove>("mutation", "notes/remove"), scheduleAutoSave: createFunctionReferenceFor<typeof notes__scheduleAutoSave>("mutation", "notes/scheduleAutoSave"), search: createFunctionReferenceFor<typeof notes__search>("query", "notes/search"), togglePin: createFunctionReferenceFor<typeof notes__togglePin>("mutation", "notes/togglePin"), update: createFunctionReferenceFor<typeof notes__update>("mutation", "notes/update") } } as const;

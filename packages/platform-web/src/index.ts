@@ -1,5 +1,7 @@
 import {
   type AnySyncoreSchema,
+  createDevtoolsRequestHandler,
+  type DevtoolsRequestHandler,
   type DevtoolsSink,
   SyncoreRuntime,
   type SchedulerOptions,
@@ -10,6 +12,11 @@ import {
   type StorageObject,
   type StorageWriteInput
 } from "@syncore/core";
+import {
+  type SyncoreDevtoolsMessage,
+  type SyncoreDevtoolsRequest,
+  type SyncoreDevtoolsSnapshot
+} from "@syncore/devtools-protocol";
 import {
   createWebPersistence,
   type SyncoreWebPersistence,
@@ -80,7 +87,7 @@ export interface CreateWebRuntimeOptions {
   platform?: string;
 
   /** Optional devtools sink used during development. */
-  devtools?: DevtoolsSink;
+  devtools?: DevtoolsSink | false;
 
   /** Optional scheduler configuration for jobs and recurring work. */
   scheduler?: SchedulerOptions;
@@ -137,20 +144,57 @@ export async function createWebSyncoreRuntime(
       persistence,
       options.storageNamespace ?? options.databaseName ?? "syncore"
     );
+  const appName = resolveWebAppName();
+  const origin = resolveWebOrigin();
+  const sessionLabel = resolveWebSessionLabel();
+  const autoDevtools =
+    options.devtools === undefined && shouldAutoConnectDevtools()
+      ? (() => {
+          const sinkOptions: BrowserWebSocketDevtoolsSinkOptions = {
+            url: resolveDefaultDevtoolsUrl()
+          };
+          if (appName) {
+            sinkOptions.appName = appName;
+          }
+          if (origin) {
+            sinkOptions.origin = origin;
+          }
+          if (sessionLabel) {
+            sinkOptions.sessionLabel = sessionLabel;
+          }
+          return createBrowserWebSocketDevtoolsSink(sinkOptions);
+        })()
+      : undefined;
+  const resolvedDevtools =
+    options.devtools === false ? undefined : (options.devtools ?? autoDevtools);
 
-  return new SyncoreRuntime({
+  const runtime = new SyncoreRuntime({
     schema: options.schema,
     functions: options.functions,
     driver,
     storage,
     platform: options.platform ?? "browser",
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
-    ...(options.devtools ? { devtools: options.devtools } : {}),
+    ...(resolvedDevtools ? { devtools: resolvedDevtools } : {}),
     ...(options.experimentalPlugins
       ? { experimentalPlugins: options.experimentalPlugins }
       : {}),
     ...(options.scheduler ? { scheduler: options.scheduler } : {})
   });
+
+  if (autoDevtools) {
+    autoDevtools.attachRuntime(() => runtime.getDevtoolsSnapshot());
+    autoDevtools.attachRequestHandler(
+      createDevtoolsRequestHandler({
+        driver,
+        schema: options.schema,
+        functions: options.functions,
+        runtime
+      })
+    );
+  }
+
+  return runtime;
 }
 
 /**
@@ -197,6 +241,258 @@ export function createBrowserSyncoreClient(
   runtime: SyncoreRuntime<BrowserSyncoreSchema>
 ) {
   return createWebSyncoreClient(runtime);
+}
+
+export interface BrowserWebSocketDevtoolsSinkOptions {
+  url: string;
+  reconnectDelayMs?: number;
+  appName?: string;
+  origin?: string;
+  sessionLabel?: string;
+}
+
+export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
+  attachRuntime(getSnapshot: () => SyncoreDevtoolsSnapshot): void;
+  attachRequestHandler(handler: DevtoolsRequestHandler): void;
+  dispose(): void;
+}
+
+export function createBrowserWebSocketDevtoolsSink(
+  options: BrowserWebSocketDevtoolsSinkOptions
+): BrowserWebSocketDevtoolsSink {
+  let socket: WebSocket | undefined;
+  let disposed = false;
+  let connectTimer: ReturnType<typeof setTimeout> | undefined;
+  let getSnapshot: (() => SyncoreDevtoolsSnapshot) | undefined;
+  let onRequest: DevtoolsRequestHandler | undefined;
+  const pendingMessages: SyncoreDevtoolsMessage[] = [];
+  let latestHello:
+    | {
+        runtimeId: string;
+        platform: string;
+      }
+    | undefined;
+
+  const connect = () => {
+    if (disposed || typeof WebSocket === "undefined") {
+      return;
+    }
+    socket = new WebSocket(options.url);
+    socket.onopen = () => {
+      if (latestHello) {
+        sendNow({
+          type: "hello",
+          runtimeId: latestHello.runtimeId,
+          platform: latestHello.platform,
+          ...(options.appName ? { appName: options.appName } : {}),
+          ...(options.origin ? { origin: options.origin } : {}),
+          ...(options.sessionLabel
+            ? { sessionLabel: options.sessionLabel }
+            : {})
+        });
+      }
+      if (getSnapshot) {
+        sendNow({
+          type: "snapshot",
+          snapshot: withSnapshotMeta(getSnapshot(), options)
+        });
+      }
+      flushPendingMessages();
+    };
+    socket.onmessage = (event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+      const message = JSON.parse(event.data) as
+        | SyncoreDevtoolsMessage
+        | SyncoreDevtoolsRequest;
+      if (message.type === "ping") {
+        send({ type: "pong" });
+      } else if (message.type === "request" && onRequest) {
+        onRequest(message.payload)
+          .then((responsePayload) => {
+            const runtimeId =
+              latestHello?.runtimeId ?? getSnapshot?.().runtimeId;
+            if (!runtimeId) {
+              return;
+            }
+            send({
+              type: "response",
+              requestId: message.requestId,
+              runtimeId,
+              payload: responsePayload
+            });
+          })
+          .catch((err) => {
+            const runtimeId =
+              latestHello?.runtimeId ?? getSnapshot?.().runtimeId;
+            if (!runtimeId) {
+              return;
+            }
+            send({
+              type: "response",
+              requestId: message.requestId,
+              runtimeId,
+              payload: {
+                kind: "error",
+                message: err instanceof Error ? err.message : "Unknown error"
+              }
+            });
+          });
+      }
+    };
+    socket.onclose = scheduleReconnect;
+    socket.onerror = () => {
+      socket?.close();
+    };
+  };
+
+  const scheduleReconnect = () => {
+    if (disposed || connectTimer) {
+      return;
+    }
+    connectTimer = setTimeout(() => {
+      connectTimer = undefined;
+      connect();
+    }, options.reconnectDelayMs ?? 1200);
+  };
+
+  const sendNow = (message: SyncoreDevtoolsMessage) => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(message));
+    }
+  };
+
+  const flushPendingMessages = () => {
+    while (pendingMessages.length > 0) {
+      const nextMessage = pendingMessages.shift();
+      if (nextMessage) {
+        sendNow(nextMessage);
+      }
+    }
+  };
+
+  const send = (message: SyncoreDevtoolsMessage) => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      sendNow(message);
+      return;
+    }
+    pendingMessages.push(message);
+  };
+
+  connect();
+
+  return {
+    emit(event) {
+      if (event.type === "runtime.connected") {
+        latestHello = {
+          runtimeId: event.runtimeId,
+          platform: event.platform
+        };
+        send({
+          type: "hello",
+          runtimeId: event.runtimeId,
+          platform: event.platform,
+          ...(options.appName ? { appName: options.appName } : {}),
+          ...(options.origin ? { origin: options.origin } : {}),
+          ...(options.sessionLabel
+            ? { sessionLabel: options.sessionLabel }
+            : {})
+        });
+      }
+      send({ type: "event", event });
+      if (getSnapshot) {
+        send({
+          type: "snapshot",
+          snapshot: withSnapshotMeta(getSnapshot(), options)
+        });
+      }
+    },
+    attachRuntime(snapshotGetter) {
+      getSnapshot = snapshotGetter;
+      if (socket?.readyState === WebSocket.OPEN) {
+        send({
+          type: "snapshot",
+          snapshot: withSnapshotMeta(getSnapshot(), options)
+        });
+      }
+    },
+    attachRequestHandler(handler) {
+      onRequest = handler;
+    },
+    dispose() {
+      disposed = true;
+      if (connectTimer) {
+        clearTimeout(connectTimer);
+      }
+      socket?.close();
+    }
+  };
+}
+
+function withSnapshotMeta(
+  snapshot: SyncoreDevtoolsSnapshot,
+  options: BrowserWebSocketDevtoolsSinkOptions
+): SyncoreDevtoolsSnapshot {
+  return {
+    ...snapshot,
+    ...(options.appName ? { appName: options.appName } : {}),
+    ...(options.origin ? { origin: options.origin } : {}),
+    ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {})
+  };
+}
+
+function shouldAutoConnectDevtools(): boolean {
+  if (typeof globalThis === "undefined") {
+    return false;
+  }
+  try {
+    return globalThis.location?.hostname === "localhost" ||
+      globalThis.location?.hostname === "127.0.0.1"
+      ? true
+      : Boolean(globalThis.location?.hostname?.endsWith?.(".local"));
+  } catch {
+    return false;
+  }
+}
+
+function resolveDefaultDevtoolsUrl(): string {
+  return "ws://127.0.0.1:4311";
+}
+
+function resolveWebOrigin(): string | undefined {
+  try {
+    return globalThis.location?.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveWebAppName(): string | undefined {
+  try {
+    return (
+      globalThis.location?.hostname ?? globalThis.document?.title ?? undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveWebSessionLabel(): string | undefined {
+  try {
+    if (typeof navigator === "undefined") {
+      return undefined;
+    }
+    return navigator.userAgent.includes("Firefox")
+      ? "Firefox"
+      : navigator.userAgent.includes("Chrome")
+        ? "Chrome"
+        : navigator.userAgent.includes("Safari")
+          ? "Safari"
+          : navigator.userAgent;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

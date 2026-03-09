@@ -1,6 +1,6 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/api-extractor/v7/api-extractor.schema.json",
-  "mainEntryPointFilePath": "<projectFolder>/dist/ipc-react.d.ts",
+  "mainEntryPointFilePath": "<projectFolder>/dist/ipc-react.d.mts",
   "compiler": {
     "tsconfigFilePath": "<projectFolder>/tsconfig.api-extractor.json"
   },

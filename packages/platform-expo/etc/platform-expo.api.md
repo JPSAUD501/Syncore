@@ -4,58 +4,46 @@
 
 ```ts
 
-import { DevtoolsSink } from 'syncore';
-import { SchedulerOptions } from 'syncore';
+import { AnySyncoreSchema } from '@syncore/core';
+import { DevtoolsSink } from '@syncore/core';
+import { SchedulerOptions } from '@syncore/core';
 import { SQLiteDatabase } from 'expo-sqlite';
-import { StorageObject } from 'syncore';
-import { StorageWriteInput } from 'syncore';
-import * as syncore from 'syncore';
-import { SyncoreCapabilities } from 'syncore';
-import { SyncoreExperimentalPlugin } from 'syncore';
-import { SyncoreRuntime } from 'syncore';
-import { SyncoreRuntimeOptions } from 'syncore';
-import { SyncoreSchema } from '@syncore/schema';
-import { SyncoreSqlDriver } from 'syncore';
-import { SyncoreStorageAdapter } from 'syncore';
+import { StorageObject } from '@syncore/core';
+import { StorageWriteInput } from '@syncore/core';
+import * as _syncore_core0 from '@syncore/core';
+import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreExperimentalPlugin } from '@syncore/core';
+import { SyncoreRuntime } from '@syncore/core';
+import { SyncoreRuntimeOptions } from '@syncore/core';
+import { SyncoreSqlDriver } from '@syncore/core';
+import { SyncoreStorageAdapter } from '@syncore/core';
 
-// @public (undocumented)
+// @public
 export interface CreateExpoRuntimeOptions {
-    // (undocumented)
     capabilities?: SyncoreCapabilities;
-    // (undocumented)
     databaseDirectory?: string;
-    // (undocumented)
     databaseName?: string;
-    // (undocumented)
     devtools?: DevtoolsSink;
-    // (undocumented)
     driver?: SyncoreSqlDriver;
-    // (undocumented)
     experimentalPlugins?: Array<SyncoreExperimentalPlugin<ExpoSyncoreSchema>>;
-    // (undocumented)
     functions: SyncoreRuntimeOptions<ExpoSyncoreSchema>["functions"];
-    // (undocumented)
     platform?: string;
-    // (undocumented)
     scheduler?: SchedulerOptions;
-    // (undocumented)
     schema: ExpoSyncoreSchema;
-    // (undocumented)
     storage?: SyncoreStorageAdapter;
-    // (undocumented)
     storageDirectoryName?: string;
 }
 
-// @public (undocumented)
+// @public
 export function createExpoSyncoreBootstrap(options: CreateExpoRuntimeOptions): ExpoSyncoreBootstrap;
 
-// @public (undocumented)
-export function createExpoSyncoreClient(runtime: SyncoreRuntime<ExpoSyncoreSchema>): syncore.SyncoreClient;
+// @public
+export function createExpoSyncoreClient(runtime: SyncoreRuntime<ExpoSyncoreSchema>): _syncore_core0.SyncoreClient;
 
-// @public (undocumented)
+// @public
 export function createExpoSyncoreRuntime(options: CreateExpoRuntimeOptions): SyncoreRuntime<ExpoSyncoreSchema>;
 
-// @public (undocumented)
+// @public
 export class ExpoFileStorageAdapter implements SyncoreStorageAdapter {
     constructor(storageDirectoryName: string);
     // (undocumented)
@@ -68,7 +56,7 @@ export class ExpoFileStorageAdapter implements SyncoreStorageAdapter {
     read(id: string): Promise<Uint8Array | null>;
 }
 
-// @public (undocumented)
+// @public
 export class ExpoSqliteDriver implements SyncoreSqlDriver {
     constructor(database: SQLiteDatabase);
     // (undocumented)
@@ -90,20 +78,16 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
     withTransaction<T>(callback: () => Promise<T>): Promise<T>;
 }
 
-// @public (undocumented)
+// @public
 export interface ExpoSyncoreBootstrap {
-    // (undocumented)
     getClient(): Promise<ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>>;
-    // (undocumented)
     getRuntime(): SyncoreRuntime<ExpoSyncoreSchema>;
-    // (undocumented)
     reset(): Promise<void>;
-    // (undocumented)
     stop(): Promise<void>;
 }
 
 // @public (undocumented)
-export type ExpoSyncoreSchema = SyncoreSchema<any>;
+export type ExpoSyncoreSchema = AnySyncoreSchema;
 
 // (No @packageDocumentation comment for this package)
 

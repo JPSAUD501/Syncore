@@ -4,20 +4,22 @@
 
 ```ts
 
-import { AnySyncoreSchema } from 'syncore';
-import { DevtoolsSink } from 'syncore';
-import { FunctionReference } from 'syncore';
-import { SchedulerOptions } from 'syncore';
-import { StorageObject } from 'syncore';
-import { StorageWriteInput } from 'syncore';
-import * as syncore from 'syncore';
-import { SyncoreCapabilities } from 'syncore';
-import { SyncoreClient } from 'syncore';
-import { SyncoreExperimentalPlugin } from 'syncore';
-import { SyncoreRuntime } from 'syncore';
-import { SyncoreRuntimeOptions } from 'syncore';
-import { SyncoreStorageAdapter } from 'syncore';
-import { SyncoreWatch } from 'syncore';
+import { AnySyncoreSchema } from '@syncore/core';
+import { DevtoolsRequestHandler } from '@syncore/core';
+import { DevtoolsSink } from '@syncore/core';
+import { FunctionReference } from '@syncore/core';
+import { SchedulerOptions } from '@syncore/core';
+import { StorageObject } from '@syncore/core';
+import { StorageWriteInput } from '@syncore/core';
+import * as _syncore_core0 from '@syncore/core';
+import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreClient } from '@syncore/core';
+import { SyncoreDevtoolsSnapshot } from '@syncore/devtools-protocol';
+import { SyncoreExperimentalPlugin } from '@syncore/core';
+import { SyncoreRuntime } from '@syncore/core';
+import { SyncoreRuntimeOptions } from '@syncore/core';
+import { SyncoreStorageAdapter } from '@syncore/core';
+import { SyncoreWatch } from '@syncore/core';
 
 // @public (undocumented)
 export interface AttachedWebWorkerRuntime {
@@ -27,7 +29,7 @@ export interface AttachedWebWorkerRuntime {
     ready: Promise<void>;
 }
 
-// @public (undocumented)
+// @public
 export function attachWebWorkerRuntime(options: AttachWebWorkerRuntimeOptions): AttachedWebWorkerRuntime;
 
 // @public (undocumented)
@@ -38,7 +40,7 @@ export interface AttachWebWorkerRuntimeOptions {
     endpoint: SyncoreWorkerMessageEndpoint;
 }
 
-// @public (undocumented)
+// @public
 export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
     constructor(persistence: SyncoreWebPersistence, namespace: string);
     // (undocumented)
@@ -54,11 +56,56 @@ export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
 }
 
 // @public (undocumented)
+export type BrowserSyncoreSchema = WebSyncoreSchema;
+
+// @public (undocumented)
+export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
+    // (undocumented)
+    attachRequestHandler(handler: DevtoolsRequestHandler): void;
+    // (undocumented)
+    attachRuntime(getSnapshot: () => SyncoreDevtoolsSnapshot): void;
+    // (undocumented)
+    dispose(): void;
+}
+
+// @public (undocumented)
+export interface BrowserWebSocketDevtoolsSinkOptions {
+    // (undocumented)
+    appName?: string;
+    // (undocumented)
+    origin?: string;
+    // (undocumented)
+    reconnectDelayMs?: number;
+    // (undocumented)
+    sessionLabel?: string;
+    // (undocumented)
+    url: string;
+}
+
+// @public
+export type CreateBrowserRuntimeOptions = CreateWebRuntimeOptions;
+
+// @public
+export function createBrowserSyncoreClient(runtime: SyncoreRuntime<BrowserSyncoreSchema>): _syncore_core0.SyncoreClient;
+
+// @public
+export function createBrowserSyncoreRuntime(options: CreateBrowserRuntimeOptions): Promise<SyncoreRuntime<AnySyncoreSchema>>;
+
+// @public (undocumented)
+export function createBrowserWebSocketDevtoolsSink(options: BrowserWebSocketDevtoolsSinkOptions): BrowserWebSocketDevtoolsSink;
+
+// @public
+export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOptions): AttachedWebWorkerRuntime;
+
+// @public
+export type CreateBrowserWorkerRuntimeOptions = CreateWebWorkerRuntimeOptions;
+
+// @public
 export function createManagedWebWorkerClient(options: {
     createWorker: () => Worker;
 }): ManagedWebWorkerClient;
 
-// @public (undocumented)
+// @public
 export function createSyncoreWebWorkerClient(options: CreateWebWorkerClientProviderOptions): ManagedWebWorkerClient;
 
 // @public (undocumented)
@@ -74,69 +121,48 @@ export interface CreateWebPersistenceOptions {
     opfsRootDirectoryName?: string;
 }
 
-// @public (undocumented)
+// @public
 export interface CreateWebRuntimeOptions {
-    // (undocumented)
     capabilities?: SyncoreCapabilities;
-    // (undocumented)
     databaseName?: string;
-    // (undocumented)
-    devtools?: DevtoolsSink;
-    // (undocumented)
+    devtools?: DevtoolsSink | false;
     driver?: SyncoreRuntimeOptions<WebSyncoreSchema>["driver"];
-    // (undocumented)
     experimentalPlugins?: Array<SyncoreExperimentalPlugin<WebSyncoreSchema>>;
-    // (undocumented)
     functions: SyncoreRuntimeOptions<WebSyncoreSchema>["functions"];
-    // (undocumented)
     locateFile?: (fileName: string) => string;
-    // (undocumented)
     opfsRootDirectoryName?: string;
-    // (undocumented)
     persistence?: SyncoreWebPersistence;
-    // (undocumented)
     persistenceDatabaseName?: string;
-    // (undocumented)
     persistenceMode?: WebPersistenceMode;
-    // (undocumented)
     platform?: string;
-    // (undocumented)
     scheduler?: SchedulerOptions;
-    // (undocumented)
     schema: WebSyncoreSchema;
-    // (undocumented)
     storage?: SyncoreStorageAdapter;
-    // (undocumented)
     storageNamespace?: string;
-    // (undocumented)
     wasmUrl?: string;
 }
 
-// @public (undocumented)
-export function createWebSyncoreClient(runtime: SyncoreRuntime<WebSyncoreSchema>): syncore.SyncoreClient;
+// @public
+export function createWebSyncoreClient(runtime: SyncoreRuntime<WebSyncoreSchema>): _syncore_core0.SyncoreClient;
 
-// @public (undocumented)
+// @public
 export function createWebSyncoreRuntime(options: CreateWebRuntimeOptions): Promise<SyncoreRuntime<WebSyncoreSchema>>;
 
-// @public (undocumented)
+// @public
 export function createWebWorkerClient(endpoint: SyncoreWorkerMessageEndpoint): SyncoreWebWorkerClient;
 
-// @public (undocumented)
+// @public
 export interface CreateWebWorkerClientProviderOptions {
-    // (undocumented)
     workerName?: string;
-    // (undocumented)
     workerType?: WorkerOptions["type"];
-    // (undocumented)
     workerUrl: URL | string;
 }
 
-// @public (undocumented)
+// @public
 export function createWebWorkerRuntime(options: CreateWebWorkerRuntimeOptions): AttachedWebWorkerRuntime;
 
-// @public (undocumented)
+// @public
 export interface CreateWebWorkerRuntimeOptions extends CreateWebRuntimeOptions {
-    // (undocumented)
     endpoint: SyncoreWorkerMessageEndpoint;
 }
 
@@ -149,7 +175,7 @@ export interface IndexedDbPersistenceOptions {
 // @public (undocumented)
 export function isOpfsAvailable(): boolean;
 
-// @public (undocumented)
+// @public
 export interface ManagedWebWorkerClient {
     // (undocumented)
     client: SyncoreWebWorkerClient;

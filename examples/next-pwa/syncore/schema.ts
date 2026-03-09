@@ -1,10 +1,18 @@
 import { defineSchema, defineTable, v } from "syncore";
 
 export default defineSchema({
-  todos: defineTable({
+  bookmarks: defineTable({
+    url: v.string(),
     title: v.string(),
-    complete: v.boolean()
+    description: v.string(),
+    tag: v.string(),
+    starred: v.boolean(),
+    createdAt: v.number()
   })
-    .index("by_complete", ["complete"])
-    .searchIndex("search_title", { searchField: "title" })
+    .index("by_tag", ["tag", "createdAt"])
+    .index("by_starred", ["starred", "createdAt"])
+    .searchIndex("search_bookmarks", {
+      searchField: "title",
+      filterFields: ["tag", "starred"]
+    })
 });

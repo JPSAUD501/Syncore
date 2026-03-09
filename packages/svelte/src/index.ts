@@ -8,7 +8,7 @@ import type {
   SyncoreWatch
 } from "@syncore/core";
 
-type OptionalArgsTuple<TArgs> =
+export type OptionalArgsTuple<TArgs> =
   Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
 /**

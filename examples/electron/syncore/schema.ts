@@ -1,10 +1,17 @@
 import { defineSchema, defineTable, v } from "syncore";
 
 export default defineSchema({
-  tasks: defineTable({
-    text: v.string(),
-    done: v.boolean()
+  entries: defineTable({
+    date: v.string(),
+    body: v.string(),
+    mood: v.string(),
+    wordCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number()
   })
-    .index("by_done", ["done"])
-    .searchIndex("search_text", { searchField: "text" })
+    .index("by_date", ["date"])
+    .searchIndex("search_body", {
+      searchField: "body",
+      filterFields: ["mood"]
+    })
 });

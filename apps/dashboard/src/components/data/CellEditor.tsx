@@ -22,7 +22,15 @@ export function CellEditor({
   const [text, setText] = useState(() => {
     if (value === null || value === undefined) return "";
     if (typeof value === "object") return JSON.stringify(value, null, 2);
-    return String(value);
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
+      return String(value);
+    }
+    return "";
   });
 
   const handleSave = useCallback(() => {

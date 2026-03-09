@@ -4,22 +4,24 @@
 
 ```ts
 
-import { AnySyncoreSchema } from 'syncore';
-import { DevtoolsSink } from 'syncore';
-import type { FunctionReference } from 'syncore';
-import { SchedulerOptions } from 'syncore';
-import { StorageObject } from 'syncore';
-import { StorageWriteInput } from 'syncore';
-import { SyncoreCapabilities } from 'syncore';
-import { SyncoreClient } from 'syncore';
+import { AnySyncoreSchema } from '@syncore/core';
+import { DevtoolsRequestHandler } from '@syncore/core';
+import { DevtoolsSink } from '@syncore/core';
+import { FunctionReference } from '@syncore/core';
+import { SchedulerOptions } from '@syncore/core';
+import { StorageObject } from '@syncore/core';
+import { StorageWriteInput } from '@syncore/core';
+import * as _syncore_core0 from '@syncore/core';
+import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreClient } from '@syncore/core';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
 import { SyncoreDevtoolsSnapshot } from '@syncore/devtools-protocol';
-import { SyncoreExperimentalPlugin } from 'syncore';
-import { SyncoreRuntime } from 'syncore';
-import { SyncoreRuntimeOptions } from 'syncore';
-import { SyncoreSqlDriver } from 'syncore';
-import { SyncoreStorageAdapter } from 'syncore';
-import type { SyncoreWatch } from 'syncore';
+import { SyncoreExperimentalPlugin } from '@syncore/core';
+import { SyncoreRuntime } from '@syncore/core';
+import { SyncoreRuntimeOptions } from '@syncore/core';
+import { SyncoreSqlDriver } from '@syncore/core';
+import { SyncoreStorageAdapter } from '@syncore/core';
+import { SyncoreWatch } from '@syncore/core';
 
 // @public (undocumented)
 export interface AttachedNodeIpcRuntime {
@@ -40,7 +42,7 @@ export interface AttachNodeIpcRuntimeOptions {
     endpoint: SyncoreIpcMessageEndpoint;
 }
 
-// @public (undocumented)
+// @public
 export function bindElectronWindowToSyncoreRuntime(options: {
     runtime: SyncoreRuntime<NodeSyncoreSchema>;
     window: SyncoreElectronBridgeWindow;
@@ -49,6 +51,14 @@ export function bindElectronWindowToSyncoreRuntime(options: {
 }): SyncoreElectronIpcBinding;
 
 // @public (undocumented)
+export function bindElectronWindowToSyncoreRuntime(options: {
+    runtime: SyncoreRuntime<NodeSyncoreSchema>;
+    window: SyncoreElectronBridgeWindow;
+    ipcMain: SyncoreElectronIpcMain;
+    channel?: string;
+}): SyncoreElectronIpcBinding;
+
+// @public
 export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): SyncoreIpcMessageEndpoint & {
     dispose(): void;
 };
@@ -63,6 +73,9 @@ export interface CreateElectronSyncoreBridgeOptions {
     window: SyncoreElectronBridgeWindow;
 }
 
+// @public
+export function createManagedNodeSyncoreClient(options: WithNodeSyncoreClientOptions): Promise<ManagedNodeSyncoreClient>;
+
 // @public (undocumented)
 export function createNodeIpcMessageEndpoint(bridge: SyncoreMainProcessBridge): SyncoreIpcMessageEndpoint & {
     dispose(): void;
@@ -71,11 +84,13 @@ export function createNodeIpcMessageEndpoint(bridge: SyncoreMainProcessBridge): 
 // @public (undocumented)
 export interface CreateNodeRuntimeOptions {
     // (undocumented)
+    appName?: string;
+    // (undocumented)
     capabilities?: SyncoreCapabilities;
     // (undocumented)
     databasePath: string;
     // (undocumented)
-    devtools?: DevtoolsSink;
+    devtools?: DevtoolsSink | false;
     // (undocumented)
     devtoolsUrl?: string;
     // (undocumented)
@@ -83,31 +98,35 @@ export interface CreateNodeRuntimeOptions {
     // (undocumented)
     functions: SyncoreRuntimeOptions<NodeSyncoreSchema>["functions"];
     // (undocumented)
+    origin?: string;
+    // (undocumented)
     platform?: string;
     // (undocumented)
     scheduler?: SchedulerOptions;
     // (undocumented)
     schema: NodeSyncoreSchema;
     // (undocumented)
+    sessionLabel?: string;
+    // (undocumented)
     storageDirectory: string;
 }
 
-// @public (undocumented)
-export function createNodeSyncoreClient(runtime: SyncoreRuntime<NodeSyncoreSchema>): SyncoreClient;
+// @public
+export function createNodeSyncoreClient(runtime: SyncoreRuntime<NodeSyncoreSchema>): _syncore_core0.SyncoreClient;
 
-// @public (undocumented)
+// @public
 export function createNodeSyncoreRuntime(options: CreateNodeRuntimeOptions): SyncoreRuntime<NodeSyncoreSchema>;
 
 // @public (undocumented)
 export function createNodeWebSocketDevtoolsSink(options: NodeWebSocketDevtoolsSinkOptions): NodeWebSocketDevtoolsSink;
 
-// @public (undocumented)
+// @public
 export function createRendererSyncoreBridgeClient(bridge: SyncoreRendererBridge): SyncoreRendererClient;
 
-// @public (undocumented)
+// @public
 export function createRendererSyncoreClient(endpoint: SyncoreIpcMessageEndpoint): SyncoreRendererClient;
 
-// @public (undocumented)
+// @public
 export function createRendererSyncoreWindowClient(windowObject: Window & typeof globalThis, bridgeName?: string): SyncoreRendererClient;
 
 // @public (undocumented)
@@ -116,10 +135,20 @@ export interface CreateSyncoreRendererWindowClientOptions {
     bridgeName?: string;
 }
 
-// @public (undocumented)
+// @public
 export function installSyncoreWindowBridge(options?: {
     bridgeName?: string;
 }): string;
+
+// @public
+export interface ManagedNodeSyncoreClient {
+    // (undocumented)
+    client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>;
+    // (undocumented)
+    dispose(): Promise<void>;
+    // (undocumented)
+    runtime: SyncoreRuntime<NodeSyncoreSchema>;
+}
 
 // @public (undocumented)
 export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
@@ -167,6 +196,8 @@ export type NodeSyncoreSchema = AnySyncoreSchema;
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
     // (undocumented)
+    attachRequestHandler(handler: DevtoolsRequestHandler): void;
+    // (undocumented)
     attachRuntime(getSnapshot: () => SyncoreDevtoolsSnapshot): void;
     // (undocumented)
     dispose(): void;
@@ -175,7 +206,13 @@ export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSinkOptions {
     // (undocumented)
+    appName?: string;
+    // (undocumented)
+    origin?: string;
+    // (undocumented)
     reconnectDelayMs?: number;
+    // (undocumented)
+    sessionLabel?: string;
     // (undocumented)
     url: string;
 }
@@ -205,6 +242,14 @@ export interface SyncoreElectronIpcBinding {
     dispose(): Promise<void>;
     // (undocumented)
     ready: Promise<void>;
+}
+
+// @public
+export interface SyncoreElectronIpcMain {
+    // (undocumented)
+    off(channel: string, listener: (event: unknown, message: unknown) => void): void;
+    // (undocumented)
+    on(channel: string, listener: (event: unknown, message: unknown) => void): void;
 }
 
 // @public (undocumented)
@@ -242,7 +287,7 @@ export class SyncoreRendererClient implements SyncoreClient {
     dispose(): void;
     // (undocumented)
     mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
-    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
+    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.mts
     //
     // (undocumented)
     query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
@@ -257,6 +302,12 @@ export interface SyncoreWindowBridge {
     // (undocumented)
     postMessage(message: unknown): void;
 }
+
+// @public
+export function withNodeSyncoreClient<TResult>(options: WithNodeSyncoreClientOptions, callback: (client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>, runtime: SyncoreRuntime<NodeSyncoreSchema>) => Promise<TResult> | TResult): Promise<TResult>;
+
+// @public
+export type WithNodeSyncoreClientOptions = CreateNodeRuntimeOptions;
 
 // (No @packageDocumentation comment for this package)
 

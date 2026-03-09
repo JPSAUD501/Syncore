@@ -19,6 +19,13 @@ type ManagedSyncoreWatch<TResult> = SyncoreWatch<TResult> & {
 type OptionalArgsTuple<TArgs> =
   Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
+/**
+ * Pass `"skip"` as the args argument to `useQuery` to suppress the subscription
+ * entirely and return `undefined` without contacting the runtime.
+ */
+export const skip = "skip" as const;
+type Skip = typeof skip;
+
 const SyncoreContext = createContext<SyncoreClient | null>(null);
 
 /**
@@ -56,27 +63,38 @@ export function useSyncore(): SyncoreClient {
  * Load a reactive Syncore query within a React component.
  *
  * The hook subscribes automatically and re-renders whenever the local query
- * result changes.
+ * result changes. Pass `"skip"` as the second argument to suppress the
+ * subscription entirely and return `undefined` without contacting the runtime.
  */
 export function useQuery<TArgs, TResult>(
   reference: FunctionReference<"query", TArgs, TResult>,
-  ...args: OptionalArgsTuple<TArgs>
+  ...args: OptionalArgsTuple<TArgs> | [Skip]
 ): TResult | undefined {
+  const isSkipped = args[0] === skip;
   const client = useSyncore();
   const watch = useManagedQueryWatch(
     client,
     reference,
-    normalizeOptionalArgs(args)
+    isSkipped
+      ? undefined
+      : normalizeOptionalArgs(args as OptionalArgsTuple<TArgs>),
+    isSkipped
   );
-  const [snapshot, setSnapshot] = useState(() => readWatchSnapshot(watch));
+  const [snapshot, setSnapshot] = useState(() =>
+    isSkipped ? noOpSnapshot : readWatchSnapshot(watch)
+  );
 
   useEffect(() => {
+    if (isSkipped) {
+      setSnapshot(noOpSnapshot);
+      return;
+    }
     const sync = () => {
       setSnapshot(readWatchSnapshot(watch));
     };
     sync();
     return watch.onUpdate(sync);
-  }, [watch]);
+  }, [watch, isSkipped]);
 
   if (snapshot.error) {
     throw snapshot.error;
@@ -84,6 +102,14 @@ export function useQuery<TArgs, TResult>(
 
   return snapshot.result;
 }
+
+const noOpSnapshot = { result: undefined, error: undefined };
+
+const noOpWatch: ManagedSyncoreWatch<never> = {
+  onUpdate: () => () => {},
+  localQueryResult: () => undefined,
+  localQueryError: () => undefined
+};
 
 /**
  * Construct a stable function that executes a Syncore mutation.
@@ -173,20 +199,31 @@ export function useQueries<TResult>(
 function useManagedQueryWatch<TArgs, TResult>(
   client: SyncoreClient,
   reference: FunctionReference<"query", TArgs, TResult>,
-  args?: TArgs
+  args?: TArgs,
+  isSkipped?: boolean
 ): ManagedSyncoreWatch<TResult> {
-  const argsKey = stableStringify(args ?? {});
-  const normalizedArgs = useMemo(() => JSON.parse(argsKey) as TArgs, [argsKey]);
+  const argsKey = isSkipped ? "skip" : stableStringify(args ?? {});
+  const normalizedArgs = useMemo(
+    () => (isSkipped ? undefined : (JSON.parse(argsKey) as TArgs)),
+    [argsKey, isSkipped]
+  );
   const watch = useMemo<ManagedSyncoreWatch<TResult>>(
     () =>
-      client.watchQuery(
-        reference,
-        normalizedArgs
-      ) as ManagedSyncoreWatch<TResult>,
-    [client, normalizedArgs, reference]
+      isSkipped
+        ? noOpWatch
+        : (client.watchQuery(
+            reference,
+            normalizedArgs!
+          ) as ManagedSyncoreWatch<TResult>),
+    [client, normalizedArgs, reference, isSkipped]
   );
 
-  useEffect(() => () => watch.dispose?.(), [watch]);
+  useEffect(
+    () => () => {
+      if (!isSkipped) watch.dispose?.();
+    },
+    [watch, isSkipped]
+  );
 
   return watch;
 }

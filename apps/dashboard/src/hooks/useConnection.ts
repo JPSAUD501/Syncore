@@ -1,17 +1,22 @@
-import { useDevtoolsStore } from "@/lib/store";
+import {
+  useActiveRuntime,
+  useRuntimeList,
+  useDevtoolsStore
+} from "@/lib/store";
 
 /**
  * Hook to access the connection state of the devtools WebSocket.
  */
 export function useConnection() {
   const connected = useDevtoolsStore((s) => s.connected);
-  const runtimeId = useDevtoolsStore((s) => s.runtimeId);
-  const platform = useDevtoolsStore((s) => s.platform);
+  const activeRuntime = useActiveRuntime();
+  const runtimes = useRuntimeList();
 
   return {
     connected,
-    runtimeId,
-    platform,
-    isReady: connected && runtimeId !== null
+    runtimeId: activeRuntime?.runtimeId ?? null,
+    platform: activeRuntime?.platform ?? null,
+    runtimeCount: runtimes.length,
+    isReady: connected && activeRuntime !== null
   };
 }

@@ -156,7 +156,8 @@ function SqlPage() {
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const parsed = stored ? (JSON.parse(stored) as unknown) : [];
+      return Array.isArray(parsed) ? (parsed as HistoryEntry[]) : [];
     } catch {
       return [];
     }
@@ -258,7 +259,7 @@ function SqlPage() {
         keydown: (event: KeyboardEvent) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
             event.preventDefault();
-            executeQuery();
+            void executeQuery();
             return true;
           }
           return false;
@@ -312,7 +313,7 @@ function SqlPage() {
 
           <div className="flex items-center gap-2 mt-2">
             <Button
-              onClick={() => executeQuery()}
+              onClick={() => void executeQuery()}
               disabled={!connected || loading || !query.trim()}
               size="sm"
               className="gap-1.5"
@@ -395,7 +396,7 @@ function SqlPage() {
                 type="button"
                 onClick={() => {
                   setQuery(shortcut.query);
-                  executeQuery(shortcut.query);
+                  void executeQuery(shortcut.query);
                 }}
                 disabled={!connected}
                 className={cn(

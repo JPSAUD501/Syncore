@@ -9,30 +9,55 @@
 
 import { createFunctionReferenceFor } from "syncore";
 import type { FunctionReferenceFor } from "syncore";
-import type { create as todos__create } from "../functions/todos";
-import type { list as todos__list } from "../functions/todos";
+import type { archiveHabit as habits__archiveHabit } from "../functions/habits";
+import type { completionsForDate as habits__completionsForDate } from "../functions/habits";
+import type { createHabit as habits__createHabit } from "../functions/habits";
+import type { listCompletions as habits__listCompletions } from "../functions/habits";
+import type { listHabits as habits__listHabits } from "../functions/habits";
+import type { removeHabit as habits__removeHabit } from "../functions/habits";
+import type { toggleCompletion as habits__toggleCompletion } from "../functions/habits";
 
 /**
- * Type-safe references to functions exported from `syncore/functions/todos.ts`.
+ * Type-safe references to functions exported from `syncore/functions/habits.ts`.
  */
-export interface SyncoreApi__todos {
+export interface SyncoreApi__habits {
   /**
-   * Reference to the public Syncore mutation `todos/create`.
+   * Reference to the public Syncore mutation `habits/archiveHabit`.
    */
-  readonly create: FunctionReferenceFor<typeof todos__create>;
+  readonly archiveHabit: FunctionReferenceFor<typeof habits__archiveHabit>;
   /**
-   * Reference to the public Syncore query `todos/list`.
+   * Reference to the public Syncore query `habits/completionsForDate`.
    */
-  readonly list: FunctionReferenceFor<typeof todos__list>;
+  readonly completionsForDate: FunctionReferenceFor<typeof habits__completionsForDate>;
+  /**
+   * Reference to the public Syncore mutation `habits/createHabit`.
+   */
+  readonly createHabit: FunctionReferenceFor<typeof habits__createHabit>;
+  /**
+   * Reference to the public Syncore query `habits/listCompletions`.
+   */
+  readonly listCompletions: FunctionReferenceFor<typeof habits__listCompletions>;
+  /**
+   * Reference to the public Syncore query `habits/listHabits`.
+   */
+  readonly listHabits: FunctionReferenceFor<typeof habits__listHabits>;
+  /**
+   * Reference to the public Syncore mutation `habits/removeHabit`.
+   */
+  readonly removeHabit: FunctionReferenceFor<typeof habits__removeHabit>;
+  /**
+   * Reference to the public Syncore mutation `habits/toggleCompletion`.
+   */
+  readonly toggleCompletion: FunctionReferenceFor<typeof habits__toggleCompletion>;
 }
 /**
  * Type-safe references to every public Syncore function in this app.
  */
 export interface SyncoreApi {
   /**
-   * Functions exported from `syncore/functions/todos.ts`.
+   * Functions exported from `syncore/functions/habits.ts`.
    */
-  readonly todos: SyncoreApi__todos;
+  readonly habits: SyncoreApi__habits;
 }
 
 /**
@@ -43,4 +68,4 @@ export interface SyncoreApi {
  * const listTasks = api.tasks.list;
  * ```
  */
-export const api: SyncoreApi = { todos: { create: createFunctionReferenceFor<typeof todos__create>("mutation", "todos/create"), list: createFunctionReferenceFor<typeof todos__list>("query", "todos/list") } } as const;
+export const api: SyncoreApi = { habits: { archiveHabit: createFunctionReferenceFor<typeof habits__archiveHabit>("mutation", "habits/archiveHabit"), completionsForDate: createFunctionReferenceFor<typeof habits__completionsForDate>("query", "habits/completionsForDate"), createHabit: createFunctionReferenceFor<typeof habits__createHabit>("mutation", "habits/createHabit"), listCompletions: createFunctionReferenceFor<typeof habits__listCompletions>("query", "habits/listCompletions"), listHabits: createFunctionReferenceFor<typeof habits__listHabits>("query", "habits/listHabits"), removeHabit: createFunctionReferenceFor<typeof habits__removeHabit>("mutation", "habits/removeHabit"), toggleCompletion: createFunctionReferenceFor<typeof habits__toggleCompletion>("mutation", "habits/toggleCompletion") } } as const;

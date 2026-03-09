@@ -9,26 +9,36 @@
 
 import type { SyncoreFunctionRegistry } from "syncore";
 
-import { create as tasks__create } from "../functions/tasks.js";
-import { list as tasks__list } from "../functions/tasks.js";
-import { toggleDone as tasks__toggleDone } from "../functions/tasks.js";
+import { getByDate as entries__getByDate } from "../functions/entries.js";
+import { list as entries__list } from "../functions/entries.js";
+import { remove as entries__remove } from "../functions/entries.js";
+import { search as entries__search } from "../functions/entries.js";
+import { upsert as entries__upsert } from "../functions/entries.js";
 
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
 export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
   /**
-   * Runtime definition for the public Syncore mutation `tasks/create`.
+   * Runtime definition for the public Syncore query `entries/getByDate`.
    */
-  readonly "tasks/create": typeof tasks__create;
+  readonly "entries/getByDate": typeof entries__getByDate;
   /**
-   * Runtime definition for the public Syncore query `tasks/list`.
+   * Runtime definition for the public Syncore query `entries/list`.
    */
-  readonly "tasks/list": typeof tasks__list;
+  readonly "entries/list": typeof entries__list;
   /**
-   * Runtime definition for the public Syncore mutation `tasks/toggleDone`.
+   * Runtime definition for the public Syncore mutation `entries/remove`.
    */
-  readonly "tasks/toggleDone": typeof tasks__toggleDone;
+  readonly "entries/remove": typeof entries__remove;
+  /**
+   * Runtime definition for the public Syncore query `entries/search`.
+   */
+  readonly "entries/search": typeof entries__search;
+  /**
+   * Runtime definition for the public Syncore mutation `entries/upsert`.
+   */
+  readonly "entries/upsert": typeof entries__upsert;
 }
 
 /**
@@ -37,7 +47,9 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
  * Most application code should import from `./api` instead of using this map directly.
  */
 export const functions: SyncoreFunctionsRegistry = {
-  "tasks/list": tasks__list,
-  "tasks/create": tasks__create,
-  "tasks/toggleDone": tasks__toggleDone,
+  "entries/list": entries__list,
+  "entries/getByDate": entries__getByDate,
+  "entries/search": entries__search,
+  "entries/upsert": entries__upsert,
+  "entries/remove": entries__remove,
 } as const;

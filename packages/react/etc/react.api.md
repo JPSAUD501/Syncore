@@ -4,14 +4,15 @@
 
 ```ts
 
-import { FunctionArgs } from 'syncore';
-import { FunctionReference } from 'syncore';
-import { FunctionResult } from 'syncore';
+import { FunctionReference } from '@syncore/core';
 import * as react_jsx_runtime0 from 'react/jsx-runtime';
 import { ReactNode } from 'react';
-import { SyncoreClient } from 'syncore';
+import { SyncoreClient } from '@syncore/core';
 
-// @public (undocumented)
+// @public
+export const skip: "skip";
+
+// @public
 export function SyncoreProvider(input: {
     client: SyncoreClient;
     children: ReactNode;
@@ -19,23 +20,25 @@ export function SyncoreProvider(input: {
 
 // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
 //
-// @public (undocumented)
-export function useAction<TReference extends FunctionReference<"action", Record<string, unknown>, unknown>>(reference: TReference): (...args: OptionalArgsTuple<FunctionArgs<TReference>>) => Promise<FunctionResult<TReference>>;
+// @public
+export function useAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>): (...args: OptionalArgsTuple<TArgs>) => Promise<TResult>;
 
-// @public (undocumented)
-export function useMutation<TReference extends FunctionReference<"mutation", Record<string, unknown>, unknown>>(reference: TReference): (...args: OptionalArgsTuple<FunctionArgs<TReference>>) => Promise<FunctionResult<TReference>>;
+// @public
+export function useMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>): (...args: OptionalArgsTuple<TArgs>) => Promise<TResult>;
 
-// @public (undocumented)
+// @public
 export function useQueries<TResult>(entries: Array<{
     key: string;
     reference: FunctionReference<"query">;
     args?: Record<string, unknown>;
 }>): Record<string, TResult | undefined>;
 
-// @public (undocumented)
-export function useQuery<TReference extends FunctionReference<"query", Record<string, unknown>, unknown>>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): FunctionResult<TReference> | undefined;
+// Warning: (ae-forgotten-export) The symbol "Skip" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function useQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs> | [Skip]): TResult | undefined;
 
-// @public (undocumented)
+// @public
 export function useSyncore(): SyncoreClient;
 
 // (No @packageDocumentation comment for this package)

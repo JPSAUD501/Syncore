@@ -210,7 +210,15 @@ function FunctionsPage() {
 
     let args: Record<string, unknown>;
     try {
-      args = JSON.parse(argsText);
+      const parsed = JSON.parse(argsText) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setRunResult({
+          status: "error",
+          error: "Arguments must be a JSON object"
+        });
+        return;
+      }
+      args = parsed as Record<string, unknown>;
     } catch {
       setRunResult({
         status: "error",
@@ -267,7 +275,7 @@ function FunctionsPage() {
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={fetchFunctions}
+              onClick={() => void fetchFunctions()}
               disabled={!connected || loadingFunctions}
               title="Refresh function list"
             >
@@ -396,7 +404,7 @@ function FunctionsPage() {
                   argsText={argsText}
                   setArgsText={setArgsText}
                   runResult={runResult}
-                  onRun={handleRun}
+                  onRun={() => void handleRun()}
                   connected={connected}
                 />
               </TabsContent>

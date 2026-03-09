@@ -4,11 +4,11 @@
 
 ```ts
 
-import type { AnySyncoreSchema } from 'syncore';
-import type { FunctionReference } from 'syncore';
-import type { SyncoreClient } from 'syncore';
-import type { SyncoreRuntime } from 'syncore';
-import type { SyncoreWatch } from 'syncore';
+import { AnySyncoreSchema } from '@syncore/core';
+import { FunctionReference } from '@syncore/core';
+import { SyncoreClient } from '@syncore/core';
+import { SyncoreRuntime } from '@syncore/core';
+import { SyncoreWatch } from '@syncore/core';
 
 // @public (undocumented)
 export interface AttachedNodeIpcRuntime {
@@ -34,16 +34,16 @@ export function createNodeIpcMessageEndpoint(bridge: SyncoreMainProcessBridge): 
     dispose(): void;
 };
 
-// @public (undocumented)
+// @public
 export function createRendererSyncoreBridgeClient(bridge: SyncoreRendererBridge): SyncoreRendererClient;
 
-// @public (undocumented)
+// @public
 export function createRendererSyncoreClient(endpoint: SyncoreIpcMessageEndpoint): SyncoreRendererClient;
 
-// @public (undocumented)
+// @public
 export function createRendererSyncoreWindowClient(windowObject: Window & typeof globalThis, bridgeName?: string): SyncoreRendererClient;
 
-// @public (undocumented)
+// @public
 export function installSyncoreWindowBridge(options?: {
     bridgeName?: string;
 }): string;
@@ -91,7 +91,7 @@ export class SyncoreRendererClient implements SyncoreClient {
     dispose(): void;
     // (undocumented)
     mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
-    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point ipc.d.ts
+    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point ipc.d.mts
     //
     // (undocumented)
     query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;

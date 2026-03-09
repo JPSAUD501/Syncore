@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "syncore:dev": "pnpm --dir ../../packages/cli exec tsx src/index.ts dev",
     "build:deps": "pnpm --filter syncore build:standalone",
     "build": "pnpm run build:deps && vite build",
-    "dev": "pnpm run build:deps && vite"
+    "dev": "pnpm run build:deps && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"pnpm run syncore:dev\" \"pnpm run dev:app\"",
+    "dev:app": "vite"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -15,6 +17,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
     "vite": "^6.4.1"
   }
 }

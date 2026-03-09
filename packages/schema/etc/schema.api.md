@@ -37,10 +37,10 @@ export class BooleanValidator implements Validator<boolean> {
 // @public (undocumented)
 export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(schema: SyncoreSchema<TTables>): SchemaSnapshot;
 
-// @public (undocumented)
+// @public
 export function defineSchema<TTables extends SyncoreSchemaDefinition>(tables: TTables): SyncoreSchema<TTables>;
 
-// @public (undocumented)
+// @public
 export function defineTable<TShape extends ObjectValidatorShape>(validator: TShape): TableDefinition<ObjectValidator<TShape>>;
 
 // @public (undocumented)
@@ -217,16 +217,14 @@ export interface SyncoreSchemaDefinition {
     [tableName: string]: AnyTableDefinition;
 }
 
-// @public (undocumented)
+// @public
 export class TableDefinition<TValidator extends Validator<unknown>> {
     constructor(validator: TValidator, options?: TableDefinitionOptions);
-    // (undocumented)
     index(name: string, fields: string[]): this;
     // (undocumented)
     readonly indexes: IndexDefinition[];
     // (undocumented)
     readonly options: TableDefinitionOptions;
-    // (undocumented)
     searchIndex(name: string, config: {
         searchField: string;
         filterFields?: string[];
@@ -270,26 +268,28 @@ export interface TableSnapshot {
     validator: ValidatorDescription;
 }
 
-// @public (undocumented)
-export const v: {
-    string: () => StringValidator;
-    number: () => NumberValidator;
-    boolean: () => BooleanValidator;
-    null: () => NullValidator;
-    any: () => AnyValidator;
-    literal: <TValue extends string | number | boolean | null>(literalValue: TValue) => LiteralValidator<TValue>;
-    array: <TItem>(itemValidator: Validator<TItem>) => ArrayValidator<TItem>;
-    object: <TShape extends ObjectValidatorShape>(shape: TShape) => ObjectValidator<TShape>;
-    id: <TTableName extends string>(tableName: TTableName) => IdValidator<TTableName>;
-    optional: <TValue>(inner: Validator<TValue>) => OptionalValidator<TValue>;
-};
+// @public
+export const v: ValidatorBuilderApi;
 
-// @public (undocumented)
+// @public
 export interface Validator<TValue> {
     // (undocumented)
     readonly kind: ValidatorKind;
-    // (undocumented)
     parse(value: unknown, path?: string): TValue;
+}
+
+// @public
+export interface ValidatorBuilderApi {
+    any(): AnyValidator;
+    array<TItem>(itemValidator: Validator<TItem>): ArrayValidator<TItem>;
+    boolean(): BooleanValidator;
+    id<TTableName extends string>(tableName: TTableName): IdValidator<TTableName>;
+    literal<TValue extends string | number | boolean | null>(literalValue: TValue): LiteralValidator<TValue>;
+    null(): NullValidator;
+    number(): NumberValidator;
+    object<TShape extends ObjectValidatorShape>(shape: TShape): ObjectValidator<TShape>;
+    optional<TValue>(inner: Validator<TValue>): OptionalValidator<TValue>;
+    string(): StringValidator;
 }
 
 // @public (undocumented)

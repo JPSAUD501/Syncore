@@ -85,6 +85,7 @@
   },
   "dependencies": {
     "@syncore/core": "workspace:*",
+    "@syncore/devtools-protocol": "workspace:*",
     "@syncore/next": "workspace:*",
     "@syncore/platform-expo": "workspace:*",
     "@syncore/platform-node": "workspace:*",

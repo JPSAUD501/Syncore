@@ -10,12 +10,13 @@
 import type { SyncoreFunctionRegistry } from "syncore";
 
 import { create as notes__create } from "../functions/notes";
-import { createFromScheduler as notes__createFromScheduler } from "../functions/notes";
+import { get as notes__get } from "../functions/notes";
 import { list as notes__list } from "../functions/notes";
-import { resetAll as notes__resetAll } from "../functions/notes";
-import { scheduleCreateCatchUp as notes__scheduleCreateCatchUp } from "../functions/notes";
-import { scheduleCreateSkip as notes__scheduleCreateSkip } from "../functions/notes";
-import { togglePinned as notes__togglePinned } from "../functions/notes";
+import { remove as notes__remove } from "../functions/notes";
+import { scheduleAutoSave as notes__scheduleAutoSave } from "../functions/notes";
+import { search as notes__search } from "../functions/notes";
+import { togglePin as notes__togglePin } from "../functions/notes";
+import { update as notes__update } from "../functions/notes";
 
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
@@ -26,29 +27,33 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
    */
   readonly "notes/create": typeof notes__create;
   /**
-   * Runtime definition for the public Syncore mutation `notes/createFromScheduler`.
+   * Runtime definition for the public Syncore query `notes/get`.
    */
-  readonly "notes/createFromScheduler": typeof notes__createFromScheduler;
+  readonly "notes/get": typeof notes__get;
   /**
    * Runtime definition for the public Syncore query `notes/list`.
    */
   readonly "notes/list": typeof notes__list;
   /**
-   * Runtime definition for the public Syncore mutation `notes/resetAll`.
+   * Runtime definition for the public Syncore mutation `notes/remove`.
    */
-  readonly "notes/resetAll": typeof notes__resetAll;
+  readonly "notes/remove": typeof notes__remove;
   /**
-   * Runtime definition for the public Syncore mutation `notes/scheduleCreateCatchUp`.
+   * Runtime definition for the public Syncore mutation `notes/scheduleAutoSave`.
    */
-  readonly "notes/scheduleCreateCatchUp": typeof notes__scheduleCreateCatchUp;
+  readonly "notes/scheduleAutoSave": typeof notes__scheduleAutoSave;
   /**
-   * Runtime definition for the public Syncore mutation `notes/scheduleCreateSkip`.
+   * Runtime definition for the public Syncore query `notes/search`.
    */
-  readonly "notes/scheduleCreateSkip": typeof notes__scheduleCreateSkip;
+  readonly "notes/search": typeof notes__search;
   /**
-   * Runtime definition for the public Syncore mutation `notes/togglePinned`.
+   * Runtime definition for the public Syncore mutation `notes/togglePin`.
    */
-  readonly "notes/togglePinned": typeof notes__togglePinned;
+  readonly "notes/togglePin": typeof notes__togglePin;
+  /**
+   * Runtime definition for the public Syncore mutation `notes/update`.
+   */
+  readonly "notes/update": typeof notes__update;
 }
 
 /**
@@ -58,10 +63,11 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
  */
 export const functions: SyncoreFunctionsRegistry = {
   "notes/list": notes__list,
+  "notes/get": notes__get,
+  "notes/search": notes__search,
   "notes/create": notes__create,
-  "notes/togglePinned": notes__togglePinned,
-  "notes/resetAll": notes__resetAll,
-  "notes/createFromScheduler": notes__createFromScheduler,
-  "notes/scheduleCreateCatchUp": notes__scheduleCreateCatchUp,
-  "notes/scheduleCreateSkip": notes__scheduleCreateSkip,
+  "notes/update": notes__update,
+  "notes/togglePin": notes__togglePin,
+  "notes/remove": notes__remove,
+  "notes/scheduleAutoSave": notes__scheduleAutoSave,
 } as const;

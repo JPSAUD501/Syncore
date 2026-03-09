@@ -2,9 +2,17 @@ import { defineSchema, defineTable, v } from "syncore";
 
 export default defineSchema({
   notes: defineTable({
+    title: v.string(),
     body: v.string(),
-    pinned: v.boolean()
+    color: v.string(),
+    pinned: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number()
   })
-    .index("by_pinned", ["pinned"])
-    .searchIndex("search_body", { searchField: "body" })
+    .index("by_pinned_created", ["pinned", "createdAt"])
+    .index("by_color", ["color", "createdAt"])
+    .searchIndex("search_body", {
+      searchField: "body",
+      filterFields: ["pinned"]
+    })
 });

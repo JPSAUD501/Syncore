@@ -5,6 +5,53 @@
 ```ts
 
 // @public (undocumented)
+export interface DataFilter {
+    // (undocumented)
+    field: string;
+    // (undocumented)
+    operator: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "startsWith";
+    // (undocumented)
+    value: unknown;
+}
+
+// @public (undocumented)
+export interface FunctionDefinition {
+    args?: Record<string, unknown>;
+    // (undocumented)
+    file: string;
+    // (undocumented)
+    name: string;
+    returns?: Record<string, unknown>;
+    // (undocumented)
+    type: "query" | "mutation" | "action";
+}
+
+// @public (undocumented)
+export interface SchedulerJob {
+    // (undocumented)
+    args: Record<string, unknown>;
+    // (undocumented)
+    completedAt?: number;
+    cronSchedule?: string;
+    // (undocumented)
+    durationMs?: number;
+    // (undocumented)
+    error?: string;
+    // (undocumented)
+    functionName: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    result?: unknown;
+    // (undocumented)
+    runAt: number;
+    // (undocumented)
+    scheduledAt: number;
+    // (undocumented)
+    status: "pending" | "running" | "completed" | "failed" | "cancelled";
+}
+
+// @public (undocumented)
 export type SyncoreDevtoolsEvent = {
     type: "runtime.connected";
     runtimeId: string;
@@ -68,6 +115,9 @@ export type SyncoreDevtoolsMessage = {
     type: "hello";
     runtimeId: string;
     platform: string;
+    appName?: string;
+    origin?: string;
+    sessionLabel?: string;
 } | {
     type: "event";
     event: SyncoreDevtoolsEvent;
@@ -78,7 +128,24 @@ export type SyncoreDevtoolsMessage = {
     type: "ping";
 } | {
     type: "pong";
+} | {
+    type: "response";
+    requestId: string;
+    runtimeId: string;
+    payload: SyncoreResponsePayload;
 };
+
+// @public (undocumented)
+export interface SyncoreDevtoolsRequest {
+    // (undocumented)
+    payload: SyncoreRequestPayload;
+    // (undocumented)
+    requestId: string;
+    // (undocumented)
+    targetRuntimeId: string;
+    // (undocumented)
+    type: "request";
+}
 
 // @public (undocumented)
 export interface SyncoreDevtoolsSnapshot {
@@ -90,7 +157,11 @@ export interface SyncoreDevtoolsSnapshot {
         lastRunAt: number;
     }>;
     // (undocumented)
+    appName?: string;
+    // (undocumented)
     connectedAt: number;
+    // (undocumented)
+    origin?: string;
     // (undocumented)
     pendingJobs: Array<{
         id: string;
@@ -104,6 +175,119 @@ export interface SyncoreDevtoolsSnapshot {
     recentEvents: SyncoreDevtoolsEvent[];
     // (undocumented)
     runtimeId: string;
+    // (undocumented)
+    sessionLabel?: string;
+}
+
+// @public (undocumented)
+export type SyncoreRequestPayload = {
+    kind: "fn.list";
+} | {
+    kind: "fn.run";
+    functionName: string;
+    functionType: "query" | "mutation" | "action";
+    args: Record<string, unknown>;
+} | {
+    kind: "data.query";
+    table: string;
+    filters?: DataFilter[];
+    limit?: number;
+    cursor?: string;
+} | {
+    kind: "data.insert";
+    table: string;
+    document: Record<string, unknown>;
+} | {
+    kind: "data.patch";
+    table: string;
+    id: string;
+    fields: Record<string, unknown>;
+} | {
+    kind: "data.delete";
+    table: string;
+    id: string;
+} | {
+    kind: "schema.get";
+} | {
+    kind: "sql.execute";
+    query: string;
+} | {
+    kind: "scheduler.list";
+} | {
+    kind: "scheduler.cancel";
+    jobId: string;
+};
+
+// @public (undocumented)
+export type SyncoreResponsePayload = {
+    kind: "fn.list.result";
+    functions: FunctionDefinition[];
+} | {
+    kind: "fn.run.result";
+    result?: unknown;
+    error?: string;
+    durationMs: number;
+} | {
+    kind: "data.result";
+    rows: Record<string, unknown>[];
+    totalCount: number;
+    cursor?: string;
+} | {
+    kind: "data.mutate.result";
+    success: boolean;
+    id?: string;
+    error?: string;
+} | {
+    kind: "schema.result";
+    tables: TableSchema[];
+} | {
+    kind: "sql.result";
+    columns: string[];
+    rows: unknown[][];
+    rowsAffected: number;
+    error?: string;
+} | {
+    kind: "scheduler.list.result";
+    jobs: SchedulerJob[];
+} | {
+    kind: "scheduler.cancel.result";
+    success: boolean;
+    error?: string;
+} | {
+    kind: "error";
+    message: string;
+};
+
+// @public (undocumented)
+export interface TableField {
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    optional: boolean;
+    // (undocumented)
+    type: string;
+}
+
+// @public (undocumented)
+export interface TableIndex {
+    // (undocumented)
+    fields: string[];
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    unique: boolean;
+}
+
+// @public (undocumented)
+export interface TableSchema {
+    // (undocumented)
+    documentCount: number;
+    // (undocumented)
+    fields: TableField[];
+    // (undocumented)
+    indexes: TableIndex[];
+    // (undocumented)
+    name: string;
 }
 
 // (No @packageDocumentation comment for this package)

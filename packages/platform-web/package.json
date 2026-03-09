@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@syncore/core": "workspace:*",
+    "@syncore/devtools-protocol": "workspace:*",
     "@syncore/schema": "workspace:*",
     "sql.js": "^1.14.1"
   },

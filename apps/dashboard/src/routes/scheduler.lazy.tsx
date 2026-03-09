@@ -15,12 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  EmptyState,
-  JsonViewer,
-  FunctionBadge,
-  TimestampCell
-} from "@/components/shared";
+import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
 import { useSnapshot, useConnection } from "@/hooks";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration, formatRelativeTime } from "@/lib/utils";
@@ -152,7 +147,7 @@ function SchedulerPage() {
           <Button
             variant="outline"
             size="xs"
-            onClick={fetchJobs}
+            onClick={() => void fetchJobs()}
             disabled={!connected || loading}
             className="gap-1"
           >
@@ -201,7 +196,7 @@ function SchedulerPage() {
               jobs={pendingJobsList}
               selectedJob={selectedJob}
               onSelect={setSelectedJob}
-              onCancel={cancelJob}
+              onCancel={(jobId) => void cancelJob(jobId)}
               emptyTitle="No pending jobs"
               emptyDescription="Scheduled jobs will appear here when they're queued."
             />
@@ -212,7 +207,7 @@ function SchedulerPage() {
               jobs={cronJobs}
               selectedJob={selectedJob}
               onSelect={setSelectedJob}
-              onCancel={cancelJob}
+              onCancel={(jobId) => void cancelJob(jobId)}
               emptyTitle="No cron jobs"
               emptyDescription="Recurring cron jobs will appear here."
             />
@@ -235,7 +230,7 @@ function SchedulerPage() {
         <JobDetailPanel
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
-          onCancel={cancelJob}
+          onCancel={(jobId) => void cancelJob(jobId)}
         />
       )}
     </div>

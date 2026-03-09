@@ -8,7 +8,10 @@ import { DatabaseSync } from "node:sqlite";
 import { Command } from "commander";
 import { tsImport } from "tsx/esm/api";
 import WebSocket, { WebSocketServer } from "ws";
-import type { SyncoreDevtoolsMessage } from "@syncore/devtools-protocol";
+import type {
+  SyncoreDevtoolsMessage,
+  SyncoreDevtoolsRequest
+} from "@syncore/devtools-protocol";
 import {
   generateId,
   type AnyTableDefinition,
@@ -62,6 +65,9 @@ interface PackageJsonShape {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 }
+
+const COMBINED_DEV_COMMAND =
+  'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "pnpm run syncore:dev" "pnpm run dev:app"';
 
 const program = new Command();
 const migrationSnapshotFileName = "_schema_snapshot.json";
@@ -513,7 +519,7 @@ async function scaffoldProject(
     }
   }
 
-  await ensurePackageScripts(cwd);
+  await ensurePackageScripts(cwd, options.template);
   await ensureGitignoreEntries(cwd, [".syncore/"]);
 
   return {
@@ -816,7 +822,10 @@ async function readPackageJson(cwd: string): Promise<PackageJsonShape | null> {
   }
 }
 
-async function ensurePackageScripts(cwd: string): Promise<void> {
+async function ensurePackageScripts(
+  cwd: string,
+  template: SyncoreTemplateName
+): Promise<void> {
   const packageJsonPath = path.join(cwd, "package.json");
   if (!(await fileExists(packageJsonPath))) {
     return;
@@ -838,6 +847,8 @@ async function ensurePackageScripts(cwd: string): Promise<void> {
   nextPackageJson.scripts["syncore:dev"] ??= "syncore dev";
   nextPackageJson.scripts["syncore:codegen"] ??= "syncore codegen";
 
+  maybeAddManagedDevScripts(nextPackageJson, template);
+
   if (stableStringify(nextPackageJson) === stableStringify(packageJson)) {
     return;
   }
@@ -846,6 +857,54 @@ async function ensurePackageScripts(cwd: string): Promise<void> {
     packageJsonPath,
     `${JSON.stringify(nextPackageJson, null, 2)}\n`
   );
+}
+
+function maybeAddManagedDevScripts(
+  packageJson: PackageJsonShape,
+  template: SyncoreTemplateName
+): void {
+  if (!supportsManagedCombinedDev(template)) {
+    return;
+  }
+
+  packageJson.scripts ??= {};
+  const scripts = packageJson.scripts;
+  const currentDev = scripts.dev;
+  if (!currentDev) {
+    return;
+  }
+
+  if (
+    scripts["dev:app"] === currentDev &&
+    scripts.dev === combinedDevCommand()
+  ) {
+    packageJson.devDependencies ??= {};
+    packageJson.devDependencies.concurrently ??= "^9.1.2";
+    return;
+  }
+
+  if (scripts["dev:app"] && scripts["dev:app"] !== currentDev) {
+    return;
+  }
+
+  if (currentDev.includes("syncore:dev") || currentDev.includes("dev:app")) {
+    return;
+  }
+
+  packageJson.devDependencies ??= {};
+  packageJson.devDependencies.concurrently ??= "^9.1.2";
+  scripts["dev:app"] ??= currentDev;
+  scripts.dev = combinedDevCommand();
+}
+
+function supportsManagedCombinedDev(template: SyncoreTemplateName): boolean {
+  return (
+    template === "next" || template === "react-web" || template === "electron"
+  );
+}
+
+function combinedDevCommand(): string {
+  return COMBINED_DEV_COMMAND;
 }
 
 async function ensureGitignoreEntries(
@@ -1566,6 +1625,9 @@ async function startDevHub(options: {
   });
   const websocketServer = new WebSocketServer({ server: httpServer });
   const latestSnapshots = new Map<string, SyncoreDevtoolsMessage>();
+  const runtimeSockets = new Map<string, WebSocket>();
+  const socketRuntimeIds = new Map<WebSocket, Set<string>>();
+  const dashboardSockets = new Set<WebSocket>();
   const hello: SyncoreDevtoolsMessage = {
     type: "hello",
     runtimeId: "syncore-dev-hub",
@@ -1573,6 +1635,7 @@ async function startDevHub(options: {
   };
 
   websocketServer.on("connection", (socket: WebSocket) => {
+    dashboardSockets.add(socket);
     socket.send(JSON.stringify(hello));
     for (const snapshot of latestSnapshots.values()) {
       socket.send(JSON.stringify(snapshot));
@@ -1583,23 +1646,78 @@ async function startDevHub(options: {
       if (rawPayload.length === 0) {
         return;
       }
-      const message = JSON.parse(rawPayload) as SyncoreDevtoolsMessage;
+      const message = JSON.parse(rawPayload) as
+        | SyncoreDevtoolsMessage
+        | (SyncoreDevtoolsRequest & { targetRuntimeId?: string });
       if (message.type === "ping") {
         socket.send(
           JSON.stringify({ type: "pong" } satisfies SyncoreDevtoolsMessage)
         );
         return;
       }
+      if (message.type === "request") {
+        const targetRuntimeId = message.targetRuntimeId;
+        if (!targetRuntimeId) {
+          return;
+        }
+        const target = runtimeSockets.get(targetRuntimeId);
+        if (target && target.readyState === WebSocket.OPEN) {
+          target.send(JSON.stringify(message));
+        }
+        return;
+      }
+      if (message.type === "hello") {
+        dashboardSockets.delete(socket);
+        runtimeSockets.set(message.runtimeId, socket);
+        const runtimeIds = socketRuntimeIds.get(socket) ?? new Set<string>();
+        runtimeIds.add(message.runtimeId);
+        socketRuntimeIds.set(socket, runtimeIds);
+        for (const client of dashboardSockets) {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
+          }
+        }
+        return;
+      }
       if (message.type === "snapshot") {
         latestSnapshots.set(message.snapshot.runtimeId, message);
+        dashboardSockets.delete(socket);
+        runtimeSockets.set(message.snapshot.runtimeId, socket);
+        const runtimeIds = socketRuntimeIds.get(socket) ?? new Set<string>();
+        runtimeIds.add(message.snapshot.runtimeId);
+        socketRuntimeIds.set(socket, runtimeIds);
       }
+
       const encoded = JSON.stringify(message);
-      for (const client of websocketServer.clients) {
+      if (message.type === "response") {
+        for (const client of dashboardSockets) {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(encoded);
+          }
+        }
+        return;
+      }
+      for (const client of dashboardSockets) {
         if (client === socket || client.readyState !== WebSocket.OPEN) {
           continue;
         }
         client.send(encoded);
       }
+    });
+
+    socket.on("close", () => {
+      dashboardSockets.delete(socket);
+      const runtimeIds = socketRuntimeIds.get(socket);
+      if (!runtimeIds) {
+        return;
+      }
+      for (const runtimeId of runtimeIds) {
+        latestSnapshots.delete(runtimeId);
+        if (runtimeSockets.get(runtimeId) === socket) {
+          runtimeSockets.delete(runtimeId);
+        }
+      }
+      socketRuntimeIds.delete(socket);
     });
   });
 

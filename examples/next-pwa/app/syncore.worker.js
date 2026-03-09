@@ -6,8 +6,8 @@ import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
-  databaseName: "syncore-next-example",
-  persistenceDatabaseName: "syncore-next-example",
+  databaseName: "syncore-bookmarks",
+  persistenceDatabaseName: "syncore-bookmarks",
   schema,
   functions,
   locateFile: () => "/sql-wasm.wasm",

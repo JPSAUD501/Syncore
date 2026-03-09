@@ -35,7 +35,7 @@ export function DataTable({
         {/* Rows */}
         <div>
           {rows.map((row, idx) => {
-            const rowId = String(row._id ?? row.id ?? idx);
+            const rowId = getRowId(row, idx);
             const isSelected = selectedRowId === rowId;
 
             return (
@@ -106,5 +106,20 @@ function CellValue({ value }: { value: unknown }) {
       </span>
     );
   }
-  return <span className="text-text-secondary">{String(value)}</span>;
+  if (typeof value === "bigint") {
+    return <span className="text-text-secondary">{String(value)}</span>;
+  }
+  return <span className="text-text-secondary">—</span>;
+}
+
+function getRowId(row: Record<string, unknown>, idx: number): string {
+  const candidate = row._id ?? row.id;
+  if (
+    typeof candidate === "string" ||
+    typeof candidate === "number" ||
+    typeof candidate === "bigint"
+  ) {
+    return String(candidate);
+  }
+  return `row-${idx}`;
 }
