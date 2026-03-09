@@ -33,6 +33,7 @@
     "@syncore/core": "workspace:*",
     "@syncore/devtools-protocol": "workspace:*",
     "@syncore/schema": "workspace:*",
+    "node-sql-parser": "^5.4.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

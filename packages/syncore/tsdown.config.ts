@@ -35,6 +35,7 @@ export default defineConfig({
       "node:fs",
       "node:fs/promises",
       "node:http",
+      "node:module",
       "node:net",
       "node:path",
       "node:sqlite",

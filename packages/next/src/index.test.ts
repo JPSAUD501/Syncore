@@ -42,7 +42,7 @@ describe("@syncore/next", () => {
   it("adds only the worker entry for static export builds", async () => {
     const wrapped = withSyncoreNext({ output: "export" });
     const webpack = (
-      wrapped as {
+      wrapped as unknown as {
         webpack: (
           config: Record<string, unknown>,
           context: Record<string, unknown>

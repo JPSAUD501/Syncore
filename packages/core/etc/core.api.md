@@ -120,6 +120,8 @@ export interface DevtoolsCommandHandlerDeps {
     runtime: SyncoreRuntime<AnySyncoreSchema>;
     // (undocumented)
     schema: AnySyncoreSchema;
+    // (undocumented)
+    sql?: DevtoolsSqlSupport;
 }
 
 // @public (undocumented)
@@ -154,6 +156,43 @@ export interface DevtoolsSink {
     attachRuntime?(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
     // (undocumented)
     emit(event: SyncoreDevtoolsEvent): void;
+}
+
+// @public (undocumented)
+export interface DevtoolsSqlAnalysis {
+    // (undocumented)
+    mode: DevtoolsSqlMode;
+    // (undocumented)
+    observedScopes: DevtoolsLiveQueryScope[];
+    // (undocumented)
+    readTables: string[];
+    // (undocumented)
+    schemaChanged: boolean;
+    // (undocumented)
+    writeTables: string[];
+}
+
+// @public (undocumented)
+export type DevtoolsSqlMode = "read" | "write" | "ddl";
+
+// @public (undocumented)
+export interface DevtoolsSqlReadResult {
+    // (undocumented)
+    columns: string[];
+    // (undocumented)
+    observedTables: string[];
+    // (undocumented)
+    rows: unknown[][];
+}
+
+// @public (undocumented)
+export interface DevtoolsSqlSupport {
+    // (undocumented)
+    analyzeSqlStatement(query: string): DevtoolsSqlAnalysis;
+    // (undocumented)
+    ensureSqlMode(analysis: DevtoolsSqlAnalysis, expected: DevtoolsSqlMode | "watch"): void;
+    // (undocumented)
+    runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult;
 }
 
 // @public (undocumented)

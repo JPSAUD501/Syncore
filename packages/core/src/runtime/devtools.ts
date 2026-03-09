@@ -22,6 +22,32 @@ export interface DevtoolsCommandHandlerDeps {
   schema: AnySyncoreSchema;
   functions: SyncoreRuntimeOptions<AnySyncoreSchema>["functions"];
   runtime: SyncoreRuntime<AnySyncoreSchema>;
+  sql?: DevtoolsSqlSupport;
+}
+
+export type DevtoolsSqlMode = "read" | "write" | "ddl";
+
+export interface DevtoolsSqlAnalysis {
+  mode: DevtoolsSqlMode;
+  readTables: string[];
+  writeTables: string[];
+  schemaChanged: boolean;
+  observedScopes: DevtoolsLiveQueryScope[];
+}
+
+export interface DevtoolsSqlReadResult {
+  columns: string[];
+  rows: unknown[][];
+  observedTables: string[];
+}
+
+export interface DevtoolsSqlSupport {
+  analyzeSqlStatement(query: string): DevtoolsSqlAnalysis;
+  ensureSqlMode(
+    analysis: DevtoolsSqlAnalysis,
+    expected: DevtoolsSqlMode | "watch"
+  ): void;
+  runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult;
 }
 
 export type DevtoolsCommandHandler = (
@@ -54,7 +80,7 @@ interface SubscriptionRecord {
 export function createDevtoolsCommandHandler(
   deps: DevtoolsCommandHandlerDeps
 ): DevtoolsCommandHandler {
-  const { driver, runtime } = deps;
+  const { driver, runtime, sql } = deps;
 
   return async (payload): Promise<SyncoreDevtoolsCommandResultPayload> => {
     switch (payload.kind) {
@@ -153,12 +179,12 @@ export function createDevtoolsCommandHandler(
 
       case "sql.read": {
         try {
-          const { runReadonlyQuery } = await loadDevtoolsSqlModule();
+          const sqlSupport = requireDevtoolsSqlSupport(sql);
           const databasePath = runtime.getDriverDatabasePath();
           if (!databasePath) {
             throw new Error("SQL Read requires a file-backed database path.");
           }
-          const { columns, rows } = runReadonlyQuery(
+          const { columns, rows } = sqlSupport.runReadonlyQuery(
             databasePath,
             payload.query
           );
@@ -179,8 +205,8 @@ export function createDevtoolsCommandHandler(
 
       case "sql.write": {
         try {
-          const { analyzeSqlStatement } = await loadDevtoolsSqlModule();
-          const analysis = analyzeSqlStatement(payload.query);
+          const sqlSupport = requireDevtoolsSqlSupport(sql);
+          const analysis = sqlSupport.analyzeSqlStatement(payload.query);
           if (analysis.mode === "read") {
             throw new Error(
               "Use SQL Read or SQL Live for read-only statements."
@@ -249,7 +275,8 @@ export function createDevtoolsSubscriptionHost(
         driver,
         schema,
         functions,
-        runtime
+        runtime,
+        ...(deps.sql ? { sql: deps.sql } : {})
       })
     );
   };
@@ -282,7 +309,7 @@ export function createDevtoolsSubscriptionHost(
           unsubscribeRuntime();
           unsubscribeEvents();
         },
-        scopes: scopesForSubscription(payload)
+        scopes: scopesForSubscription(payload, deps.sql)
       });
       await emit(payload, listener);
     },
@@ -350,12 +377,12 @@ async function resolveSubscriptionPayload(
         functions: listFunctions(functions)
       };
     case "sql.watch": {
-      const { runReadonlyQuery } = await loadDevtoolsSqlModule();
+      const sqlSupport = requireDevtoolsSqlSupport(deps.sql);
       const databasePath = runtime.getDriverDatabasePath();
       if (!databasePath) {
         throw new Error("SQL Live requires a file-backed database path.");
       }
-      const { columns, rows, observedTables } = runReadonlyQuery(
+      const { columns, rows, observedTables } = sqlSupport.runReadonlyQuery(
         databasePath,
         payload.query
       );
@@ -630,7 +657,8 @@ async function runDevtoolsMutation<TResult>(
 }
 
 function scopesForSubscription(
-  payload: SyncoreDevtoolsSubscriptionPayload
+  payload: SyncoreDevtoolsSubscriptionPayload,
+  sql?: DevtoolsSqlSupport
 ): Set<DevtoolsInvalidationScope> {
   switch (payload.kind) {
     case "runtime.summary":
@@ -647,10 +675,9 @@ function scopesForSubscription(
       return new Set(["all"]);
     case "sql.watch": {
       try {
-        const { analyzeSqlStatement, ensureSqlMode } =
-          getDevtoolsSqlModuleSync();
-        const analysis = analyzeSqlStatement(payload.query);
-        ensureSqlMode(analysis, "watch");
+        const sqlSupport = requireDevtoolsSqlSupport(sql);
+        const analysis = sqlSupport.analyzeSqlStatement(payload.query);
+        sqlSupport.ensureSqlMode(analysis, "watch");
         return new Set<DevtoolsInvalidationScope>(analysis.observedScopes);
       } catch {
         return new Set<DevtoolsInvalidationScope>(["all"]);
@@ -674,18 +701,11 @@ function intersects(
   return false;
 }
 
-let cachedDevtoolsSqlModule: typeof import("./devtools-sql.js") | undefined;
-
-async function loadDevtoolsSqlModule(): Promise<
-  typeof import("./devtools-sql.js")
-> {
-  cachedDevtoolsSqlModule ??= await import("./devtools-sql.js");
-  return cachedDevtoolsSqlModule;
-}
-
-function getDevtoolsSqlModuleSync(): typeof import("./devtools-sql.js") {
-  if (!cachedDevtoolsSqlModule) {
-    throw new Error("Devtools SQL module is not loaded yet.");
+function requireDevtoolsSqlSupport(
+  sql?: DevtoolsSqlSupport
+): DevtoolsSqlSupport {
+  if (!sql) {
+    throw new Error("SQL devtools are only available in Node-hosted runtimes.");
   }
-  return cachedDevtoolsSqlModule;
+  return sql;
 }
