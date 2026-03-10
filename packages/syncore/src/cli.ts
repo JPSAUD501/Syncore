@@ -6,10 +6,14 @@ import { fileURLToPath } from "node:url";
 export { runSyncoreCli };
 
 function isDirectInvocation(moduleUrl: string): boolean {
+  const invokedPath = process.argv[1];
+  if (invokedPath === undefined) {
+    return false;
+  }
+
   return (
-    Boolean(process.argv[1]) &&
-    realpathSync(path.resolve(process.argv[1])) ===
-      realpathSync(path.resolve(fileURLToPath(moduleUrl)))
+    realpathSync(path.resolve(invokedPath)) ===
+    realpathSync(path.resolve(fileURLToPath(moduleUrl)))
   );
 }
 
