@@ -20,6 +20,10 @@ import type {
   SyncoreDevtoolsUnsubscribe
 } from "@syncore/devtools-protocol";
 import {
+  createPublicRuntimeId,
+  createPublicTargetId
+} from "@syncore/devtools-protocol";
+import {
   createDevtoolsCommandHandler,
   createDevtoolsSubscriptionHost,
   generateId,
@@ -2156,6 +2160,7 @@ export async function startDevHub(options: {
   const logsDirectory = path.join(options.cwd, ".syncore", "logs");
   const logFilePath = path.join(logsDirectory, "runtime.jsonl");
   await mkdir(logsDirectory, { recursive: true });
+  await writeFile(logFilePath, "");
   await runDevProjectBootstrap(options.cwd, options.template);
   await setupDevProjectWatch(options.cwd, options.template);
 
@@ -2208,17 +2213,34 @@ export async function startDevHub(options: {
     event: Extract<SyncoreDevtoolsMessage, { type: "event" }>["event"]
   ) => {
     const runtimeHello = runtimeHellos.get(event.runtimeId);
+    const clientRuntimeIds = [...runtimeHellos.values()]
+      .filter(
+        (hello) =>
+          hello.runtimeId !== "syncore-dev-hub" &&
+          hello.targetKind !== "project"
+      )
+      .map((hello) => hello.runtimeId)
+      .sort();
+    const clientTargetKeys = [...runtimeHellos.values()]
+      .filter(
+        (hello) =>
+          hello.runtimeId !== "syncore-dev-hub" &&
+          hello.targetKind !== "project"
+      )
+      .map((hello) => hello.storageIdentity ?? `runtime::${hello.runtimeId}`)
+      .sort();
     const targetIdentity =
-      runtimeHello?.storageIdentity ??
-      (event.runtimeId === "syncore-dev-hub"
-        ? "syncore-dev-hub"
-        : `runtime::${event.runtimeId}`);
+      runtimeHello?.storageIdentity ?? `runtime::${event.runtimeId}`;
     const targetId =
       event.runtimeId === "syncore-dev-hub"
         ? "all"
         : runtimeHello?.targetKind === "project"
-          ? `project:${stableRuntimeTargetId(targetIdentity)}`
-        : `client:${stableRuntimeTargetId(targetIdentity)}`;
+          ? "project"
+          : createPublicTargetId(targetIdentity, clientTargetKeys);
+    const publicRuntimeId =
+      event.runtimeId === "syncore-dev-hub"
+        ? undefined
+        : createPublicRuntimeId(event.runtimeId, clientRuntimeIds);
     const category =
       event.type === "query.executed"
         ? "query"
@@ -2238,9 +2260,11 @@ export async function startDevHub(options: {
     await appendFile(
       logFilePath,
       `${JSON.stringify({
+        version: 2,
         timestamp: event.timestamp,
         runtimeId: event.runtimeId,
         targetId,
+        ...(publicRuntimeId ? { publicRuntimeId } : {}),
         ...(runtimeHello?.platform ? { platform: runtimeHello.platform } : {}),
         eventType: event.type,
         category,
@@ -2816,15 +2840,6 @@ function isCliEntryPoint(): boolean {
 
 function stableStringify(value: unknown): string {
   return JSON.stringify(sortValue(value));
-}
-
-function stableRuntimeTargetId(input: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return Math.abs(hash >>> 0).toString(36);
 }
 
 function sortValue(value: unknown): unknown {

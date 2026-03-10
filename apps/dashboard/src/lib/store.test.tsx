@@ -9,6 +9,7 @@ import {
   useDevtoolsStore,
   useSelectedRuntimeFilter,
   useSelectedTarget,
+  useSelectedTargetRuntimes,
   useSelectedRuntimeConnected
 } from "./store";
 import { useConnection } from "@/hooks/useConnection";
@@ -358,6 +359,94 @@ describe("devtools store runtime selection", () => {
     expect(result.current.selectedTarget?.kind).toBe("client");
     expect(result.current.runtimeFilter).toBe("all");
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
+  });
+
+  it("keeps the selected session filter when other sessions emit events", () => {
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-a-12345678",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-b-87654321",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState().selectRuntime("runtime-b-87654321");
+
+    useDevtoolsStore.getState()._handleMessage({
+      type: "event",
+      event: {
+        type: "query.executed",
+        runtimeId: "runtime-a-12345678",
+        queryId: "query-1",
+        functionName: "tasks:list",
+        dependencies: [],
+        durationMs: 2,
+        timestamp: 10
+      }
+    });
+
+    const { result } = renderHook(() => ({
+      runtimeFilter: useSelectedRuntimeFilter(),
+      activeRuntime: useActiveRuntime()
+    }));
+
+    expect(result.current.runtimeFilter).toBe("runtime-b-87654321");
+    expect(result.current.activeRuntime?.runtimeId).toBe("runtime-b-87654321");
+  });
+
+  it("does not expose disconnected sessions in the selected target runtime list", () => {
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-a-12345678",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-b-87654321",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "event",
+      event: {
+        type: "runtime.disconnected",
+        runtimeId: "runtime-b-87654321",
+        timestamp: 10
+      }
+    });
+
+    const { result } = renderHook(() => ({
+      targets: useConnectedTargets(),
+      selectedTarget: useSelectedTarget(),
+      runtimes: useSelectedTargetRuntimes()
+    }));
+
+    expect(result.current.targets).toHaveLength(1);
+    expect(result.current.selectedTarget?.connectedSessions).toBe(1);
+    expect(result.current.runtimes.map((runtime) => runtime.runtimeId)).toEqual([
+      "runtime-a-12345678"
+    ]);
   });
 
   it("keeps the last runtime snapshot when a runtime disconnects", () => {

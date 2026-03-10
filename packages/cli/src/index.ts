@@ -11,10 +11,21 @@ export { runSyncoreCli };
 installCliWarningFilters();
 ensureSupportedNodeVersion();
 
-if (
-  process.argv[1] &&
-  realpathSync(path.resolve(process.argv[1])) ===
-    realpathSync(path.resolve(fileURLToPath(import.meta.url)))
-) {
-  await runSyncoreCli();
+function isDirectInvocation(moduleUrl: string): boolean {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+  return (
+    realpathSync(path.resolve(entry)) ===
+    realpathSync(path.resolve(fileURLToPath(moduleUrl)))
+  );
+}
+
+if (isDirectInvocation(import.meta.url)) {
+  void runSyncoreCli().catch((error) => {
+    process.nextTick(() => {
+      throw error;
+    });
+  });
 }

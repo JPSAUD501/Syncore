@@ -51,9 +51,14 @@ function getRuntimeTag(
   }
   const runtime = runtimeMap.get(event.runtimeId);
   if (!runtime) {
-    return getPublicRuntimeId(event.runtimeId);
+    return getPublicRuntimeId(event.runtimeId, runtimeMap.keys());
   }
-  return `${runtime.label}:${runtime.publicId}`;
+  return `${runtime.publicId} ${runtime.label}`;
+}
+
+function formatInvalidatedQueryId(queryId: string): string {
+  const separatorIndex = queryId.indexOf(":");
+  return separatorIndex === -1 ? queryId : queryId.slice(0, separatorIndex);
 }
 
 /* ------------------------------------------------------------------ */
@@ -197,7 +202,7 @@ function getEventDetail(event: SyncoreDevtoolsEvent): string {
     case "query.executed":
       return `${event.functionName} (${formatDuration(event.durationMs)})`;
     case "query.invalidated":
-      return `${event.queryId} - ${event.reason}`;
+      return `${formatInvalidatedQueryId(event.queryId)} - ${event.reason}`;
     case "mutation.committed":
       return `${event.functionName} (${formatDuration(event.durationMs)})`;
     case "action.completed":
@@ -209,9 +214,9 @@ function getEventDetail(event: SyncoreDevtoolsEvent): string {
     case "storage.updated":
       return `${event.operation} ${event.storageId}`;
     case "runtime.connected":
-      return event.platform;
+      return `${event.platform} connected`;
     case "runtime.disconnected":
-      return event.runtimeId;
+      return "Runtime disconnected";
     case "log":
       return `[${event.level}] ${event.message}`;
     default:
@@ -297,16 +302,18 @@ export function OverviewPage() {
   const platform = activeRuntime?.platform ?? null;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
   const runtimeMap = useMemo(
-    () =>
-      new Map(
+    () => {
+      const runtimeIds = runtimes.map((runtime) => runtime.runtimeId);
+      return new Map(
         runtimes.map((runtime) => [
           runtime.runtimeId,
           {
             label: getRuntimeLabel(runtime),
-            publicId: getPublicRuntimeId(runtime.runtimeId)
+            publicId: getPublicRuntimeId(runtime.runtimeId, runtimeIds)
           }
         ])
-      ),
+      );
+    },
     [runtimes]
   );
 

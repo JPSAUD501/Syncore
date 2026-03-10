@@ -7,6 +7,7 @@ import type {
 export type JsonLikeFormat = "pretty" | "json" | "jsonl";
 
 export interface PersistedLogEntry {
+  version?: 2;
   timestamp: number;
   runtimeId: string;
   targetId: string;
@@ -270,11 +271,8 @@ function formatLogEntry(entry: PersistedLogEntry): string {
   const runtime =
     entry.origin === "dashboard"
       ? "dashboard"
-      : entry.runtimeLabel
-        ? entry.publicRuntimeId &&
-          !entry.runtimeLabel.includes(entry.publicRuntimeId)
-          ? `${entry.runtimeLabel}:${entry.publicRuntimeId}`
-          : entry.runtimeLabel
-        : entry.publicRuntimeId ?? "runtime";
+      : entry.publicRuntimeId && entry.runtimeLabel
+        ? `${entry.publicRuntimeId} ${entry.runtimeLabel}`
+        : entry.publicRuntimeId ?? entry.runtimeLabel ?? "runtime";
   return `${timestamp}  ${target}  ${runtime}  ${entry.category}  ${entry.message}`;
 }

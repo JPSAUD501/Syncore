@@ -111,7 +111,7 @@ function getEventSummary(event: SyncoreDevtoolsEvent): string {
     case "query.executed":
       return event.functionName;
     case "query.invalidated":
-      return `${event.queryId} - ${event.reason}`;
+      return `${formatInvalidatedQueryId(event.queryId)} - ${event.reason}`;
     case "mutation.committed":
       return event.functionName;
     case "action.completed":
@@ -121,9 +121,9 @@ function getEventSummary(event: SyncoreDevtoolsEvent): string {
     case "storage.updated":
       return `${event.operation} ${event.storageId}`;
     case "runtime.connected":
-      return `${event.runtimeId} (${event.platform})`;
+      return `${event.platform} connected`;
     case "runtime.disconnected":
-      return event.runtimeId;
+      return "Runtime disconnected";
     case "log":
       return event.message;
     default:
@@ -153,9 +153,14 @@ function getEventRuntimeTag(
   }
   const runtime = runtimeMap.get(event.runtimeId);
   if (!runtime) {
-    return getPublicRuntimeId(event.runtimeId);
+    return getPublicRuntimeId(event.runtimeId, runtimeMap.keys());
   }
-  return `${runtime.label}:${runtime.publicId}`;
+  return `${runtime.publicId} ${runtime.label}`;
+}
+
+function formatInvalidatedQueryId(queryId: string): string {
+  const separatorIndex = queryId.indexOf(":");
+  return separatorIndex === -1 ? queryId : queryId.slice(0, separatorIndex);
 }
 
 /* ------------------------------------------------------------------ */
@@ -322,12 +327,20 @@ function LogDetail({
         )}
         {event.type === "runtime.connected" && (
           <>
-            <DetailRow label="Runtime ID" value={event.runtimeId} mono />
+            <DetailRow
+              label="Runtime ID"
+              value={getEventRuntimeTag(event, runtimeMap)}
+              mono
+            />
             <DetailRow label="Platform" value={event.platform} />
           </>
         )}
         {event.type === "runtime.disconnected" && (
-          <DetailRow label="Runtime ID" value={event.runtimeId} mono />
+          <DetailRow
+            label="Runtime ID"
+            value={getEventRuntimeTag(event, runtimeMap)}
+            mono
+          />
         )}
         {event.type === "log" && (
           <>
@@ -386,16 +399,18 @@ function LogsPage() {
     [events, includeDashboardActivity]
   );
   const runtimeMap = useMemo(
-    () =>
-      new Map(
+    () => {
+      const runtimeIds = runtimes.map((runtime) => runtime.runtimeId);
+      return new Map(
         runtimes.map((runtime) => [
           runtime.runtimeId,
           {
             label: getRuntimeLabel(runtime),
-            publicId: getPublicRuntimeId(runtime.runtimeId)
+            publicId: getPublicRuntimeId(runtime.runtimeId, runtimeIds)
           }
         ])
-      ),
+      );
+    },
     [runtimes]
   );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);

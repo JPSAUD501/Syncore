@@ -34,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
-import { useActiveRuntime } from "@/lib/store";
+import { getPublicRuntimeId, useActiveRuntime } from "@/lib/store";
 import { sendRequest } from "@/lib/store";
 import { parseEditableCellValue, toEditableCellText } from "@/lib/dataValue";
 import { cn } from "@/lib/utils";
@@ -576,7 +576,7 @@ function DataPage() {
                     className="hidden text-[10px] font-mono lg:inline-flex"
                   >
                     {activeRuntime.platform}:
-                    {activeRuntime.runtimeId.slice(0, 8)}
+                    {getPublicRuntimeId(activeRuntime.runtimeId)}
                   </Badge>
                 )}
               </div>

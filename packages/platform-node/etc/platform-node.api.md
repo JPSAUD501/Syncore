@@ -224,7 +224,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
     // (undocumented)
     storageProtocol?: string;
     // (undocumented)
-    targetKind?: "client";
+    targetKind?: "client" | "project";
     // (undocumented)
     url: string;
 }

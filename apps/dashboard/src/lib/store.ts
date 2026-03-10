@@ -11,6 +11,10 @@ import type {
   SyncoreDevtoolsCommandResultPayload
 } from "@syncore/devtools-protocol";
 import {
+  createPublicRuntimeId as createSharedPublicRuntimeId,
+  createPublicTargetId as createSharedPublicTargetId
+} from "@syncore/devtools-protocol";
+import {
   readDashboardActivityPreference,
   writeDashboardActivityPreference
 } from "./activity";
@@ -195,8 +199,11 @@ function isProjectRuntime(
   return runtime.targetKind === "project";
 }
 
-export function getPublicRuntimeId(runtimeId: string): string {
-  return runtimeId.slice(0, 8);
+export function getPublicRuntimeId(
+  runtimeId: string,
+  runtimeIds?: Iterable<string>
+): string {
+  return createSharedPublicRuntimeId(runtimeId, runtimeIds);
 }
 
 export function getRuntimeLabel(
@@ -205,37 +212,11 @@ export function getRuntimeLabel(
   return runtime.sessionLabel ?? runtime.appName ?? runtime.platform;
 }
 
-function stableTargetId(input: string, salt: number): string {
-  const hashInput = salt === 0 ? input : `${input}#${salt}`;
-  let hash = 2166136261;
-  for (let index = 0; index < hashInput.length; index += 1) {
-    hash ^= hashInput.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  const value = (hash >>> 0) % 100000;
-  return value.toString().padStart(5, "0");
-}
-
 function createPublicTargetId(
   key: string,
   keys: string[]
 ): string {
-  const used = new Set<string>();
-  for (const existingKey of [...keys].sort()) {
-    let attempt = 0;
-    while (true) {
-      const candidate = stableTargetId(existingKey, attempt);
-      if (existingKey === key && !used.has(candidate)) {
-        return candidate;
-      }
-      if (!used.has(candidate)) {
-        used.add(candidate);
-        break;
-      }
-      attempt += 1;
-    }
-  }
-  return stableTargetId(key, 0);
+  return createSharedPublicTargetId(key, keys);
 }
 
 function getTargetGroupKey(runtime: RuntimeState): string {
@@ -447,12 +428,17 @@ function resolveSelectionState(
     preferredRuntimeId
       ? targets.find((target) => target.runtimeIds.includes(preferredRuntimeId))
       : undefined;
+  const currentTarget = currentSelectedTargetId
+    ? targets.find((target) => target.id === currentSelectedTargetId)
+    : undefined;
+  const hasAnyConnectedTarget = targets.some((target) => target.connected);
   const selectedTarget =
-    (currentSelectedTargetId
-      ? targets.find((target) => target.id === currentSelectedTargetId)
+    (currentTarget && (currentTarget.connected || !hasAnyConnectedTarget)
+      ? currentTarget
       : undefined) ??
     preferredTarget ??
     targets.find((target) => target.kind === "client" && target.connected) ??
+    targets.find((target) => target.kind === "project" && target.connected) ??
     targets.find((target) => target.kind === "client") ??
     targets[0] ??
     null;
@@ -489,11 +475,7 @@ function resolveSelectionState(
     selectedTarget.runtimeIds.includes(currentSelectedRuntimeFilter) &&
     filteredRuntime?.connected === true;
   const selectedRuntimeFilter =
-    preferredRuntimeId && selectedTarget.runtimeIds.includes(preferredRuntimeId)
-      ? "all"
-      : hasCurrentFilter
-        ? currentSelectedRuntimeFilter
-        : "all";
+    hasCurrentFilter ? currentSelectedRuntimeFilter : "all";
   const selectedRuntimeId =
     selectedRuntimeFilter && selectedRuntimeFilter !== "all"
       ? selectedRuntimeFilter
@@ -937,7 +919,7 @@ export function useSelectedTargetRuntimes() {
         getTargetsSnapshot(state.runtimes).find(
           (target) => target.id === state.selectedTargetId
         )
-          ?.runtimes ?? []
+          ?.runtimes.filter((runtime) => runtime.connected) ?? []
       );
     })
   );

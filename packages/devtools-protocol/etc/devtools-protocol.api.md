@@ -5,6 +5,18 @@
 ```ts
 
 // @public (undocumented)
+export function createBasePublicId(input: string): string;
+
+// @public (undocumented)
+export function createPublicId(key: string, keys: Iterable<string>): string;
+
+// @public (undocumented)
+export function createPublicRuntimeId(runtimeId: string, runtimeIds?: Iterable<string>): string;
+
+// @public (undocumented)
+export function createPublicTargetId(targetKey: string, targetKeys: Iterable<string>): string;
+
+// @public (undocumented)
 export interface DataFilter {
     // (undocumented)
     field: string;
@@ -42,13 +54,80 @@ export interface SchedulerJob {
     // (undocumented)
     id: string;
     // (undocumented)
+    lastRunAt?: number;
+    // (undocumented)
+    misfirePolicy?: SchedulerMisfirePolicy;
+    // (undocumented)
+    recurringName?: string;
+    // (undocumented)
     result?: unknown;
     // (undocumented)
     runAt: number;
     // (undocumented)
+    schedule?: SchedulerRecurringSchedule;
+    // (undocumented)
     scheduledAt: number;
     // (undocumented)
+    scheduleLabel?: string;
+    // (undocumented)
     status: "pending" | "running" | "completed" | "failed" | "cancelled";
+    // (undocumented)
+    timezone?: string;
+    // (undocumented)
+    updatedAt?: number;
+}
+
+// @public (undocumented)
+export type SchedulerMisfirePolicy = {
+    type: "catch_up";
+} | {
+    type: "skip";
+} | {
+    type: "run_once_if_missed";
+} | {
+    type: "windowed";
+    windowMs: number;
+};
+
+// @public (undocumented)
+export interface SchedulerRecurringDailySchedule {
+    // (undocumented)
+    hour: number;
+    // (undocumented)
+    minute: number;
+    // (undocumented)
+    timezone?: string;
+    // (undocumented)
+    type: "daily";
+}
+
+// @public (undocumented)
+export interface SchedulerRecurringIntervalSchedule {
+    // (undocumented)
+    hours?: number;
+    // (undocumented)
+    minutes?: number;
+    // (undocumented)
+    seconds?: number;
+    // (undocumented)
+    type: "interval";
+}
+
+// @public (undocumented)
+export type SchedulerRecurringSchedule = SchedulerRecurringIntervalSchedule | SchedulerRecurringDailySchedule | SchedulerRecurringWeeklySchedule;
+
+// @public (undocumented)
+export interface SchedulerRecurringWeeklySchedule {
+    // (undocumented)
+    dayOfWeek: "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
+    // (undocumented)
+    hour: number;
+    // (undocumented)
+    minute: number;
+    // (undocumented)
+    timezone?: string;
+    // (undocumented)
+    type: "weekly";
 }
 
 // @public (undocumented)
@@ -108,6 +187,13 @@ export type SyncoreDevtoolsCommandPayload = {
 } | {
     kind: "scheduler.cancel";
     jobId: string;
+} | {
+    kind: "scheduler.update";
+    jobId: string;
+    schedule: SchedulerRecurringSchedule;
+    args: Record<string, unknown>;
+    misfirePolicy: SchedulerMisfirePolicy;
+    runAt?: number;
 };
 
 // @public (undocumented)
@@ -134,7 +220,14 @@ export type SyncoreDevtoolsCommandResultPayload = {
 } | {
     kind: "scheduler.cancel.result";
     success: boolean;
+    cancelled: boolean;
     error?: string;
+} | {
+    kind: "scheduler.update.result";
+    success: boolean;
+    updated: boolean;
+    error?: string;
+    job?: SchedulerJob;
 } | {
     kind: "error";
     message: string;
@@ -194,7 +287,7 @@ export type SyncoreDevtoolsMessage = {
     appName?: string;
     origin?: string;
     sessionLabel?: string;
-    targetKind?: "client";
+    targetKind?: "client" | "project";
     storageProtocol?: string;
     databaseLabel?: string;
     storageIdentity?: string;
@@ -332,7 +425,7 @@ export interface SyncoreRuntimeSummary {
     // (undocumented)
     storageProtocol?: string;
     // (undocumented)
-    targetKind?: "client";
+    targetKind?: "client" | "project";
 }
 
 // @public (undocumented)

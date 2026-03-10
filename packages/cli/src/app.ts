@@ -394,7 +394,7 @@ function addDevCommand(program: Command): void {
     .option("--until-success", "Retry bootstrap until it succeeds")
     .option("--run <function>", "Run a Syncore function after bootstrap succeeds")
     .option("--run-sh <command>", "Run a shell command after bootstrap succeeds")
-    .option("--open-dashboard", "Open the dashboard URL in the system browser")
+    .option("--open-dashboard", "Open the dashboard URL even in non-interactive mode")
     .addHelpText(
       "after",
       [
@@ -414,6 +414,8 @@ function addDevCommand(program: Command): void {
         if (options.run && options.runSh) {
           ctx.fail("`syncorejs dev` accepts either --run or --run-sh, not both.");
         }
+        const shouldOpenDashboard =
+          Boolean(options.openDashboard) || isRealInteractiveTerminal(ctx);
         await ensureLocalPortConfiguration(ctx);
 
         const template = await resolveRequestedTemplate(ctx.cwd, options.template);
@@ -450,16 +452,31 @@ function addDevCommand(program: Command): void {
           devtoolsUrl: resolveDevtoolsUrl(),
           targets
         });
-        if (options.openDashboard) {
-          setTimeout(() => {
-            void openTarget(resolveDashboardUrl());
-          }, 1500);
-        }
 
         await startManagedDevHub(ctx, template);
+        await maybeOpenDashboard(ctx, shouldOpenDashboard);
         await monitorLiveDevSession(ctx, template);
       });
     });
+}
+
+function isRealInteractiveTerminal(context: CliContext): boolean {
+  return context.interactive && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+async function maybeOpenDashboard(
+  context: CliContext,
+  shouldOpenDashboard: boolean
+): Promise<void> {
+  if (!shouldOpenDashboard) {
+    return;
+  }
+  const opened = await openTarget(resolveDashboardUrl());
+  if (opened) {
+    context.info(`Opened dashboard at ${resolveDashboardUrl()}.`);
+    return;
+  }
+  context.warn("Unable to open the dashboard automatically.");
 }
 
 function addMigrateCommand(program: Command): void {
@@ -596,7 +613,7 @@ function addRunCommand(program: Command): void {
         "Examples:",
         "  npx syncorejs run tasks/list",
         "  npx syncorejs run api.tasks.create '{\"text\":\"Ship Syncore\"}' --target project",
-        "  npx syncorejs run tasks/list --watch --target 10427 --runtime a12f3c4d --format json"
+        "  npx syncorejs run tasks/list --watch --target 10427 --runtime 20318 --format json"
       ].join("\n")
     )
     .action(
@@ -627,8 +644,8 @@ function addRunCommand(program: Command): void {
         });
         ctx.info(
           options.watch
-            ? `Watching ${resolved.name} on ${target.id}${runtime ? ` (${runtime.label}:${runtime.id})` : ""}.`
-            : `Running ${resolved.name} on ${target.id}${runtime ? ` (${runtime.label}:${runtime.id})` : ""}.`
+            ? `Watching ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
+            : `Running ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
         );
         if (target.kind === "project") {
           const managed = await createManagedProjectClient(ctx.cwd);
@@ -748,7 +765,7 @@ function addDataCommand(program: Command): void {
         "Examples:",
         "  npx syncorejs data",
         "  npx syncorejs data tasks --target project --limit 10",
-        "  npx syncorejs data tasks --target 10427 --runtime a12f3c4d --watch --format jsonl"
+        "  npx syncorejs data tasks --target 10427 --runtime 20318 --watch --format jsonl"
       ].join("\n")
     )
     .action(
@@ -826,7 +843,7 @@ function addDataCommand(program: Command): void {
             }
           });
           ctx.info(
-            `Watching table ${table} on ${target.id} (${runtime!.label}:${runtime!.id}). Press Ctrl+C to stop.`
+            `Watching table ${table} on ${target.id} (${runtime!.id} ${runtime!.label}). Press Ctrl+C to stop.`
           );
           await waitForSignal();
           unsubscribe();
@@ -853,7 +870,7 @@ function addImportCommand(program: Command): void {
         "",
         "Examples:",
         "  npx syncorejs import --table tasks sample.jsonl --target project",
-        "  npx syncorejs import --table tasks sample.json --target 10427 --runtime a12f3c4d",
+        "  npx syncorejs import --table tasks sample.json --target 10427 --runtime 20318",
         "  npx syncorejs import backups/export.zip"
       ].join("\n")
     )
@@ -928,7 +945,7 @@ function addExportCommand(program: Command): void {
         "",
         "Examples:",
         "  npx syncorejs export --table tasks --path tasks.jsonl --target project",
-        "  npx syncorejs export --path ./exports --target 10427 --runtime a12f3c4d",
+        "  npx syncorejs export --path ./exports --target 10427 --runtime 20318",
         "  npx syncorejs export --path ./exports.zip"
       ].join("\n")
     )
@@ -982,7 +999,7 @@ function addLogsCommand(program: Command): void {
         "",
         "Examples:",
         "  npx syncorejs logs",
-        "  npx syncorejs logs --target 10427 --runtime a12f3c4d --watch",
+        "  npx syncorejs logs --target 10427 --runtime 20318 --watch",
         "  npx syncorejs logs --kind mutation --format jsonl"
       ].join("\n")
     )
@@ -1528,6 +1545,7 @@ async function readPersistedLogs(cwd: string): Promise<PersistedLogEntry[]> {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => JSON.parse(line) as PersistedLogEntry)
+    .filter((entry) => entry.version === 2)
     .filter((entry) => !shouldSuppressLogEntry(entry));
 }
 
@@ -1602,7 +1620,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "system",
-        message: `${typeof event.queryId === "string" ? event.queryId : "query"} invalidated${typeof event.reason === "string" ? ` (${event.reason})` : ""}`,
+        message: `${formatInvalidatedQueryId(event.queryId)} invalidated${typeof event.reason === "string" ? ` (${event.reason})` : ""}`,
         event
       };
     case "mutation.committed":
@@ -1632,7 +1650,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "system",
-        message: `${runtimeLabel}${publicRuntimeId ? `:${publicRuntimeId}` : ""} connected`,
+        message: `${publicRuntimeId ?? "runtime"} ${runtimeLabel} connected`,
         event
       };
     case "runtime.disconnected":
@@ -1640,7 +1658,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "system",
-        message: `${runtimeLabel}${publicRuntimeId ? `:${publicRuntimeId}` : ""} disconnected`,
+        message: `${publicRuntimeId ?? "runtime"} ${runtimeLabel} disconnected`,
         event
       };
     case "storage.updated":
@@ -1685,6 +1703,17 @@ function shouldSuppressLogEntry(entry: PersistedLogEntry): boolean {
     entry.eventType === "log" &&
     /syncore devtools hub is alive/i.test(entry.message)
   );
+}
+
+function formatInvalidatedQueryId(queryId: unknown): string {
+  if (typeof queryId !== "string" || queryId.length === 0) {
+    return "query";
+  }
+  const separatorIndex = queryId.indexOf(":");
+  if (separatorIndex === -1) {
+    return queryId;
+  }
+  return queryId.slice(0, separatorIndex);
 }
 
 function humanizeRuntimeEvent(

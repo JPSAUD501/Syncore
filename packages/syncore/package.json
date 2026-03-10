@@ -95,7 +95,7 @@
     }
   },
   "scripts": {
-    "build": "bun run build:deps && tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
+    "build": "tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
     "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/schema build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/cli build && bun run --filter @syncore/react build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build && bun run --filter @syncore/svelte build",
     "build:standalone": "bun run build:deps && bun run build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",

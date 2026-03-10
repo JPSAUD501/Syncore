@@ -17,6 +17,11 @@ import type {
   SyncoreDevtoolsSubscriptionResultPayload
 } from "@syncore/devtools-protocol";
 import {
+  createBasePublicId,
+  createPublicRuntimeId as createSharedPublicRuntimeId,
+  createPublicTargetId as createSharedPublicTargetId
+} from "@syncore/devtools-protocol";
+import {
   VALID_SYNCORE_TEMPLATES,
   detectProjectTemplate,
   fileExists,
@@ -139,8 +144,11 @@ export type SyncoreTargetDescriptor =
   | ProjectTargetDescriptor
   | ClientTargetDescriptor;
 
-export function createPublicRuntimeId(runtimeId: string): string {
-  return runtimeId.slice(0, 8);
+export function createPublicRuntimeId(
+  runtimeId: string,
+  runtimeIds?: Iterable<string>
+): string {
+  return createSharedPublicRuntimeId(runtimeId, runtimeIds);
 }
 
 export function getClientRuntimeLabel(input: {
@@ -647,7 +655,7 @@ export function resolveDashboardUrl(): string {
 }
 
 export function resolveDevtoolsUrl(): string {
-  return `ws://localhost:${resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311)}`;
+  return `ws://127.0.0.1:${resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311)}`;
 }
 
 type RuntimeHello = Extract<SyncoreDevtoolsMessage, { type: "hello" }>;
@@ -683,7 +691,12 @@ export async function listConnectedClientTargets(
     return [];
   }
 
-  const hub = await connectToDevtoolsHub(devtoolsUrl);
+  let hub: HubConnection;
+  try {
+    hub = await connectToDevtoolsHub(devtoolsUrl);
+  } catch {
+    return [];
+  }
   try {
     const snapshot = await hub.collectSnapshot();
     return buildClientTargets(snapshot.hellos);
@@ -713,7 +726,11 @@ export async function connectToProjectHub(
   if (!Number.isFinite(port) || !(await isLocalPortInUse(port))) {
     return null;
   }
-  return await connectToDevtoolsHub(devtoolsUrl);
+  try {
+    return await connectToDevtoolsHub(devtoolsUrl);
+  } catch {
+    return null;
+  }
 }
 
 export function isKnownTemplate(value: string): value is (typeof VALID_SYNCORE_TEMPLATES)[number] {
@@ -864,6 +881,10 @@ async function isDirectory(filePath: string): Promise<boolean> {
 
 async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
   const socket = new WebSocket(url);
+  socket.on("error", () => {
+    // The hub can disappear between the port probe and the websocket handshake.
+    // Keep those transient client-side failures from surfacing as process-level errors.
+  });
   const hellos = new Map<string, RuntimeHello>();
   const events: RuntimeEventMessage["event"][] = [];
   const eventListeners = new Set<(event: RuntimeEventMessage["event"]) => void>();
@@ -1039,6 +1060,11 @@ function buildClientTargets(hellos: RuntimeHello[]): ClientTargetDescriptor[] {
     groups.set(key, group);
   }
 
+  const allRuntimeIds = hellos
+    .filter((hello) => hello.runtimeId !== "syncore-dev-hub")
+    .map((hello) => hello.runtimeId)
+    .sort();
+
   return [...groups.values()]
     .map(({ key, runtimes }) => {
       const sortedRuntimes = [...runtimes].sort((left, right) =>
@@ -1052,8 +1078,9 @@ function buildClientTargets(hellos: RuntimeHello[]): ClientTargetDescriptor[] {
             .filter((value): value is string => typeof value === "string")
         )
       );
+      const runtimeIds = sortedRuntimes.map((entry) => entry.runtimeId);
       const runtimeDescriptors = sortedRuntimes.map((entry, index) => ({
-        id: createPublicRuntimeId(entry.runtimeId),
+        id: createPublicRuntimeId(entry.runtimeId, allRuntimeIds),
         runtimeId: entry.runtimeId,
         label: getClientRuntimeLabel({
           ...(entry.sessionLabel ? { sessionLabel: entry.sessionLabel } : {}),
@@ -1075,7 +1102,7 @@ function buildClientTargets(hellos: RuntimeHello[]): ClientTargetDescriptor[] {
         kind: "client" as const,
         label: renderClientTargetLabel(primary, runtimes.length),
         runtimeId: primary.runtimeId,
-        runtimeIds: sortedRuntimes.map((entry) => entry.runtimeId),
+        runtimeIds,
         runtimes: runtimeDescriptors,
         platform: primary.platform,
         ...(primary.appName ? { appName: primary.appName } : {}),
@@ -1102,22 +1129,7 @@ export function createPublicClientTargetId(
 ): string {
   const keys =
     groupsOrKeys instanceof Map ? [...groupsOrKeys.keys()] : [...groupsOrKeys];
-  const used = new Set<string>();
-  for (const existingKey of [...keys].sort()) {
-    let attempt = 0;
-    while (true) {
-      const candidate = stableNumericId(existingKey, attempt);
-      if (existingKey === key && !used.has(candidate)) {
-        return candidate;
-      }
-      if (!used.has(candidate)) {
-        used.add(candidate);
-        break;
-      }
-      attempt += 1;
-    }
-  }
-  return createBasePublicClientTargetId(key);
+  return createSharedPublicTargetId(key, keys);
 }
 
 export function targetSupportsCapability(
@@ -1140,18 +1152,7 @@ function renderClientTargetLabel(
 }
 
 export function createBasePublicClientTargetId(input: string): string {
-  return stableNumericId(input, 0);
-}
-
-function stableNumericId(input: string, salt: number): string {
-  const hashInput = salt === 0 ? input : `${input}#${salt}`;
-  let hash = 2166136261;
-  for (let index = 0; index < hashInput.length; index += 1) {
-    hash ^= hashInput.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  const value = (hash >>> 0) % 100000;
-  return value.toString().padStart(5, "0");
+  return createBasePublicId(input);
 }
 
 function createHubRequestId(prefix: string): string {

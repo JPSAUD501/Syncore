@@ -361,7 +361,7 @@ describe("syncore CLI", () => {
       "{}",
       "--json",
       "--runtime",
-      "a12f3c4d"
+      "20318"
     ]);
 
     expect(result.exitCode).toBe(1);
@@ -384,7 +384,7 @@ describe("syncore CLI", () => {
       "--target",
       "project",
       "--runtime",
-      "a12f3c4d",
+      "20318",
       "--json"
     ]);
 
@@ -405,7 +405,7 @@ describe("syncore CLI", () => {
       runtimeIds: ["runtime-a", "runtime-b"],
       runtimes: [
         {
-          id: "a12f3c4d",
+          id: "20318",
           runtimeId: "runtime-a",
           label: "tab-a",
           platform: "browser-worker",
@@ -413,7 +413,7 @@ describe("syncore CLI", () => {
           primary: true
         },
         {
-          id: "b98e7d6c",
+          id: "40291",
           runtimeId: "runtime-b",
           label: "tab-b",
           platform: "browser-worker",
@@ -429,7 +429,7 @@ describe("syncore CLI", () => {
     };
 
     expect(() =>
-      resolveClientRuntime(target, "deadbeef", {
+      resolveClientRuntime(target, "99999", {
         command: "logs"
       })
     ).toThrowError(/Unknown runtime/);
@@ -443,6 +443,7 @@ describe("syncore CLI", () => {
       path.join(cwd, ".syncore", "logs", "runtime.jsonl"),
       [
         JSON.stringify({
+          version: 2,
           timestamp: Date.now() - 1000,
           runtimeId: "syncore-dev-hub",
           targetId: "all",
@@ -454,11 +455,12 @@ describe("syncore CLI", () => {
           event: {}
         }),
         JSON.stringify({
+          version: 2,
           timestamp: Date.now(),
           runtimeId: "runtime-a",
           targetId: "61747",
           runtimeLabel: "tab-a",
-          publicRuntimeId: "a12f3c4d",
+          publicRuntimeId: "20318",
           origin: "runtime",
           eventType: "query.executed",
           category: "query",
@@ -473,7 +475,7 @@ describe("syncore CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).not.toContain("hub is alive");
     expect(result.stdout).toContain("tasks/list executed");
-    expect(result.stdout).toContain("tab-a:a12f3c4d");
+    expect(result.stdout).toContain("20318 tab-a");
   });
 
   test("dashboard returns JSON-friendly output", async () => {
@@ -514,7 +516,7 @@ describe("syncore CLI", () => {
           runtimeIds: ["runtime-a-12345678", "runtime-b-87654321"],
           runtimes: [
             {
-              id: "a12f3c4d",
+              id: "20318",
               runtimeId: "runtime-a-12345678",
               label: "browser-worker",
               platform: "browser-worker",
@@ -523,7 +525,7 @@ describe("syncore CLI", () => {
               primary: true
             },
             {
-              id: "b98e7d6c",
+              id: "40291",
               runtimeId: "runtime-b-87654321",
               label: "browser-worker",
               platform: "browser-worker",
@@ -543,8 +545,8 @@ describe("syncore CLI", () => {
       ])
     );
 
-    expect(printed).toContain("runtime a12f3c4d  browser-worker  primary");
-    expect(printed).toContain("runtime b98e7d6c  browser-worker");
+    expect(printed).toContain("runtime 20318  browser-worker  primary");
+    expect(printed).toContain("runtime 40291  browser-worker");
     expect(printed).toContain(
       "origin: http://localhost:3000  platform: browser-worker  status: online"
     );

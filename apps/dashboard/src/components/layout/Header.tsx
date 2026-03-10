@@ -1,5 +1,6 @@
 import { useRouterState } from "@tanstack/react-router";
 import {
+  getPublicRuntimeId,
   useActiveRuntime,
   useConnectedTargets,
   useDevtoolsStore,
@@ -145,7 +146,10 @@ export function Header({
                       {runtime.sessionLabel ?? runtime.appName ?? runtime.platform}
                     </span>
                     <span className="truncate font-mono text-[10px] text-text-tertiary">
-                      {runtime.runtimeId.slice(0, 8)}
+                      {getPublicRuntimeId(
+                        runtime.runtimeId,
+                        selectedTargetRuntimes.map((entry) => entry.runtimeId)
+                      )}
                     </span>
                   </span>
                 </SelectItem>

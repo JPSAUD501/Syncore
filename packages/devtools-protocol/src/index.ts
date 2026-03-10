@@ -77,6 +77,57 @@ export interface SyncoreRuntimeSummary {
   recentEventCount: number;
 }
 
+export function createBasePublicId(input: string): string {
+  return stablePublicId(input, 0);
+}
+
+export function createPublicId(
+  key: string,
+  keys: Iterable<string>
+): string {
+  const used = new Set<string>();
+  for (const existingKey of [...keys].sort()) {
+    let attempt = 0;
+    while (true) {
+      const candidate = stablePublicId(existingKey, attempt);
+      if (existingKey === key && !used.has(candidate)) {
+        return candidate;
+      }
+      if (!used.has(candidate)) {
+        used.add(candidate);
+        break;
+      }
+      attempt += 1;
+    }
+  }
+  return createBasePublicId(key);
+}
+
+export function createPublicRuntimeId(
+  runtimeId: string,
+  runtimeIds?: Iterable<string>
+): string {
+  return runtimeIds ? createPublicId(runtimeId, runtimeIds) : createBasePublicId(runtimeId);
+}
+
+export function createPublicTargetId(
+  targetKey: string,
+  targetKeys: Iterable<string>
+): string {
+  return createPublicId(targetKey, targetKeys);
+}
+
+function stablePublicId(input: string, salt: number): string {
+  const hashInput = salt === 0 ? input : `${input}#${salt}`;
+  let hash = 2166136261;
+  for (let index = 0; index < hashInput.length; index += 1) {
+    hash ^= hashInput.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const value = (hash >>> 0) % 100000;
+  return value.toString().padStart(5, "0");
+}
+
 /* ------------------------------------------------------------------ */
 /*  Runtime → Dashboard messages                                       */
 /* ------------------------------------------------------------------ */

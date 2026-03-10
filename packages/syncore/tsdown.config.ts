@@ -24,12 +24,31 @@ export default defineConfig({
   unbundle: true,
   dts: true,
   sourcemap: true,
-  clean: true,
+  // Examples consume this package through a workspace link. Avoid deleting
+  // dist during rebuilds so long-lived dev servers do not resolve transient
+  // missing files like dist/browser.js.
+  clean: false,
   checks: {
     pluginTimings: false
   },
   deps: {
     neverBundle: [
+      "@syncore/cli",
+      "@syncore/core",
+      "@syncore/core/cli",
+      "@syncore/devtools-protocol",
+      "@syncore/next",
+      "@syncore/next/config",
+      "@syncore/platform-expo",
+      "@syncore/platform-expo/react",
+      "@syncore/platform-node",
+      "@syncore/platform-node/ipc",
+      "@syncore/platform-node/ipc/react",
+      "@syncore/platform-web",
+      "@syncore/platform-web/react",
+      "@syncore/react",
+      "@syncore/schema",
+      "@syncore/svelte",
       "commander",
       "next",
       "node:fs",

@@ -96,6 +96,22 @@ async function main(): Promise<void> {
       );
     }
 
+    const bunResult = await execCommand(
+      "bun",
+      ["x", syncorePublishedBinName, "--help"],
+      fixtureDir
+    );
+    if (!bunResult.stdout.includes(syncorePublishedBinName)) {
+      throw new Error(
+        `Expected bun x ${syncorePublishedBinName} --help to mention the CLI name.`
+      );
+    }
+    if (/Detected unsettled top-level await/i.test(bunResult.stderr)) {
+      throw new Error(
+        `bun x ${syncorePublishedBinName} --help emitted an unsettled top-level await warning:\n${bunResult.stderr}`
+      );
+    }
+
     const publishedPackageJson = JSON.parse(
       await readFile(
         path.join(

@@ -126,7 +126,7 @@ export function resolveClientRuntime(
     );
   }
 
-  if (!/^[a-z0-9]{8}$/i.test(requestedRuntime)) {
+  if (!/^\d{5}$/.test(requestedRuntime)) {
     throw new CliError(
       `Invalid runtime ${JSON.stringify(requestedRuntime)} for \`${options.command}\`.`,
       {
@@ -135,7 +135,7 @@ export function resolveClientRuntime(
         details: {
           targetId: target.id,
           requestedRuntime,
-          expected: "an 8-character runtime id"
+          expected: "a 5-digit runtime id"
         }
       }
     );

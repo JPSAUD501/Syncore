@@ -297,7 +297,7 @@ export class IdValidator<TTableName extends string> implements Validator<string>
 
 // @public (undocumented)
 export namespace index_d_exports {
-    export { ActionCtx, AnySyncoreSchema, ComparisonOperator, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionResult, FunctionResultFromDefinition, IndexRangeBuilder, InferArgs, InsertValueForTable, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreCapabilities, SyncoreClient, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExperimentalPlugin, SyncoreExperimentalPluginContext, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreRuntime, SyncoreRuntimeOptions, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, action, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, cronJobs, generateId, mutation, query };
+    export { ActionCtx, AnySyncoreSchema, ComparisonOperator, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionResult, FunctionResultFromDefinition, IndexRangeBuilder, InferArgs, InsertValueForTable, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreCapabilities, SyncoreClient, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExperimentalPlugin, SyncoreExperimentalPluginContext, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreRuntime, SyncoreRuntimeOptions, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, action, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, cronJobs, generateId, mutation, query };
 }
 
 // @public (undocumented)
@@ -863,6 +863,8 @@ export interface SyncoreFunctionRegistry {
 // @public
 export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
+    // (undocumented)
+    cancelScheduledJob(id: string): Promise<boolean>;
     createClient(): SyncoreClient;
     // (undocumented)
     forceRefreshDevtools(reason: string, meta?: DevtoolsEventMeta): Promise<void>;
@@ -878,6 +880,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     getRuntimeSummary(): SyncoreRuntimeSummary;
     // (undocumented)
     notifyDevtoolsScopes(scopes: Iterable<DevtoolsLiveQueryScope>): void;
+    // (undocumented)
+    prepareForDirectAccess(): Promise<void>;
     // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "DevtoolsEventMeta" needs to be exported by the entry point index.d.mts
@@ -896,6 +900,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     subscribeToDevtoolsEvents(listener: (event: SyncoreDevtoolsEvent) => void): () => void;
     // (undocumented)
     subscribeToDevtoolsInvalidations(listener: (scopes: Set<DevtoolsLiveQueryScope>) => void): () => void;
+    // (undocumented)
+    updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean>;
     // (undocumented)
     watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): SyncoreWatch<TResult>;
 }
@@ -951,7 +957,7 @@ export interface SyncoreRuntimeSummary {
     // (undocumented)
     storageProtocol?: string;
     // (undocumented)
-    targetKind?: "client";
+    targetKind?: "client" | "project";
 }
 
 // @public (undocumented)
@@ -1071,6 +1077,20 @@ export interface TableSnapshot {
     }>;
     // (undocumented)
     validator: ValidatorDescription;
+}
+
+// @public (undocumented)
+export interface UpdateScheduledJobOptions {
+    // (undocumented)
+    args: JsonObject;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    misfirePolicy: MisfirePolicy;
+    // (undocumented)
+    runAt?: number;
+    // (undocumented)
+    schedule: RecurringSchedule;
 }
 
 // @public

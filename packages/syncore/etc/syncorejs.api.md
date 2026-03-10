@@ -656,6 +656,8 @@ export interface SyncoreFunctionRegistry {
 // @public
 export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
+    // (undocumented)
+    cancelScheduledJob(id: string): Promise<boolean>;
     createClient(): SyncoreClient;
     // (undocumented)
     forceRefreshDevtools(reason: string, meta?: DevtoolsEventMeta): Promise<void>;
@@ -678,6 +680,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     // (undocumented)
     notifyDevtoolsScopes(scopes: Iterable<DevtoolsLiveQueryScope>): void;
     // (undocumented)
+    prepareForDirectAccess(): Promise<void>;
+    // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "DevtoolsEventMeta" needs to be exported by the entry point index.d.ts
     //
@@ -697,6 +701,10 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     //
     // (undocumented)
     subscribeToDevtoolsInvalidations(listener: (scopes: Set<DevtoolsLiveQueryScope>) => void): () => void;
+    // Warning: (ae-forgotten-export) The symbol "UpdateScheduledJobOptions" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean>;
     // (undocumented)
     watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): SyncoreWatch<TResult>;
 }
