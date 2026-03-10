@@ -4,7 +4,7 @@
   "type": "module",
   "main": "./dist/examples/electron/src/main.js",
   "scripts": {
-    "syncorejs:dev": "bunx tsx ../../packages/cli/src/index.ts dev",
+    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
     "build:deps": "bun run --filter syncorejs build:standalone",
     "dev": "concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
     "dev:app": "bun run build && electron ./dist/examples/electron/src/main.js",
@@ -17,7 +17,7 @@
     "predev": "bun run syncorejs:codegen",
     "prelint": "bun run syncorejs:codegen",
     "pretypecheck": "bun run syncorejs:codegen",
-    "syncorejs:codegen": "bunx tsx ../../packages/cli/src/index.ts codegen",
+    "syncorejs:codegen": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "dependencies": {

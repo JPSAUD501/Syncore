@@ -21,7 +21,7 @@
   "scripts": {
     "build:deps": "bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build && bun run --filter @syncore/core build && bun run --filter @syncore/react build && bun run --filter @syncore/svelte build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build",
     "snapshot:declarations": "bun src/snapshot-declaration-artifacts.ts",
-    "build": "node -e \"\"",
+    "build": "node -e \"process.exit(0)\"",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('.declaration-artifacts',{recursive:true,force:true});require('node:fs').rmSync('playwright-report',{recursive:true,force:true});require('node:fs').rmSync('test-results',{recursive:true,force:true})\"",
     "lint": "eslint playwright.config.ts src tests --ext .ts",
     "test": "bun run build:deps && bun run snapshot:declarations && vitest run --config vitest.config.ts",

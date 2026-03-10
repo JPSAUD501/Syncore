@@ -24,6 +24,7 @@ export const syncorePackageRoot = path.join(
 export const syncorePublishedPackageName = "syncorejs";
 export const syncoreDistDir = path.join(syncorePackageRoot, "dist");
 export const syncoreVendorDir = path.join(syncoreDistDir, "_vendor");
+export const syncoreVendorLockDir = path.join(syncoreDistDir, ".vendor-lock");
 
 export interface InternalPackageConfig {
   name: string;
@@ -90,21 +91,49 @@ export const typeReplacements = new Map<string, string>([
 ]);
 
 export async function vendorSyncoreInternals(): Promise<void> {
-  await rm(syncoreVendorDir, { recursive: true, force: true });
-  await mkdir(syncoreVendorDir, { recursive: true });
+  await withVendorLock(async () => {
+    await rm(syncoreVendorDir, { recursive: true, force: true });
+    await mkdir(syncoreVendorDir, { recursive: true });
 
-  for (const pkg of syncoreInternalPackages) {
-    await cp(pkg.sourceDir, pkg.outputDir, { recursive: true, force: true });
-    await rewriteTree(pkg.outputDir, (content, filePath) =>
-      rewriteInternalImports(content, filePath, pkg.outputDir)
+    for (const pkg of syncoreInternalPackages) {
+      await cp(pkg.sourceDir, pkg.outputDir, { recursive: true, force: true });
+      await rewriteTree(pkg.outputDir, (content, filePath) =>
+        rewriteInternalImports(content, filePath, pkg.outputDir)
+      );
+    }
+
+    await rewriteTree(syncoreDistDir, (content, filePath) =>
+      rewritePublicEntry(content, filePath)
     );
+
+    await assertVendoredArtifactsExist();
+  });
+}
+
+async function withVendorLock<T>(callback: () => Promise<T>): Promise<T> {
+  await mkdir(syncoreDistDir, { recursive: true });
+
+  const deadline = Date.now() + 120_000;
+  while (true) {
+    try {
+      await mkdir(syncoreVendorLockDir);
+      break;
+    } catch (error) {
+      if (!isAlreadyExistsError(error)) {
+        throw error;
+      }
+      if (Date.now() > deadline) {
+        throw new Error("Timed out waiting for the Syncore packaging lock.");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
 
-  await rewriteTree(syncoreDistDir, (content, filePath) =>
-    rewritePublicEntry(content, filePath)
-  );
-
-  await assertVendoredArtifactsExist();
+  try {
+    return await callback();
+  } finally {
+    await rm(syncoreVendorLockDir, { recursive: true, force: true });
+  }
 }
 
 export async function rewriteTree(
@@ -285,6 +314,17 @@ export function toPosixRelative(fromDir: string, toFile: string): string {
 
 export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isAlreadyExistsError(
+  error: unknown
+): error is NodeJS.ErrnoException {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "EEXIST"
+  );
 }
 
 export async function assertVendoredArtifactsExist(): Promise<void> {
