@@ -10,63 +10,84 @@ export function useTrackChanges<T>(
   keyFn: (item: T, index: number) => string,
   hashFn?: (item: T) => string
 ) {
-  const [changedKeys, setChangedKeys] = useState<Set<string>>(new Set());
-  const [newKeys, setNewKeys] = useState<Set<string>>(new Set());
+  const [changedPulses, setChangedPulses] = useState<Map<string, number>>(
+    new Map()
+  );
+  const [newPulses, setNewPulses] = useState<Map<string, number>>(new Map());
   const previousHashesRef = useRef<Map<string, string>>(new Map());
+  const changePulseVersionsRef = useRef<Map<string, number>>(new Map());
+  const newPulseVersionsRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     const previousHashes = previousHashesRef.current;
     const nextHashes = new Map<string, string>();
-    const changed = new Set<string>();
-    const added = new Set<string>();
+    const changed = new Map<string, number>();
+    const added = new Map<string, number>();
+    const changePulseVersions = changePulseVersionsRef.current;
+    const newPulseVersions = newPulseVersionsRef.current;
 
     for (const [index, item] of items.entries()) {
       const key = keyFn(item, index);
       const hash = hashFn ? hashFn(item) : JSON.stringify(item);
       nextHashes.set(key, hash);
       if (!previousHashes.has(key)) {
-        added.add(key);
+        const nextPulse = (newPulseVersions.get(key) ?? 0) + 1;
+        newPulseVersions.set(key, nextPulse);
+        added.set(key, nextPulse);
       } else if (previousHashes.get(key) !== hash) {
-        changed.add(key);
+        const nextPulse = (changePulseVersions.get(key) ?? 0) + 1;
+        changePulseVersions.set(key, nextPulse);
+        changed.set(key, nextPulse);
       }
     }
 
     previousHashesRef.current = nextHashes;
 
     if (changed.size > 0 || added.size > 0) {
-      setChangedKeys(changed);
-      setNewKeys(added);
+      setChangedPulses(changed);
+      setNewPulses(added);
       const timer = setTimeout(() => {
-        setChangedKeys(new Set());
-        setNewKeys(new Set());
+        setChangedPulses(new Map());
+        setNewPulses(new Map());
       }, 1200);
       return () => clearTimeout(timer);
     }
   }, [hashFn, items, keyFn]);
 
   return {
-    isChanged: (key: string) => changedKeys.has(key),
-    isNew: (key: string) => newKeys.has(key)
+    isChanged: (key: string) => changedPulses.has(key),
+    isNew: (key: string) => newPulses.has(key),
+    getChangePulse: (key: string) => changedPulses.get(key) ?? 0,
+    getNewPulse: (key: string) => newPulses.get(key) ?? 0
   };
 }
 
-export function useDidJustChange(value: unknown): boolean {
-  const [didChange, setDidChange] = useState(false);
+export function useDidJustChange(value: unknown): {
+  didChange: boolean;
+  pulse: number;
+} {
+  const [pulse, setPulse] = useState(0);
   const previousValueRef = useRef<string | null>(null);
+  const latestPulseRef = useRef(0);
 
   useEffect(() => {
     const serialized = JSON.stringify(value);
     const previousValue = previousValueRef.current;
     if (previousValue !== null && previousValue !== serialized) {
-      setDidChange(true);
-      const timer = setTimeout(() => setDidChange(false), 1200);
+      const nextPulse = latestPulseRef.current + 1;
+      latestPulseRef.current = nextPulse;
+      setPulse(nextPulse);
+      const timer = setTimeout(() => setPulse(0), 1200);
       previousValueRef.current = serialized;
       return () => clearTimeout(timer);
     }
     previousValueRef.current = serialized;
   }, [value]);
 
-  return didChange;
+  return {
+    didChange: pulse > 0,
+    pulse
+  };
 }
 
 export function useDevtoolsSubscription<

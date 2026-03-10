@@ -1,4 +1,8 @@
-import { useActiveRuntime, useDevtoolsStore } from "@/lib/store";
+import {
+  useActiveRuntime,
+  useDevtoolsStore,
+  useSelectedRuntimeConnected
+} from "@/lib/store";
 import { useMemo } from "react";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 
@@ -9,6 +13,7 @@ import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 export function useDevtools() {
   const activeRuntime = useActiveRuntime();
   const connected = useDevtoolsStore((s) => s.connected);
+  const runtimeConnected = useSelectedRuntimeConnected();
   const events = useMemo(() => activeRuntime?.events ?? [], [activeRuntime]);
   const queryCount = activeRuntime?.queryCount ?? 0;
   const mutationCount = activeRuntime?.mutationCount ?? 0;
@@ -92,6 +97,8 @@ export function useDevtools() {
 
   return {
     connected,
+    runtimeConnected,
+    isReady: connected && runtimeConnected,
     events,
     summary: activeRuntime?.summary ?? null,
     activeQueries: activeRuntime?.activeQueries ?? [],

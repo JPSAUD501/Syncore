@@ -1,10 +1,11 @@
 import { useRouterState } from "@tanstack/react-router";
 import {
   useActiveRuntime,
+  useConnectedRuntimes,
   useDevtoolsStore,
-  useRuntimeList
+  useSelectedRuntimeConnected
 } from "@/lib/store";
-import { Wifi, WifiOff, Menu, Circle } from "lucide-react";
+import { Wifi, WifiOff, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -34,7 +35,8 @@ export function Header({
   const connected = useDevtoolsStore((s) => s.connected);
   const selectRuntime = useDevtoolsStore((s) => s.selectRuntime);
   const activeRuntime = useActiveRuntime();
-  const runtimes = useRuntimeList().filter((runtime) => runtime.connected);
+  const runtimeConnected = useSelectedRuntimeConnected();
+  const runtimes = useConnectedRuntimes();
 
   const title = ROUTE_TITLES[pathname] ?? "Dashboard";
   const runtimeId = activeRuntime?.runtimeId ?? null;
@@ -45,7 +47,7 @@ export function Header({
   const displayName = sessionLabel ?? platform ?? null;
 
   return (
-    <header className="flex items-center justify-between h-12 px-4 md:px-6 border-b border-border bg-bg-base/60 backdrop-blur-sm shrink-0">
+    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-bg-base px-4 md:px-6">
       <div className="flex items-center gap-2">
         {/* Hamburger for mobile */}
         {onToggleSidebar && (
@@ -58,21 +60,29 @@ export function Header({
             <Menu size={16} />
           </Button>
         )}
-        <h1 className="text-sm font-bold text-text-primary">{title}</h1>
+        <h1 className="text-sm font-semibold text-text-primary">{title}</h1>
       </div>
 
       <div className="flex items-center gap-2 md:gap-3">
         {/* Runtime selector — only when multiple active runtimes */}
         {runtimes.length > 1 && (
           <Select
-            {...(runtimeId ? { value: runtimeId } : {})}
+            {...(runtimeConnected && runtimeId ? { value: runtimeId } : {})}
             onValueChange={(value) => selectRuntime(value)}
           >
             <SelectTrigger
               size="sm"
               className="min-w-48 max-w-72 hidden sm:flex"
             >
-              <SelectValue placeholder="Select runtime" />
+              <SelectValue
+                placeholder={
+                  runtimeConnected
+                    ? "Select runtime"
+                    : displayName
+                      ? `${displayName} (inactive)`
+                      : "Select runtime"
+                }
+              />
             </SelectTrigger>
             <SelectContent align="end">
               {runtimes.map((runtime) => {
@@ -97,16 +107,10 @@ export function Header({
 
         {/* Active runtime display name */}
         {displayName && runtimes.length <= 1 && (
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-md bg-bg-surface/50 border border-border">
-            <Circle
-              size={6}
-              fill="var(--color-success)"
-              stroke="none"
-              className="animate-live-dot"
-            />
-            <span className="text-[11px] text-text-secondary font-medium truncate max-w-40">
+          <div className="hidden min-w-0 sm:block">
+            <div className="truncate text-[11px] font-medium text-text-secondary">
               {displayName}
-            </span>
+            </div>
           </div>
         )}
 
@@ -114,7 +118,7 @@ export function Header({
         {platform && (
           <Badge
             variant="secondary"
-            className="font-mono text-[10px] hidden md:inline-flex"
+            className="hidden font-mono text-[10px] md:inline-flex"
           >
             {platform}
           </Badge>

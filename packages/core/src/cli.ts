@@ -1654,11 +1654,19 @@ async function startDevHub(options: {
   });
   const websocketServer = new WebSocketServer({ server: httpServer });
   const runtimeSockets = new Map<string, WebSocket>();
+  const runtimeHellos = new Map<
+    string,
+    Extract<SyncoreDevtoolsMessage, { type: "hello" }>
+  >();
+  const runtimeEvents = new Map<
+    string,
+    Array<Extract<SyncoreDevtoolsMessage, { type: "event" }>["event"]>
+  >();
   const socketRuntimeIds = new Map<WebSocket, Set<string>>();
   const dashboardSockets = new Set<WebSocket>();
   const dashboardSubscriptions = new Map<
     WebSocket,
-    Map<string, { runtimeId: string }>
+    Map<string, { runtimeId: string; payload: SyncoreDevtoolsSubscribe }>
   >();
   const hello: SyncoreDevtoolsMessage = {
     type: "hello",
@@ -1669,6 +1677,22 @@ async function startDevHub(options: {
   websocketServer.on("connection", (socket: WebSocket) => {
     dashboardSockets.add(socket);
     socket.send(JSON.stringify(hello));
+    for (const runtimeHello of runtimeHellos.values()) {
+      socket.send(JSON.stringify(runtimeHello));
+    }
+    for (const [runtimeId, history] of runtimeEvents) {
+      if (!runtimeHellos.has(runtimeId)) {
+        continue;
+      }
+      for (const event of [...history].reverse()) {
+        socket.send(
+          JSON.stringify({
+            type: "event",
+            event
+          } satisfies SyncoreDevtoolsMessage)
+        );
+      }
+    }
 
     socket.on("message", (payload) => {
       const rawPayload = decodeWebSocketPayload(payload);
@@ -1700,13 +1724,14 @@ async function startDevHub(options: {
         if (!targetRuntimeId) {
           return;
         }
+        const subscriptions = dashboardSubscriptions.get(socket) ?? new Map();
+        subscriptions.set(message.subscriptionId, {
+          runtimeId: targetRuntimeId,
+          payload: message
+        });
+        dashboardSubscriptions.set(socket, subscriptions);
         const target = runtimeSockets.get(targetRuntimeId);
         if (target && target.readyState === WebSocket.OPEN) {
-          const subscriptions = dashboardSubscriptions.get(socket) ?? new Map();
-          subscriptions.set(message.subscriptionId, {
-            runtimeId: targetRuntimeId
-          });
-          dashboardSubscriptions.set(socket, subscriptions);
           target.send(JSON.stringify(message));
         }
         return;
@@ -1735,9 +1760,22 @@ async function startDevHub(options: {
       if (message.type === "hello") {
         dashboardSockets.delete(socket);
         runtimeSockets.set(message.runtimeId, socket);
+        runtimeHellos.set(message.runtimeId, message);
+        runtimeEvents.set(message.runtimeId, []);
         const runtimeIds = socketRuntimeIds.get(socket) ?? new Set<string>();
         runtimeIds.add(message.runtimeId);
         socketRuntimeIds.set(socket, runtimeIds);
+        for (const [dashboardSocket, subscriptions] of dashboardSubscriptions) {
+          if (dashboardSocket.readyState !== WebSocket.OPEN) {
+            continue;
+          }
+          for (const subscription of subscriptions.values()) {
+            if (subscription.runtimeId !== message.runtimeId) {
+              continue;
+            }
+            socket.send(JSON.stringify(subscription.payload));
+          }
+        }
         for (const client of dashboardSockets) {
           if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(message));
@@ -1746,6 +1784,20 @@ async function startDevHub(options: {
         return;
       }
       const encoded = JSON.stringify(message);
+      if (
+        message.type === "event" &&
+        message.event.type === "runtime.disconnected"
+      ) {
+        runtimeHellos.delete(message.event.runtimeId);
+      }
+      if (message.type === "event" && message.event.runtimeId !== "syncore-dev-hub") {
+        const history = runtimeEvents.get(message.event.runtimeId) ?? [];
+        history.unshift(message.event);
+        runtimeEvents.set(message.event.runtimeId, history.slice(0, 200));
+        if (message.event.type === "runtime.disconnected") {
+          runtimeEvents.delete(message.event.runtimeId);
+        }
+      }
       if (
         message.type === "command.result" ||
         message.type === "subscription.data" ||
@@ -1789,7 +1841,25 @@ async function startDevHub(options: {
       }
       for (const runtimeId of runtimeIds) {
         if (runtimeSockets.get(runtimeId) === socket) {
+          if (runtimeHellos.has(runtimeId)) {
+            const disconnectedEvent: SyncoreDevtoolsMessage = {
+              type: "event",
+              event: {
+                type: "runtime.disconnected",
+                runtimeId,
+                timestamp: Date.now()
+              }
+            };
+            const payload = JSON.stringify(disconnectedEvent);
+            for (const client of dashboardSockets) {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(payload);
+              }
+            }
+          }
           runtimeSockets.delete(runtimeId);
+          runtimeHellos.delete(runtimeId);
+          runtimeEvents.delete(runtimeId);
         }
       }
       socketRuntimeIds.delete(socket);

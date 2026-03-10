@@ -6,8 +6,7 @@ import {
   AlertCircle,
   Loader2,
   CalendarClock,
-  Timer,
-  Circle
+  Timer
 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,7 @@ export const Route = createLazyFileRoute("/scheduler")({
 });
 
 function SchedulerPage() {
-  const { connected } = useConnection();
+  const { isReady } = useConnection();
   const [selectedJob, setSelectedJob] = useState<SchedulerJob | null>(null);
 
   /* ---------------------------------------------------------------- */
@@ -35,8 +34,8 @@ function SchedulerPage() {
   /* ---------------------------------------------------------------- */
 
   const jobsSubscription = useDevtoolsSubscription(
-    connected ? { kind: "scheduler.jobs" } : null,
-    { enabled: connected }
+    isReady ? { kind: "scheduler.jobs" } : null,
+    { enabled: isReady }
   );
 
   const jobs = useMemo(
@@ -53,7 +52,7 @@ function SchedulerPage() {
 
   const cancelJob = useCallback(
     async (jobId: string) => {
-      if (!connected) return;
+      if (!isReady) return;
       try {
         const res = await sendRequest({ kind: "scheduler.cancel", jobId });
         if (res.kind === "scheduler.cancel.result" && res.success) {
@@ -67,7 +66,7 @@ function SchedulerPage() {
         /* ignore */
       }
     },
-    [connected, selectedJob]
+    [isReady, selectedJob]
   );
 
   const allJobs = useMemo(
@@ -102,11 +101,11 @@ function SchedulerPage() {
   /* ---------------------------------------------------------------- */
 
   return (
-    <div className="flex h-[calc(100vh-7rem)]">
+    <div className="flex h-[calc(100vh-7rem)] gap-3">
       {/* ---- Main content ---- */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
         {/* Header */}
-        <div className="p-4 border-b border-border flex items-center gap-3">
+        <div className="flex items-center gap-3 border-b border-border p-4">
           <Clock size={16} className="text-accent" />
           <h2 className="text-[14px] font-bold text-text-primary flex-1">
             Scheduler
@@ -114,20 +113,11 @@ function SchedulerPage() {
           {jobsSubscription.loading && (
             <Loader2 size={12} className="animate-spin text-text-tertiary" />
           )}
-          <div className="flex items-center gap-1.5">
-            <Circle
-              size={5}
-              fill="var(--color-success)"
-              stroke="none"
-              className="animate-live-dot"
-            />
-            <span className="text-[10px] text-text-tertiary">Live</span>
-          </div>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="pending" className="flex-1 flex flex-col min-h-0">
-          <div className="px-4 border-b border-border">
+          <div className="border-b border-border px-4">
             <TabsList variant="line" className="h-9">
               <TabsTrigger value="pending" className="gap-1">
                 <Timer size={12} />
@@ -315,9 +305,9 @@ function JobDetailPanel({
   onCancel: (id: string) => void;
 }) {
   return (
-    <div className="w-96 border-l border-border flex flex-col bg-bg-base hidden lg:flex">
+    <div className="hidden w-96 flex-col overflow-hidden rounded-md border border-border bg-bg-surface lg:flex">
       {/* Header */}
-      <div className="p-3 border-b border-border flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-border p-3">
         <div className="flex items-center gap-2">
           <JobStatusIcon status={job.status} />
           <span className="text-[12px] font-bold text-text-primary">
@@ -333,7 +323,7 @@ function JobDetailPanel({
         <div className="p-4 space-y-4">
           {/* ID */}
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+            <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
               Job ID
             </label>
             <code className="text-[11px] text-text-code bg-bg-surface px-2 py-1 rounded block">
@@ -343,7 +333,7 @@ function JobDetailPanel({
 
           {/* Function */}
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+            <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
               Function
             </label>
             <code className="text-[11px] text-text-primary font-mono">
@@ -353,7 +343,7 @@ function JobDetailPanel({
 
           {/* Status */}
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+            <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
               Status
             </label>
             <JobStatusBadge status={job.status} />
@@ -362,20 +352,20 @@ function JobDetailPanel({
           {/* Timing */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+              <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
                 Scheduled At
               </label>
               <TimestampCell timestamp={job.scheduledAt} format="both" />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+              <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
                 Run At
               </label>
               <TimestampCell timestamp={job.runAt} format="both" />
             </div>
             {job.completedAt && (
               <div>
-                <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+                <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
                   Completed At
                 </label>
                 <TimestampCell timestamp={job.completedAt} format="both" />
@@ -383,7 +373,7 @@ function JobDetailPanel({
             )}
             {job.durationMs !== undefined && (
               <div>
-                <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+                <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
                   Duration
                 </label>
                 <span className="text-[12px] text-text-primary font-mono">
@@ -396,7 +386,7 @@ function JobDetailPanel({
           {/* Cron schedule */}
           {job.cronSchedule && (
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-1">
+              <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
                 Cron Schedule
               </label>
               <code className="text-[11px] text-fn-cron bg-fn-cron/10 px-2 py-1 rounded block">
@@ -409,7 +399,7 @@ function JobDetailPanel({
 
           {/* Arguments */}
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-2">
+            <label className="mb-2 block text-[11px] font-medium text-text-tertiary">
               Arguments
             </label>
             <JsonViewer data={job.args} defaultExpanded maxDepth={4} />
@@ -418,7 +408,7 @@ function JobDetailPanel({
           {/* Result */}
           {job.result !== undefined && (
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-2">
+              <label className="mb-2 block text-[11px] font-medium text-text-tertiary">
                 Result
               </label>
               <JsonViewer data={job.result} defaultExpanded maxDepth={4} />
@@ -428,7 +418,7 @@ function JobDetailPanel({
           {/* Error */}
           {job.error && (
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary block mb-2">
+              <label className="mb-2 block text-[11px] font-medium text-text-tertiary">
                 Error
               </label>
               <div className="rounded-md border border-error/20 bg-error/5 p-3">

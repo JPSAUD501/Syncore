@@ -1,15 +1,15 @@
-import { cn } from "@/lib/utils";
+import { useMemo, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTrackChanges } from "@/hooks";
+import { formatCellPreview, isDateLikeField } from "@/lib/dataValue";
+import { cn } from "@/lib/utils";
 import { CellEditor } from "./CellEditor";
-import { useMemo, useState } from "react";
 
 interface DataTableProps {
   columns: string[];
   rows: Record<string, unknown>[];
   selectedRowId?: string | null;
   selectedRowIds?: string[];
-  onRowClick?: (row: Record<string, unknown>) => void;
   onToggleRowSelection?: (rowId: string) => void;
   onToggleAllRows?: (rowIds: string[], checked: boolean) => void;
   onCellEdit?: (rowId: string, field: string, value: unknown) => void;
@@ -21,7 +21,6 @@ export function DataTable({
   rows,
   selectedRowId,
   selectedRowIds = [],
-  onRowClick,
   onToggleRowSelection,
   onToggleAllRows,
   onCellEdit,
@@ -38,12 +37,12 @@ export function DataTable({
     [rows]
   );
 
-  // Track per-row changes for highlight animations
-  const { isChanged, isNew } = useTrackChanges(
+  const { isChanged, isNew, getChangePulse, getNewPulse } = useTrackChanges(
     rows,
     (_row, index) => rowIds[index] ?? `row-${index}`,
     (row) => JSON.stringify(row)
   );
+
   const visibleRowIds = useMemo(() => rowIds, [rowIds]);
   const selectedIds = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const allVisibleSelected =
@@ -51,11 +50,10 @@ export function DataTable({
     visibleRowIds.every((id) => selectedIds.has(id));
 
   return (
-    <ScrollArea className={cn("w-full", className)}>
-      <div className="min-w-full">
-        {/* Header */}
-        <div className="flex border-b border-border bg-bg-surface/50 sticky top-0 z-10">
-          <div className="flex w-10 shrink-0 items-center justify-center border-r border-border px-2 py-2">
+    <ScrollArea className={cn("h-full w-full bg-bg-base", className)}>
+      <div className="min-w-full w-max border-r border-border bg-bg-base">
+        <div className="sticky top-0 z-10 flex border-b border-border bg-bg-surface">
+          <div className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border px-2">
             <input
               type="checkbox"
               checked={allVisibleSelected}
@@ -69,41 +67,53 @@ export function DataTable({
           {columns.map((col) => (
             <div
               key={col}
-              className="flex-shrink-0 w-48 px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-text-tertiary border-r border-border last:border-r-0"
+              className={cn(
+                "h-9 shrink-0 border-r border-border px-3 py-2 text-left text-[11px] font-semibold text-text-tertiary last:border-r-0",
+                getColumnWidthClass(col)
+              )}
             >
               {col}
             </div>
           ))}
         </div>
 
-        {/* Rows */}
-        <div>
+        <div className="bg-bg-base">
           {rows.map((row, idx) => {
             const rowId = getRowId(row, idx);
             const isSelected = selectedRowId === rowId;
+            const isChecked = selectedIds.has(rowId);
             const rowChanged = isChanged(rowId);
             const rowNew = isNew(rowId);
+            const changePulse = getChangePulse(rowId);
+            const newPulse = getNewPulse(rowId);
 
             return (
               <div
                 key={rowId}
-                onClick={() => onRowClick?.(row)}
                 className={cn(
-                  "flex border-b border-border transition-colors cursor-pointer",
+                  "flex border-b border-border/80 bg-bg-base transition-colors",
                   isSelected
-                    ? "bg-accent/8 border-l-2 border-l-accent"
-                    : "hover:bg-bg-elevated/50",
-                  rowChanged && "animate-highlight",
-                  rowNew && "animate-fade-in"
+                    ? "bg-bg-surface shadow-[inset_2px_0_0_0_var(--color-accent)]"
+                    : isChecked
+                      ? "bg-bg-surface/70"
+                      : "hover:bg-bg-surface/45",
+                  rowChanged &&
+                    (changePulse % 2 === 0
+                      ? "animate-highlight-a"
+                      : "animate-highlight-b"),
+                  rowNew &&
+                    (newPulse % 2 === 0
+                      ? "animate-fade-in-a"
+                      : "animate-fade-in-b")
                 )}
               >
                 <div
-                  className="flex w-10 shrink-0 items-center justify-center border-r border-border px-2 py-2"
+                  className="flex min-h-11 w-10 shrink-0 items-center justify-center border-r border-border px-2 py-2"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <input
                     type="checkbox"
-                    checked={selectedIds.has(rowId)}
+                    checked={isChecked}
                     onChange={() => onToggleRowSelection?.(rowId)}
                     className="size-3.5 rounded border-border bg-bg-base accent-[var(--color-accent)]"
                     aria-label={`Select row ${rowId}`}
@@ -114,14 +124,19 @@ export function DataTable({
                     key={col}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
-                      if (!onCellEdit) return;
+                      if (!onCellEdit) {
+                        return;
+                      }
                       setEditingCell({
                         rowId,
                         field: col,
                         value: row[col]
                       });
                     }}
-                    className="flex-shrink-0 w-48 px-3 py-2 text-[12px] text-text-secondary font-mono truncate border-r border-border last:border-r-0"
+                    className={cn(
+                      "flex min-h-11 shrink-0 items-center border-r border-border px-3 py-2 font-mono text-[12px] text-text-secondary last:border-r-0",
+                      getColumnWidthClass(col)
+                    )}
                   >
                     {editingCell?.rowId === rowId &&
                     editingCell.field === col ? (
@@ -135,7 +150,7 @@ export function DataTable({
                         }}
                       />
                     ) : (
-                      <CellValue value={row[col]} />
+                      <CellValue field={col} value={row[col]} />
                     )}
                   </div>
                 ))}
@@ -148,16 +163,31 @@ export function DataTable({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Cell value renderer                                                */
-/* ------------------------------------------------------------------ */
+function CellValue({
+  field,
+  value
+}: {
+  field: string;
+  value: unknown;
+}) {
+  const preview = formatCellPreview(field, value);
 
-function CellValue({ value }: { value: unknown }) {
+  if (preview.kind === "date") {
+    return (
+      <span
+        className="block truncate tabular-nums text-[11px] text-amber-100"
+        title={preview.title ? `${preview.text}\n${preview.title}` : preview.text}
+      >
+        {preview.text}
+      </span>
+    );
+  }
+
   if (value === null) {
     return <span className="text-text-tertiary italic">null</span>;
   }
   if (value === undefined) {
-    return <span className="text-text-tertiary italic">—</span>;
+    return <span className="text-text-tertiary italic">-</span>;
   }
   if (typeof value === "boolean") {
     return (
@@ -170,10 +200,10 @@ function CellValue({ value }: { value: unknown }) {
     return <span className="text-info">{value}</span>;
   }
   if (typeof value === "string") {
-    if (value.length > 50) {
+    if (value.length > 72) {
       return (
-        <span className="text-text-secondary" title={value}>
-          "{value.slice(0, 50)}..."
+        <span className="block truncate text-text-secondary" title={value}>
+          "{value}"
         </span>
       );
     }
@@ -191,7 +221,17 @@ function CellValue({ value }: { value: unknown }) {
   if (typeof value === "bigint") {
     return <span className="text-text-secondary">{String(value)}</span>;
   }
-  return <span className="text-text-secondary">—</span>;
+  return <span className="text-text-secondary">-</span>;
+}
+
+function getColumnWidthClass(column: string): string {
+  if (column === "_id" || column === "id") {
+    return "w-[18rem]";
+  }
+  if (isDateLikeField(column) || column === "_creationTime") {
+    return "w-[16rem]";
+  }
+  return "w-56";
 }
 
 function getRowId(row: Record<string, unknown>, idx: number): string {

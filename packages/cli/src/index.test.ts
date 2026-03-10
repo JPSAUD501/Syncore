@@ -292,6 +292,222 @@ describe("syncore CLI", () => {
     child.kill("SIGTERM");
     await waitForExit(child);
   });
+
+  test("hub replays active runtimes to new dashboards and broadcasts disconnects", async () => {
+    const cwd = await createTempProjectDirectory();
+    const devtoolsPort = await getAvailablePort();
+    const dashboardPort = await getAvailablePort();
+    await runCli(cwd, ["init"]);
+    await writeWorkspaceTsconfig(cwd);
+
+    const child = spawn(
+      process.execPath,
+      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
+      {
+        cwd,
+        env: createCliProcessEnv({
+          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
+          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
+        }),
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
+    const childPipes = getPipedStreams(child);
+    const hubUrl = `ws://127.0.0.1:${devtoolsPort}`;
+
+    try {
+      await waitForOutput(
+        child,
+        childPipes,
+        `Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`
+      );
+
+      const dashboardA = await openWebSocketClient(hubUrl);
+      const runtime = await openWebSocketClient(hubUrl);
+
+      await waitForWebSocketMessage(dashboardA, (payload) =>
+        payload.includes('"runtimeId":"syncore-dev-hub"')
+      );
+      await waitForWebSocketMessage(runtime, (payload) =>
+        payload.includes('"runtimeId":"syncore-dev-hub"')
+      );
+
+      runtime.socket.send(
+        JSON.stringify({
+          type: "hello",
+          runtimeId: "runtime-browser-1",
+          platform: "browser",
+          sessionLabel: "Browser One"
+        })
+      );
+
+      const runtimeHello = await waitForWebSocketMessage(
+        dashboardA,
+        (payload) =>
+          payload.includes('"type":"hello"') &&
+          payload.includes('"runtimeId":"runtime-browser-1"')
+      );
+      expect(runtimeHello).toContain('"sessionLabel":"Browser One"');
+
+      runtime.socket.send(
+        JSON.stringify({
+          type: "event",
+          event: {
+            type: "mutation.committed",
+            runtimeId: "runtime-browser-1",
+            mutationId: "mut-1",
+            functionName: "bookmarks/toggleStar",
+            changedTables: ["bookmarks"],
+            durationMs: 12,
+            timestamp: Date.now()
+          }
+        })
+      );
+
+      await waitForWebSocketMessage(
+        dashboardA,
+        (payload) =>
+          payload.includes('"type":"event"') &&
+          payload.includes('"runtimeId":"runtime-browser-1"') &&
+          payload.includes('"mutation.committed"')
+      );
+
+      const dashboardB = await openWebSocketClient(hubUrl);
+
+      await waitForWebSocketMessage(dashboardB, (payload) =>
+        payload.includes('"runtimeId":"syncore-dev-hub"')
+      );
+      const replayedHello = await waitForWebSocketMessage(
+        dashboardB,
+        (payload) =>
+          payload.includes('"type":"hello"') &&
+          payload.includes('"runtimeId":"runtime-browser-1"')
+      );
+      expect(replayedHello).toContain('"sessionLabel":"Browser One"');
+      const replayedEvent = await waitForWebSocketMessage(
+        dashboardB,
+        (payload) =>
+          payload.includes('"type":"event"') &&
+          payload.includes('"runtimeId":"runtime-browser-1"') &&
+          payload.includes('"mutation.committed"')
+      );
+      expect(replayedEvent).toContain('"functionName":"bookmarks/toggleStar"');
+
+      runtime.socket.close();
+
+      const disconnectMessage = await waitForWebSocketMessage(
+        dashboardA,
+        (payload) =>
+          payload.includes('"type":"event"') &&
+          payload.includes('"runtime.disconnected"') &&
+          payload.includes('"runtimeId":"runtime-browser-1"')
+      );
+      expect(disconnectMessage).toContain('"type":"runtime.disconnected"');
+
+      dashboardA.socket.close();
+      dashboardB.socket.close();
+    } finally {
+      child.kill("SIGTERM");
+      await waitForExit(child);
+    }
+  });
+
+  test("hub forwards queued subscriptions when the runtime connects later", async () => {
+    const cwd = await createTempProjectDirectory();
+    const devtoolsPort = await getAvailablePort();
+    const dashboardPort = await getAvailablePort();
+    await runCli(cwd, ["init"]);
+    await writeWorkspaceTsconfig(cwd);
+
+    const child = spawn(
+      process.execPath,
+      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
+      {
+        cwd,
+        env: createCliProcessEnv({
+          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
+          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
+        }),
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
+    const childPipes = getPipedStreams(child);
+    const hubUrl = `ws://127.0.0.1:${devtoolsPort}`;
+
+    try {
+      await waitForOutput(
+        child,
+        childPipes,
+        `Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`
+      );
+
+      const dashboard = await openWebSocketClient(hubUrl);
+      await waitForWebSocketMessage(dashboard, (payload) =>
+        payload.includes('"runtimeId":"syncore-dev-hub"')
+      );
+
+      dashboard.socket.send(
+        JSON.stringify({
+          type: "subscribe",
+          subscriptionId: "sub-queued-1",
+          targetRuntimeId: "runtime-browser-late",
+          payload: {
+            kind: "functions.catalog"
+          }
+        })
+      );
+
+      const runtime = await openWebSocketClient(hubUrl);
+      await waitForWebSocketMessage(runtime, (payload) =>
+        payload.includes('"runtimeId":"syncore-dev-hub"')
+      );
+
+      runtime.socket.send(
+        JSON.stringify({
+          type: "hello",
+          runtimeId: "runtime-browser-late",
+          platform: "browser",
+          sessionLabel: "Late Runtime"
+        })
+      );
+
+      const subscribeMessage = await waitForWebSocketMessage(
+        runtime,
+        (payload) =>
+          payload.includes('"type":"subscribe"') &&
+          payload.includes('"subscriptionId":"sub-queued-1"') &&
+          payload.includes('"kind":"functions.catalog"')
+      );
+      expect(subscribeMessage).toContain('"targetRuntimeId":"runtime-browser-late"');
+
+      runtime.socket.send(
+        JSON.stringify({
+          type: "subscription.data",
+          subscriptionId: "sub-queued-1",
+          runtimeId: "runtime-browser-late",
+          payload: {
+            kind: "functions.catalog.result",
+            functions: []
+          }
+        })
+      );
+
+      const subscriptionData = await waitForWebSocketMessage(
+        dashboard,
+        (payload) =>
+          payload.includes('"type":"subscription.data"') &&
+          payload.includes('"subscriptionId":"sub-queued-1"') &&
+          payload.includes('"kind":"functions.catalog.result"')
+      );
+      expect(subscriptionData).toContain('"runtimeId":"runtime-browser-late"');
+
+      dashboard.socket.close();
+      runtime.socket.close();
+    } finally {
+      child.kill("SIGTERM");
+      await waitForExit(child);
+    }
+  });
 });
 
 async function createTempProjectDirectory(): Promise<string> {
@@ -499,6 +715,63 @@ async function readWebSocketMessage(url: string): Promise<string> {
     socket.once("error", (error) => {
       reject(error);
     });
+  });
+}
+
+async function openWebSocketClient(url: string): Promise<{
+  socket: WebSocket;
+  messages: string[];
+}> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url);
+    const messages: string[] = [];
+    socket.on("message", (payload) => {
+      messages.push(stringifyWebSocketPayload(payload));
+    });
+    socket.once("open", () => resolve({ socket, messages }));
+    socket.once("error", reject);
+  });
+}
+
+async function waitForWebSocketMessage(
+  client: { socket: WebSocket; messages: string[] },
+  predicate: (payload: string) => boolean
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    for (const message of client.messages) {
+      if (predicate(message)) {
+        resolve(message);
+        return;
+      }
+    }
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for a matching WebSocket message."));
+    }, 10_000);
+
+    const handleMessage = (payload: unknown) => {
+      const serialized = stringifyWebSocketPayload(payload);
+      if (!predicate(serialized)) {
+        return;
+      }
+      cleanup();
+      resolve(serialized);
+    };
+
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      client.socket.off("message", handleMessage);
+      client.socket.off("error", handleError);
+    };
+
+    client.socket.on("message", handleMessage);
+    client.socket.on("error", handleError);
   });
 }
 

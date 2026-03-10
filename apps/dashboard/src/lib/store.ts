@@ -91,10 +91,12 @@ interface PendingRequest {
 }
 
 interface SubscriptionRecord {
+  subscriptionId: string;
   runtimeId: string;
   listeners: Set<(payload: SyncoreDevtoolsSubscriptionResultPayload) => void>;
   errorListeners: Set<(message: string) => void>;
   payload: SyncoreDevtoolsSubscriptionPayload;
+  sent: boolean;
 }
 
 interface DevtoolsState {
@@ -103,6 +105,7 @@ interface DevtoolsState {
   selectedRuntimeId: string | null;
   _handleMessage: (msg: SyncoreDevtoolsMessage) => void;
   _setConnected: (v: boolean) => void;
+  _markAllRuntimesDisconnected: () => void;
   selectRuntime: (runtimeId: string | null) => void;
   clearEvents: (runtimeId?: string) => void;
 }
@@ -146,10 +149,7 @@ function resolveSelectedRuntimeId(
   currentSelectedRuntimeId: string | null,
   preferredRuntimeId?: string
 ): string | null {
-  if (
-    currentSelectedRuntimeId &&
-    runtimes[currentSelectedRuntimeId]?.connected === true
-  ) {
+  if (currentSelectedRuntimeId && runtimes[currentSelectedRuntimeId]) {
     return currentSelectedRuntimeId;
   }
   if (preferredRuntimeId && runtimes[preferredRuntimeId]?.connected === true) {
@@ -184,6 +184,27 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   _setConnected: (v) =>
     set((state) => (state.connected === v ? state : { connected: v })),
 
+  _markAllRuntimesDisconnected: () =>
+    set((state) => {
+      let changed = false;
+      const runtimes = Object.fromEntries(
+        Object.entries(state.runtimes).map(([runtimeId, runtime]) => {
+          if (!runtime.connected) {
+            return [runtimeId, runtime];
+          }
+          changed = true;
+          return [
+            runtimeId,
+            {
+              ...runtime,
+              connected: false
+            }
+          ];
+        })
+      );
+      return changed ? { runtimes } : state;
+    }),
+
   selectRuntime: (runtimeId) =>
     set((state) =>
       state.selectedRuntimeId === runtimeId
@@ -197,6 +218,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
         if (msg.runtimeId === HUB_RUNTIME_ID) {
           break;
         }
+        flushSubscriptions(msg.runtimeId);
         set((state) => {
           const nextRuntime = ensureRuntime(state.runtimes, {
             runtimeId: msg.runtimeId,
@@ -376,12 +398,35 @@ export function useRuntimeList() {
   return useDevtoolsStore(useShallow((state) => sortRuntimes(state.runtimes)));
 }
 
+export function useConnectedRuntimes() {
+  return useDevtoolsStore(
+    useShallow((state) =>
+      sortRuntimes(state.runtimes).filter((runtime) => runtime.connected)
+    )
+  );
+}
+
 export function useConnectedRuntimeCount() {
   return useDevtoolsStore(
     (state) =>
       Object.values(state.runtimes).filter((runtime) => runtime.connected)
         .length
   );
+}
+
+export function useBestConnectedRuntime() {
+  return useDevtoolsStore(
+    (state) => sortRuntimes(state.runtimes).find((runtime) => runtime.connected) ?? null
+  );
+}
+
+export function useSelectedRuntimeConnected(): boolean {
+  return useDevtoolsStore<boolean>((state): boolean => {
+    if (!state.selectedRuntimeId) {
+      return false;
+    }
+    return state.runtimes[state.selectedRuntimeId]?.connected === true;
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -394,6 +439,39 @@ let requestCounter = 0;
 
 function generateRequestId(): string {
   return `req_${Date.now()}_${++requestCounter}`;
+}
+
+function sendSubscriptionRecord(record: SubscriptionRecord): boolean {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return false;
+  }
+
+  const message: SyncoreDevtoolsClientMessage = {
+    type: "subscribe",
+    subscriptionId: record.subscriptionId,
+    targetRuntimeId: record.runtimeId,
+    payload: record.payload
+  };
+  debugLog("subscribe", "[dashboard] subscribe", {
+    subscriptionId: record.subscriptionId,
+    targetRuntimeId: record.runtimeId,
+    payload: record.payload
+  });
+  ws.send(JSON.stringify(message));
+  record.sent = true;
+  return true;
+}
+
+function flushSubscriptions(runtimeId?: string) {
+  for (const record of subscriptions.values()) {
+    if (runtimeId && record.runtimeId !== runtimeId) {
+      continue;
+    }
+    if (record.sent) {
+      continue;
+    }
+    sendSubscriptionRecord(record);
+  }
 }
 
 /**
@@ -467,32 +545,24 @@ export function subscribe(
 ): () => void {
   const state = useDevtoolsStore.getState();
   const targetRuntimeId = state.selectedRuntimeId;
-  if (!ws || ws.readyState !== WebSocket.OPEN || !targetRuntimeId) {
+  if (!targetRuntimeId) {
     return () => {};
   }
 
   const subscriptionId = generateRequestId();
-  subscriptions.set(subscriptionId, {
+  const record: SubscriptionRecord = {
+    subscriptionId,
     runtimeId: targetRuntimeId,
     listeners: new Set([listener]),
     errorListeners: new Set(options?.onError ? [options.onError] : []),
-    payload
-  });
-
-  const message: SyncoreDevtoolsClientMessage = {
-    type: "subscribe",
-    subscriptionId,
-    targetRuntimeId,
-    payload
+    payload,
+    sent: false
   };
-  debugLog("subscribe", "[dashboard] subscribe", {
-    subscriptionId,
-    targetRuntimeId,
-    payload
-  });
-  ws.send(JSON.stringify(message));
+  subscriptions.set(subscriptionId, record);
+  sendSubscriptionRecord(record);
 
   return () => {
+    const current = subscriptions.get(subscriptionId);
     subscriptions.delete(subscriptionId);
     if (ws?.readyState === WebSocket.OPEN) {
       const unsubscribeMessage: SyncoreDevtoolsClientMessage = {
@@ -500,12 +570,14 @@ export function subscribe(
         subscriptionId,
         targetRuntimeId
       };
-      debugLog("unsubscribe", "[dashboard] unsubscribe", {
-        subscriptionId,
-        targetRuntimeId,
-        payload
-      });
-      ws.send(JSON.stringify(unsubscribeMessage));
+      if (current?.sent) {
+        debugLog("unsubscribe", "[dashboard] unsubscribe", {
+          subscriptionId,
+          targetRuntimeId,
+          payload
+        });
+        ws.send(JSON.stringify(unsubscribeMessage));
+      }
     }
   };
 }
@@ -527,6 +599,7 @@ function connect() {
   socket.onopen = () => {
     debugLog("ws-open", "[dashboard] websocket open", { url: WS_URL });
     useDevtoolsStore.getState()._setConnected(true);
+    flushSubscriptions();
   };
 
   socket.onmessage = (e) => {
@@ -553,12 +626,16 @@ function connect() {
       reconnecting: connectionStarted
     });
     useDevtoolsStore.getState()._setConnected(false);
+    useDevtoolsStore.getState()._markAllRuntimesDisconnected();
     // Reject all pending requests
     for (const [, pending] of pendingRequests) {
       clearTimeout(pending.timer);
       pending.reject(new Error("WebSocket disconnected"));
     }
     pendingRequests.clear();
+    for (const subscription of subscriptions.values()) {
+      subscription.sent = false;
+    }
     if (connectionStarted) {
       scheduleReconnect();
     }

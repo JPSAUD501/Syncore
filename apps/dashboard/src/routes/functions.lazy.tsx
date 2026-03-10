@@ -10,10 +10,9 @@ import {
   Activity,
   Search,
   XCircle,
-  CheckCircle2,
-  Circle
+  CheckCircle2
 } from "lucide-react";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -32,7 +31,6 @@ import { useDevtools } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
-import type { FunctionDefinition } from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/functions")({
   component: FunctionsPage
@@ -54,7 +52,7 @@ interface FunctionRunResult {
 /* ------------------------------------------------------------------ */
 
 function FunctionsPage() {
-  const { connected, functionMetrics, functionEvents } = useDevtools();
+  const { isReady, functionMetrics, functionEvents } = useDevtools();
   const [search, setSearch] = useState("");
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<FunctionRunResult>({
@@ -67,8 +65,8 @@ function FunctionsPage() {
   /* ---------------------------------------------------------------- */
 
   const functionsSubscription = useDevtoolsSubscription(
-    connected ? { kind: "functions.catalog" } : null,
-    { enabled: connected }
+    isReady ? { kind: "functions.catalog" } : null,
+    { enabled: isReady }
   );
 
   const registeredFunctions =
@@ -199,12 +197,27 @@ function FunctionsPage() {
     return functionEvents.filter((e) => e.functionName === selectedFn);
   }, [functionEvents, selectedFn]);
 
+  useEffect(() => {
+    if (allFunctions.length === 0) {
+      if (selectedFn !== null) {
+        setSelectedFn(null);
+      }
+      return;
+    }
+
+    if (selectedFn && allFunctions.some((fn) => fn.name === selectedFn)) {
+      return;
+    }
+
+    setSelectedFn(allFunctions[0]!.name);
+  }, [allFunctions, selectedFn]);
+
   /* ---------------------------------------------------------------- */
   /*  Run function                                                     */
   /* ---------------------------------------------------------------- */
 
   const handleRun = useCallback(async () => {
-    if (!selectedFunction || !connected) return;
+    if (!selectedFunction || !isReady) return;
 
     let args: Record<string, unknown>;
     try {
@@ -255,17 +268,18 @@ function FunctionsPage() {
         error: err instanceof Error ? err.message : "Unknown error"
       });
     }
-  }, [selectedFunction, connected, argsText]);
+  }, [selectedFunction, isReady, argsText]);
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
 
   return (
-    <div className="flex h-[calc(100vh-7rem)]">
+    <div className="flex h-[calc(100vh-7rem)] gap-3">
       {/* ---- Left sidebar: file tree ---- */}
-      <div className="w-72 shrink-0 border-r border-border flex flex-col hidden md:flex">
-        <div className="p-3 border-b border-border">
+      <div className="hidden min-h-0 w-72 shrink-0 md:flex">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
+        <div className="border-b border-border p-3">
           <div className="flex items-center gap-2 mb-2">
             <h2 className="text-[13px] font-bold text-text-primary flex-1">
               Functions
@@ -273,15 +287,6 @@ function FunctionsPage() {
             {loadingFunctions && (
               <Loader2 size={12} className="animate-spin text-text-tertiary" />
             )}
-            <div className="flex items-center gap-1.5">
-              <Circle
-                size={5}
-                fill="var(--color-success)"
-                stroke="none"
-                className="animate-live-dot"
-              />
-              <span className="text-[10px] text-text-tertiary">Live</span>
-            </div>
           </div>
           <div className="relative">
             <Search
@@ -292,20 +297,20 @@ function FunctionsPage() {
               placeholder="Search functions..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-7 text-[12px]"
+              className="h-8 border-border bg-bg-base pl-8 text-[12px]"
             />
           </div>
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="p-1.5">
+          <div className="p-2">
             {fileTree.length === 0 ? (
               <div className="py-8 text-center">
                 <Code2 size={20} className="mx-auto mb-2 text-text-tertiary" />
                 <p className="text-[11px] text-text-tertiary">
-                  {connected
+                  {isReady
                     ? "No functions observed yet"
-                    : "Connect to see functions"}
+                    : "Connect to an active runtime to see functions"}
                 </p>
               </div>
             ) : (
@@ -323,7 +328,7 @@ function FunctionsPage() {
         </ScrollArea>
 
         {/* Summary counts */}
-        <div className="p-3 border-t border-border">
+        <div className="border-t border-border p-3">
           <div className="flex gap-3 text-[11px] text-text-tertiary">
             <span>
               {allFunctions.filter((f) => f.type === "query").length} queries
@@ -337,14 +342,15 @@ function FunctionsPage() {
             </span>
           </div>
         </div>
+        </div>
       </div>
 
       {/* ---- Right content: function details ---- */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
         {selectedFunction ? (
           <>
             {/* Header */}
-            <div className="p-4 border-b border-border">
+            <div className="border-b border-border p-4">
               <div className="flex items-center gap-3 mb-2">
                 <FunctionBadge type={selectedFunction.type} />
                 <h2 className="text-[14px] font-bold text-text-primary font-mono">
@@ -378,7 +384,7 @@ function FunctionsPage() {
               defaultValue="runner"
               className="flex-1 flex flex-col min-h-0"
             >
-              <div className="px-4 border-b border-border">
+              <div className="border-b border-border px-4">
                 <TabsList variant="line" className="h-9">
                   <TabsTrigger value="runner">Runner</TabsTrigger>
                   <TabsTrigger value="logs">
@@ -403,7 +409,7 @@ function FunctionsPage() {
                   setArgsText={setArgsText}
                   runResult={runResult}
                   onRun={() => void handleRun()}
-                  connected={connected}
+                  connected={isReady}
                 />
               </TabsContent>
 
@@ -530,7 +536,7 @@ function FunctionRunner({
       {/* Arguments editor */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="text-[11px] uppercase tracking-wider font-medium text-text-tertiary">
+          <label className="text-[11px] font-medium text-text-tertiary">
             Arguments
           </label>
           {fn.args && Object.keys(fn.args).length > 0 && (
@@ -591,7 +597,7 @@ function FunctionRunner({
       {/* Result area */}
       <div className="flex-1 min-h-0">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-[11px] uppercase tracking-wider font-medium text-text-tertiary">
+          <span className="text-[11px] font-medium text-text-tertiary">
             Result
           </span>
           {runResult.status === "success" && (
@@ -769,13 +775,13 @@ function MetricCard({
   variant?: "default" | "error";
 }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-surface p-3">
+    <div className="rounded-md border border-border bg-bg-base p-3">
       <div className="flex items-center gap-2 mb-1.5">
         <Icon
           size={12}
           className={variant === "error" ? "text-error" : "text-text-tertiary"}
         />
-        <span className="text-[10px] uppercase tracking-wider font-medium text-text-tertiary">
+        <span className="text-[10px] font-medium text-text-tertiary">
           {label}
         </span>
       </div>

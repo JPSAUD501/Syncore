@@ -5,10 +5,9 @@ import {
   Table2,
   Layers,
   Key,
-  Loader2,
-  Circle
+  Loader2
 } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -37,6 +36,7 @@ import { useConnection } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { useActiveRuntime } from "@/lib/store";
 import { sendRequest } from "@/lib/store";
+import { parseEditableCellValue, toEditableCellText } from "@/lib/dataValue";
 import { cn } from "@/lib/utils";
 import type { DataFilter } from "@syncore/devtools-protocol";
 import {
@@ -55,7 +55,7 @@ export const Route = createLazyFileRoute("/data")({
 });
 
 function DataPage() {
-  const { connected } = useConnection();
+  const { isReady, runtimeConnected } = useConnection();
   const activeRuntime = useActiveRuntime();
   const { pushToast } = useToast();
 
@@ -65,13 +65,10 @@ function DataPage() {
 
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
+  const [activePanelTab, setActivePanelTab] = useState<"data" | "schema" | "indexes">("data");
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState<DataFilter[]>([]);
-  const [selectedDoc, setSelectedDoc] = useState<Record<
-    string,
-    unknown
-  > | null>(null);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<
@@ -88,18 +85,17 @@ function DataPage() {
   const [importSeedText, setImportSeedText] = useState<string | undefined>(
     undefined
   );
+  const [mobileTablesOpen, setMobileTablesOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
-  const selectedTableRef = useRef(selectedTable);
-  selectedTableRef.current = selectedTable;
 
   /* ---------------------------------------------------------------- */
   /*  Reactive schema fetch                                            */
   /* ---------------------------------------------------------------- */
 
   const schemaSubscription = useDevtoolsSubscription(
-    connected ? { kind: "schema.tables" } : null,
-    { enabled: connected }
+    isReady ? { kind: "schema.tables" } : null,
+    { enabled: isReady }
   );
 
   const tableList = useMemo(
@@ -117,12 +113,18 @@ function DataPage() {
     }
   }, [tableList, selectedTable]);
 
+  useEffect(() => {
+    if (selectedTable) {
+      setActivePanelTab("data");
+    }
+  }, [selectedTable]);
+
   /* ---------------------------------------------------------------- */
   /*  Fetch table data (reactive via runtime events)                   */
   /* ---------------------------------------------------------------- */
 
   const dataSubscription = useDevtoolsSubscription(
-    connected && selectedTable
+    isReady && selectedTable
       ? {
           kind: "data.table",
           table: selectedTable,
@@ -130,7 +132,7 @@ function DataPage() {
           limit: 100
         }
       : null,
-    { enabled: connected && !!selectedTable }
+    { enabled: isReady && !!selectedTable }
   );
 
   useEffect(() => {
@@ -158,14 +160,14 @@ function DataPage() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!connected || !selectedTable) return;
+      if (!isReady || !selectedTable) return;
       try {
         await sendRequest({
           kind: "data.delete",
           table: selectedTable,
           id
         });
-        setSelectedDoc(null);
+        setSelectedRowIds((current) => current.filter((rowId) => rowId !== id));
         pushToast({
           tone: "success",
           title: "Document deleted",
@@ -179,12 +181,12 @@ function DataPage() {
         });
       }
     },
-    [connected, selectedTable, pushToast]
+    [isReady, selectedTable, pushToast]
   );
 
   const handleDeleteMany = useCallback(
     async (ids: string[]) => {
-      if (!connected || !selectedTable || ids.length === 0) return;
+      if (!isReady || !selectedTable || ids.length === 0) return;
       await Promise.all(
         ids.map((id) =>
           sendRequest({
@@ -195,16 +197,13 @@ function DataPage() {
         )
       );
       setSelectedRowIds([]);
-      setSelectedDoc((current) =>
-        current && ids.includes(getDocumentId(current)) ? null : current
-      );
       pushToast({
         tone: "success",
         title: "Documents deleted",
         description: `${ids.length} document${ids.length === 1 ? "" : "s"} removed from ${selectedTable}.`
       });
     },
-    [connected, selectedTable, pushToast]
+    [isReady, selectedTable, pushToast]
   );
 
   const handleInsert = useCallback(
@@ -212,7 +211,7 @@ function DataPage() {
       document: Record<string, unknown>,
       options?: { silent?: boolean }
     ) => {
-      if (!connected || !selectedTable) return;
+      if (!isReady || !selectedTable) return;
       const res = await sendRequest({
         kind: "data.insert",
         table: selectedTable,
@@ -229,12 +228,12 @@ function DataPage() {
         });
       }
     },
-    [connected, selectedTable, pushToast]
+    [isReady, selectedTable, pushToast]
   );
 
   const handlePatch = useCallback(
     async (id: string, fields: Record<string, unknown>) => {
-      if (!connected || !selectedTable) return;
+      if (!isReady || !selectedTable) return;
       const res = await sendRequest({
         kind: "data.patch",
         table: selectedTable,
@@ -250,7 +249,7 @@ function DataPage() {
         description: `${id} was updated.`
       });
     },
-    [connected, selectedTable, pushToast]
+    [isReady, selectedTable, pushToast]
   );
 
   const handleFieldEdit = useCallback(
@@ -352,8 +351,8 @@ function DataPage() {
   );
 
   const selectedDocId = useMemo(
-    () => (selectedDoc ? getDocumentId(selectedDoc) : null),
-    [selectedDoc]
+    () => (selectedRowIds.length === 1 ? selectedRowIds[0] ?? null : null),
+    [selectedRowIds]
   );
 
   const liveSelectedDoc = useMemo(() => {
@@ -363,7 +362,7 @@ function DataPage() {
 
   useEffect(() => {
     if (selectedDocId && !liveSelectedDoc) {
-      setSelectedDoc(null);
+      setSelectedRowIds((current) => current.filter((id) => id !== selectedDocId));
     }
   }, [liveSelectedDoc, selectedDocId]);
 
@@ -481,148 +480,94 @@ function DataPage() {
   );
 
   const loading = schemaSubscription.loading || dataLoading;
-  const dataError =
-    typeof dataSubscription.error === "string"
-      ? dataSubscription.error
-      : typeof schemaSubscription.error === "string"
-        ? schemaSubscription.error
-        : typeof activeRuntime?.lastSubscriptionError === "string"
-          ? activeRuntime.lastSubscriptionError
-          : null;
+  const dataError = firstString(
+    dataSubscription.error,
+    schemaSubscription.error,
+    activeRuntime?.lastSubscriptionError
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
 
   return (
-    <div className="flex h-[calc(100vh-7rem)]">
+    <div className="flex h-[calc(100vh-7rem)] gap-3">
       {/* ---- Left sidebar: table list ---- */}
-      <div className="w-64 shrink-0 border-r border-border flex flex-col hidden md:flex">
-        <div className="p-3 border-b border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-[13px] font-bold text-text-primary flex-1">
-              Tables
-            </h2>
-            {schemaSubscription.loading && (
-              <Loader2 size={12} className="animate-spin text-text-tertiary" />
-            )}
-            {schemaSubscription.data && (
-              <Circle
-                size={6}
-                fill="var(--color-accent)"
-                stroke="none"
-                className="animate-live-dot"
-              />
-            )}
-          </div>
-          <div className="relative">
-            <Search
-              size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
-            />
-            <Input
-              placeholder="Search tables..."
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              className="pl-8 h-7 text-[12px]"
-            />
-          </div>
-        </div>
-
-        <ScrollArea className="flex-1">
-          <div className="p-1.5">
-            {filteredTables.length === 0 ? (
-              <div className="py-8 text-center">
-                <Database
-                  size={20}
-                  className="mx-auto mb-2 text-text-tertiary"
-                />
-                <p className="text-[11px] text-text-tertiary">
-                  {connected ? "No tables found" : "Connect to browse tables"}
-                </p>
-              </div>
-            ) : (
-              filteredTables.map((table) => (
-                <button
-                  key={table.name}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTable(table.name);
-                    setSelectedDoc(null);
-                    setSelectedRowIds([]);
-                    setFilters([]);
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px] transition-colors",
-                    selectedTable === table.name
-                      ? "bg-accent/10 text-text-primary"
-                      : "text-text-secondary hover:bg-bg-surface hover:text-text-primary"
-                  )}
-                >
-                  <Table2 size={12} className="text-text-tertiary shrink-0" />
-                  <span className="truncate font-mono">{table.name}</span>
-                  <Badge
-                    variant="secondary"
-                    className="ml-auto text-[9px] px-1 py-0 shrink-0"
-                  >
-                    {table.documentCount}
-                  </Badge>
-                </button>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-
-        <div className="p-3 border-t border-border text-[11px] text-text-tertiary">
-          {tableList.length} tables
-        </div>
+      <div className="hidden min-h-0 w-72 shrink-0 md:flex">
+        <TableDirectory
+          filteredTables={filteredTables}
+          runtimeConnected={runtimeConnected}
+          schemaLoading={schemaSubscription.loading}
+          hasSchemaData={Boolean(schemaSubscription.data)}
+          selectedTable={selectedTable}
+          tableCount={tableList.length}
+          tableSearch={tableSearch}
+          onTableSearchChange={setTableSearch}
+          onSelectTable={(tableName) => {
+            setSelectedTable(tableName);
+            setSelectedRowIds([]);
+            setFilters([]);
+            setMobileTablesOpen(false);
+          }}
+        />
       </div>
 
       {/* ---- Right content: data view ---- */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setMobileTablesOpen(true)}
+          >
+            <Table2 size={13} />
+            Tables
+          </Button>
+          {selectedTable && (
+            <Badge variant="secondary" className="max-w-[60vw] truncate">
+              <span className="truncate font-mono">{selectedTable}</span>
+            </Badge>
+          )}
+          {tableList.length > 0 && (
+            <span className="ml-auto text-[11px] text-text-tertiary">
+              {tableList.length} tables
+            </span>
+          )}
+        </div>
         {selectedTable ? (
           <>
             {/* Toolbar */}
-            <div className="p-3 border-b border-border flex items-center gap-3">
-              <div className="flex items-center gap-2 flex-1">
-                <h3 className="text-[13px] font-bold text-text-primary font-mono">
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <h3 className="truncate font-mono text-[13px] font-semibold text-text-primary">
                   {selectedTable}
                 </h3>
-                <Badge variant="outline" className="text-[9px]">
+                <Badge variant="outline" className="text-[10px]">
                   {totalCount} rows
                 </Badge>
                 {loading && (
                   <Loader2
-                    size={13}
+                    size={12}
                     className="animate-spin text-text-tertiary"
                   />
                 )}
-                {/* Live indicator instead of refresh */}
-                <div className="flex items-center gap-1.5 ml-2">
-                  <Circle
-                    size={5}
-                    fill="var(--color-success)"
-                    stroke="none"
-                    className="animate-live-dot"
-                  />
-                  <span className="text-[10px] text-text-tertiary">Live</span>
-                </div>
                 {dataError && (
-                  <Badge variant="destructive" className="ml-2 max-w-[28rem]">
+                  <Badge variant="destructive" className="max-w-[22rem]">
                     <span className="truncate">{dataError}</span>
                   </Badge>
                 )}
                 {activeRuntime && (
                   <Badge
                     variant="outline"
-                    className="ml-2 text-[9px] font-mono"
+                    className="hidden text-[10px] font-mono lg:inline-flex"
                   >
                     {activeRuntime.platform}:
                     {activeRuntime.runtimeId.slice(0, 8)}
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 overflow-x-auto">
+              <div className="flex items-center gap-1 overflow-x-auto">
                 <Button
                   variant="outline"
                   size="xs"
@@ -700,7 +645,7 @@ function DataPage() {
             </div>
 
             {selectedRowsCount > 0 && (
-              <div className="flex items-center gap-2 border-b border-border bg-accent/5 px-3 py-2">
+              <div className="flex items-center gap-1.5 border-b border-border bg-bg-base px-3 py-1.5">
                 <Badge variant="warning" className="text-[10px]">
                   {selectedRowsCount} selected
                 </Badge>
@@ -744,7 +689,7 @@ function DataPage() {
             )}
 
             {/* Filters */}
-            <div className="px-3 py-2 border-b border-border">
+            <div className="border-b border-border px-3 py-1.5">
               <DataFilters
                 fields={columns}
                 filters={filters}
@@ -752,10 +697,16 @@ function DataPage() {
               />
             </div>
 
-            {/* Content area with tabs */}
-            <Tabs defaultValue="data" className="flex-1 flex flex-col min-h-0">
-              <div className="px-3 border-b border-border">
-                <TabsList variant="line" className="h-9">
+            <div className="mx-3 mb-3 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-base">
+              <Tabs
+                value={activePanelTab}
+                onValueChange={(value) =>
+                  setActivePanelTab(value as "data" | "schema" | "indexes")
+                }
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <div className="border-b border-border bg-bg-surface px-3">
+                  <TabsList variant="line" className="h-9">
                   <TabsTrigger value="data" className="gap-1">
                     <Table2 size={12} />
                     Data
@@ -768,88 +719,107 @@ function DataPage() {
                     <Key size={12} />
                     Indexes
                   </TabsTrigger>
-                </TabsList>
-              </div>
+                  </TabsList>
+                </div>
 
-              <TabsContent value="data" className="flex-1 min-h-0">
-                <div className="flex h-full">
-                  <div className="flex-1 min-w-0">
-                    {rows.length === 0 ? (
-                      <EmptyState
-                        icon={Database}
-                        title="No data"
-                        description={
-                          filters.length > 0
-                            ? "No rows match the current filters."
-                            : "This table is empty."
+                <TabsContent
+                  value="data"
+                  forceMount
+                  className={cn(
+                    "flex-1 min-h-0 bg-transparent",
+                    activePanelTab !== "data" && "hidden"
+                  )}
+                >
+                  <div className="flex h-full">
+                    <div className="min-w-0 flex-1 p-2">
+                      {rows.length === 0 ? (
+                        <EmptyState
+                          icon={Database}
+                          title="No data"
+                          description={
+                            filters.length > 0
+                              ? "No rows match the current filters."
+                              : "This table is empty."
+                          }
+                          className="h-full rounded-md border border-border bg-bg-base"
+                        />
+                      ) : (
+                        <DataTable
+                          key={`${selectedTable}:${rows.length}`}
+                          columns={columns}
+                          rows={rows}
+                          selectedRowId={selectedDocId}
+                          selectedRowIds={selectedRowIds}
+                          onToggleRowSelection={(rowId) => {
+                            setSelectedRowIds((current) =>
+                              current.includes(rowId)
+                                ? current.filter((id) => id !== rowId)
+                                : [...current, rowId]
+                            );
+                          }}
+                          onToggleAllRows={(rowIds, checked) => {
+                            setSelectedRowIds((current) => {
+                              if (checked) {
+                                return Array.from(
+                                  new Set([...current, ...rowIds])
+                                );
+                              }
+                              const toRemove = new Set(rowIds);
+                              return current.filter((id) => !toRemove.has(id));
+                            });
+                          }}
+                          onCellEdit={(rowId, field, value) => {
+                            void handleFieldEdit(rowId, field, value);
+                          }}
+                          className="h-full rounded-md border border-border bg-bg-base"
+                        />
+                      )}
+                    </div>
+
+                    {liveSelectedDoc && (
+                      <DocumentPanel
+                        document={liveSelectedDoc}
+                        onClose={() => setSelectedRowIds([])}
+                        onEditField={(id, field, value) =>
+                          setFieldEditState({ id, field, value })
                         }
-                        className="h-full"
-                      />
-                    ) : (
-                      <DataTable
-                        columns={columns}
-                        rows={rows}
-                        selectedRowId={
-                          selectedDoc ? getDocumentId(selectedDoc) : null
-                        }
-                        selectedRowIds={selectedRowIds}
-                        onRowClick={setSelectedDoc}
-                        onToggleRowSelection={(rowId) => {
-                          setSelectedRowIds((current) =>
-                            current.includes(rowId)
-                              ? current.filter((id) => id !== rowId)
-                              : [...current, rowId]
-                          );
+                        onEditDocument={() => {
+                          setEditorMode("patch");
+                          setEditorOpen(true);
                         }}
-                        onToggleAllRows={(rowIds, checked) => {
-                          setSelectedRowIds((current) => {
-                            if (checked) {
-                              return Array.from(
-                                new Set([...current, ...rowIds])
-                              );
-                            }
-                            const toRemove = new Set(rowIds);
-                            return current.filter((id) => !toRemove.has(id));
-                          });
+                        onDuplicate={() => {
+                          setEditorMode("duplicate");
+                          setEditorOpen(true);
                         }}
-                        onCellEdit={(rowId, field, value) => {
-                          void handleFieldEdit(rowId, field, value);
-                        }}
-                        className="h-full"
+                        onDelete={(id) => setConfirmDeleteId(id)}
                       />
                     )}
                   </div>
+                </TabsContent>
 
-                  {/* Document panel */}
-                  {liveSelectedDoc && (
-                    <DocumentPanel
-                      document={liveSelectedDoc}
-                      onClose={() => setSelectedDoc(null)}
-                      onEditField={(id, field, value) =>
-                        setFieldEditState({ id, field, value })
-                      }
-                      onEditDocument={() => {
-                        setEditorMode("patch");
-                        setEditorOpen(true);
-                      }}
-                      onDuplicate={() => {
-                        setEditorMode("duplicate");
-                        setEditorOpen(true);
-                      }}
-                      onDelete={(id) => setConfirmDeleteId(id)}
-                    />
+                <TabsContent
+                  value="schema"
+                  forceMount
+                  className={cn(
+                    "flex-1 min-h-0 bg-transparent",
+                    activePanelTab !== "schema" && "hidden"
                   )}
-                </div>
-              </TabsContent>
+                >
+                  <SchemaViewer schema={currentSchema} className="p-2" />
+                </TabsContent>
 
-              <TabsContent value="schema" className="flex-1 min-h-0">
-                <SchemaViewer schema={currentSchema} />
-              </TabsContent>
-
-              <TabsContent value="indexes" className="flex-1 min-h-0">
-                <IndexesViewer indexes={currentSchema?.indexes ?? []} />
-              </TabsContent>
-            </Tabs>
+                <TabsContent
+                  value="indexes"
+                  forceMount
+                  className={cn(
+                    "flex-1 min-h-0 bg-transparent",
+                    activePanelTab !== "indexes" && "hidden"
+                  )}
+                >
+                  <IndexesViewer indexes={currentSchema?.indexes ?? []} className="p-2" />
+                </TabsContent>
+              </Tabs>
+            </div>
           </>
         ) : (
           <EmptyState
@@ -984,7 +954,12 @@ function DataPage() {
         submitLabel="Update Field"
         initialDocument={
           fieldEditState
-            ? { [fieldEditState.field]: fieldEditState.value }
+            ? {
+                [fieldEditState.field]: toEditableCellText(
+                  fieldEditState.field,
+                  fieldEditState.value
+                )
+              }
             : undefined
         }
         hint="Primitive values, arrays, objects, null, true and false are all supported."
@@ -993,13 +968,159 @@ function DataPage() {
           if (!fieldEditState) {
             throw new Error("No field selected.");
           }
+          const submittedValue = document[fieldEditState.field];
+          const serializedValue =
+            typeof submittedValue === "string"
+              ? submittedValue
+              : stringifyEditableValue(submittedValue);
           await handleFieldEdit(
             fieldEditState.id,
             fieldEditState.field,
-            document[fieldEditState.field]
+            parseEditableCellValue(
+              fieldEditState.field,
+              serializedValue,
+              fieldEditState.value
+            )
           );
         }}
       />
+
+      <Dialog open={mobileTablesOpen} onOpenChange={setMobileTablesOpen}>
+        <DialogContent className="max-w-[calc(100%-1.5rem)] p-0 sm:max-w-lg">
+          <TableDirectory
+            filteredTables={filteredTables}
+            runtimeConnected={runtimeConnected}
+            schemaLoading={schemaSubscription.loading}
+            hasSchemaData={Boolean(schemaSubscription.data)}
+            selectedTable={selectedTable}
+            tableCount={tableList.length}
+            tableSearch={tableSearch}
+            onTableSearchChange={setTableSearch}
+            onSelectTable={(tableName) => {
+              setSelectedTable(tableName);
+              setSelectedRowIds([]);
+              setFilters([]);
+              setMobileTablesOpen(false);
+            }}
+            className="max-h-[75vh]"
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function TableDirectory({
+  filteredTables,
+  runtimeConnected,
+  schemaLoading,
+  hasSchemaData,
+  selectedTable,
+  tableCount,
+  tableSearch,
+  onTableSearchChange,
+  onSelectTable,
+  className
+}: {
+  filteredTables: Array<{
+    name: string;
+    documentCount: number;
+  }>;
+  runtimeConnected: boolean;
+  schemaLoading: boolean;
+  hasSchemaData: boolean;
+  selectedTable: string | null;
+  tableCount: number;
+  tableSearch: string;
+  onTableSearchChange: (value: string) => void;
+  onSelectTable: (tableName: string) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface",
+        className
+      )}
+    >
+      <div className="border-b border-border px-3 py-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-[13px] font-semibold text-text-primary">
+            Tables
+          </h2>
+          <div className="flex items-center gap-2">
+            {schemaLoading && (
+              <Loader2 size={12} className="animate-spin text-text-tertiary" />
+            )}
+            {hasSchemaData && <span className="text-[11px] text-text-tertiary">{tableCount}</span>}
+          </div>
+        </div>
+        <div className="relative">
+          <Search
+            size={13}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+          />
+          <Input
+            placeholder="Search tables..."
+            value={tableSearch}
+            onChange={(e) => onTableSearchChange(e.target.value)}
+            className="h-8 rounded-md border-border bg-bg-base pl-8 text-[12px]"
+          />
+        </div>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="space-y-1.5 p-2.5">
+          {filteredTables.length === 0 ? (
+            <div className="py-10 text-center">
+              <Database size={20} className="mx-auto mb-2 text-text-tertiary" />
+              <p className="text-[11px] text-text-tertiary">
+                {runtimeConnected
+                  ? "No tables found"
+                  : "Connect to an active runtime to browse tables"}
+              </p>
+            </div>
+          ) : (
+            filteredTables.map((table) => {
+              const isActive = selectedTable === table.name;
+              return (
+                <button
+                  key={table.name}
+                  type="button"
+                  onClick={() => onSelectTable(table.name)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md border px-2.5 py-2.5 text-left transition-colors",
+                    isActive
+                      ? "border-border-active bg-bg-base text-text-primary"
+                      : "border-transparent bg-transparent text-text-secondary hover:border-border hover:bg-bg-base hover:text-text-primary"
+                  )}
+                >
+                  <Table2 size={13} className="shrink-0 text-text-tertiary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-mono text-[12px]">
+                      {table.name}
+                    </div>
+                    <div className="text-[10px] text-text-tertiary">
+                      {table.documentCount} row
+                      {table.documentCount === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <Badge
+                    variant={isActive ? "outline" : "secondary"}
+                    className="shrink-0 px-1.5 py-0 text-[9px]"
+                  >
+                    {table.documentCount}
+                  </Badge>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </ScrollArea>
+
+      <div className="border-t border-border px-3 py-2 text-[11px] text-text-tertiary">
+        {tableCount} tables
+      </div>
     </div>
   );
 }
@@ -1039,4 +1160,23 @@ function shallowEqualRows(
     }
   }
   return true;
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return null;
+}
+
+function stringifyEditableValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === undefined) {
+    return "";
+  }
+  return JSON.stringify(value);
 }

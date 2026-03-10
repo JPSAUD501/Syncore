@@ -17,7 +17,7 @@ function Tabs({
       data-orientation={orientation}
       orientation={orientation}
       className={cn(
-        "group/tabs flex gap-2 data-[orientation=horizontal]:flex-col",
+        "group/tabs flex gap-0 data-[orientation=horizontal]:flex-col",
         className
       )}
       {...props}
@@ -31,7 +31,7 @@ const tabsListVariants = cva(
     variants: {
       variant: {
         default: "bg-bg-surface border border-border",
-        line: "gap-1 bg-transparent border-b border-border rounded-none"
+        line: "gap-4 bg-transparent border-0 rounded-none p-0"
       }
     },
     defaultVariants: {
@@ -72,7 +72,7 @@ function TabsTrigger({
         // Default variant active state
         "group-data-[variant=default]/tabs-list:data-[state=active]:bg-bg-elevated group-data-[variant=default]/tabs-list:data-[state=active]:text-text-primary group-data-[variant=default]/tabs-list:data-[state=active]:border-border group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm",
         // Line variant active state
-        "group-data-[variant=line]/tabs-list:rounded-none group-data-[variant=line]/tabs-list:border-b-2 group-data-[variant=line]/tabs-list:border-b-transparent group-data-[variant=line]/tabs-list:data-[state=active]:border-b-accent group-data-[variant=line]/tabs-list:data-[state=active]:text-text-primary",
+        "group-data-[variant=line]/tabs-list:rounded-none group-data-[variant=line]/tabs-list:px-0 group-data-[variant=line]/tabs-list:border-b-2 group-data-[variant=line]/tabs-list:border-b-transparent group-data-[variant=line]/tabs-list:data-[state=active]:border-b-accent group-data-[variant=line]/tabs-list:data-[state=active]:text-text-primary",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
@@ -88,7 +88,7 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 outline-none", className)}
+      className={cn("mt-0 flex-1 outline-none", className)}
       {...props}
     />
   );

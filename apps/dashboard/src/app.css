@@ -167,7 +167,7 @@ button {
 /*  Reactivity highlight animations (Convex-inspired)                  */
 /* ================================================================== */
 
-@keyframes highlight {
+@keyframes highlightA {
   0% {
     background-color: transparent;
   }
@@ -179,7 +179,19 @@ button {
   }
 }
 
-@keyframes highlightBorder {
+@keyframes highlightB {
+  0% {
+    background-color: transparent;
+  }
+  15% {
+    background-color: oklch(0.72 0.12 70 / 0.12);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes highlightBorderA {
   0% {
     border-color: var(--color-border);
   }
@@ -191,7 +203,30 @@ button {
   }
 }
 
-@keyframes fadeIn {
+@keyframes highlightBorderB {
+  0% {
+    border-color: var(--color-border);
+  }
+  15% {
+    border-color: var(--color-accent);
+  }
+  100% {
+    border-color: var(--color-border);
+  }
+}
+
+@keyframes fadeInA {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInB {
   0% {
     opacity: 0;
     transform: translateY(-4px);
@@ -221,16 +256,48 @@ button {
   }
 }
 
-.animate-highlight {
-  animation: highlight 1.2s ease-out;
+.animate-highlight-a,
+.animate-highlight-b {
+  animation-duration: 1.2s;
+  animation-timing-function: ease-out;
 }
 
-.animate-highlight-border {
-  animation: highlightBorder 1.2s ease-out;
+.animate-highlight-a {
+  animation-name: highlightA;
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
+.animate-highlight-b {
+  animation-name: highlightB;
+}
+
+.animate-highlight-border-a,
+.animate-highlight-border-b {
+  animation-duration: 1.2s;
+  animation-timing-function: ease-out;
+}
+
+.animate-highlight-border-a {
+  animation-name: highlightBorderA;
+}
+
+.animate-highlight-border-b {
+  animation-name: highlightBorderB;
+}
+
+.animate-fade-in,
+.animate-fade-in-a,
+.animate-fade-in-b {
+  animation-duration: 0.3s;
+  animation-timing-function: ease-out;
+}
+
+.animate-fade-in,
+.animate-fade-in-a {
+  animation-name: fadeInA;
+}
+
+.animate-fade-in-b {
+  animation-name: fadeInB;
 }
 
 .animate-fade-in-cell {

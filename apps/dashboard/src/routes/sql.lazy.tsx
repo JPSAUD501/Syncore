@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Table2,
   AlertCircle,
-  Sparkles,
   History
 } from "lucide-react";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -157,7 +156,7 @@ const substrateHighlight = EditorView.baseTheme({
 /* ------------------------------------------------------------------ */
 
 function SqlPage() {
-  const { connected } = useConnection();
+  const { isReady } = useConnection();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SqlMode>("read");
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -188,11 +187,11 @@ function SqlPage() {
   const liveStartedAtRef = useRef<number | null>(null);
 
   const liveSubscription = useDevtoolsSubscription(
-    connected && mode === "live" && query.trim()
+    isReady && mode === "live" && query.trim()
       ? { kind: "sql.watch", query: query.trim() }
       : null,
     {
-      enabled: connected && mode === "live" && query.trim().length > 0
+      enabled: isReady && mode === "live" && query.trim().length > 0
     }
   );
 
@@ -218,7 +217,7 @@ function SqlPage() {
   const executeQuery = useCallback(
     async (sql?: string) => {
       const queryText = sql ?? query.trim();
-      if (!queryText || !connected) return;
+      if (!queryText || !isReady) return;
       if (mode === "live") {
         return;
       }
@@ -291,7 +290,7 @@ function SqlPage() {
         setLoading(false);
       }
     },
-    [query, connected, mode]
+    [query, isReady, mode]
   );
 
   useEffect(() => {
@@ -379,15 +378,14 @@ function SqlPage() {
   /* ---------------------------------------------------------------- */
 
   return (
-    <div className="flex h-[calc(100vh-7rem)]">
+    <div className="flex h-[calc(100vh-7rem)] gap-3">
       {/* ---- Main content ---- */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
         {/* Editor area — enhanced with sql-editor-wrapper */}
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center gap-2 mb-3">
-            <Terminal size={14} className="text-accent" />
-            <h2 className="text-[13px] font-bold text-text-primary flex-1">
-              SQL Console
+        <div className="border-b border-border p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="flex-1 text-[14px] font-semibold text-text-primary">
+              Query
             </h2>
             <Badge variant="outline" className="text-[9px]">
               SQLite
@@ -420,11 +418,11 @@ function SqlPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 mt-3">
+          <div className="mt-3 flex items-center gap-2">
             {mode !== "live" && (
               <Button
                 onClick={() => void executeQuery()}
-                disabled={!connected || loading || !query.trim()}
+                disabled={!isReady || loading || !query.trim()}
                 size="sm"
                 className="gap-1.5 px-4"
               >
@@ -437,25 +435,25 @@ function SqlPage() {
               </Button>
             )}
 
-            <div className="flex items-center gap-1 rounded-md border border-border bg-bg-surface p-0.5">
+            <div className="flex items-center gap-1 rounded-md border border-border bg-bg-base p-0.5">
               {(["read", "live", "write"] as const).map((nextMode) => (
                 <button
                   key={nextMode}
                   type="button"
                   onClick={() => setMode(nextMode)}
                   className={cn(
-                    "px-2.5 py-1 rounded text-[10px] uppercase tracking-wide transition-colors",
+                    "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
                     mode === nextMode
                       ? "bg-accent text-bg-deep"
                       : "text-text-tertiary hover:text-text-primary"
                   )}
                 >
-                  {nextMode}
+                  {nextMode[0]!.toUpperCase() + nextMode.slice(1)}
                 </button>
               ))}
             </div>
 
-            <span className="text-[10px] text-text-tertiary">
+            <span className="text-[11px] text-text-tertiary">
               {mode === "live" ? "Live updates enabled" : "Ctrl+Enter to run"}
             </span>
 
@@ -469,19 +467,13 @@ function SqlPage() {
                   <Clock size={10} />
                   {formatDuration(result.durationMs)}
                 </span>
-                {result.mode === "live" && (
-                  <span className="flex items-center gap-1 text-success">
-                    <Sparkles size={10} />
-                    live
-                  </span>
-                )}
               </div>
             )}
           </div>
         </div>
 
         {/* Results area */}
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col bg-bg-base">
           {mode === "live" && liveSubscription.loading && !result ? (
             <div className="p-4 text-[12px] text-text-tertiary">
               Subscribing...
@@ -519,12 +511,12 @@ function SqlPage() {
       </div>
 
       {/* ---- Right sidebar: PRAGMA shortcuts + history ---- */}
-      <div className="w-64 shrink-0 border-l border-border flex flex-col hidden lg:flex">
+      <div className="hidden w-64 shrink-0 overflow-hidden rounded-md border border-border bg-bg-surface lg:flex lg:flex-col">
         {/* PRAGMA shortcuts */}
-        <div className="p-3 border-b border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles size={12} className="text-accent" />
-            <span className="text-[11px] font-bold text-text-primary">
+        <div className="border-b border-border p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Table2 size={12} className="text-accent" />
+            <span className="text-[11px] font-semibold text-text-primary">
               Quick Actions
             </span>
           </div>
@@ -537,10 +529,10 @@ function SqlPage() {
                   setQuery(shortcut.query);
                   void executeQuery(shortcut.query);
                 }}
-                disabled={!connected || mode === "live"}
+                disabled={!isReady || mode === "live"}
                 className={cn(
-                  "flex items-center gap-2 w-full px-2 py-1.5 rounded text-[11px] text-text-secondary",
-                  "hover:bg-bg-surface hover:text-text-primary transition-colors",
+                  "flex w-full items-center gap-2 rounded px-2 py-1.5 text-[11px] text-text-secondary transition-colors",
+                  "hover:bg-bg-base hover:text-text-primary",
                   "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
               >
@@ -553,9 +545,9 @@ function SqlPage() {
 
         {/* History */}
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="p-3 border-b border-border flex items-center gap-2">
+          <div className="flex items-center gap-2 border-b border-border p-3">
             <History size={12} className="text-text-tertiary" />
-            <span className="text-[11px] font-bold text-text-primary flex-1">
+            <span className="flex-1 text-[11px] font-semibold text-text-primary">
               History
             </span>
             {history.length > 0 && (
@@ -583,8 +575,8 @@ function SqlPage() {
                     type="button"
                     onClick={() => setQuery(entry.query)}
                     className={cn(
-                      "w-full text-left px-2 py-1.5 rounded transition-colors",
-                      "hover:bg-bg-surface group"
+                      "group w-full rounded px-2 py-1.5 text-left transition-colors",
+                      "hover:bg-bg-base"
                     )}
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
@@ -652,16 +644,16 @@ function ResultsTable({ result }: { result: QueryResult }) {
 
   return (
     <ScrollArea className="flex-1">
-      <div className="min-w-full animate-fade-in">
+      <div className="min-w-full animate-fade-in bg-bg-base">
         {/* Header */}
-        <div className="flex border-b border-border bg-bg-surface/50 sticky top-0 z-10">
-          <div className="w-12 shrink-0 px-2 py-2 text-[10px] uppercase tracking-wider font-semibold text-text-tertiary border-r border-border text-center">
+        <div className="sticky top-0 z-10 flex border-b border-border bg-bg-surface">
+          <div className="w-12 shrink-0 border-r border-border px-2 py-2 text-center text-[10px] font-semibold text-text-tertiary">
             #
           </div>
           {result.columns.map((col) => (
             <div
               key={col}
-              className="flex-shrink-0 min-w-[120px] max-w-[300px] w-auto px-3 py-2 text-[10px] uppercase tracking-wider font-semibold text-text-tertiary border-r border-border last:border-r-0"
+              className="flex-shrink-0 min-w-[120px] max-w-[300px] w-auto border-r border-border px-3 py-2 text-[10px] font-semibold text-text-tertiary last:border-r-0"
             >
               {col}
             </div>

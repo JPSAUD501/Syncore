@@ -6,13 +6,11 @@ import {
   ScrollText,
   Clock,
   Terminal,
-  Circle,
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConnectedRuntimeCount, useDevtoolsStore } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
@@ -38,37 +36,33 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
   if (collapsed) return null;
 
   return (
-    <aside className="flex flex-col h-screen border-r border-border bg-bg-base/80 backdrop-blur-sm w-[220px] shrink-0">
-      {/* Brand */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-4">
-        <div className="grid place-items-center w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-amber-700 text-bg-deep font-bold text-sm shadow-sm shadow-accent/20">
+    <aside className="flex h-screen w-[240px] shrink-0 flex-col border-r border-border bg-bg-base">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg-surface font-semibold text-text-primary">
           S
         </div>
-        <div className="flex-1">
-          <div className="font-bold text-sm text-text-primary leading-tight">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-semibold text-text-primary">
             Syncore
           </div>
-          <div className="text-[11px] text-text-tertiary leading-tight">
+          <div className="truncate text-[12px] text-text-tertiary">
             Dev Dashboard
           </div>
         </div>
-        {/* Close button for mobile overlay */}
         {onClose && (
           <Button
             variant="ghost"
             size="icon-xs"
             onClick={onClose}
-            className="md:hidden"
+            className="self-start md:hidden"
           >
             <X size={14} />
           </Button>
         )}
       </div>
 
-      <Separator className="mx-4" />
-
       {/* Navigation */}
-      <nav className="flex flex-col gap-0.5 px-3 flex-1 mt-3">
+      <nav className="mt-3 flex flex-1 flex-col gap-0.5 px-3">
         {NAV_ITEMS.map((item) => {
           const isActive =
             item.to === "/"
@@ -81,11 +75,11 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
               to={item.to}
               onClick={onNavClick}
               className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors duration-150",
+                "flex items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors duration-150",
                 "hover:bg-bg-surface hover:text-text-primary",
                 isActive
-                  ? "bg-bg-surface text-text-primary border border-border-hover shadow-sm shadow-black/5"
-                  : "text-text-secondary border border-transparent"
+                  ? "border-border-hover bg-bg-surface text-text-primary"
+                  : "border-transparent text-text-secondary"
               )}
             >
               <item.icon size={15} strokeWidth={1.8} />
@@ -96,21 +90,13 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
       </nav>
 
       {/* Status bar */}
-      <div className="px-4 py-3 border-t border-border space-y-2">
-        <div className="flex items-center gap-2 text-[11px] text-text-tertiary">
-          <Circle
-            size={7}
-            fill={connected ? "var(--color-success)" : "var(--color-error)"}
-            stroke="none"
-            className={cn(connected && "animate-pulse")}
-          />
-          <span>
-            {connected
-              ? connectedRuntimeCount > 0
-                ? `${connectedRuntimeCount} runtime(s) connected`
-                : "Hub connected"
-              : "Disconnected"}
-          </span>
+      <div className="space-y-2 border-t border-border px-4 py-3">
+        <div className="text-[11px] text-text-tertiary">
+          {connected
+            ? connectedRuntimeCount > 0
+              ? `${connectedRuntimeCount} runtime(s) connected`
+              : "Hub connected"
+            : "Disconnected"}
         </div>
         <div className="flex items-center justify-between">
           <Badge variant="secondary" className="text-[10px] py-0">

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { JsonViewer } from "@/components/shared";
 import { X, Copy, Check, Trash2, Edit, CopyPlus } from "lucide-react";
 import { useState, useCallback } from "react";
+import { formatCellPreview } from "@/lib/dataValue";
 
 interface DocumentPanelProps {
   document: Record<string, unknown> | null;
@@ -45,21 +46,30 @@ export function DocumentPanel({
   return (
     <div
       className={cn(
-        "w-96 border-l border-border flex flex-col bg-bg-base",
+        "flex w-[24rem] flex-col border-l border-border bg-bg-base",
         className
       )}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <div className="flex items-center gap-2 min-w-0">
-          <Badge variant="outline" className="text-[9px] shrink-0">
-            Document
-          </Badge>
-          <span className="text-[11px] text-text-secondary font-mono truncate">
-            {docId}
-          </span>
+      <div className="border-b border-border px-4 py-3">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-text-primary">
+              Inspector
+            </div>
+            <div className="mt-1 flex min-w-0 items-center gap-2">
+              <Badge variant="outline" className="shrink-0 text-[9px]">
+                Document
+              </Badge>
+              <span className="truncate font-mono text-[11px] text-text-secondary">
+                {docId}
+              </span>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon-xs" onClick={onClose}>
+            <X size={11} />
+          </Button>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 rounded-md border border-border bg-bg-surface p-1">
           <Button
             variant="ghost"
             size="icon-xs"
@@ -102,15 +112,11 @@ export function DocumentPanel({
               <Trash2 size={11} className="text-error" />
             </Button>
           )}
-          <Button variant="ghost" size="icon-xs" onClick={onClose}>
-            <X size={11} />
-          </Button>
         </div>
       </div>
 
-      {/* Document content */}
       <ScrollArea className="flex-1">
-        <div className="p-3">
+        <div className="p-4">
           <JsonViewer
             data={document}
             defaultExpanded
@@ -122,18 +128,25 @@ export function DocumentPanel({
         <Separator />
 
         {/* Field list */}
-        <div className="p-3">
-          <h4 className="text-[10px] uppercase tracking-wider font-semibold text-text-tertiary mb-2">
+        <div className="p-4">
+          <h4 className="mb-2 text-[11px] font-medium text-text-secondary">
             Fields
           </h4>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {Object.entries(document).map(([key, value]) => (
               <div
                 key={key}
-                className="flex items-center justify-between py-1 px-2 rounded hover:bg-bg-surface/50 transition-colors group"
+                className="group flex items-start justify-between gap-3 rounded-md border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-bg-surface"
               >
-                <span className="text-[11px] text-accent font-mono">{key}</span>
-                <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-[11px] text-accent">
+                    {key}
+                  </span>
+                  <div className="mt-1 truncate text-[10px] text-text-secondary">
+                    {formatCellPreview(key, value).text}
+                  </div>
+                </div>
+                <div className="ml-3 flex items-center gap-2">
                   <span className="text-[10px] text-text-tertiary">
                     {inferType(value)}
                   </span>

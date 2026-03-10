@@ -5,6 +5,11 @@
       "source": "anthropics/skills",
       "sourceType": "github",
       "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    },
+    "uncodixfy": {
+      "source": "cyxzdev/uncodixfy",
+      "sourceType": "github",
+      "computedHash": "b5b791aca61e0732c0563c9bd1e3f72febefbbcad6d68d317d37382a3f9f7c33"
     }
   }
 }

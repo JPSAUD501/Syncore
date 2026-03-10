@@ -401,9 +401,10 @@ function LogsPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)]">
+    <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 pb-3 shrink-0 flex-wrap">
+      <div className="shrink-0 rounded-md border border-border bg-bg-surface p-3">
+      <div className="flex items-center gap-2 flex-wrap">
         {/* Search */}
         <div className="relative flex-1 max-w-sm min-w-48">
           <Search
@@ -476,18 +477,7 @@ function LogsPage() {
         </Button>
 
         {/* Live indicator + Event count */}
-        <div className="flex items-center gap-2 ml-auto">
-          {!paused && (
-            <div className="flex items-center gap-1.5">
-              <Circle
-                size={5}
-                fill="var(--color-success)"
-                stroke="none"
-                className="animate-live-dot"
-              />
-              <span className="text-[10px] text-text-tertiary">Live</span>
-            </div>
-          )}
+        <div className="ml-auto flex items-center gap-2">
           <Badge variant="secondary" className="tabular-nums">
             {filteredEvents.length} events
           </Badge>
@@ -496,7 +486,7 @@ function LogsPage() {
 
       {/* Filter chips */}
       {showFilters && (
-        <div className="flex items-center gap-1.5 pb-3 shrink-0 flex-wrap">
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
           {EVENT_TYPE_FILTERS.map((f) => (
             <Button
               key={f.value}
@@ -525,9 +515,10 @@ function LogsPage() {
           )}
         </div>
       )}
+      </div>
 
       {/* Log list + detail */}
-      <div className="flex flex-1 min-h-0 rounded-lg border border-border overflow-hidden bg-bg-surface">
+      <div className="flex flex-1 min-h-0 overflow-hidden rounded-md border border-border bg-bg-surface">
         {/* Event list */}
         <ScrollArea
           ref={listRef}
@@ -563,7 +554,7 @@ function LogsPage() {
         {selectedEvent && (
           <div className="w-[40%] shrink-0 border-l border-border bg-bg-base overflow-y-auto hidden md:block">
             <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-surface">
-              <span className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-text-primary">
                 Event Detail
               </span>
               <Button

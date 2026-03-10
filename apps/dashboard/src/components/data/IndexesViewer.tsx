@@ -22,29 +22,29 @@ export function IndexesViewer({ indexes, className }: IndexesViewerProps) {
 
   return (
     <ScrollArea className={cn("h-full", className)}>
-      <div className="p-4 space-y-3">
+      <div className="space-y-2 p-4">
         {indexes.map((index) => (
           <div
             key={index.name}
-            className="rounded-md border border-border bg-bg-surface/50 p-3"
+            className="rounded-md border border-border bg-bg-surface p-3"
           >
-            <div className="flex items-center gap-2 mb-2">
+            <div className="mb-2 flex items-center gap-2">
               <Key size={12} className="text-accent shrink-0" />
               <span className="text-[12px] text-text-primary font-mono font-medium">
                 {index.name}
               </span>
               {index.unique && (
-                <Badge variant="warning" className="text-[9px]">
+                <Badge variant="warning" className="text-[10px]">
                   unique
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-1.5 ml-5">
+            <div className="ml-5 flex items-center gap-1.5">
               <ArrowUpDown size={10} className="text-text-tertiary" />
               <div className="flex items-center gap-1">
                 {index.fields.map((field, i) => (
                   <span key={field}>
-                    <code className="text-[11px] text-text-code bg-bg-base px-1 py-0.5 rounded">
+                    <code className="rounded bg-bg-base px-1 py-0.5 text-[11px] text-text-code">
                       {field}
                     </code>
                     {i < index.fields.length - 1 && (
