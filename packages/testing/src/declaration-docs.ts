@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 export interface DeclarationDocExpectation {
@@ -9,10 +9,18 @@ export interface DeclarationDocExpectation {
 export async function readDeclarationFile(
   relativePathFromTest: string
 ): Promise<string> {
-  return readFile(
-    path.resolve(import.meta.dirname, relativePathFromTest),
-    "utf8"
+  const snapshotPath = path.resolve(
+    import.meta.dirname,
+    "..",
+    ".declaration-artifacts",
+    "packages",
+    relativePathFromTest.replace(/^(\.\.\/)+/, "")
   );
+  if (await fileExists(snapshotPath)) {
+    return readFile(snapshotPath, "utf8");
+  }
+
+  return readFile(path.resolve(import.meta.dirname, relativePathFromTest), "utf8");
 }
 
 export function expectPublicDeclarationsToBeDocumented(
@@ -65,4 +73,13 @@ function createDocumentedDeclarationPattern(
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

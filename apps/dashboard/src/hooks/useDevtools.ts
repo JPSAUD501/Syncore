@@ -1,6 +1,7 @@
 import {
   useActiveRuntime,
   useDevtoolsStore,
+  useSelectedTargetEvents,
   useSelectedRuntimeConnected
 } from "@/lib/store";
 import { useMemo } from "react";
@@ -52,13 +53,14 @@ export function useDevtools(): DevtoolsStateSnapshot {
   const includeDashboardActivity = useDevtoolsStore(
     (s) => s.includeDashboardActivity
   );
+  const targetEvents = useSelectedTargetEvents();
   const events = useMemo(
     () =>
       filterActivityEvents(
-        activeRuntime?.events ?? [],
+        targetEvents,
         includeDashboardActivity
       ),
-    [activeRuntime, includeDashboardActivity]
+    [targetEvents, includeDashboardActivity]
   );
   const counts = useMemo(() => summarizeActivityEvents(events), [events]);
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);

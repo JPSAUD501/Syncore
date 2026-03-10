@@ -256,6 +256,7 @@
         "syncorejs": "dist/cli.js",
       },
       "dependencies": {
+        "adm-zip": "^0.5.16",
         "commander": "^13.1.0",
         "date-fns-tz": "^3.2.0",
         "node-sql-parser": "^5.4.0",
@@ -264,6 +265,7 @@
         "ws": "^8.18.0",
       },
       "devDependencies": {
+        "@syncore/cli": "workspace:*",
         "@syncore/core": "workspace:*",
         "@syncore/devtools-protocol": "workspace:*",
         "@syncore/next": "workspace:*",

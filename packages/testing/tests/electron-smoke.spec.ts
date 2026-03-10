@@ -6,6 +6,14 @@ import { _electron as electron, expect, test } from "@playwright/test";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "..", "..", "..");
 const exampleRoot = path.join(workspaceRoot, "examples", "electron");
+const electronMainEntry = path.join(
+  exampleRoot,
+  "dist",
+  "examples",
+  "electron",
+  "src",
+  "main.js"
+);
 
 test("Electron example persists local state across app relaunches", async () => {
   const userDataDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-electron-smoke-"));
@@ -19,32 +27,33 @@ test("Electron example persists local state across app relaunches", async () => 
   try {
     firstLaunch = await launchElectronApp(userDataDirectory);
     const firstWindow = await firstLaunch.firstWindow();
+    const editor = firstWindow.getByPlaceholder(
+      "What happened today? How are you feeling?"
+    );
+    const deleteButton = firstWindow.getByRole("button", { name: "Delete" });
+    await expect(editor).toBeVisible();
 
-    await expect(
-      firstWindow.getByRole("heading", {
-        name: "Syncore stays on disk and reacts instantly in the renderer."
-      })
-    ).toBeVisible();
+    const entryText = `Electron smoke ${Date.now()} captured through the renderer bridge`;
+    await editor.fill(entryText);
 
-    const taskText = `Electron smoke ${Date.now()}`;
-    await firstWindow.getByLabel("Task draft").fill(taskText);
-    await firstWindow.getByRole("button", { name: "Add task" }).click();
-
-    await expect(firstWindow.getByText(taskText)).toBeVisible();
-    await expect(firstWindow.getByText("Total tasks: 1")).toBeVisible();
+    await expect(deleteButton).toBeVisible();
+    await expect(firstWindow.getByText(entryText)).toBeVisible();
 
     await firstLaunch.close();
     firstLaunch = undefined;
 
     secondLaunch = await launchElectronApp(userDataDirectory);
     const secondWindow = await secondLaunch.firstWindow();
+    const relaunchedEditor = secondWindow.getByPlaceholder(
+      "What happened today? How are you feeling?"
+    );
 
-    await expect(secondWindow.getByText(taskText)).toBeVisible();
-    await expect(secondWindow.getByText("Total tasks: 1")).toBeVisible();
+    await expect(relaunchedEditor).toHaveValue(entryText);
+    await expect(secondWindow.getByRole("button", { name: "Delete" })).toBeVisible();
 
-    await secondWindow.getByRole("button", { name: "Complete" }).click();
-    await expect(secondWindow.getByText("Completed on this machine")).toBeVisible();
-    await expect(secondWindow.getByText("Completed: 1")).toBeVisible();
+    await secondWindow.getByRole("button", { name: "Delete" }).click();
+    await expect(secondWindow.getByRole("button", { name: "Delete" })).toHaveCount(0);
+    await expect(relaunchedEditor).toHaveValue("");
 
     await secondLaunch.close();
     secondLaunch = undefined;
@@ -62,7 +71,7 @@ async function launchElectronApp(userDataDirectory: string) {
   return electron.launch({
     executablePath,
     cwd: exampleRoot,
-    args: [path.join(exampleRoot, "dist", "src", "main.js")],
+    args: [electronMainEntry],
     env: {
       ...process.env,
       SYNCORE_ELECTRON_USER_DATA_DIR: userDataDirectory

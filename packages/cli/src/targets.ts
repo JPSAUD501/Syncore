@@ -1,5 +1,11 @@
 import type { CliContext } from "./context.js";
-import { listAvailableTargets, targetSupportsCapability, type SyncoreTargetDescriptor, type TargetCapability } from "./project.js";
+import {
+  listAvailableTargets,
+  targetSupportsCapability,
+  type ClientRuntimeDescriptor,
+  type SyncoreTargetDescriptor,
+  type TargetCapability
+} from "./project.js";
 import { CliError } from "./errors.js";
 import { buildNoTargetsNextSteps, buildSelectTargetNextSteps } from "./messages.js";
 
@@ -32,6 +38,19 @@ export async function resolveOperationalTarget(
   }
 
   if (requestedTarget) {
+    if (requestedTarget !== "project" && !/^\d{5}$/.test(requestedTarget)) {
+      throw new CliError(
+        `Invalid target ${JSON.stringify(requestedTarget)} for \`${options.command}\`.`,
+        {
+          category: "target",
+          nextSteps: buildSelectTargetNextSteps(),
+          details: {
+            requestedTarget,
+            expected: "project or a 5-digit target id"
+          }
+        }
+      );
+    }
     const matchedTarget = targets.find((target) => target.id === requestedTarget);
     if (!matchedTarget) {
       throw new CliError(
@@ -78,4 +97,68 @@ export async function resolveOperationalTarget(
           : `${target.platform}, ${target.connectedSessions} session(s), ${target.capabilities.join("/")}`
     }))
   );
+}
+
+export function resolveClientRuntime(
+  target: SyncoreTargetDescriptor,
+  requestedRuntime: string | undefined,
+  options: {
+    command: "run" | "data" | "import" | "export" | "logs";
+  }
+): ClientRuntimeDescriptor | null {
+  if (!requestedRuntime) {
+    return target.kind === "client"
+      ? target.runtimes.find((runtime) => runtime.primary) ?? target.runtimes[0] ?? null
+      : null;
+  }
+
+  if (target.kind === "project") {
+    throw new CliError(
+      `\`${options.command}\` does not accept --runtime for the project target.`,
+      {
+        category: "target",
+        nextSteps: buildSelectTargetNextSteps(),
+        details: {
+          targetId: target.id,
+          requestedRuntime
+        }
+      }
+    );
+  }
+
+  if (!/^[a-z0-9]{8}$/i.test(requestedRuntime)) {
+    throw new CliError(
+      `Invalid runtime ${JSON.stringify(requestedRuntime)} for \`${options.command}\`.`,
+      {
+        category: "target",
+        nextSteps: buildSelectTargetNextSteps(),
+        details: {
+          targetId: target.id,
+          requestedRuntime,
+          expected: "an 8-character runtime id"
+        }
+      }
+    );
+  }
+
+  const runtime = target.runtimes.find((entry) => entry.id === requestedRuntime);
+  if (!runtime) {
+    throw new CliError(
+      `Unknown runtime ${JSON.stringify(requestedRuntime)} for target ${JSON.stringify(target.id)}.`,
+      {
+        category: "target",
+        nextSteps: buildSelectTargetNextSteps(),
+        details: {
+          targetId: target.id,
+          requestedRuntime,
+          availableRuntimes: target.runtimes.map((entry) => ({
+            id: entry.id,
+            label: entry.label
+          }))
+        }
+      }
+    );
+  }
+
+  return runtime;
 }

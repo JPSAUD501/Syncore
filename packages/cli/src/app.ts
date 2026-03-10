@@ -38,9 +38,12 @@ import {
   templateUsesConnectedClients
 } from "./messages.js";
 import {
+  buildRuntimeLookup,
+  type ClientRuntimeLookupEntry,
   type ClientTargetDescriptor,
   type TargetCapability,
   connectToProjectHub,
+  createPublicRuntimeId,
   createManagedProjectClient,
   exportProjectData,
   importProjectData,
@@ -65,7 +68,7 @@ import {
   printTargetsTable,
   renderOutput
 } from "./render.js";
-import { resolveOperationalTarget } from "./targets.js";
+import { resolveClientRuntime, resolveOperationalTarget } from "./targets.js";
 
 interface InitCommandOptions {
   template: SyncoreTemplateName | "auto";
@@ -85,6 +88,7 @@ interface RunCommandOptions {
   watch?: boolean;
   format: JsonLikeFormat;
   target?: string;
+  runtime?: string;
 }
 
 interface DataCommandOptions {
@@ -92,22 +96,26 @@ interface DataCommandOptions {
   order?: "asc" | "desc";
   format: JsonLikeFormat;
   target?: string;
+  runtime?: string;
   watch?: boolean;
 }
 
 interface ImportCommandOptions {
   table?: string;
   target?: string;
+  runtime?: string;
 }
 
 interface ExportCommandOptions {
   path: string;
   table?: string;
   target?: string;
+  runtime?: string;
 }
 
 interface LogsCommandOptions {
   target?: string;
+  runtime?: string;
   limit: string;
   watch?: boolean;
   kind?: "query" | "mutation" | "action" | "system";
@@ -574,7 +582,8 @@ function addRunCommand(program: Command): void {
     .argument("<functionName>", "Function name like tasks/list or api.tasks.list")
     .argument("[args]", "JSON object of arguments", "{}")
     .option("--watch", "Watch a query for local changes")
-    .option("--target <target>", "Target id: project or client:<id>")
+    .option("--target <target>", "Target id: project or a 5-digit client target id")
+    .option("--runtime <runtime>", "Runtime id inside the selected client target")
     .option(
       "--format <format>",
       "Output format: pretty, json, or jsonl",
@@ -587,7 +596,7 @@ function addRunCommand(program: Command): void {
         "Examples:",
         "  npx syncorejs run tasks/list",
         "  npx syncorejs run api.tasks.create '{\"text\":\"Ship Syncore\"}' --target project",
-        "  npx syncorejs run tasks/list --watch --target client:abc123 --format json"
+        "  npx syncorejs run tasks/list --watch --target 10427 --runtime a12f3c4d --format json"
       ].join("\n")
     )
     .action(
@@ -599,6 +608,9 @@ function addRunCommand(program: Command): void {
       ) => {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
+        if (options.runtime && !options.target) {
+          ctx.fail("`syncorejs run --runtime` requires --target.");
+        }
         const resolved = await resolveProjectFunction(ctx.cwd, functionName);
         const args = parseJsonObject(argsText, "Function arguments");
 
@@ -610,10 +622,13 @@ function addRunCommand(program: Command): void {
           command: "run",
           capability: "run"
         });
+        const runtime = resolveClientRuntime(target, options.runtime, {
+          command: "run"
+        });
         ctx.info(
           options.watch
-            ? `Watching ${resolved.name} on ${target.id}.`
-            : `Running ${resolved.name} on ${target.id}.`
+            ? `Watching ${resolved.name} on ${target.id}${runtime ? ` (${runtime.label}:${runtime.id})` : ""}.`
+            : `Running ${resolved.name} on ${target.id}${runtime ? ` (${runtime.label}:${runtime.id})` : ""}.`
         );
         if (target.kind === "project") {
           const managed = await createManagedProjectClient(ctx.cwd);
@@ -659,7 +674,7 @@ function addRunCommand(program: Command): void {
         const hub = await requireHubConnection(ctx);
         try {
           if (options.watch) {
-            const unsubscribe = hub.subscribe(target.runtimeId, {
+            const unsubscribe = hub.subscribe(runtime!.runtimeId, {
               kind: "fn.watch",
               functionName: resolved.name,
               functionType: "query",
@@ -685,7 +700,7 @@ function addRunCommand(program: Command): void {
             return;
           }
 
-          const result = await hub.sendCommand(target.runtimeId, {
+          const result = await hub.sendCommand(runtime!.runtimeId, {
             kind: "fn.run",
             functionName: resolved.name,
             functionType: resolved.definition.kind,
@@ -716,7 +731,8 @@ function addDataCommand(program: Command): void {
     .summary("Inspect local Syncore data")
     .description("List tables or print local rows from a specific table.")
     .argument("[table]", "Optional table to inspect")
-    .option("--target <target>", "Target id: project or client:<id>")
+    .option("--target <target>", "Target id: project or a 5-digit client target id")
+    .option("--runtime <runtime>", "Runtime id inside the selected client target")
     .option("--limit <n>", "Maximum rows to print", "100")
     .option("--order <choice>", "Order by _creationTime", "desc")
     .option("--watch", "Watch a table for changes on the selected target")
@@ -732,7 +748,7 @@ function addDataCommand(program: Command): void {
         "Examples:",
         "  npx syncorejs data",
         "  npx syncorejs data tasks --target project --limit 10",
-        "  npx syncorejs data tasks --target client:abc123 --watch --format jsonl"
+        "  npx syncorejs data tasks --target 10427 --runtime a12f3c4d --watch --format jsonl"
       ].join("\n")
     )
     .action(
@@ -743,15 +759,21 @@ function addDataCommand(program: Command): void {
       ) => {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
+        if (options.runtime && !options.target) {
+          ctx.fail("`syncorejs data --runtime` requires --target.");
+        }
         const target = await resolveOperationalTarget(ctx, options.target, {
           command: "data",
           capability: "readData"
+        });
+        const runtime = resolveClientRuntime(target, options.runtime, {
+          command: "data"
         });
         if (!table) {
           const tables =
             target.kind === "project"
               ? await listProjectTables(ctx.cwd)
-              : await listRemoteTables(target.runtimeId, ctx);
+              : await listRemoteTables(runtime!.runtimeId, ctx);
           ctx.printResult({
             summary: `Found ${tables.length} table(s) on ${target.id}.`,
             command: "data",
@@ -779,7 +801,7 @@ function addDataCommand(program: Command): void {
 
         const hub = await requireHubConnection(ctx);
         try {
-          const payload = await readRemoteTable(hub, target.runtimeId, table, {
+          const payload = await readRemoteTable(hub, runtime!.runtimeId, table, {
             limit: Number.parseInt(options.limit, 10)
           });
           renderOutput(ctx, payload.rows, options.format);
@@ -788,7 +810,7 @@ function addDataCommand(program: Command): void {
             return;
           }
 
-          const unsubscribe = hub.subscribe(target.runtimeId, {
+          const unsubscribe = hub.subscribe(runtime!.runtimeId, {
             kind: "data.table",
             table,
             limit: Number.parseInt(options.limit, 10)
@@ -803,7 +825,9 @@ function addDataCommand(program: Command): void {
               ctx.handleError(new Error(error));
             }
           });
-          ctx.info(`Watching table ${table} on ${target.id}. Press Ctrl+C to stop.`);
+          ctx.info(
+            `Watching table ${table} on ${target.id} (${runtime!.label}:${runtime!.id}). Press Ctrl+C to stop.`
+          );
           await waitForSignal();
           unsubscribe();
         } finally {
@@ -821,14 +845,15 @@ function addImportCommand(program: Command): void {
     .description("Import JSON, JSONL, directory, or ZIP data into the local Syncore database.")
     .argument("<path>", "Path to a .json, .jsonl, directory, or .zip input")
     .option("--table <table>", "Destination table for single-file imports")
-    .option("--target <target>", "Target id: project or client:<id>")
+    .option("--target <target>", "Target id: project or a 5-digit client target id")
+    .option("--runtime <runtime>", "Runtime id inside the selected client target")
     .addHelpText(
       "after",
       [
         "",
         "Examples:",
         "  npx syncorejs import --table tasks sample.jsonl --target project",
-        "  npx syncorejs import --table tasks sample.json --target client:abc123",
+        "  npx syncorejs import --table tasks sample.json --target 10427 --runtime a12f3c4d",
         "  npx syncorejs import backups/export.zip"
       ].join("\n")
     )
@@ -840,9 +865,15 @@ function addImportCommand(program: Command): void {
       ) => {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
+        if (options.runtime && !options.target) {
+          ctx.fail("`syncorejs import --runtime` requires --target.");
+        }
         const target = await resolveOperationalTarget(ctx, options.target, {
           command: "import",
           capability: "writeData"
+        });
+        const runtime = resolveClientRuntime(target, options.runtime, {
+          command: "import"
         });
         const preview = await previewImportPlan(ctx, sourcePath, options, target.id);
         if (
@@ -862,7 +893,7 @@ function addImportCommand(program: Command): void {
                 })
               )
             : await ctx.withSpinner(`Importing data into ${target.id}`, async () =>
-                importIntoClientTarget(ctx, target, sourcePath, options)
+                importIntoClientTarget(ctx, target, runtime!, sourcePath, options)
               );
         ctx.printResult({
           summary: `Imported ${imported.reduce((sum, entry) => sum + entry.importedCount, 0)} row(s).`,
@@ -889,23 +920,30 @@ function addExportCommand(program: Command): void {
     .description("Export one or more local tables to JSON, JSONL, a directory, or a ZIP file.")
     .requiredOption("--path <path>", "Output path (.json, .jsonl, directory, or .zip)")
     .option("--table <table>", "Export a single table")
-    .option("--target <target>", "Target id: project or client:<id>")
+    .option("--target <target>", "Target id: project or a 5-digit client target id")
+    .option("--runtime <runtime>", "Runtime id inside the selected client target")
     .addHelpText(
       "after",
       [
         "",
         "Examples:",
         "  npx syncorejs export --table tasks --path tasks.jsonl --target project",
-        "  npx syncorejs export --path ./exports --target client:abc123",
+        "  npx syncorejs export --path ./exports --target 10427 --runtime a12f3c4d",
         "  npx syncorejs export --path ./exports.zip"
       ].join("\n")
     )
     .action(async (options: ExportCommandOptions, command: Command) => {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
+        if (options.runtime && !options.target) {
+          ctx.fail("`syncorejs export --runtime` requires --target.");
+        }
         const target = await resolveOperationalTarget(ctx, options.target, {
           command: "export",
           capability: "exportData"
+        });
+        const runtime = resolveClientRuntime(target, options.runtime, {
+          command: "export"
         });
         const result =
           target.kind === "project"
@@ -915,7 +953,7 @@ function addExportCommand(program: Command): void {
                 })
               )
             : await ctx.withSpinner(`Exporting data from ${target.id}`, async () =>
-                exportClientTargetData(ctx, target, options)
+                exportClientTargetData(ctx, target, runtime!, options)
               );
         ctx.printResult({
           summary: `Exported ${result.tables.length} table(s) to ${result.path}.`,
@@ -933,6 +971,7 @@ function addLogsCommand(program: Command): void {
     .summary("Inspect Syncore runtime logs")
     .description("Read persisted hub logs and optionally watch live runtime events.")
     .option("--target <target>", "Target id, or all", "all")
+    .option("--runtime <runtime>", "Runtime id inside the selected client target")
     .option("--limit <n>", "Maximum log lines to print", "100")
     .option("--watch", "Stream new logs from the local devtools hub")
     .option("--kind <kind>", "Filter by event kind: query, mutation, action, system")
@@ -943,13 +982,16 @@ function addLogsCommand(program: Command): void {
         "",
         "Examples:",
         "  npx syncorejs logs",
-        "  npx syncorejs logs --target client:abc123 --watch",
+        "  npx syncorejs logs --target 10427 --runtime a12f3c4d --watch",
         "  npx syncorejs logs --kind mutation --format jsonl"
       ].join("\n")
     )
     .action(async (options: LogsCommandOptions, command: Command) => {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
+        if (options.runtime && (!options.target || options.target === "all")) {
+          ctx.fail("`syncorejs logs --runtime` requires a specific --target.");
+        }
         await runLogsCommand(ctx, options);
       });
     });
@@ -1326,6 +1368,7 @@ async function readRemoteTable(
 async function importIntoClientTarget(
   context: CliContext,
   target: ClientTargetDescriptor,
+  runtime: ClientTargetDescriptor["runtimes"][number],
   sourcePath: string,
   options: ImportCommandOptions
 ): Promise<Array<{ table: string; importedCount: number }>> {
@@ -1341,7 +1384,7 @@ async function importIntoClientTarget(
         const payload = { ...row };
         delete payload._id;
         delete payload._creationTime;
-        const result = await hub.sendCommand(target.runtimeId, {
+        const result = await hub.sendCommand(runtime.runtimeId, {
           kind: "data.insert",
           table: batch.table,
           document: payload
@@ -1369,6 +1412,7 @@ async function importIntoClientTarget(
 async function exportClientTargetData(
   context: CliContext,
   target: ClientTargetDescriptor,
+  runtime: ClientTargetDescriptor["runtimes"][number],
   options: ExportCommandOptions
 ): Promise<{
   path: string;
@@ -1379,13 +1423,13 @@ async function exportClientTargetData(
   try {
     const tables = options.table
       ? [options.table]
-      : (await listRemoteTables(target.runtimeId, context)).map(
+      : (await listRemoteTables(runtime.runtimeId, context)).map(
           (entry: { name: string }) => entry.name
         );
     const payloads = await Promise.all(
       tables.map(async (table) => ({
         table,
-        rows: (await readRemoteTable(hub, target.runtimeId, table, {
+        rows: (await readRemoteTable(hub, runtime.runtimeId, table, {
           limit: Number.MAX_SAFE_INTEGER
         })).rows
       }))
@@ -1401,6 +1445,7 @@ async function runLogsCommand(
   options: LogsCommandOptions
 ): Promise<void> {
   const availableTargets = await listAvailableTargets(context.cwd);
+  const runtimeLookup = buildRuntimeLookup(availableTargets);
   const selectedTarget =
     options.target && options.target !== "all"
       ? availableTargets.find((target) => target.id === options.target)
@@ -1410,15 +1455,24 @@ async function runLogsCommand(
       `Unknown target ${JSON.stringify(options.target)}. Available targets: ${availableTargets.map((target) => target.id).join(", ")}`
     );
   }
+  const selectedRuntime = selectedTarget
+    ? resolveClientRuntime(selectedTarget, options.runtime, {
+        command: "logs"
+      })
+    : null;
   const allowedRuntimeIds =
     selectedTarget?.kind === "client" ? new Set(selectedTarget.runtimeIds) : undefined;
   const entries = await readPersistedLogs(context.cwd);
   const filtered = entries
+    .map((entry) => decoratePersistedLogEntry(entry, runtimeLookup))
     .filter((entry) =>
       options.target && options.target !== "all"
         ? entry.targetId === options.target ||
           (allowedRuntimeIds ? allowedRuntimeIds.has(entry.runtimeId) : false)
         : true
+    )
+    .filter((entry) =>
+      selectedRuntime ? entry.runtimeId === selectedRuntime.runtimeId : true
     )
     .filter((entry) => (options.kind ? entry.category === options.kind : true))
     .slice(-Number.parseInt(options.limit, 10));
@@ -1431,7 +1485,10 @@ async function runLogsCommand(
 
   const hub = await requireHubConnection(context);
   const unsubscribe = hub.onEvent((event) => {
-    const entry = normalizeRuntimeEvent(event);
+    const entry = normalizeRuntimeEvent(
+      event,
+      runtimeLookup.get(event.runtimeId)
+    );
     if (!entry) {
       return;
     }
@@ -1444,6 +1501,9 @@ async function runLogsCommand(
       return;
     }
     if (options.kind && entry.category !== options.kind) {
+      return;
+    }
+    if (selectedRuntime && entry.runtimeId !== selectedRuntime.runtimeId) {
       return;
     }
     renderOutput(context, entry, options.format);
@@ -1467,62 +1527,173 @@ async function readPersistedLogs(cwd: string): Promise<PersistedLogEntry[]> {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as PersistedLogEntry);
+    .map((line) => JSON.parse(line) as PersistedLogEntry)
+    .filter((entry) => !shouldSuppressLogEntry(entry));
 }
 
 function normalizeRuntimeEvent(
-  event: Record<string, unknown> & { type: string; runtimeId: string; timestamp: number }
+  event: Record<string, unknown> & { type: string; runtimeId: string; timestamp: number },
+  runtimeEntry?: ClientRuntimeLookupEntry
 ): PersistedLogEntry | null {
   const functionName =
     typeof event.functionName === "string" ? event.functionName : "unknown";
   const logMessage =
     typeof event.message === "string" ? event.message : "Syncore log";
+  const resolvedTargetId =
+    event.runtimeId === "syncore-dev-hub"
+      ? "all"
+      : (runtimeEntry?.targetId ?? event.runtimeId);
+  const runtimeLabel =
+    event.runtimeId === "syncore-dev-hub"
+      ? "dashboard"
+      : (runtimeEntry?.label ?? "runtime");
+  const publicRuntimeId =
+    event.runtimeId === "syncore-dev-hub"
+      ? undefined
+      : (runtimeEntry?.id ?? createPublicRuntimeId(event.runtimeId));
+  const targetLabel = runtimeEntry?.targetLabel;
+  const origin =
+    event.origin === "dashboard" || event.runtimeId === "syncore-dev-hub"
+      ? "dashboard"
+      : "runtime";
+  const entryBase = {
+    timestamp: event.timestamp,
+    runtimeId: event.runtimeId,
+    targetId: resolvedTargetId,
+    ...(targetLabel ? { targetLabel } : {}),
+    ...(publicRuntimeId ? { publicRuntimeId } : {}),
+    ...(runtimeLabel ? { runtimeLabel } : {}),
+    origin
+  } satisfies Pick<
+    PersistedLogEntry,
+    | "timestamp"
+    | "runtimeId"
+    | "targetId"
+    | "targetLabel"
+    | "publicRuntimeId"
+    | "runtimeLabel"
+    | "origin"
+  >;
+
+  if (
+    event.type === "log" &&
+    shouldSuppressLogEntry({
+      ...entryBase,
+      eventType: event.type,
+      category: "system",
+      message: logMessage,
+      event
+    })
+  ) {
+    return null;
+  }
 
   switch (event.type) {
     case "query.executed":
       return {
-        timestamp: event.timestamp,
-        runtimeId: event.runtimeId,
-        targetId: `client:${event.runtimeId}`,
+        ...entryBase,
         eventType: event.type,
         category: "query",
-        message: `Query ${functionName} executed.`,
+        message: `${functionName} executed`,
+        event
+      };
+    case "query.invalidated":
+      return {
+        ...entryBase,
+        eventType: event.type,
+        category: "system",
+        message: `${typeof event.queryId === "string" ? event.queryId : "query"} invalidated${typeof event.reason === "string" ? ` (${event.reason})` : ""}`,
         event
       };
     case "mutation.committed":
       return {
-        timestamp: event.timestamp,
-        runtimeId: event.runtimeId,
-        targetId: `client:${event.runtimeId}`,
+        ...entryBase,
         eventType: event.type,
         category: "mutation",
-        message: `Mutation ${functionName} committed.`,
+        message:
+          Array.isArray(event.changedTables) && event.changedTables.length > 0
+            ? `${functionName} committed (${event.changedTables.join(", ")})`
+            : `${functionName} committed`,
         event
       };
     case "action.completed":
       return {
-        timestamp: event.timestamp,
-        runtimeId: event.runtimeId,
-        targetId: `client:${event.runtimeId}`,
+        ...entryBase,
         eventType: event.type,
         category: "action",
-        message: `Action ${functionName} completed.`,
+        message:
+          typeof event.error === "string" && event.error.length > 0
+            ? `${functionName} failed: ${event.error}`
+            : `${functionName} completed`,
+        event
+      };
+    case "runtime.connected":
+      return {
+        ...entryBase,
+        eventType: event.type,
+        category: "system",
+        message: `${runtimeLabel}${publicRuntimeId ? `:${publicRuntimeId}` : ""} connected`,
+        event
+      };
+    case "runtime.disconnected":
+      return {
+        ...entryBase,
+        eventType: event.type,
+        category: "system",
+        message: `${runtimeLabel}${publicRuntimeId ? `:${publicRuntimeId}` : ""} disconnected`,
+        event
+      };
+    case "storage.updated":
+      return {
+        ...entryBase,
+        eventType: event.type,
+        category: "system",
+        message: `${typeof event.operation === "string" ? event.operation : "update"} ${typeof event.storageId === "string" ? event.storageId : "storage"}`,
         event
       };
     default:
       return {
-        timestamp: event.timestamp,
-        runtimeId: event.runtimeId,
-        targetId: event.runtimeId === "syncore-dev-hub" ? "all" : `client:${event.runtimeId}`,
+        ...entryBase,
         eventType: event.type,
         category: "system",
-        message:
-          event.type === "log"
-            ? logMessage
-            : `Runtime event ${event.type}.`,
+        message: event.type === "log" ? logMessage : humanizeRuntimeEvent(event),
         event
       };
   }
+}
+
+function decoratePersistedLogEntry(
+  entry: PersistedLogEntry,
+  runtimeLookup: ReturnType<typeof buildRuntimeLookup>
+): PersistedLogEntry {
+  const runtime = runtimeLookup.get(entry.runtimeId);
+  return {
+    ...entry,
+    targetId:
+      entry.targetId === "all"
+        ? "all"
+        : runtime?.targetId ?? entry.targetId ?? entry.runtimeId,
+    ...(runtime?.targetLabel ? { targetLabel: runtime.targetLabel } : {}),
+    ...(runtime?.id ? { publicRuntimeId: runtime.id } : {}),
+    ...(runtime?.label ? { runtimeLabel: runtime.label } : {}),
+    ...(entry.origin ? {} : { origin: entry.runtimeId === "syncore-dev-hub" ? "dashboard" : "runtime" })
+  };
+}
+
+function shouldSuppressLogEntry(entry: PersistedLogEntry): boolean {
+  return (
+    entry.eventType === "log" &&
+    /syncore devtools hub is alive/i.test(entry.message)
+  );
+}
+
+function humanizeRuntimeEvent(
+  event: Record<string, unknown> & { type: string }
+): string {
+  if (event.type === "scheduler.tick" && Array.isArray(event.executedJobIds)) {
+    return `scheduler tick (${event.executedJobIds.length} job(s))`;
+  }
+  return event.type.replaceAll(".", " ");
 }
 
 async function subscribeOnce(

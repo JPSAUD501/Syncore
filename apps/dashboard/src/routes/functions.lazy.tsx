@@ -27,7 +27,7 @@ import {
   TimestampCell
 } from "@/components/shared";
 import type { FunctionType } from "@/components/shared/FunctionBadge";
-import { useDevtools } from "@/hooks";
+import { useDevtools, usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
@@ -52,7 +52,8 @@ interface FunctionRunResult {
 /* ------------------------------------------------------------------ */
 
 function FunctionsPage() {
-  const { isReady, functionMetrics, functionEvents } = useDevtools();
+  const { functionMetrics, functionEvents } = useDevtools();
+  const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
   const [search, setSearch] = useState("");
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<FunctionRunResult>({
@@ -65,8 +66,8 @@ function FunctionsPage() {
   /* ---------------------------------------------------------------- */
 
   const functionsSubscription = useDevtoolsSubscription(
-    isReady ? { kind: "functions.catalog" } : null,
-    { enabled: isReady }
+    targetRuntimeId ? { kind: "functions.catalog" } : null,
+    { enabled: Boolean(targetRuntimeId), targetRuntimeId }
   );
 
   const registeredFunctions =
@@ -217,7 +218,7 @@ function FunctionsPage() {
   /* ---------------------------------------------------------------- */
 
   const handleRun = useCallback(async () => {
-    if (!selectedFunction || !isReady) return;
+    if (!selectedFunction || !targetRuntimeId) return;
 
     let args: Record<string, unknown>;
     try {
@@ -246,7 +247,7 @@ function FunctionsPage() {
         functionType:
           selectedFunction.type === "cron" ? "action" : selectedFunction.type,
         args
-      });
+      }, { targetRuntimeId });
       if (res.kind === "fn.run.result") {
         if (res.error) {
           setRunResult({
@@ -268,7 +269,7 @@ function FunctionsPage() {
         error: err instanceof Error ? err.message : "Unknown error"
       });
     }
-  }, [selectedFunction, isReady, argsText]);
+  }, [selectedFunction, targetRuntimeId, argsText]);
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
@@ -284,6 +285,11 @@ function FunctionsPage() {
             <h2 className="text-[13px] font-bold text-text-primary flex-1">
               Functions
             </h2>
+            {usingProjectTarget && (
+              <Badge variant="outline" className="text-[9px]">
+                Project Offline
+              </Badge>
+            )}
             {loadingFunctions && (
               <Loader2 size={12} className="animate-spin text-text-tertiary" />
             )}
@@ -308,9 +314,9 @@ function FunctionsPage() {
               <div className="py-8 text-center">
                 <Code2 size={20} className="mx-auto mb-2 text-text-tertiary" />
                 <p className="text-[11px] text-text-tertiary">
-                  {isReady
-                    ? "No functions observed yet"
-                    : "Connect to an active runtime to see functions"}
+                  {targetRuntimeId
+                    ? "No functions available for this target"
+                    : "Connect a runtime or configure a project target"}
                 </p>
               </div>
             ) : (
@@ -409,7 +415,7 @@ function FunctionsPage() {
                   setArgsText={setArgsText}
                   runResult={runResult}
                   onRun={() => void handleRun()}
-                  connected={isReady}
+                  connected={Boolean(targetRuntimeId)}
                 />
               </TabsContent>
 

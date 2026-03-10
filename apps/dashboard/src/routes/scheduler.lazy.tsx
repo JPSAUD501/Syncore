@@ -1,41 +1,70 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import {
-  Clock,
-  XCircle,
-  CheckCircle2,
   AlertCircle,
-  Loader2,
   CalendarClock,
-  Timer
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Timer,
+  XCircle
 } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
-import { useConnection } from "@/hooks";
+import { usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
-import { cn, formatDuration, formatRelativeTime } from "@/lib/utils";
-import type { SchedulerJob } from "@syncore/devtools-protocol";
+import { cn, formatRelativeTime } from "@/lib/utils";
+import type {
+  SchedulerJob,
+  SchedulerMisfirePolicy,
+  SchedulerRecurringSchedule
+} from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/scheduler")({
   component: SchedulerPage
 });
 
-function SchedulerPage() {
-  const { isReady } = useConnection();
-  const [selectedJob, setSelectedJob] = useState<SchedulerJob | null>(null);
+type SchedulerEditorState = {
+  argsText: string;
+  misfireType: SchedulerMisfirePolicy["type"];
+  windowMs: string;
+  schedule: SchedulerRecurringSchedule;
+};
 
-  /* ---------------------------------------------------------------- */
-  /*  Reactive job list fetch                                          */
-  /* ---------------------------------------------------------------- */
+const WEEK_DAYS: Array<Extract<
+  SchedulerRecurringSchedule,
+  { type: "weekly" }
+>["dayOfWeek"]> = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday"
+];
+
+function SchedulerPage() {
+  const { targetRuntimeId, usingProjectTarget, supportsOffline } =
+    usePreferredTarget();
+  const [selectedJob, setSelectedJob] = useState<SchedulerJob | null>(null);
+  const [editorState, setEditorState] = useState<SchedulerEditorState | null>(
+    null
+  );
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const selectedJobId = selectedJob?.id ?? null;
+  const selectedJobUpdatedAt = selectedJob?.updatedAt ?? null;
 
   const jobsSubscription = useDevtoolsSubscription(
-    isReady ? { kind: "scheduler.jobs" } : null,
-    { enabled: isReady }
+    targetRuntimeId ? { kind: "scheduler.jobs" } : null,
+    { enabled: Boolean(targetRuntimeId), targetRuntimeId }
   );
 
   const jobs = useMemo(
@@ -47,109 +76,154 @@ function SchedulerPage() {
   );
 
   useEffect(() => {
-    if (!isReady) {
-      setSelectedJob(null);
+    if (!selectedJobId) {
       return;
     }
-    if (selectedJob && !jobs.some((job) => job.id === selectedJob.id)) {
-      setSelectedJob(null);
-    }
-  }, [isReady, jobs, selectedJob]);
+    const nextSelectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
+    setSelectedJob(nextSelectedJob);
+  }, [jobs, selectedJob, selectedJobId]);
 
-  /* ---------------------------------------------------------------- */
-  /*  Cancel job                                                       */
-  /* ---------------------------------------------------------------- */
+  useEffect(() => {
+    if (!selectedJob || !isRecurringJob(selectedJob)) {
+      setEditorState(null);
+      setActionError(null);
+      return;
+    }
+    setEditorState(createEditorState(selectedJob));
+    setActionError(null);
+  }, [selectedJob, selectedJobId, selectedJobUpdatedAt]);
 
   const cancelJob = useCallback(
     async (jobId: string) => {
-      if (!isReady) return;
-      try {
-        const res = await sendRequest({ kind: "scheduler.cancel", jobId });
-        if (res.kind === "scheduler.cancel.result" && res.success) {
-          if (selectedJob?.id === jobId) {
-            setSelectedJob((prev) =>
-              prev ? { ...prev, status: "cancelled" as const } : null
-            );
-          }
-        }
-      } catch {
-        /* ignore */
+      if (!targetRuntimeId) {
+        return;
+      }
+      setActionError(null);
+      const result = await sendRequest(
+        { kind: "scheduler.cancel", jobId },
+        { targetRuntimeId }
+      );
+      if (result.kind === "scheduler.cancel.result" && result.error) {
+        setActionError(result.error);
+        return;
+      }
+      if (result.kind === "scheduler.cancel.result" && !result.cancelled) {
+        setActionError("This job could not be cancelled anymore.");
       }
     },
-    [isReady, selectedJob]
+    [targetRuntimeId]
   );
 
-  const allJobs = useMemo(
-    () => [...jobs].sort((a, b) => b.runAt - a.runAt),
-    [jobs]
-  );
+  const saveRecurringJob = useCallback(async () => {
+    if (!targetRuntimeId || !selectedJob || !editorState || !isRecurringJob(selectedJob)) {
+      return;
+    }
+    setSaving(true);
+    setActionError(null);
+    try {
+      const args = parseArgsText(editorState.argsText);
+      const misfirePolicy = parseMisfirePolicy(editorState);
+      const result = await sendRequest(
+        {
+          kind: "scheduler.update",
+          jobId: selectedJob.id,
+          schedule: editorState.schedule,
+          args,
+          misfirePolicy
+        },
+        { targetRuntimeId }
+      );
+      if (result.kind !== "scheduler.update.result") {
+        return;
+      }
+      if (result.error) {
+        setActionError(result.error);
+        return;
+      }
+      if (!result.updated) {
+        setActionError("This recurring job is no longer editable.");
+        return;
+      }
+      if (result.job) {
+        setSelectedJob(result.job);
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }, [editorState, selectedJob, targetRuntimeId]);
 
-  const pendingJobsList = useMemo(
-    () =>
-      allJobs.filter((j) => j.status === "pending" || j.status === "running"),
+  const allJobs = useMemo(() => [...jobs].sort((a, b) => b.runAt - a.runAt), [jobs]);
+  const pendingJobs = useMemo(
+    () => allJobs.filter((job) => job.status === "pending" || job.status === "running"),
     [allJobs]
   );
-
-  const cronJobs = useMemo(
-    () => allJobs.filter((j) => j.cronSchedule),
+  const recurringJobs = useMemo(
+    () => allJobs.filter((job) => Boolean(job.recurringName && job.schedule)),
     [allJobs]
   );
-
-  const completedJobs = useMemo(
+  const historyJobs = useMemo(
     () =>
-      allJobs.filter(
-        (j) =>
-          j.status === "completed" ||
-          j.status === "failed" ||
-          j.status === "cancelled"
+      allJobs.filter((job) =>
+        ["completed", "failed", "cancelled"].includes(job.status)
       ),
     [allJobs]
   );
 
-  /* ---------------------------------------------------------------- */
-  /*  Render                                                           */
-  /* ---------------------------------------------------------------- */
+  if (!targetRuntimeId) {
+    return (
+      <div className="h-[calc(100vh-7rem)]">
+        <EmptyState
+          icon={Clock}
+          title="Scheduler unavailable"
+          description={
+            supportsOffline
+              ? "The project target is not available right now."
+              : "Connect a runtime or configure a project target to manage scheduled jobs."
+          }
+          className="h-full"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-3">
-      {/* ---- Main content ---- */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
-        {/* Header */}
         <div className="flex items-center gap-3 border-b border-border p-4">
           <Clock size={16} className="text-accent" />
-          <h2 className="text-[14px] font-bold text-text-primary flex-1">
+          <h2 className="flex-1 text-[14px] font-bold text-text-primary">
             Scheduler
           </h2>
+          {usingProjectTarget && (
+            <Badge variant="outline" className="text-[9px]">
+              Project Offline
+            </Badge>
+          )}
           {jobsSubscription.loading && (
             <Loader2 size={12} className="animate-spin text-text-tertiary" />
           )}
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="pending" className="flex-1 flex flex-col min-h-0">
+        <Tabs defaultValue="pending" className="flex min-h-0 flex-1 flex-col">
           <div className="border-b border-border px-4">
             <TabsList variant="line" className="h-9">
               <TabsTrigger value="pending" className="gap-1">
                 <Timer size={12} />
                 Pending
-                {pendingJobsList.length > 0 && (
-                  <Badge
-                    variant="warning"
-                    className="ml-1 text-[9px] px-1 py-0"
-                  >
-                    {pendingJobsList.length}
+                {pendingJobs.length > 0 && (
+                  <Badge variant="warning" className="ml-1 px-1 py-0 text-[9px]">
+                    {pendingJobs.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="cron" className="gap-1">
+              <TabsTrigger value="recurring" className="gap-1">
                 <CalendarClock size={12} />
-                Cron Jobs
-                {cronJobs.length > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="ml-1 text-[9px] px-1 py-0"
-                  >
-                    {cronJobs.length}
+                Recurring
+                {recurringJobs.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 px-1 py-0 text-[9px]">
+                    {recurringJobs.length}
                   </Badge>
                 )}
               </TabsTrigger>
@@ -160,66 +234,75 @@ function SchedulerPage() {
             </TabsList>
           </div>
 
-          <TabsContent value="pending" className="flex-1 min-h-0">
+          <TabsContent value="pending" className="min-h-0 flex-1">
             <JobList
-              jobs={pendingJobsList}
-              selectedJob={selectedJob}
+              jobs={pendingJobs}
+              selectedJobId={selectedJob?.id ?? null}
               onSelect={setSelectedJob}
-              onCancel={(jobId) => void cancelJob(jobId)}
+              onCancel={(jobId) => {
+                void cancelJob(jobId);
+              }}
               emptyTitle="No pending jobs"
-              emptyDescription="Scheduled jobs will appear here when they're queued."
+              emptyDescription="Scheduled jobs will appear here when they are queued."
             />
           </TabsContent>
 
-          <TabsContent value="cron" className="flex-1 min-h-0">
+          <TabsContent value="recurring" className="min-h-0 flex-1">
             <JobList
-              jobs={cronJobs}
-              selectedJob={selectedJob}
+              jobs={recurringJobs}
+              selectedJobId={selectedJob?.id ?? null}
               onSelect={setSelectedJob}
-              onCancel={(jobId) => void cancelJob(jobId)}
-              emptyTitle="No cron jobs"
-              emptyDescription="Recurring cron jobs will appear here."
+              onCancel={(jobId) => {
+                void cancelJob(jobId);
+              }}
+              emptyTitle="No recurring jobs"
+              emptyDescription="Recurring jobs will appear here once they are registered."
             />
           </TabsContent>
 
-          <TabsContent value="history" className="flex-1 min-h-0">
+          <TabsContent value="history" className="min-h-0 flex-1">
             <JobList
-              jobs={completedJobs}
-              selectedJob={selectedJob}
+              jobs={historyJobs}
+              selectedJobId={selectedJob?.id ?? null}
               onSelect={setSelectedJob}
               emptyTitle="No job history"
-              emptyDescription="Completed, failed, and cancelled jobs will appear here."
+              emptyDescription="Completed, failed and cancelled jobs will appear here."
             />
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* ---- Job detail panel ---- */}
       {selectedJob && (
         <JobDetailPanel
           job={selectedJob}
+          editorState={editorState}
+          saving={saving}
+          error={actionError}
+          usingProjectTarget={usingProjectTarget}
           onClose={() => setSelectedJob(null)}
-          onCancel={(jobId) => void cancelJob(jobId)}
+          onCancel={(jobId) => {
+            void cancelJob(jobId);
+          }}
+          onEditorChange={setEditorState}
+          onSave={() => {
+            void saveRecurringJob();
+          }}
         />
       )}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Job list                                                           */
-/* ------------------------------------------------------------------ */
-
 function JobList({
   jobs,
-  selectedJob,
+  selectedJobId,
   onSelect,
   onCancel,
   emptyTitle,
   emptyDescription
 }: {
   jobs: SchedulerJob[];
-  selectedJob: SchedulerJob | null;
+  selectedJobId: string | null;
   onSelect: (job: SchedulerJob) => void;
   onCancel?: (jobId: string) => void;
   emptyTitle: string;
@@ -238,62 +321,51 @@ function JobList({
 
   return (
     <ScrollArea className="h-full">
-      <div className="p-2 space-y-1">
+      <div className="space-y-1 p-2">
         {jobs.map((job) => (
           <div
             key={job.id}
             onClick={() => onSelect(job)}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors cursor-pointer animate-fade-in",
-              selectedJob?.id === job.id
-                ? "bg-accent/8 border border-accent/15"
-                : "hover:bg-bg-surface/50 border border-transparent"
+              "cursor-pointer rounded-md border px-3 py-2.5 transition-colors",
+              selectedJobId === job.id
+                ? "border-accent/20 bg-accent/8"
+                : "border-transparent hover:bg-bg-base"
             )}
           >
-            <JobStatusIcon status={job.status} />
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-mono text-text-primary truncate">
-                  {job.functionName}
-                </span>
-                {job.cronSchedule && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] px-1 py-0 shrink-0"
-                  >
-                    {job.cronSchedule}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] text-text-tertiary">
-                  {formatRelativeTime(job.runAt)}
-                </span>
-                {job.durationMs !== undefined && (
-                  <span className="text-[10px] text-text-tertiary">
-                    {formatDuration(job.durationMs)}
+            <div className="flex items-start gap-3">
+              <JobStatusIcon status={job.status} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-mono text-[12px] text-text-primary">
+                    {job.functionName}
                   </span>
-                )}
+                  {job.scheduleLabel && (
+                    <Badge variant="outline" className="px-1 py-0 text-[8px]">
+                      {job.scheduleLabel}
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-0.5 flex items-center gap-2 text-[10px] text-text-tertiary">
+                  <span>{formatRelativeTime(job.runAt)}</span>
+                  {job.recurringName && <span>{job.recurringName}</span>}
+                </div>
               </div>
-            </div>
-
-            <JobStatusBadge status={job.status} />
-
-            {onCancel &&
-              (job.status === "pending" || job.status === "running") && (
+              <JobStatusBadge status={job.status} />
+              {onCancel && job.status === "pending" && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCancel(job.id);
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onCancel(job.id);
                   }}
                   title="Cancel job"
                 >
                   <XCircle size={12} className="text-error" />
                 </Button>
               )}
+            </div>
           </div>
         ))}
       </div>
@@ -301,22 +373,31 @@ function JobList({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Job detail panel                                                   */
-/* ------------------------------------------------------------------ */
-
 function JobDetailPanel({
   job,
+  editorState,
+  saving,
+  error,
+  usingProjectTarget,
   onClose,
-  onCancel
+  onCancel,
+  onEditorChange,
+  onSave
 }: {
   job: SchedulerJob;
+  editorState: SchedulerEditorState | null;
+  saving: boolean;
+  error: string | null;
+  usingProjectTarget: boolean;
   onClose: () => void;
-  onCancel: (id: string) => void;
+  onCancel: (jobId: string) => void;
+  onEditorChange: (state: SchedulerEditorState | null) => void;
+  onSave: () => void;
 }) {
+  const canEdit = job.status === "pending" && isRecurringJob(job) && editorState;
+
   return (
     <div className="hidden w-96 flex-col overflow-hidden rounded-md border border-border bg-bg-surface lg:flex">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-border p-3">
         <div className="flex items-center gap-2">
           <JobStatusIcon status={job.status} />
@@ -330,126 +411,167 @@ function JobDetailPanel({
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-4">
-          {/* ID */}
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-              Job ID
-            </label>
-            <code className="text-[11px] text-text-code bg-bg-surface px-2 py-1 rounded block">
+        <div className="space-y-4 p-4">
+          <DetailField label="Job ID">
+            <code className="block rounded bg-bg-base px-2 py-1 text-[11px] text-text-code">
               {job.id}
             </code>
-          </div>
+          </DetailField>
 
-          {/* Function */}
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-              Function
-            </label>
-            <code className="text-[11px] text-text-primary font-mono">
-              {job.functionName}
-            </code>
-          </div>
+          <DetailField label="Function">
+            <code className="text-[11px] text-text-primary">{job.functionName}</code>
+          </DetailField>
 
-          {/* Status */}
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-              Status
-            </label>
+          {job.recurringName && (
+            <DetailField label="Recurring Name">
+              <span className="text-[12px] text-text-primary">{job.recurringName}</span>
+            </DetailField>
+          )}
+
+          <DetailField label="Status">
             <JobStatusBadge status={job.status} />
-          </div>
+          </DetailField>
 
-          {/* Timing */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-                Scheduled At
-              </label>
+            <DetailField label="Scheduled At">
               <TimestampCell timestamp={job.scheduledAt} format="both" />
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-                Run At
-              </label>
+            </DetailField>
+            <DetailField label="Run At">
               <TimestampCell timestamp={job.runAt} format="both" />
-            </div>
-            {job.completedAt && (
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-                  Completed At
-                </label>
-                <TimestampCell timestamp={job.completedAt} format="both" />
-              </div>
+            </DetailField>
+            {job.lastRunAt && (
+              <DetailField label="Last Run">
+                <TimestampCell timestamp={job.lastRunAt} format="both" />
+              </DetailField>
             )}
-            {job.durationMs !== undefined && (
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-                  Duration
-                </label>
-                <span className="text-[12px] text-text-primary font-mono">
-                  {formatDuration(job.durationMs)}
-                </span>
-              </div>
+            {job.updatedAt && (
+              <DetailField label="Updated At">
+                <TimestampCell timestamp={job.updatedAt} format="both" />
+              </DetailField>
             )}
           </div>
 
-          {/* Cron schedule */}
-          {job.cronSchedule && (
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-                Cron Schedule
-              </label>
-              <code className="text-[11px] text-fn-cron bg-fn-cron/10 px-2 py-1 rounded block">
-                {job.cronSchedule}
+          {job.scheduleLabel && (
+            <DetailField label="Schedule">
+              <code className="block rounded bg-bg-base px-2 py-1 text-[11px] text-text-code">
+                {job.scheduleLabel}
               </code>
-            </div>
+            </DetailField>
           )}
 
           <Separator />
 
-          {/* Arguments */}
-          <div>
-            <label className="mb-2 block text-[11px] font-medium text-text-tertiary">
-              Arguments
-            </label>
+          <DetailField label="Arguments">
             <JsonViewer data={job.args} defaultExpanded maxDepth={4} />
-          </div>
+          </DetailField>
 
-          {/* Result */}
-          {job.result !== undefined && (
-            <div>
-              <label className="mb-2 block text-[11px] font-medium text-text-tertiary">
-                Result
-              </label>
-              <JsonViewer data={job.result} defaultExpanded maxDepth={4} />
-            </div>
-          )}
+          {canEdit && editorState ? (
+            <>
+              <Separator />
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-semibold text-text-primary">
+                    Recurring Job Editor
+                  </span>
+                  {usingProjectTarget && (
+                    <Badge variant="outline" className="text-[9px]">
+                      Project Offline
+                    </Badge>
+                  )}
+                </div>
 
-          {/* Error */}
-          {job.error && (
-            <div>
-              <label className="mb-2 block text-[11px] font-medium text-text-tertiary">
-                Error
-              </label>
-              <div className="rounded-md border border-error/20 bg-error/5 p-3">
-                <p className="text-[11px] text-error font-mono whitespace-pre-wrap">
-                  {job.error}
-                </p>
+                <ScheduleEditor
+                  state={editorState}
+                  onChange={onEditorChange}
+                />
+
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-medium text-text-tertiary">
+                    Arguments JSON
+                  </label>
+                  <textarea
+                    value={editorState.argsText}
+                    onChange={(event) =>
+                      onEditorChange({
+                        ...editorState,
+                        argsText: event.target.value
+                      })
+                    }
+                    className="min-h-28 w-full rounded-md border border-border bg-bg-base px-3 py-2 text-[12px] text-text-primary outline-none transition-colors focus:border-border-active"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-medium text-text-tertiary">
+                    Misfire Policy
+                  </label>
+                  <select
+                    value={editorState.misfireType}
+                    onChange={(event) =>
+                      onEditorChange({
+                        ...editorState,
+                        misfireType: event.target.value as SchedulerMisfirePolicy["type"]
+                      })
+                    }
+                    className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
+                  >
+                    <option value="catch_up">Catch up</option>
+                    <option value="skip">Skip</option>
+                    <option value="run_once_if_missed">Run once if missed</option>
+                    <option value="windowed">Windowed</option>
+                  </select>
+                  {editorState.misfireType === "windowed" && (
+                    <Input
+                      type="number"
+                      min="0"
+                      value={editorState.windowMs}
+                      onChange={(event) =>
+                        onEditorChange({
+                          ...editorState,
+                          windowMs: event.target.value
+                        })
+                      }
+                      placeholder="Window in ms"
+                    />
+                  )}
+                </div>
+
+                {error && (
+                  <div className="rounded-md border border-error/20 bg-error/5 px-3 py-2 text-[11px] text-error">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => void onSave()}
+                    disabled={saving}
+                  >
+                    {saving && <Loader2 size={12} className="animate-spin" />}
+                    Save Recurring Job
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void onCancel(job.id)}
+                  >
+                    Cancel Job
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Cancel button */}
-          {(job.status === "pending" || job.status === "running") && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => onCancel(job.id)}
-              className="w-full gap-1.5"
-            >
-              <XCircle size={13} />
-              Cancel Job
-            </Button>
+            </>
+          ) : (
+            <>
+              <Separator />
+              <div className="rounded-md border border-border bg-bg-base px-3 py-2 text-[11px] text-text-tertiary">
+                {isRecurringJob(job)
+                  ? "Recurring jobs can only be edited while they are still scheduled."
+                  : "One-shot jobs can only be cancelled before they run."}
+              </div>
+            </>
           )}
         </div>
       </ScrollArea>
@@ -457,40 +579,310 @@ function JobDetailPanel({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Status helpers                                                     */
-/* ------------------------------------------------------------------ */
+function ScheduleEditor({
+  state,
+  onChange
+}: {
+  state: SchedulerEditorState;
+  onChange: (state: SchedulerEditorState) => void;
+}) {
+  const schedule = state.schedule;
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <label className="block text-[11px] font-medium text-text-tertiary">
+          Schedule Type
+        </label>
+        <select
+          value={schedule.type}
+          onChange={(event) =>
+            onChange({
+              ...state,
+              schedule: createScheduleForType(
+                event.target.value as SchedulerRecurringSchedule["type"]
+              )
+            })
+          }
+          className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
+        >
+          <option value="interval">Interval</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </div>
+
+      {schedule.type === "interval" && (
+        <div className="grid grid-cols-3 gap-2">
+          <NumberField
+            label="Hours"
+            value={schedule.hours ?? 0}
+            onChange={(value) =>
+              onChange({
+                ...state,
+                schedule: { ...schedule, hours: value }
+              })
+            }
+          />
+          <NumberField
+            label="Minutes"
+            value={schedule.minutes ?? 0}
+            onChange={(value) =>
+              onChange({
+                ...state,
+                schedule: { ...schedule, minutes: value }
+              })
+            }
+          />
+          <NumberField
+            label="Seconds"
+            value={schedule.seconds ?? 0}
+            onChange={(value) =>
+              onChange({
+                ...state,
+                schedule: { ...schedule, seconds: value }
+              })
+            }
+          />
+        </div>
+      )}
+
+      {schedule.type === "daily" && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField
+              label="Hour"
+              value={schedule.hour}
+              onChange={(value) =>
+                onChange({
+                  ...state,
+                  schedule: { ...schedule, hour: value }
+                })
+              }
+            />
+            <NumberField
+              label="Minute"
+              value={schedule.minute}
+              onChange={(value) =>
+                onChange({
+                  ...state,
+                  schedule: { ...schedule, minute: value }
+                })
+              }
+            />
+          </div>
+          <Input
+            value={schedule.timezone ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...state,
+                schedule: withScheduleTimezone(schedule, event.target.value)
+              })
+            }
+            placeholder="Timezone (optional)"
+          />
+        </div>
+      )}
+
+      {schedule.type === "weekly" && (
+        <div className="space-y-2">
+          <select
+            value={schedule.dayOfWeek}
+            onChange={(event) =>
+              onChange({
+                ...state,
+                schedule: {
+                  ...schedule,
+                  dayOfWeek: event.target.value as (typeof WEEK_DAYS)[number]
+                }
+              })
+            }
+            className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
+          >
+            {WEEK_DAYS.map((day) => (
+              <option key={day} value={day}>
+                {day}
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField
+              label="Hour"
+              value={schedule.hour}
+              onChange={(value) =>
+                onChange({
+                  ...state,
+                  schedule: { ...schedule, hour: value }
+                })
+              }
+            />
+            <NumberField
+              label="Minute"
+              value={schedule.minute}
+              onChange={(value) =>
+                onChange({
+                  ...state,
+                  schedule: { ...schedule, minute: value }
+                })
+              }
+            />
+          </div>
+          <Input
+            value={schedule.timezone ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...state,
+                schedule: withScheduleTimezone(schedule, event.target.value)
+              })
+            }
+            placeholder="Timezone (optional)"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="block text-[11px] font-medium text-text-tertiary">
+        {label}
+      </span>
+      <Input
+        type="number"
+        min="0"
+        value={String(value)}
+        onChange={(event) => onChange(parseInt(event.target.value || "0", 10))}
+      />
+    </label>
+  );
+}
+
+function DetailField({
+  label,
+  children
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 function JobStatusIcon({ status }: { status: SchedulerJob["status"] }) {
   switch (status) {
-    case "pending":
-      return <Clock size={14} className="text-fn-cron shrink-0" />;
-    case "running":
-      return <Loader2 size={14} className="text-info shrink-0 animate-spin" />;
     case "completed":
-      return <CheckCircle2 size={14} className="text-success shrink-0" />;
+      return <CheckCircle2 size={14} className="text-success" />;
     case "failed":
-      return <AlertCircle size={14} className="text-error shrink-0" />;
+      return <AlertCircle size={14} className="text-error" />;
     case "cancelled":
-      return <XCircle size={14} className="text-text-tertiary shrink-0" />;
+      return <XCircle size={14} className="text-text-tertiary" />;
+    default:
+      return <Clock size={14} className="text-warning" />;
   }
 }
 
 function JobStatusBadge({ status }: { status: SchedulerJob["status"] }) {
-  const variants: Record<
-    SchedulerJob["status"],
-    "warning" | "info" | "success" | "destructive" | "secondary"
-  > = {
-    pending: "warning",
-    running: "info",
-    completed: "success",
-    failed: "destructive",
-    cancelled: "secondary"
-  };
+  const variant =
+    status === "completed"
+      ? "success"
+      : status === "failed"
+        ? "destructive"
+        : status === "cancelled"
+          ? "secondary"
+          : "warning";
+  return <Badge variant={variant}>{status}</Badge>;
+}
 
-  return (
-    <Badge variant={variants[status]} className="text-[9px]">
-      {status}
-    </Badge>
-  );
+function isRecurringJob(
+  job: SchedulerJob
+): job is SchedulerJob & {
+  recurringName: string;
+  schedule: SchedulerRecurringSchedule;
+} {
+  return Boolean(job.recurringName && job.schedule);
+}
+
+function createEditorState(
+  job: SchedulerJob & { schedule: SchedulerRecurringSchedule; misfirePolicy?: SchedulerMisfirePolicy }
+): SchedulerEditorState {
+  return {
+    argsText: JSON.stringify(job.args, null, 2),
+    misfireType: job.misfirePolicy?.type ?? "catch_up",
+    windowMs:
+      job.misfirePolicy?.type === "windowed"
+        ? String(job.misfirePolicy.windowMs)
+        : "",
+    schedule: job.schedule
+  };
+}
+
+function createScheduleForType(
+  type: SchedulerRecurringSchedule["type"]
+): SchedulerRecurringSchedule {
+  switch (type) {
+    case "interval":
+      return { type, minutes: 5 };
+    case "daily":
+      return { type, hour: 9, minute: 0 };
+    case "weekly":
+      return { type, dayOfWeek: "monday", hour: 9, minute: 0 };
+  }
+}
+
+function withScheduleTimezone<
+  TSchedule extends Extract<
+    SchedulerRecurringSchedule,
+    { type: "daily" | "weekly" }
+  >
+>(schedule: TSchedule, timezone: string): TSchedule {
+  const nextTimezone = timezone.trim();
+  if (!nextTimezone) {
+    const rest = { ...schedule };
+    delete rest.timezone;
+    return rest;
+  }
+  return {
+    ...schedule,
+    timezone: nextTimezone
+  };
+}
+
+function parseArgsText(text: string): Record<string, unknown> {
+  const parsed = JSON.parse(text) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Arguments must be a JSON object.");
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function parseMisfirePolicy(
+  state: SchedulerEditorState
+): SchedulerMisfirePolicy {
+  if (state.misfireType !== "windowed") {
+    return { type: state.misfireType };
+  }
+  const windowMs = Number(state.windowMs);
+  if (!Number.isFinite(windowMs) || windowMs < 0) {
+    throw new Error("Windowed misfire policy requires a valid window in ms.");
+  }
+  return {
+    type: "windowed",
+    windowMs
+  };
 }

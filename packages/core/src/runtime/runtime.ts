@@ -236,6 +236,14 @@ export interface SchedulerOptions {
   recurringJobs?: RecurringJobDefinition[];
 }
 
+export interface UpdateScheduledJobOptions {
+  id: string;
+  schedule: RecurringSchedule;
+  args: JsonObject;
+  misfirePolicy: MisfirePolicy;
+  runAt?: number;
+}
+
 export interface SyncoreCapabilities {
   [name: string]: unknown;
 }
@@ -860,6 +868,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   private readonly recurringJobs: RecurringJobDefinition[];
   private readonly schedulerPollIntervalMs: number;
   private readonly driverDatabasePath: string | undefined;
+  private prepared = false;
   private started = false;
 
   constructor(private readonly options: SyncoreRuntimeOptions<TSchema>) {
@@ -881,10 +890,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     if (this.started) {
       return;
     }
-    await this.ensureSystemTables();
-    await this.reconcileStorageState();
-    await this.applySchema();
-    await this.syncRecurringJobs();
+    await this.prepareForDirectAccess();
     await this.runPluginHook("onStart");
     this.detachExternalChangeListener =
       this.options.externalChangeSignal?.subscribe((event) => {
@@ -900,6 +906,17 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
       platform: this.platform,
       timestamp: Date.now()
     });
+  }
+
+  async prepareForDirectAccess(): Promise<void> {
+    if (this.prepared) {
+      return;
+    }
+    await this.ensureSystemTables();
+    await this.reconcileStorageState();
+    await this.applySchema();
+    await this.syncRecurringJobs();
+    this.prepared = true;
   }
 
   /**
@@ -971,6 +988,59 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
 
   getDriverDatabasePath(): string | undefined {
     return this.driverDatabasePath;
+  }
+
+  async cancelScheduledJob(id: string): Promise<boolean> {
+    await this.prepareForDirectAccess();
+    const result = await this.options.driver.run(
+      `UPDATE "_scheduled_functions"
+       SET status = 'cancelled', updated_at = ?
+       WHERE id = ? AND status = 'scheduled'`,
+      [Date.now(), id]
+    );
+    if ((result.changes ?? 0) > 0) {
+      this.notifySchedulerJobsChanged();
+      return true;
+    }
+    return false;
+  }
+
+  async updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean> {
+    await this.prepareForDirectAccess();
+    const existing = await this.options.driver.get<{
+      status: string;
+      recurring_name: string | null;
+    }>(
+      `SELECT status, recurring_name FROM "_scheduled_functions" WHERE id = ?`,
+      [options.id]
+    );
+    if (!existing || existing.status !== "scheduled" || !existing.recurring_name) {
+      return false;
+    }
+    const now = Date.now();
+    const runAt = options.runAt ?? computeNextRun(options.schedule, now);
+    const result = await this.options.driver.run(
+      `UPDATE "_scheduled_functions"
+       SET args_json = ?, run_at = ?, updated_at = ?, schedule_json = ?, timezone = ?, misfire_policy = ?, window_ms = ?
+       WHERE id = ? AND status = 'scheduled' AND recurring_name IS NOT NULL`,
+      [
+        stableStringify(options.args),
+        runAt,
+        now,
+        stableStringify(options.schedule),
+        "timezone" in options.schedule ? (options.schedule.timezone ?? null) : null,
+        options.misfirePolicy.type,
+        options.misfirePolicy.type === "windowed"
+          ? options.misfirePolicy.windowMs
+          : null,
+        options.id
+      ]
+    );
+    if ((result.changes ?? 0) > 0) {
+      this.notifySchedulerJobsChanged();
+      return true;
+    }
+    return false;
   }
 
   subscribeToDevtoolsEvents(
@@ -1655,12 +1725,13 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         return this.scheduleJob(value, reference, functionArgs, misfirePolicy);
       },
       cancel: async (id) => {
-        await this.options.driver.run(
-          `UPDATE "_scheduled_functions" SET status = 'cancelled', updated_at = ? WHERE id = ?`,
-          [Date.now(), id]
-        );
+        await this.cancelScheduledJob(id);
       }
     };
+  }
+
+  private notifySchedulerJobsChanged(): void {
+    this.notifyDevtoolsScopes(["scheduler.jobs"]);
   }
 
   private async ensureSystemTables(): Promise<void> {
@@ -1888,6 +1959,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         misfirePolicy.type === "windowed" ? misfirePolicy.windowMs : null
       ]
     );
+    this.notifySchedulerJobsChanged();
     return id;
   }
 
@@ -1923,6 +1995,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
             : null
         ]
       );
+      this.notifySchedulerJobsChanged();
     }
   }
 
@@ -1963,6 +2036,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
           `UPDATE "_scheduled_functions" SET status = 'failed', updated_at = ? WHERE id = ?`,
           [Date.now(), job.id]
         );
+        this.notifySchedulerJobsChanged();
         this.emitDevtools({
           type: "log",
           runtimeId: this.runtimeId,
@@ -1982,6 +2056,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         executedJobIds,
         timestamp: Date.now()
       });
+      this.notifySchedulerJobsChanged();
     }
   }
 
@@ -1995,6 +2070,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         `UPDATE "_scheduled_functions" SET status = ?, updated_at = ?, last_run_at = ? WHERE id = ?`,
         [terminalStatus, executedAt, executedAt, job.id]
       );
+      this.notifySchedulerJobsChanged();
       return;
     }
 
@@ -2006,6 +2082,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
        WHERE id = ?`,
       [nextRunAt, executedAt, executedAt, job.id]
     );
+    this.notifySchedulerJobsChanged();
   }
 
   private async refreshInvalidatedQueries(

@@ -1,5 +1,7 @@
 import type {
+  SchedulerMisfirePolicy,
   SchedulerJob,
+  SchedulerRecurringSchedule,
   SyncoreDevtoolsCommandPayload,
   SyncoreDevtoolsCommandResultPayload,
   SyncoreDevtoolsSubscriptionPayload,
@@ -83,6 +85,7 @@ export function createDevtoolsCommandHandler(
   const { driver, runtime, sql } = deps;
 
   return async (payload): Promise<SyncoreDevtoolsCommandResultPayload> => {
+    await runtime.prepareForDirectAccess();
     switch (payload.kind) {
       case "fn.run": {
         const start = performance.now();
@@ -238,18 +241,44 @@ export function createDevtoolsCommandHandler(
 
       case "scheduler.cancel": {
         try {
-          await runDevtoolsMutation(runtime, async () => {
-            await driver.run(
-              `UPDATE "_scheduled_functions" SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'scheduled'`,
-              [Date.now(), payload.jobId]
-            );
-            return null;
-          }, { origin: "dashboard" });
-          return { kind: "scheduler.cancel.result", success: true };
+          const cancelled = await runtime.cancelScheduledJob(payload.jobId);
+          return {
+            kind: "scheduler.cancel.result",
+            success: true,
+            cancelled
+          };
         } catch (error) {
           return {
             kind: "scheduler.cancel.result",
             success: false,
+            cancelled: false,
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
+      case "scheduler.update": {
+        try {
+          const updated = await runtime.updateScheduledJob({
+            id: payload.jobId,
+            schedule: payload.schedule,
+            args: payload.args,
+            misfirePolicy: payload.misfirePolicy,
+            ...(payload.runAt !== undefined ? { runAt: payload.runAt } : {})
+          });
+          const jobs = updated ? await listSchedulerJobs(driver) : [];
+          const updatedJob = jobs.find((job) => job.id === payload.jobId);
+          return {
+            kind: "scheduler.update.result",
+            success: true,
+            updated,
+            ...(updated && updatedJob ? { job: updatedJob } : {})
+          };
+        } catch (error) {
+          return {
+            kind: "scheduler.update.result",
+            success: false,
+            updated: false,
             error: error instanceof Error ? error.message : String(error)
           };
         }
@@ -380,6 +409,7 @@ async function resolveSubscriptionPayload(
   deps: DevtoolsCommandHandlerDeps
 ): Promise<SyncoreDevtoolsSubscriptionResultPayload> {
   const { driver, schema, functions, runtime } = deps;
+  await runtime.prepareForDirectAccess();
 
   switch (payload.kind) {
     case "runtime.summary":
@@ -581,23 +611,36 @@ async function listSchedulerJobs(
       run_at: number;
       created_at: number;
       updated_at: number;
+      recurring_name: string | null;
       schedule_json: string | null;
+      timezone: string | null;
+      misfire_policy: string;
+      last_run_at: number | null;
+      window_ms: number | null;
     }>(`SELECT * FROM "_scheduled_functions" ORDER BY run_at DESC LIMIT 200`);
 
-    return rows.map((row) => ({
-      id: row.id,
-      functionName: row.function_name,
-      args: JSON.parse(row.args_json) as Record<string, unknown>,
-      scheduledAt: row.created_at,
-      runAt: row.run_at,
-      status: mapJobStatus(row.status),
-      ...(row.status === "completed" || row.status === "failed"
-        ? { completedAt: row.updated_at }
-        : {}),
-      ...(row.schedule_json && safeReadCron(row.schedule_json)
-        ? { cronSchedule: safeReadCron(row.schedule_json)! }
-        : {})
-    }));
+    return rows.map((row) => {
+      const schedule = safeReadSchedule(row.schedule_json);
+      const scheduleLabel = schedule ? formatScheduleLabel(schedule) : undefined;
+      return {
+        id: row.id,
+        functionName: row.function_name,
+        args: JSON.parse(row.args_json) as Record<string, unknown>,
+        scheduledAt: row.created_at,
+        runAt: row.run_at,
+        status: mapJobStatus(row.status),
+        ...(row.status === "completed" || row.status === "failed"
+          ? { completedAt: row.updated_at }
+          : {}),
+        ...(row.recurring_name ? { recurringName: row.recurring_name } : {}),
+        ...(schedule ? { schedule } : {}),
+        ...(scheduleLabel ? { scheduleLabel, cronSchedule: scheduleLabel } : {}),
+        ...(row.timezone ? { timezone: row.timezone } : {}),
+        ...(row.last_run_at !== null ? { lastRunAt: row.last_run_at } : {}),
+        ...(row.updated_at ? { updatedAt: row.updated_at } : {}),
+        misfirePolicy: readMisfirePolicy(row.misfire_policy, row.window_ms)
+      };
+    });
   } catch {
     return [];
   }
@@ -692,13 +735,63 @@ function mapJobStatus(
   }
 }
 
-function safeReadCron(scheduleJson: string): string | undefined {
+function safeReadSchedule(
+  scheduleJson: string | null
+): SchedulerRecurringSchedule | undefined {
+  if (!scheduleJson) {
+    return undefined;
+  }
   try {
-    const schedule = JSON.parse(scheduleJson) as { cron?: string };
-    return schedule.cron;
+    return JSON.parse(scheduleJson) as SchedulerRecurringSchedule;
   } catch {
     return undefined;
   }
+}
+
+function formatScheduleLabel(schedule: SchedulerRecurringSchedule): string {
+  switch (schedule.type) {
+    case "interval": {
+      const parts: string[] = [];
+      if (schedule.hours) {
+        parts.push(`${schedule.hours}h`);
+      }
+      if (schedule.minutes) {
+        parts.push(`${schedule.minutes}m`);
+      }
+      if (schedule.seconds) {
+        parts.push(`${schedule.seconds}s`);
+      }
+      return parts.length > 0 ? `Every ${parts.join(" ")}` : "Recurring";
+    }
+    case "daily":
+      return `Daily ${padNumber(schedule.hour)}:${padNumber(schedule.minute)}${schedule.timezone ? ` ${schedule.timezone}` : ""}`;
+    case "weekly":
+      return `Weekly ${capitalize(schedule.dayOfWeek)} ${padNumber(schedule.hour)}:${padNumber(schedule.minute)}${schedule.timezone ? ` ${schedule.timezone}` : ""}`;
+  }
+}
+
+function readMisfirePolicy(
+  type: string,
+  windowMs: number | null
+): SchedulerMisfirePolicy {
+  if (type === "windowed") {
+    return {
+      type,
+      windowMs: windowMs ?? 0
+    };
+  }
+  if (type === "skip" || type === "run_once_if_missed") {
+    return { type };
+  }
+  return { type: "catch_up" };
+}
+
+function padNumber(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function capitalize(value: string): string {
+  return value.slice(0, 1).toUpperCase() + value.slice(1);
 }
 
 async function runDevtoolsMutation<TResult>(

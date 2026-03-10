@@ -7,7 +7,7 @@
  * @module
  */
 
-import type schema from "../schema";
+import type schema from "../schema.js";
 import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncorejs";
 import type {
   ActionCtx as BaseActionCtx,

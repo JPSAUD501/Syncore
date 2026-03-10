@@ -95,8 +95,8 @@
     }
   },
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
-    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/schema build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/react build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build && bun run --filter @syncore/svelte build",
+    "build": "bun run build:deps && tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
+    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/schema build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/cli build && bun run --filter @syncore/react build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build && bun run --filter @syncore/svelte build",
     "build:standalone": "bun run build:deps && bun run build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src --ext .ts,.tsx",
@@ -104,6 +104,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "commander": "^13.1.0",
     "date-fns-tz": "^3.2.0",
     "node-sql-parser": "^5.4.0",
@@ -140,6 +141,7 @@
     }
   },
   "devDependencies": {
+    "@syncore/cli": "workspace:*",
     "@syncore/core": "workspace:*",
     "@syncore/devtools-protocol": "workspace:*",
     "@syncore/next": "workspace:*",

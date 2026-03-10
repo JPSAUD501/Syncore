@@ -20,7 +20,7 @@
     "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build && bun run --filter @syncore/platform-node build",
     "clean": "node -e \"const fs=require('node:fs');for (const target of ['dist','node_modules/.unrun','node_modules/.vite','node_modules/.vite-temp']) { fs.rmSync(target,{recursive:true,force:true}); }\"",
     "lint": "eslint src --ext .ts",
-    "test": "bun run build:deps && vitest run",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "syncorejs:dev": "syncorejs dev",
     "syncorejs:codegen": "syncorejs codegen"

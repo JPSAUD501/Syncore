@@ -94,11 +94,11 @@ export function useDevtoolsSubscription<
   TResult extends SyncoreDevtoolsSubscriptionResultPayload
 >(
   payload: SyncoreDevtoolsSubscriptionPayload | null,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; targetRuntimeId?: string | null }
 ) {
   const enabled = options?.enabled ?? true;
-  const selectedRuntimeId = useDevtoolsStore(
-    (state) => state.selectedRuntimeId
+  const targetRuntimeId = useDevtoolsStore(
+    (state) => options?.targetRuntimeId ?? state.selectedRuntimeId
   );
   const payloadRef = useRef<SyncoreDevtoolsSubscriptionPayload | null>(payload);
   const payloadKey = JSON.stringify(payload);
@@ -109,7 +109,7 @@ export function useDevtoolsSubscription<
 
   useEffect(() => {
     const nextPayload = payloadRef.current;
-    if (!nextPayload || !enabled || !selectedRuntimeId) {
+    if (!nextPayload || !enabled || !targetRuntimeId) {
       setData(null);
       setLoading(false);
       return;
@@ -125,6 +125,7 @@ export function useDevtoolsSubscription<
         setLoading(false);
       },
       {
+        targetRuntimeId,
         onError: (message) => {
           setError(message);
           setLoading(false);
@@ -135,7 +136,7 @@ export function useDevtoolsSubscription<
     return () => {
       unsubscribe();
     };
-  }, [enabled, payloadKey, selectedRuntimeId]);
+  }, [enabled, payloadKey, targetRuntimeId]);
 
   return {
     data,

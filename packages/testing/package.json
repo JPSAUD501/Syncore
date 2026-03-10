@@ -19,11 +19,13 @@
     "vitest": "^3.0.8"
   },
   "scripts": {
+    "build:deps": "bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build && bun run --filter @syncore/core build && bun run --filter @syncore/react build && bun run --filter @syncore/svelte build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build",
+    "snapshot:declarations": "bun src/snapshot-declaration-artifacts.ts",
     "build": "node -e \"\"",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('playwright-report',{recursive:true,force:true});require('node:fs').rmSync('test-results',{recursive:true,force:true})\"",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('.declaration-artifacts',{recursive:true,force:true});require('node:fs').rmSync('playwright-report',{recursive:true,force:true});require('node:fs').rmSync('test-results',{recursive:true,force:true})\"",
     "lint": "eslint playwright.config.ts src tests --ext .ts",
-    "test": "vitest run --config vitest.config.ts",
-    "test:smoke:electron": "bun run turbo run build --filter=syncore-example-electron && playwright test -c playwright.electron.config.ts",
+    "test": "bun run build:deps && bun run snapshot:declarations && vitest run --config vitest.config.ts",
+    "test:smoke:electron": "bun run --cwd ../../examples/electron build && playwright test -c playwright.electron.config.ts",
     "test:smoke:expo": "tsx src/expo-smoke.ts",
     "test:smoke:web": "playwright test -c playwright.config.ts",
     "test:smoke": "bun run test:smoke:web && bun run test:smoke:electron && bun run test:smoke:expo",

@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmptyState } from "@/components/shared";
 import { useConnection } from "@/hooks";
+import { usePreferredTarget } from "@/hooks/usePreferredTarget";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
@@ -157,6 +158,7 @@ const substrateHighlight = EditorView.baseTheme({
 
 function SqlPage() {
   const { isReady } = useConnection();
+  const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SqlMode>("read");
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -187,11 +189,16 @@ function SqlPage() {
   const liveStartedAtRef = useRef<number | null>(null);
 
   const liveSubscription = useDevtoolsSubscription(
-    isReady && mode === "live" && query.trim()
+    isReady && !usingProjectTarget && mode === "live" && query.trim()
       ? { kind: "sql.watch", query: query.trim() }
       : null,
     {
-      enabled: isReady && mode === "live" && query.trim().length > 0
+      enabled:
+        isReady &&
+        !usingProjectTarget &&
+        mode === "live" &&
+        query.trim().length > 0,
+      targetRuntimeId
     }
   );
 
@@ -217,8 +224,17 @@ function SqlPage() {
   const executeQuery = useCallback(
     async (sql?: string) => {
       const queryText = sql ?? query.trim();
-      if (!queryText || !isReady) return;
+      if (!queryText || !targetRuntimeId) return;
       if (mode === "live") {
+        if (usingProjectTarget) {
+          setResult({
+            columns: [],
+            rows: [],
+            durationMs: 0,
+            mode: "live",
+            error: "SQL Live requires an active runtime."
+          });
+        }
         return;
       }
 
@@ -229,7 +245,7 @@ function SqlPage() {
         const res = await sendRequest({
           kind: mode === "write" ? "sql.write" : "sql.read",
           query: queryText
-        });
+        }, { targetRuntimeId });
         const durationMs = performance.now() - startTime;
 
         if (res.kind === "sql.read.result") {
@@ -290,7 +306,7 @@ function SqlPage() {
         setLoading(false);
       }
     },
-    [query, isReady, mode]
+    [mode, query, targetRuntimeId, usingProjectTarget]
   );
 
   useEffect(() => {
@@ -300,7 +316,7 @@ function SqlPage() {
       return;
     }
     const queryText = query.trim();
-    if (!isReady || !queryText) {
+    if (!isReady || !queryText || usingProjectTarget) {
       liveStartedAtRef.current = null;
       setResult(null);
       return;
@@ -342,7 +358,14 @@ function SqlPage() {
         return [nextEntry, ...prev.slice(0, 49)];
       });
     }
-  }, [isReady, liveSubscription.data, liveSubscription.loading, mode, query]);
+  }, [
+    isReady,
+    liveSubscription.data,
+    liveSubscription.loading,
+    mode,
+    query,
+    usingProjectTarget
+  ]);
 
   /* ---------------------------------------------------------------- */
   /*  Clear history                                                    */
@@ -391,6 +414,11 @@ function SqlPage() {
             <h2 className="flex-1 text-[14px] font-semibold text-text-primary">
               Query
             </h2>
+            {usingProjectTarget && (
+              <Badge variant="outline" className="text-[9px]">
+                Project Offline
+              </Badge>
+            )}
             <Badge variant="outline" className="text-[9px]">
               SQLite
             </Badge>
@@ -426,7 +454,7 @@ function SqlPage() {
             {mode !== "live" && (
               <Button
                 onClick={() => void executeQuery()}
-                disabled={!isReady || loading || !query.trim()}
+                disabled={!targetRuntimeId || loading || !query.trim()}
                 size="sm"
                 className="gap-1.5 px-4"
               >
@@ -478,7 +506,11 @@ function SqlPage() {
 
         {/* Results area */}
         <div className="flex min-h-0 flex-1 flex-col bg-bg-base">
-          {mode === "live" && liveSubscription.loading && !result ? (
+          {mode === "live" && usingProjectTarget ? (
+            <div className="p-4 text-[12px] text-text-tertiary">
+              SQL Live is only available while a runtime is active.
+            </div>
+          ) : mode === "live" && liveSubscription.loading && !result ? (
             <div className="p-4 text-[12px] text-text-tertiary">
               Subscribing...
             </div>
@@ -533,7 +565,7 @@ function SqlPage() {
                   setQuery(shortcut.query);
                   void executeQuery(shortcut.query);
                 }}
-                disabled={!isReady || mode === "live"}
+                disabled={!targetRuntimeId || mode === "live"}
                 className={cn(
                   "flex w-full items-center gap-2 rounded px-2 py-1.5 text-[11px] text-text-secondary transition-colors",
                   "hover:bg-bg-base hover:text-text-primary",

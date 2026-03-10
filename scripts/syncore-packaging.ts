@@ -4,6 +4,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  rm,
   stat,
   writeFile
 } from "node:fs/promises";
@@ -38,6 +39,7 @@ export const syncoreInternalPackages: InternalPackageConfig[] = [
   createInternalPackage("@syncore/schema", "schema"),
   createInternalPackage("@syncore/devtools-protocol", "devtools-protocol"),
   createInternalPackage("@syncore/core", "core"),
+  createInternalPackage("@syncore/cli", "cli"),
   createInternalPackage("@syncore/react", "react"),
   createInternalPackage("@syncore/platform-web", "platform-web"),
   createInternalPackage("@syncore/platform-node", "platform-node"),
@@ -51,6 +53,7 @@ export const runtimeReplacements = new Map<string, string>([
   ["@syncore/devtools-protocol", "./_vendor/devtools-protocol/index.js"],
   ["@syncore/core", "./_vendor/core/index.mjs"],
   ["@syncore/core/cli", "./_vendor/core/cli.mjs"],
+  ["@syncore/cli", "./_vendor/cli/index.mjs"],
   ["@syncore/react", "./_vendor/react/index.js"],
   ["@syncore/platform-web", "./_vendor/platform-web/index.js"],
   ["@syncore/platform-web/react", "./_vendor/platform-web/react.js"],
@@ -69,6 +72,7 @@ export const typeReplacements = new Map<string, string>([
   ["@syncore/devtools-protocol", "./_vendor/devtools-protocol/index.d.ts"],
   ["@syncore/core", "./_vendor/core/index.d.mts"],
   ["@syncore/core/cli", "./_vendor/core/cli.d.mts"],
+  ["@syncore/cli", "./_vendor/cli/index.d.mts"],
   ["@syncore/react", "./_vendor/react/index.d.ts"],
   ["@syncore/platform-web", "./_vendor/platform-web/index.d.ts"],
   ["@syncore/platform-web/react", "./_vendor/platform-web/react.d.ts"],
@@ -86,6 +90,7 @@ export const typeReplacements = new Map<string, string>([
 ]);
 
 export async function vendorSyncoreInternals(): Promise<void> {
+  await rm(syncoreVendorDir, { recursive: true, force: true });
   await mkdir(syncoreVendorDir, { recursive: true });
 
   for (const pkg of syncoreInternalPackages) {
@@ -285,6 +290,7 @@ export function escapeRegex(value: string): string {
 export async function assertVendoredArtifactsExist(): Promise<void> {
   const requiredFiles = [
     path.join(syncoreVendorDir, "core", "index.mjs"),
+    path.join(syncoreVendorDir, "cli", "index.mjs"),
     path.join(syncoreVendorDir, "schema", "index.js"),
     path.join(syncoreVendorDir, "react", "index.js"),
     path.join(syncoreVendorDir, "platform-web", "index.js"),

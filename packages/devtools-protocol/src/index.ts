@@ -68,7 +68,7 @@ export interface SyncoreRuntimeSummary {
   appName?: string;
   origin?: string;
   sessionLabel?: string;
-  targetKind?: "client";
+  targetKind?: "client" | "project";
   storageProtocol?: string;
   databaseLabel?: string;
   storageIdentity?: string;
@@ -89,7 +89,7 @@ export type SyncoreDevtoolsMessage =
       appName?: string;
       origin?: string;
       sessionLabel?: string;
-      targetKind?: "client";
+      targetKind?: "client" | "project";
       storageProtocol?: string;
       databaseLabel?: string;
       storageIdentity?: string;
@@ -171,7 +171,15 @@ export type SyncoreDevtoolsCommandPayload =
   | { kind: "sql.read"; query: string }
   | { kind: "sql.write"; query: string }
   /* Scheduler */
-  | { kind: "scheduler.cancel"; jobId: string };
+  | { kind: "scheduler.cancel"; jobId: string }
+  | {
+      kind: "scheduler.update";
+      jobId: string;
+      schedule: SchedulerRecurringSchedule;
+      args: Record<string, unknown>;
+      misfirePolicy: SchedulerMisfirePolicy;
+      runAt?: number;
+    };
 
 export type SyncoreDevtoolsSubscriptionPayload =
   | { kind: "runtime.summary" }
@@ -237,7 +245,19 @@ export type SyncoreDevtoolsCommandResultPayload =
       error?: string;
       invalidationScopes: string[];
     }
-  | { kind: "scheduler.cancel.result"; success: boolean; error?: string }
+  | {
+      kind: "scheduler.cancel.result";
+      success: boolean;
+      cancelled: boolean;
+      error?: string;
+    }
+  | {
+      kind: "scheduler.update.result";
+      success: boolean;
+      updated: boolean;
+      error?: string;
+      job?: SchedulerJob;
+    }
   | { kind: "error"; message: string };
 
 export type SyncoreDevtoolsSubscriptionResultPayload =
@@ -311,6 +331,53 @@ export interface SchedulerJob {
   result?: unknown;
   error?: string;
   durationMs?: number;
-  /** If set, this is a recurring cron job */
+  recurringName?: string;
+  schedule?: SchedulerRecurringSchedule;
+  scheduleLabel?: string;
+  misfirePolicy?: SchedulerMisfirePolicy;
+  timezone?: string;
+  lastRunAt?: number;
+  updatedAt?: number;
+  /** Compatibility label for older UI code. */
   cronSchedule?: string;
 }
+
+export interface SchedulerRecurringIntervalSchedule {
+  type: "interval";
+  seconds?: number;
+  minutes?: number;
+  hours?: number;
+}
+
+export interface SchedulerRecurringDailySchedule {
+  type: "daily";
+  hour: number;
+  minute: number;
+  timezone?: string;
+}
+
+export interface SchedulerRecurringWeeklySchedule {
+  type: "weekly";
+  dayOfWeek:
+    | "sunday"
+    | "monday"
+    | "tuesday"
+    | "wednesday"
+    | "thursday"
+    | "friday"
+    | "saturday";
+  hour: number;
+  minute: number;
+  timezone?: string;
+}
+
+export type SchedulerRecurringSchedule =
+  | SchedulerRecurringIntervalSchedule
+  | SchedulerRecurringDailySchedule
+  | SchedulerRecurringWeeklySchedule;
+
+export type SchedulerMisfirePolicy =
+  | { type: "catch_up" }
+  | { type: "skip" }
+  | { type: "run_once_if_missed" }
+  | { type: "windowed"; windowMs: number };

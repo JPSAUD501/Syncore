@@ -1,9 +1,13 @@
 import { useRouterState } from "@tanstack/react-router";
 import {
   useActiveRuntime,
-  useConnectedRuntimes,
+  useConnectedTargets,
   useDevtoolsStore,
-  useSelectedRuntimeConnected
+  useProjectTargetRuntime,
+  useSelectedRuntimeConnected,
+  useSelectedRuntimeFilter,
+  useSelectedTarget,
+  useSelectedTargetRuntimes
 } from "@/lib/store";
 import { Wifi, WifiOff, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +37,9 @@ export function Header({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const connected = useDevtoolsStore((s) => s.connected);
+  const selectTarget = useDevtoolsStore((s) => s.selectTarget);
   const selectRuntime = useDevtoolsStore((s) => s.selectRuntime);
+  const selectRuntimeFilter = useDevtoolsStore((s) => s.selectRuntimeFilter);
   const includeDashboardActivity = useDevtoolsStore(
     (s) => s.includeDashboardActivity
   );
@@ -41,21 +47,27 @@ export function Header({
     (s) => s.toggleIncludeDashboardActivity
   );
   const activeRuntime = useActiveRuntime();
+  const selectedTarget = useSelectedTarget();
+  const selectedTargetRuntimes = useSelectedTargetRuntimes();
+  const selectedRuntimeFilter = useSelectedRuntimeFilter();
   const runtimeConnected = useSelectedRuntimeConnected();
-  const runtimes = useConnectedRuntimes();
+  const targets = useConnectedTargets();
+  const projectTarget = useProjectTargetRuntime();
 
   const title = ROUTE_TITLES[pathname] ?? "Dashboard";
-  const runtimeId = activeRuntime?.runtimeId ?? null;
   const sessionLabel = activeRuntime?.sessionLabel ?? null;
   const platform = activeRuntime?.platform ?? null;
 
-  // Extract the unique name from the session label (format: "UniqueName (Browser)")
   const displayName = sessionLabel ?? platform ?? null;
+  const supportsProjectFallback = ["/data", "/functions", "/scheduler", "/sql"].includes(
+    pathname
+  );
+  const projectOffline =
+    supportsProjectFallback && !runtimeConnected && projectTarget?.connected;
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-bg-base px-4 md:px-6">
       <div className="flex items-center gap-2">
-        {/* Hamburger for mobile */}
         {onToggleSidebar && (
           <Button
             variant="ghost"
@@ -70,49 +82,79 @@ export function Header({
       </div>
 
       <div className="flex items-center gap-2 md:gap-3">
-        {/* Runtime selector — only when multiple active runtimes */}
-        {runtimes.length > 1 && (
+        {targets.length > 0 && (
           <Select
-            {...(runtimeConnected && runtimeId ? { value: runtimeId } : {})}
-            onValueChange={(value) => selectRuntime(value)}
+            {...(selectedTarget?.id ? { value: selectedTarget.id } : {})}
+            onValueChange={(value) => selectTarget(value)}
           >
             <SelectTrigger
               size="sm"
-              className="min-w-48 max-w-72 hidden sm:flex"
+              className="hidden min-w-48 max-w-72 sm:flex"
             >
-              <SelectValue
-                placeholder={
-                  runtimeConnected
-                    ? "Select runtime"
-                    : displayName
-                      ? `${displayName} (inactive)`
-                      : "Select runtime"
-                }
-              />
+              <SelectValue placeholder="Select target" />
             </SelectTrigger>
             <SelectContent align="end">
-              {runtimes.map((runtime) => {
-                const label =
-                  runtime.sessionLabel ?? runtime.appName ?? runtime.platform;
-                return (
-                  <SelectItem key={runtime.runtimeId} value={runtime.runtimeId}>
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-text-primary font-medium">
-                        {label}
-                      </span>
-                      <span className="truncate text-[10px] text-text-tertiary font-mono">
-                        {runtime.runtimeId.slice(0, 8)}
-                      </span>
+              {targets.map((target) => (
+                <SelectItem key={target.id} value={target.id}>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium text-text-primary">
+                      {target.id} - {target.label}
                     </span>
-                  </SelectItem>
-                );
-              })}
+                    <span className="truncate font-mono text-[10px] text-text-tertiary">
+                      {target.kind === "project"
+                        ? "project"
+                        : `${target.connectedSessions} session(s)`}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
 
-        {/* Active runtime display name */}
-        {displayName && runtimes.length <= 1 && (
+        {selectedTarget?.kind === "client" && selectedTargetRuntimes.length > 1 && (
+          <Select
+            value={selectedRuntimeFilter ?? "all"}
+            onValueChange={(value) =>
+              value === "all"
+                ? selectRuntimeFilter("all")
+                : selectRuntime(value)
+            }
+          >
+            <SelectTrigger
+              size="sm"
+              className="hidden min-w-44 max-w-64 sm:flex"
+            >
+              <SelectValue placeholder="All sessions" />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="all">
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate font-medium text-text-primary">
+                    All sessions
+                  </span>
+                  <span className="truncate font-mono text-[10px] text-text-tertiary">
+                    {selectedTarget.connectedSessions} session(s)
+                  </span>
+                </span>
+              </SelectItem>
+              {selectedTargetRuntimes.map((runtime) => (
+                <SelectItem key={runtime.runtimeId} value={runtime.runtimeId}>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium text-text-primary">
+                      {runtime.sessionLabel ?? runtime.appName ?? runtime.platform}
+                    </span>
+                    <span className="truncate font-mono text-[10px] text-text-tertiary">
+                      {runtime.runtimeId.slice(0, 8)}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {displayName && targets.length <= 1 && (
           <div className="hidden min-w-0 sm:block">
             <div className="truncate text-[11px] font-medium text-text-secondary">
               {displayName}
@@ -120,13 +162,18 @@ export function Header({
           </div>
         )}
 
-        {/* Platform badge */}
         {platform && (
           <Badge
             variant="secondary"
             className="hidden font-mono text-[10px] md:inline-flex"
           >
             {platform}
+          </Badge>
+        )}
+
+        {projectOffline && (
+          <Badge variant="outline" className="hidden text-[10px] md:inline-flex">
+            Project Offline
           </Badge>
         )}
 
@@ -144,7 +191,6 @@ export function Header({
           {includeDashboardActivity ? "All activity" : "App only"}
         </Button>
 
-        {/* Connection indicator */}
         <Badge
           variant={connected ? "success" : "destructive"}
           className={cn("gap-1.5", connected && "animate-fade-in")}

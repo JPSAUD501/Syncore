@@ -7,6 +7,15 @@ import {
 import schema from "../syncore/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
+const rendererHtmlPath = path.resolve(
+  import.meta.dirname,
+  "..",
+  "..",
+  "..",
+  "renderer",
+  "index.html"
+);
+
 const userDataDirectory =
   process.env.SYNCORE_ELECTRON_USER_DATA_DIR ?? app.getPath("userData");
 
@@ -52,9 +61,7 @@ async function createWindow(): Promise<void> {
   if (rendererUrl) {
     await mainWindow.loadURL(rendererUrl);
   } else {
-    await mainWindow.loadFile(
-      path.join(import.meta.dirname, "..", "renderer", "index.html")
-    );
+    await mainWindow.loadFile(rendererHtmlPath);
   }
 
   mainWindow.on("closed", () => {

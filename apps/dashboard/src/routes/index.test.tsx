@@ -1,6 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SyncoreDevtoolsSubscriptionResultPayload } from "@syncore/devtools-protocol";
+import type {
+  SyncoreDevtoolsSubscriptionResultPayload,
+  SyncoreRuntimeSummary
+} from "@syncore/devtools-protocol";
 import { OverviewPage } from "./index";
 
 const storeState = {
@@ -13,6 +16,11 @@ const storeState = {
     connected: true,
     events: Array.from({ length: 8 }, (_, index) => ({
       type: "query.executed",
+      runtimeId: "runtime-1",
+      queryId: `query-${index + 1}`,
+      functionName: "tasks:list",
+      dependencies: [],
+      durationMs: 1,
       timestamp: index + 1
     })),
     queryCount: 7,
@@ -27,12 +35,20 @@ const storeState = {
         lastRunAt: 1
       }
     ],
-    summary: { recentEventCount: 8 }
+    summary: buildSummary(8)
   } as {
     runtimeId: string;
     platform: string;
     connected: boolean;
-    events: Array<{ type: string; timestamp: number }>;
+    events: Array<{
+      type: "query.executed";
+      runtimeId: string;
+      queryId: string;
+      functionName: string;
+      dependencies: string[];
+      durationMs: number;
+      timestamp: number;
+    }>;
     queryCount: number;
     mutationCount: number;
     actionCount: number;
@@ -43,7 +59,7 @@ const storeState = {
       dependencyKeys: string[];
       lastRunAt: number;
     }>;
-    summary: { recentEventCount: number } | null;
+    summary: SyncoreRuntimeSummary | null;
   } | null,
   runtimeConnected: true,
   clearEvents: vi.fn()
@@ -72,7 +88,7 @@ const subscriptionState: {
     loading: false,
     data: {
       kind: "runtime.summary.result",
-      summary: { recentEventCount: 8 }
+      summary: buildSummary(8)
     }
   },
   activeQueries: {
@@ -91,6 +107,16 @@ const subscriptionState: {
   }
 };
 
+function buildSummary(recentEventCount: number): SyncoreRuntimeSummary {
+  return {
+    runtimeId: "runtime-1",
+    platform: "browser",
+    connectedAt: 1,
+    activeQueryCount: 0,
+    recentEventCount
+  };
+}
+
 vi.mock("@/lib/store", () => ({
   useDevtoolsStore: (selector: (state: {
     connected: boolean;
@@ -103,7 +129,14 @@ vi.mock("@/lib/store", () => ({
       includeDashboardActivity: storeState.includeDashboardActivity
     }),
   useActiveRuntime: () => storeState.activeRuntime,
-  useConnectedRuntimeCount: () => storeState.connectedRuntimeCount
+  useConnectedRuntimeCount: () => storeState.connectedRuntimeCount,
+  useRuntimeList: () => (storeState.activeRuntime ? [storeState.activeRuntime] : []),
+  getPublicRuntimeId: (runtimeId: string) => runtimeId.slice(0, 8),
+  getRuntimeLabel: (runtime: {
+    sessionLabel?: string;
+    appName?: string;
+    platform: string;
+  }) => runtime.sessionLabel ?? runtime.appName ?? runtime.platform
 }));
 
 vi.mock("@/hooks", () => ({
@@ -151,6 +184,11 @@ function resetTestState() {
     connected: true,
     events: Array.from({ length: 8 }, (_, index) => ({
       type: "query.executed",
+      runtimeId: "runtime-1",
+      queryId: `query-${index + 1}`,
+      functionName: "tasks:list",
+      dependencies: [],
+      durationMs: 1,
       timestamp: index + 1
     })),
     queryCount: 7,
@@ -165,13 +203,13 @@ function resetTestState() {
         lastRunAt: 1
       }
     ],
-    summary: { recentEventCount: 8 }
+    summary: buildSummary(8)
   };
   subscriptionState.summary = {
     loading: false,
     data: {
       kind: "runtime.summary.result",
-      summary: { recentEventCount: 8 }
+      summary: buildSummary(8)
     }
   };
   subscriptionState.activeQueries = {
@@ -205,9 +243,8 @@ describe("OverviewPage", () => {
 
     render(<OverviewPage />);
 
-    expect(screen.queryByText("Watching")).toBeNull();
-    expect(screen.queryByText("7")).toBeNull();
-    expect(screen.getAllByText("Waiting for runtime data").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Watching")).toHaveLength(0);
+    expect(screen.getAllByText("Captured before disconnect").length).toBeGreaterThan(0);
   });
 
   it("shows loading placeholders while fresh runtime data is still pending", () => {
@@ -223,8 +260,8 @@ describe("OverviewPage", () => {
   it("renders fresh subscription data once it arrives", () => {
     render(<OverviewPage />);
 
-    expect(screen.getByText("Watching")).not.toBeNull();
-    expect(screen.getByText("1 queries")).not.toBeNull();
+    expect(screen.getAllByText("Watching").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1 queries").length).toBeGreaterThan(0);
     expect(screen.getAllByText("8 events").length).toBeGreaterThan(0);
   });
 });

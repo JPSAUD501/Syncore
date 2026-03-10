@@ -73,6 +73,24 @@ export type TargetCapability =
   | "exportData"
   | "streamLogs";
 
+export interface ClientRuntimeDescriptor {
+  id: string;
+  runtimeId: string;
+  label: string;
+  platform: string;
+  appName?: string;
+  origin?: string;
+  sessionLabel?: string;
+  storageIdentity?: string;
+  online: true;
+  primary: boolean;
+}
+
+export interface ClientRuntimeLookupEntry extends ClientRuntimeDescriptor {
+  targetId: string;
+  targetLabel: string;
+}
+
 const PROJECT_TARGET_CAPABILITIES: TargetCapability[] = [
   "run",
   "readData",
@@ -94,6 +112,7 @@ export interface ClientTargetDescriptor {
   label: string;
   runtimeId: string;
   runtimeIds: string[];
+  runtimes: ClientRuntimeDescriptor[];
   platform: string;
   appName?: string;
   origin?: string;
@@ -119,6 +138,37 @@ export interface ProjectTargetDescriptor {
 export type SyncoreTargetDescriptor =
   | ProjectTargetDescriptor
   | ClientTargetDescriptor;
+
+export function createPublicRuntimeId(runtimeId: string): string {
+  return runtimeId.slice(0, 8);
+}
+
+export function getClientRuntimeLabel(input: {
+  sessionLabel?: string;
+  appName?: string;
+  platform: string;
+}): string {
+  return input.sessionLabel ?? input.appName ?? input.platform;
+}
+
+export function buildRuntimeLookup(
+  targets: SyncoreTargetDescriptor[]
+): Map<string, ClientRuntimeLookupEntry> {
+  const lookup = new Map<string, ClientRuntimeLookupEntry>();
+  for (const target of targets) {
+    if (target.kind !== "client") {
+      continue;
+    }
+    for (const runtime of target.runtimes) {
+      lookup.set(runtime.runtimeId, {
+        ...runtime,
+        targetId: target.id,
+        targetLabel: target.label
+      });
+    }
+  }
+  return lookup;
+}
 
 export async function resolveProjectPaths(
   cwd: string
@@ -991,22 +1041,42 @@ function buildClientTargets(hellos: RuntimeHello[]): ClientTargetDescriptor[] {
 
   return [...groups.values()]
     .map(({ key, runtimes }) => {
-      const primary = [...runtimes].sort((left, right) =>
+      const sortedRuntimes = [...runtimes].sort((left, right) =>
         left.runtimeId.localeCompare(right.runtimeId)
-      )[0]!;
+      );
+      const primary = sortedRuntimes[0]!;
       const sessionLabels = Array.from(
         new Set(
-          runtimes
+          sortedRuntimes
             .map((entry) => entry.sessionLabel)
             .filter((value): value is string => typeof value === "string")
         )
       );
+      const runtimeDescriptors = sortedRuntimes.map((entry, index) => ({
+        id: createPublicRuntimeId(entry.runtimeId),
+        runtimeId: entry.runtimeId,
+        label: getClientRuntimeLabel({
+          ...(entry.sessionLabel ? { sessionLabel: entry.sessionLabel } : {}),
+          ...(entry.appName ? { appName: entry.appName } : {}),
+          platform: entry.platform
+        }),
+        platform: entry.platform,
+        ...(entry.appName ? { appName: entry.appName } : {}),
+        ...(entry.origin ? { origin: entry.origin } : {}),
+        ...(entry.sessionLabel ? { sessionLabel: entry.sessionLabel } : {}),
+        ...(entry.storageIdentity
+          ? { storageIdentity: entry.storageIdentity }
+          : {}),
+        online: true as const,
+        primary: index === 0
+      }));
       return {
-        id: `client:${stableId(key)}`,
+        id: createPublicClientTargetId(key, groups),
         kind: "client" as const,
         label: renderClientTargetLabel(primary, runtimes.length),
         runtimeId: primary.runtimeId,
-        runtimeIds: runtimes.map((entry) => entry.runtimeId).sort(),
+        runtimeIds: sortedRuntimes.map((entry) => entry.runtimeId),
+        runtimes: runtimeDescriptors,
         platform: primary.platform,
         ...(primary.appName ? { appName: primary.appName } : {}),
         ...(primary.origin ? { origin: primary.origin } : {}),
@@ -1024,6 +1094,30 @@ function buildClientTargets(hellos: RuntimeHello[]): ClientTargetDescriptor[] {
       };
     })
     .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+export function createPublicClientTargetId(
+  key: string,
+  groupsOrKeys: Map<string, { key: string; runtimes: RuntimeHello[] }> | Iterable<string>
+): string {
+  const keys =
+    groupsOrKeys instanceof Map ? [...groupsOrKeys.keys()] : [...groupsOrKeys];
+  const used = new Set<string>();
+  for (const existingKey of [...keys].sort()) {
+    let attempt = 0;
+    while (true) {
+      const candidate = stableNumericId(existingKey, attempt);
+      if (existingKey === key && !used.has(candidate)) {
+        return candidate;
+      }
+      if (!used.has(candidate)) {
+        used.add(candidate);
+        break;
+      }
+      attempt += 1;
+    }
+  }
+  return createBasePublicClientTargetId(key);
 }
 
 export function targetSupportsCapability(
@@ -1045,13 +1139,19 @@ function renderClientTargetLabel(
   return connectedSessions > 1 ? `${base} (${connectedSessions} sessions)` : base;
 }
 
-function stableId(input: string): string {
+export function createBasePublicClientTargetId(input: string): string {
+  return stableNumericId(input, 0);
+}
+
+function stableNumericId(input: string, salt: number): string {
+  const hashInput = salt === 0 ? input : `${input}#${salt}`;
   let hash = 2166136261;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
+  for (let index = 0; index < hashInput.length; index += 1) {
+    hash ^= hashInput.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return Math.abs(hash >>> 0).toString(36);
+  const value = (hash >>> 0) % 100000;
+  return value.toString().padStart(5, "0");
 }
 
 function createHubRequestId(prefix: string): string {

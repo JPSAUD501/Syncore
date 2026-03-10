@@ -12,8 +12,9 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { SchedulerJob } from "@syncore/devtools-protocol";
 import { defineSchema, defineTable, v } from "../../../schema/src/index.js";
-import { mutation, query } from "./functions.js";
+import { cronJobs, mutation, query } from "./functions.js";
 import {
   createFunctionReference,
   type SyncoreExternalChangeApplier,
@@ -938,6 +939,187 @@ describe("SyncoreRuntime schema + scheduler", () => {
     );
     expect(taskUpdates.at(-1)?.rows).toHaveLength(1);
     expect(noteUpdates.at(-1)?.rows).toHaveLength(1);
+
+    host.dispose();
+    await hostDriver.close();
+    await runtime.stop();
+  });
+
+  it("lists recurring scheduler metadata and supports update/cancel no-ops", async () => {
+    const databasePath = path.join(rootDirectory, "scheduler-devtools.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: v.string(),
+        done: v.boolean()
+      })
+    });
+
+    const functions = {
+      "tasks/create": mutation({
+        args: { text: v.string() },
+        returns: v.string(),
+        handler: async (ctx, args) =>
+          (ctx as MutationCtx).db.insert("tasks", {
+            text: (args as { text: string }).text,
+            done: false
+          })
+      })
+    };
+
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath),
+      scheduler: {
+        recurringJobs: cronJobs()
+          .interval(
+            "cleanup",
+            { minutes: 5 },
+            createFunctionReference("mutation", "tasks/create"),
+            { text: "cleanup" },
+            { type: "skip" }
+          )
+          .daily(
+            "digest",
+            {
+              hour: 9,
+              minute: 30,
+              timezone: "America/Sao_Paulo"
+            },
+            createFunctionReference("mutation", "tasks/create"),
+            { text: "digest" }
+          )
+          .weekly(
+            "report",
+            {
+              dayOfWeek: "monday",
+              hour: 8,
+              minute: 15,
+              timezone: "UTC"
+            },
+            createFunctionReference("mutation", "tasks/create"),
+            { text: "report" }
+          ).jobs
+      }
+    });
+
+    await runtime.start();
+    const hostDriver = new TestSqliteDriver(databasePath);
+    const handler = createDevtoolsCommandHandler({
+      driver: hostDriver,
+      schema,
+      functions,
+      runtime,
+      sql: nodeDevtoolsSqlSupport
+    });
+    const host = createDevtoolsSubscriptionHost({
+      driver: hostDriver,
+      schema,
+      functions,
+      runtime,
+      sql: nodeDevtoolsSqlSupport
+    });
+    const schedulerSnapshots: SchedulerJob[][] = [];
+
+    await host.subscribe("scheduler-jobs", { kind: "scheduler.jobs" }, (payload) => {
+      if (payload.kind === "scheduler.jobs.result") {
+        schedulerSnapshots.push(payload.jobs);
+      }
+    });
+
+    const initialJobs = schedulerSnapshots.at(-1) ?? [];
+    expect(initialJobs).toHaveLength(3);
+    expect(initialJobs.map((job) => job.recurringName).sort()).toEqual([
+      "cleanup",
+      "digest",
+      "report"
+    ]);
+    expect(initialJobs.find((job) => job.recurringName === "cleanup")?.schedule).toEqual({
+      type: "interval",
+      minutes: 5
+    });
+    expect(
+      initialJobs.find((job) => job.recurringName === "digest")?.scheduleLabel
+    ).toContain("Daily");
+    expect(
+      initialJobs.find((job) => job.recurringName === "report")?.schedule
+    ).toEqual({
+      type: "weekly",
+      dayOfWeek: "monday",
+      hour: 8,
+      minute: 15,
+      timezone: "UTC"
+    });
+
+    const updateResult = await handler({
+      kind: "scheduler.update",
+      jobId: "recurring:cleanup",
+      schedule: { type: "interval", minutes: 15 },
+      args: { text: "cleanup-updated" },
+      misfirePolicy: { type: "windowed", windowMs: 30_000 }
+    });
+
+    expect(updateResult.kind).toBe("scheduler.update.result");
+    if (updateResult.kind === "scheduler.update.result") {
+      expect(updateResult.success).toBe(true);
+      expect(updateResult.updated).toBe(true);
+      expect(updateResult.job?.args).toEqual({ text: "cleanup-updated" });
+      expect(updateResult.job?.misfirePolicy).toEqual({
+        type: "windowed",
+        windowMs: 30_000
+      });
+    }
+
+    await waitFor(
+      () =>
+        (schedulerSnapshots.at(-1) ?? []).find(
+          (job) => job.id === "recurring:cleanup"
+        )?.args.text === "cleanup-updated",
+      "scheduler subscription should refresh after update"
+    );
+
+    const cancelResult = await handler({
+      kind: "scheduler.cancel",
+      jobId: "recurring:cleanup"
+    });
+    expect(cancelResult).toEqual({
+      kind: "scheduler.cancel.result",
+      success: true,
+      cancelled: true
+    });
+
+    await waitFor(
+      () =>
+        (schedulerSnapshots.at(-1) ?? []).find(
+          (job) => job.id === "recurring:cleanup"
+        )?.status === "cancelled",
+      "scheduler subscription should refresh after cancellation"
+    );
+
+    const noOpCancel = await handler({
+      kind: "scheduler.cancel",
+      jobId: "recurring:cleanup"
+    });
+    expect(noOpCancel).toEqual({
+      kind: "scheduler.cancel.result",
+      success: true,
+      cancelled: false
+    });
+
+    const noOpUpdate = await handler({
+      kind: "scheduler.update",
+      jobId: "recurring:cleanup",
+      schedule: { type: "interval", minutes: 30 },
+      args: { text: "ignored" },
+      misfirePolicy: { type: "catch_up" }
+    });
+    expect(noOpUpdate).toEqual({
+      kind: "scheduler.update.result",
+      success: true,
+      updated: false
+    });
 
     host.dispose();
     await hostDriver.close();

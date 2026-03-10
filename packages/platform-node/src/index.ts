@@ -659,7 +659,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
   appName?: string;
   origin?: string;
   sessionLabel?: string;
-  targetKind?: "client";
+  targetKind?: "client" | "project";
   storageProtocol?: string;
   databaseLabel?: string;
   storageIdentity?: string;

@@ -1,5 +1,10 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useActiveRuntime, useDevtoolsStore } from "@/lib/store";
+import {
+  getPublicRuntimeId,
+  getRuntimeLabel,
+  useRuntimeList,
+  useDevtoolsStore
+} from "@/lib/store";
 import { cn, formatTime, formatDuration } from "@/lib/utils";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +31,7 @@ import {
   filterActivityEvents,
   getActivityOriginLabel
 } from "@/lib/activity";
+import { useDevtools } from "@/hooks";
 
 export const Route = createLazyFileRoute("/logs")({
   component: LogsPage
@@ -105,7 +111,7 @@ function getEventSummary(event: SyncoreDevtoolsEvent): string {
     case "query.executed":
       return event.functionName;
     case "query.invalidated":
-      return `${event.queryId} — ${event.reason}`;
+      return `${event.queryId} - ${event.reason}`;
     case "mutation.committed":
       return event.functionName;
     case "action.completed":
@@ -138,6 +144,20 @@ function hasError(event: SyncoreDevtoolsEvent): boolean {
   return false;
 }
 
+function getEventRuntimeTag(
+  event: SyncoreDevtoolsEvent,
+  runtimeMap: Map<string, { label: string; publicId: string }>
+): string {
+  if (event.origin === "dashboard") {
+    return "dashboard";
+  }
+  const runtime = runtimeMap.get(event.runtimeId);
+  if (!runtime) {
+    return getPublicRuntimeId(event.runtimeId);
+  }
+  return `${runtime.label}:${runtime.publicId}`;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Log entry component with fade-in animation                         */
 /* ------------------------------------------------------------------ */
@@ -146,18 +166,21 @@ function LogEntry({
   event,
   isSelected,
   onClick,
-  isNew
+  isNew,
+  runtimeMap
 }: {
   event: SyncoreDevtoolsEvent;
   isSelected: boolean;
   onClick: () => void;
   isNew: boolean;
+  runtimeMap: Map<string, { label: string; publicId: string }>;
 }) {
   const color = EVENT_COLORS[event.type];
   const Icon = EVENT_ICONS[event.type];
   const summary = getEventSummary(event);
   const duration = getEventDuration(event);
   const errored = hasError(event);
+  const runtimeTag = getEventRuntimeTag(event, runtimeMap);
 
   return (
     <button
@@ -184,6 +207,12 @@ function LogEntry({
       >
         {getActivityOriginLabel(event)}
       </Badge>
+      <Badge
+        variant="outline"
+        className="hidden w-[120px] justify-center text-[10px] shrink-0 xl:inline-flex"
+      >
+        {runtimeTag}
+      </Badge>
       <span className="text-[12px] text-text-secondary font-mono truncate flex-1">
         {summary}
       </span>
@@ -204,7 +233,13 @@ function LogEntry({
 /*  Detail panel                                                       */
 /* ------------------------------------------------------------------ */
 
-function LogDetail({ event }: { event: SyncoreDevtoolsEvent }) {
+function LogDetail({
+  event,
+  runtimeMap
+}: {
+  event: SyncoreDevtoolsEvent;
+  runtimeMap: Map<string, { label: string; publicId: string }>;
+}) {
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-center gap-2">
@@ -212,6 +247,7 @@ function LogDetail({ event }: { event: SyncoreDevtoolsEvent }) {
           {EVENT_LABELS[event.type]}
         </Badge>
         <Badge variant="outline">{getActivityOriginLabel(event)}</Badge>
+        <Badge variant="outline">{getEventRuntimeTag(event, runtimeMap)}</Badge>
         <span className="text-[11px] text-text-tertiary">
           {new Date(event.timestamp).toLocaleString()}
         </span>
@@ -340,17 +376,27 @@ function DetailRow({
 /* ------------------------------------------------------------------ */
 
 function LogsPage() {
-  const activeRuntime = useActiveRuntime();
+  const { events } = useDevtools();
+  const runtimes = useRuntimeList();
   const includeDashboardActivity = useDevtoolsStore(
     (state) => state.includeDashboardActivity
   );
-  const events = useMemo(
+  const filteredActivityEvents = useMemo(
+    () => filterActivityEvents(events, includeDashboardActivity),
+    [events, includeDashboardActivity]
+  );
+  const runtimeMap = useMemo(
     () =>
-      filterActivityEvents(
-        activeRuntime?.events ?? [],
-        includeDashboardActivity
+      new Map(
+        runtimes.map((runtime) => [
+          runtime.runtimeId,
+          {
+            label: getRuntimeLabel(runtime),
+            publicId: getPublicRuntimeId(runtime.runtimeId)
+          }
+        ])
       ),
-    [activeRuntime, includeDashboardActivity]
+    [runtimes]
   );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
@@ -365,19 +411,19 @@ function LogsPage() {
   const knownCount = prevCountRef.current;
 
   // When paused, buffer events
-  const displayEvents = paused ? pausedEvents : events;
+  const displayEvents = paused ? pausedEvents : filteredActivityEvents;
 
   useEffect(() => {
     if (!paused) {
-      setPausedEvents(events);
-      prevCountRef.current = events.length;
+      setPausedEvents(filteredActivityEvents);
+      prevCountRef.current = filteredActivityEvents.length;
     }
-  }, [paused, events]);
+  }, [paused, filteredActivityEvents]);
 
   useEffect(() => {
     if (paused) return;
-    setPausedEvents(events);
-  }, [events, paused]);
+    setPausedEvents(filteredActivityEvents);
+  }, [filteredActivityEvents, paused]);
 
   // Filter events
   const filteredEvents = useMemo(() => {
@@ -567,6 +613,7 @@ function LogsPage() {
                   event={event}
                   isSelected={selectedIndex === i}
                   isNew={i >= knownCount}
+                  runtimeMap={runtimeMap}
                   onClick={() =>
                     setSelectedIndex(selectedIndex === i ? null : i)
                   }
@@ -591,7 +638,7 @@ function LogsPage() {
                 <X size={14} />
               </Button>
             </div>
-            <LogDetail event={selectedEvent} />
+            <LogDetail event={selectedEvent} runtimeMap={runtimeMap} />
           </div>
         )}
       </div>

@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  getPublicRuntimeId,
+  getRuntimeLabel,
   useActiveRuntime,
   useConnectedRuntimeCount,
+  useRuntimeList,
   useDevtoolsStore
 } from "@/lib/store";
 import {
@@ -32,12 +35,26 @@ import {
   useDevtools
 } from "@/hooks";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
-import { useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { getActivityOriginLabel } from "@/lib/activity";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage
 });
+
+function getRuntimeTag(
+  event: SyncoreDevtoolsEvent,
+  runtimeMap: Map<string, { label: string; publicId: string }>
+): string {
+  if (event.origin === "dashboard") {
+    return "dashboard";
+  }
+  const runtime = runtimeMap.get(event.runtimeId);
+  if (!runtime) {
+    return getPublicRuntimeId(event.runtimeId);
+  }
+  return `${runtime.label}:${runtime.publicId}`;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Stat card with highlight animation                                 */
@@ -180,7 +197,7 @@ function getEventDetail(event: SyncoreDevtoolsEvent): string {
     case "query.executed":
       return `${event.functionName} (${formatDuration(event.durationMs)})`;
     case "query.invalidated":
-      return `${event.queryId} — ${event.reason}`;
+      return `${event.queryId} - ${event.reason}`;
     case "mutation.committed":
       return `${event.functionName} (${formatDuration(event.durationMs)})`;
     case "action.completed":
@@ -275,9 +292,23 @@ export function OverviewPage() {
     includeDashboardActivity
   } = useDevtools();
   const connectedRuntimeCount = useConnectedRuntimeCount();
+  const runtimes = useRuntimeList();
   const runtimeId = activeRuntime?.runtimeId ?? null;
   const platform = activeRuntime?.platform ?? null;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
+  const runtimeMap = useMemo(
+    () =>
+      new Map(
+        runtimes.map((runtime) => [
+          runtime.runtimeId,
+          {
+            label: getRuntimeLabel(runtime),
+            publicId: getPublicRuntimeId(runtime.runtimeId)
+          }
+        ])
+      ),
+    [runtimes]
+  );
 
   const summarySubscription = useDevtoolsSubscription(
     runtimeConnected && runtimeId ? { kind: "runtime.summary" } : null,
@@ -346,7 +377,7 @@ export function OverviewPage() {
           <span>
             Waiting for runtime connection on{" "}
             <code className="font-mono text-[12px] bg-warning/10 px-1.5 py-0.5 rounded">
-              ws://127.0.0.1:4311
+              ws://localhost:4311
             </code>
             . Start your app with{" "}
             <code className="font-mono text-[12px] bg-warning/10 px-1.5 py-0.5 rounded">
@@ -387,7 +418,7 @@ export function OverviewPage() {
               {platform}
             </Badge>
           )}
-          {summary && (
+          {runtimeConnected && summary && (
             <div className="flex items-center gap-1">
               <span className="text-text-tertiary">Watching</span>
               <span className="font-mono text-fn-query">
@@ -395,7 +426,7 @@ export function OverviewPage() {
               </span>
             </div>
           )}
-          {summary && (
+          {runtimeConnected && summary && (
             <div className="flex items-center gap-1">
               <span className="text-text-tertiary">Recent</span>
               <span className="font-mono text-text-primary">
@@ -504,6 +535,12 @@ export function OverviewPage() {
                         className="hidden w-20 shrink-0 justify-center text-[10px] lg:inline-flex"
                       >
                         {getActivityOriginLabel(event)}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="hidden w-32 shrink-0 justify-center text-[10px] xl:inline-flex"
+                      >
+                        {getRuntimeTag(event, runtimeMap)}
                       </Badge>
                       <span className="flex-1 truncate font-mono text-[12px] text-text-secondary">
                         {detail}

@@ -9,7 +9,11 @@ export type JsonLikeFormat = "pretty" | "json" | "jsonl";
 export interface PersistedLogEntry {
   timestamp: number;
   runtimeId: string;
-  targetId?: string;
+  targetId: string;
+  targetLabel?: string;
+  publicRuntimeId?: string;
+  runtimeLabel?: string;
+  origin?: "runtime" | "dashboard";
   platform?: string;
   eventType: string;
   category: "query" | "mutation" | "action" | "system";
@@ -102,10 +106,25 @@ export function printTargetsTable(
     process.stdout.write(
       `      origin: ${target.origin ?? "unknown"}  storage: ${target.storageProtocol ?? "unknown"}  capabilities: ${target.capabilities.join(", ")}\n`
     );
+    for (const runtime of target.runtimes) {
+      process.stdout.write(
+        `      runtime ${runtime.id}  ${runtime.label}${runtime.primary ? "  primary" : ""}\n`
+      );
+      process.stdout.write(
+        `        origin: ${runtime.origin ?? "unknown"}  platform: ${runtime.platform}  status: online\n`
+      );
+    }
     if (options.verbose) {
       process.stdout.write(
         `      runtimeIds: ${target.runtimeIds.join(", ")}\n`
       );
+      for (const runtime of target.runtimes) {
+        if (runtime.appName || runtime.sessionLabel || runtime.storageIdentity) {
+          process.stdout.write(
+            `        app: ${runtime.appName ?? "unknown"}  session: ${runtime.sessionLabel ?? "unknown"}  storageIdentity: ${runtime.storageIdentity ?? "unknown"}\n`
+          );
+        }
+      }
       process.stdout.write(
         `      sessions: ${target.sessionLabels.join(", ") || "unknown"}\n`
       );
@@ -193,6 +212,11 @@ export function printDoctorReport(
       process.stdout.write(
         `      runtimeIds=${target.runtimeIds.join(", ")}\n`
       );
+      for (const runtime of target.runtimes) {
+        process.stdout.write(
+          `      runtime ${runtime.id} label=${runtime.label} origin=${runtime.origin ?? "unknown"} platform=${runtime.platform} status=online${runtime.primary ? " primary=true" : ""}\n`
+        );
+      }
     }
   }
 }
@@ -242,5 +266,15 @@ function isPersistedLogEntry(value: unknown): value is PersistedLogEntry {
 
 function formatLogEntry(entry: PersistedLogEntry): string {
   const timestamp = new Date(entry.timestamp).toISOString().slice(11, 19);
-  return `${timestamp}  ${entry.targetId ?? "all"}  ${entry.category}  ${entry.message}`;
+  const target = entry.targetId ?? "all";
+  const runtime =
+    entry.origin === "dashboard"
+      ? "dashboard"
+      : entry.runtimeLabel
+        ? entry.publicRuntimeId &&
+          !entry.runtimeLabel.includes(entry.publicRuntimeId)
+          ? `${entry.runtimeLabel}:${entry.publicRuntimeId}`
+          : entry.runtimeLabel
+        : entry.publicRuntimeId ?? "runtime";
+  return `${timestamp}  ${target}  ${runtime}  ${entry.category}  ${entry.message}`;
 }

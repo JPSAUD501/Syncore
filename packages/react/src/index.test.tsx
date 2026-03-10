@@ -28,13 +28,13 @@ describe("@syncore/react", () => {
       </SyncoreProvider>
     );
 
-    expect(screen.getByText("empty").textContent).toBe("empty");
+    expect(screen.getByText("empty")).toBeDefined();
 
     await act(async () => {
       watch.setResult([{ title: "Offline task" }]);
     });
 
-    expect(screen.getByText("Offline task").textContent).toBe("Offline task");
+    expect(screen.getByText("Offline task")).toBeDefined();
 
     view.unmount();
 

@@ -5,7 +5,10 @@ import {
   useActiveRuntime,
   useBestConnectedRuntime,
   useConnectedRuntimes,
+  useConnectedTargets,
   useDevtoolsStore,
+  useSelectedRuntimeFilter,
+  useSelectedTarget,
   useSelectedRuntimeConnected
 } from "./store";
 import { useConnection } from "@/hooks/useConnection";
@@ -37,13 +40,8 @@ function buildRuntime(
     connected: boolean;
     platform: string;
     sessionLabel: string;
-    events: Array<{
-      type: string;
-      timestamp: number;
-      runtimeId?: string;
-      [key: string]: unknown;
-    }>;
-    summary: { recentEventCount: number };
+    events: SyncoreDevtoolsEvent[];
+    summary: SyncoreRuntimeSummary;
     activeQueries: Array<{
       id: string;
       functionName: string;
@@ -60,7 +58,9 @@ function buildRuntime(
       ? { sessionLabel: overrides.sessionLabel }
       : {}),
     connected: overrides.connected ?? true,
-    events: overrides.events ?? [],
+    events:
+      overrides.events ??
+      [],
     summary: (overrides.summary as never) ?? null,
     activeQueries: (overrides.activeQueries as never) ?? [],
     queryCount: overrides.queryCount ?? 0,
@@ -72,12 +72,27 @@ function buildRuntime(
   };
 }
 
+function buildSummary(
+  runtimeId: string,
+  recentEventCount: number
+): SyncoreRuntimeSummary {
+  return {
+    runtimeId,
+    platform: "browser",
+    connectedAt: 1,
+    activeQueryCount: 0,
+    recentEventCount
+  };
+}
+
 function resetStore() {
   useDevtoolsStore.setState((state) => ({
     ...state,
     connected: false,
     runtimes: {},
+    selectedTargetId: null,
     selectedRuntimeId: null,
+    selectedRuntimeFilter: null,
     includeDashboardActivity: false
   }));
 }
@@ -150,8 +165,18 @@ describe("devtools store runtime selection", () => {
       runtimes: {
         "runtime-old": buildRuntime("runtime-old", {
           connected: true,
-          events: [{ type: "query.executed", timestamp: 1 }],
-          summary: { recentEventCount: 5 },
+          events: [
+            {
+              type: "query.executed",
+              runtimeId: "runtime-old",
+              queryId: "query-1",
+              functionName: "tasks:list",
+              dependencies: [],
+              durationMs: 1,
+              timestamp: 1
+            }
+          ],
+          summary: buildSummary("runtime-old", 5),
           activeQueries: [
             {
               id: "query-1",
@@ -256,6 +281,85 @@ describe("devtools store runtime selection", () => {
     expect(runtime?.mutationCount).toBe(1);
   });
 
+  it("defaults to the aggregated client target when multiple sessions share a target", () => {
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-a-12345678",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-b-87654321",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+
+    const { result } = renderHook(() => ({
+      targets: useConnectedTargets(),
+      selectedTarget: useSelectedTarget(),
+      runtimeFilter: useSelectedRuntimeFilter(),
+      activeRuntime: useActiveRuntime()
+    }));
+
+    expect(result.current.targets).toHaveLength(1);
+    expect(result.current.targets[0]?.runtimeIds).toHaveLength(2);
+    expect(result.current.selectedTarget?.kind).toBe("client");
+    expect(result.current.runtimeFilter).toBe("all");
+    expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
+  });
+
+  it("falls back to all sessions when the selected runtime filter disconnects", () => {
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-a-12345678",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-b-87654321",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState().selectRuntime("runtime-b-87654321");
+
+    useDevtoolsStore.getState()._handleMessage({
+      type: "event",
+      event: {
+        type: "runtime.disconnected",
+        runtimeId: "runtime-b-87654321",
+        timestamp: 10
+      }
+    });
+
+    const { result } = renderHook(() => ({
+      selectedTarget: useSelectedTarget(),
+      runtimeFilter: useSelectedRuntimeFilter(),
+      activeRuntime: useActiveRuntime()
+    }));
+
+    expect(result.current.selectedTarget?.kind).toBe("client");
+    expect(result.current.runtimeFilter).toBe("all");
+    expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
+  });
+
   it("keeps the last runtime snapshot when a runtime disconnects", () => {
     useDevtoolsStore.setState((state) => ({
       ...state,
@@ -264,7 +368,7 @@ describe("devtools store runtime selection", () => {
       runtimes: {
         "runtime-old": buildRuntime("runtime-old", {
           connected: true,
-          summary: { recentEventCount: 5 },
+          summary: buildSummary("runtime-old", 5),
           activeQueries: [
             {
               id: "query-1",
@@ -299,7 +403,7 @@ describe("devtools store runtime selection", () => {
 
     const runtime = useDevtoolsStore.getState().runtimes["runtime-old"];
     expect(runtime?.connected).toBe(false);
-    expect(runtime?.summary).toEqual({ recentEventCount: 5 });
+    expect(runtime?.summary).toEqual(buildSummary("runtime-old", 5));
     expect(runtime?.activeQueries).toHaveLength(1);
     expect(runtime?.events[0]?.type).toBe("runtime.disconnected");
     expect(runtime?.events[1]?.type).toBe("mutation.committed");

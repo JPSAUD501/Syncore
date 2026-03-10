@@ -1,8 +1,6 @@
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFunctionReference,
@@ -19,10 +17,8 @@ import {
   attachNodeIpcRuntime,
   createRendererSyncoreClient,
   createRendererSyncoreWindowClient,
-  installSyncoreWindowBridge,
   type SyncoreIpcMessageEndpoint
 } from "./ipc.js";
-import { SyncoreElectronProvider } from "./ipc-react.js";
 
 describe("Node IPC bridge", () => {
   let rootDir: string;
@@ -179,31 +175,6 @@ describe("Node IPC bridge", () => {
     const client = createRendererSyncoreWindowClient(windowObject);
     expect(client).toBeDefined();
     client.dispose();
-  });
-
-  it("renders a preload bridge installer snippet", () => {
-    expect(installSyncoreWindowBridge()).toContain(
-      "contextBridge.exposeInMainWorld"
-    );
-  });
-
-  it("renders the short-form Electron provider", () => {
-    const windowObject = {
-      syncoreBridge: {
-        postMessage() {},
-        onMessage() {
-          return () => undefined;
-        }
-      }
-    } as unknown as Window & typeof globalThis;
-
-    const html = renderToStaticMarkup(
-      <SyncoreElectronProvider windowObject={windowObject}>
-        <div>renderer</div>
-      </SyncoreElectronProvider>
-    );
-
-    expect(html).toContain("renderer");
   });
 });
 

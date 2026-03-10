@@ -1,23 +1,33 @@
 #!/usr/bin/env node
 
-import { appendFile, readdir, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { appendFile, readdir, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { connect as connectToNet } from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { Command } from "commander";
 import { tsImport } from "tsx/esm/api";
 import WebSocket, { WebSocketServer } from "ws";
 import type {
   SyncoreDevtoolsClientMessage,
+  SyncoreDevtoolsCommandPayload,
+  SyncoreDevtoolsCommandResultPayload,
   SyncoreDevtoolsMessage,
+  SyncoreDevtoolsSubscriptionPayload,
+  SyncoreDevtoolsSubscriptionResultPayload,
   SyncoreDevtoolsSubscribe,
   SyncoreDevtoolsUnsubscribe
 } from "@syncore/devtools-protocol";
 import {
+  createDevtoolsCommandHandler,
+  createDevtoolsSubscriptionHost,
   generateId,
+  SyncoreRuntime,
   type AnyTableDefinition,
+  type DevtoolsSqlAnalysis,
+  type DevtoolsSqlReadResult,
+  type DevtoolsSqlSupport,
   createSchemaSnapshot,
   diffSchemaSnapshots,
   parseSchemaSnapshot,
@@ -27,8 +37,12 @@ import {
   renderMigrationSql,
   searchIndexTableName,
   type SchemaSnapshot,
+  type StorageObject,
+  type StorageWriteInput,
   type SyncoreSchema,
   type SyncoreFunctionRegistry,
+  type SyncoreSqlDriver,
+  type SyncoreStorageAdapter,
   type TableDefinition,
   type Validator
 } from "./index.js";
@@ -95,6 +109,7 @@ export const VALID_SYNCORE_TEMPLATES: SyncoreTemplateName[] = [
 ];
 let pendingDevBootstrap: ReturnType<typeof setTimeout> | undefined;
 let devBootstrapInFlight = false;
+const PROJECT_TARGET_RUNTIME_ID = "syncore-project-target";
 
 program
   .name("syncorejs")
@@ -1543,6 +1558,332 @@ export async function loadProjectFunctions(
   return functions;
 }
 
+interface ProjectTargetBackend {
+  hello: Extract<SyncoreDevtoolsMessage, { type: "hello" }>;
+  handleCommand(
+    payload: SyncoreDevtoolsCommandPayload
+  ): Promise<SyncoreDevtoolsCommandResultPayload>;
+  subscribe(
+    subscriptionId: string,
+    payload: SyncoreDevtoolsSubscriptionPayload,
+    listener: (
+      payload: SyncoreDevtoolsSubscriptionResultPayload
+    ) => void
+  ): Promise<void>;
+  unsubscribe(subscriptionId: string): void;
+  dispose(): Promise<void>;
+}
+
+class HubSqliteDriver implements SyncoreSqlDriver {
+  private readonly database: DatabaseSync;
+  private transactionDepth = 0;
+
+  constructor(filename: string) {
+    this.database = new DatabaseSync(filename);
+    this.database.exec("PRAGMA foreign_keys = ON;");
+    this.database.exec("PRAGMA journal_mode = WAL;");
+  }
+
+  async exec(sql: string): Promise<void> {
+    this.database.exec(sql);
+  }
+
+  async run(
+    sql: string,
+    params: unknown[] = []
+  ): Promise<{ changes: number; lastInsertRowid?: number | string }> {
+    const result = this.database.prepare(sql).run(...toSqlParameters(params));
+    return {
+      changes: Number(result.changes ?? 0),
+      lastInsertRowid:
+        typeof result.lastInsertRowid === "bigint"
+          ? Number(result.lastInsertRowid)
+          : result.lastInsertRowid
+    };
+  }
+
+  async get<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
+    return this.database.prepare(sql).get(...toSqlParameters(params)) as
+      | T
+      | undefined;
+  }
+
+  async all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
+    return this.database.prepare(sql).all(...toSqlParameters(params)) as T[];
+  }
+
+  async withTransaction<T>(callback: () => Promise<T>): Promise<T> {
+    if (this.transactionDepth > 0) {
+      return this.withSavepoint(`nested_${this.transactionDepth}`, callback);
+    }
+    this.transactionDepth += 1;
+    this.database.exec("BEGIN");
+    try {
+      const result = await callback();
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    } finally {
+      this.transactionDepth -= 1;
+    }
+  }
+
+  async withSavepoint<T>(name: string, callback: () => Promise<T>): Promise<T> {
+    const safeName = name.replaceAll(/[^a-zA-Z0-9_]/g, "_");
+    this.database.exec(`SAVEPOINT ${safeName}`);
+    try {
+      const result = await callback();
+      this.database.exec(`RELEASE SAVEPOINT ${safeName}`);
+      return result;
+    } catch (error) {
+      this.database.exec(`ROLLBACK TO SAVEPOINT ${safeName}`);
+      this.database.exec(`RELEASE SAVEPOINT ${safeName}`);
+      throw error;
+    }
+  }
+
+  async close(): Promise<void> {
+    this.database.close();
+  }
+}
+
+class HubFileStorageAdapter implements SyncoreStorageAdapter {
+  constructor(private readonly directory: string) {}
+
+  private filePath(id: string): string {
+    return path.join(this.directory, id);
+  }
+
+  async put(id: string, input: StorageWriteInput): Promise<StorageObject> {
+    await mkdir(this.directory, { recursive: true });
+    const filePath = this.filePath(id);
+    const bytes = normalizeStorageInput(input.data);
+    await writeFile(filePath, bytes);
+    return {
+      id,
+      path: filePath,
+      size: bytes.byteLength,
+      contentType: input.contentType ?? null
+    };
+  }
+
+  async get(id: string): Promise<StorageObject | null> {
+    const filePath = this.filePath(id);
+    try {
+      const info = await stat(filePath);
+      return {
+        id,
+        path: filePath,
+        size: info.size,
+        contentType: null
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async read(id: string): Promise<Uint8Array | null> {
+    try {
+      return await readFile(this.filePath(id));
+    } catch {
+      return null;
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    await rm(this.filePath(id), { force: true });
+  }
+
+  async list(): Promise<StorageObject[]> {
+    try {
+      const entries = await readdir(this.directory, { withFileTypes: true });
+      return Promise.all(
+        entries
+          .filter((entry) => entry.isFile())
+          .map(async (entry) => {
+            const filePath = this.filePath(entry.name);
+            const info = await stat(filePath);
+            return {
+              id: entry.name,
+              path: filePath,
+              size: info.size,
+              contentType: null
+            } satisfies StorageObject;
+          })
+      );
+    } catch {
+      return [];
+    }
+  }
+}
+
+const hubDevtoolsSqlSupport: DevtoolsSqlSupport = {
+  analyzeSqlStatement(query: string): DevtoolsSqlAnalysis {
+    const normalized = query.trim().replace(/^\(+/, "").toUpperCase();
+    const firstKeyword = normalized.split(/\s+/, 1)[0] ?? "";
+    if (
+      firstKeyword === "SELECT" ||
+      firstKeyword === "WITH" ||
+      firstKeyword === "PRAGMA" ||
+      firstKeyword === "EXPLAIN"
+    ) {
+      return {
+        mode: "read",
+        readTables: [],
+        writeTables: [],
+        schemaChanged: false,
+        observedScopes: ["all"]
+      };
+    }
+    if (
+      firstKeyword === "INSERT" ||
+      firstKeyword === "UPDATE" ||
+      firstKeyword === "DELETE" ||
+      firstKeyword === "REPLACE"
+    ) {
+      return {
+        mode: "write",
+        readTables: [],
+        writeTables: [],
+        schemaChanged: false,
+        observedScopes: ["all"]
+      };
+    }
+    if (
+      firstKeyword === "CREATE" ||
+      firstKeyword === "DROP" ||
+      firstKeyword === "ALTER"
+    ) {
+      return {
+        mode: "ddl",
+        readTables: [],
+        writeTables: [],
+        schemaChanged: true,
+        observedScopes: ["all", "schema.tables"]
+      };
+    }
+    throw new Error(`Unsupported SQL statement type: ${firstKeyword || "unknown"}`);
+  },
+  ensureSqlMode(analysis, expected): void {
+    if (expected === "watch") {
+      if (analysis.mode !== "read") {
+        throw new Error("Live mode supports read-only SQL only.");
+      }
+      return;
+    }
+    if (analysis.mode !== expected) {
+      if (expected === "read") {
+        throw new Error("Use SQL Write for mutating statements.");
+      }
+      throw new Error("Use SQL Read or SQL Live for read-only statements.");
+    }
+  },
+  runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult {
+    const analysis = this.analyzeSqlStatement(query);
+    this.ensureSqlMode(analysis, "read");
+    const database = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const statement = database.prepare(query);
+      const rows = statement.all() as Array<Record<string, unknown>>;
+      const columns = statement.columns().map((column) => column.name);
+      return {
+        columns,
+        rows: rows.map((row) => columns.map((column) => row[column])),
+        observedTables: []
+      };
+    } finally {
+      database.close();
+    }
+  }
+};
+
+async function createProjectTargetBackend(
+  cwd: string
+): Promise<ProjectTargetBackend | null> {
+  const config = await loadProjectConfig(cwd);
+  const projectTarget = resolveProjectTargetConfig(config);
+  if (!projectTarget) {
+    return null;
+  }
+
+  const schema = await loadProjectSchema(cwd);
+  const functions = await loadProjectFunctions(cwd);
+  const databasePath = path.resolve(cwd, projectTarget.databasePath);
+  const storageDirectory = path.resolve(cwd, projectTarget.storageDirectory);
+  await mkdir(path.dirname(databasePath), { recursive: true });
+  await mkdir(storageDirectory, { recursive: true });
+
+  const driver = new HubSqliteDriver(databasePath);
+  const runtime = new SyncoreRuntime({
+    schema,
+    functions,
+    driver,
+    storage: new HubFileStorageAdapter(storageDirectory),
+    platform: "project"
+  });
+  await runtime.prepareForDirectAccess();
+
+  const commandHandler = createDevtoolsCommandHandler({
+    driver,
+    schema,
+    functions,
+    runtime,
+    sql: hubDevtoolsSqlSupport
+  });
+  const subscriptionHost = createDevtoolsSubscriptionHost({
+    driver,
+    schema,
+    functions,
+    runtime,
+    sql: hubDevtoolsSqlSupport
+  });
+
+  return {
+    hello: {
+      type: "hello",
+      runtimeId: PROJECT_TARGET_RUNTIME_ID,
+      platform: "project",
+      sessionLabel: "Project Target",
+      targetKind: "project",
+      storageProtocol: "file",
+      databaseLabel: path.basename(databasePath),
+      storageIdentity: `file::${databasePath}`
+    },
+    handleCommand: commandHandler,
+    subscribe(subscriptionId, payload, listener) {
+      return subscriptionHost.subscribe(subscriptionId, payload, listener);
+    },
+    unsubscribe(subscriptionId) {
+      subscriptionHost.unsubscribe(subscriptionId);
+    },
+    async dispose() {
+      subscriptionHost.dispose();
+      await runtime.stop();
+    }
+  };
+}
+
+function normalizeStorageInput(input: StorageWriteInput["data"]): Uint8Array {
+  if (typeof input === "string") {
+    return Buffer.from(input);
+  }
+  if (input instanceof Uint8Array) {
+    return input;
+  }
+  return new Uint8Array(input);
+}
+
+function toSqlParameters(params: unknown[]): SQLInputValue[] {
+  return params.map((value) => {
+    if (value instanceof Uint8Array) {
+      return Buffer.from(value);
+    }
+    return value as SQLInputValue;
+  });
+}
+
 export async function readStoredSnapshot(
   cwd: string
 ): Promise<SchemaSnapshot | null> {
@@ -1717,10 +2058,38 @@ export async function fileExists(filePath: string): Promise<boolean> {
 async function resolveFunctionImportExtension(
   cwd: string
 ): Promise<"" | ".js"> {
-  void cwd;
-  // Source-generated files are consumed directly by app bundlers before any
+  const tsconfigFiles = (await readdir(cwd, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && /^tsconfig(\..+)?\.json$/u.test(entry.name))
+    .map((entry) => path.join(cwd, entry.name))
+    .sort();
+
+  for (const configPath of tsconfigFiles) {
+    try {
+      const source = await readFile(configPath, "utf8");
+      const parsed = JSON.parse(source) as {
+        compilerOptions?: {
+          module?: string;
+          moduleResolution?: string;
+        };
+      };
+      const moduleResolution = parsed.compilerOptions?.moduleResolution?.toLowerCase();
+      const moduleKind = parsed.compilerOptions?.module?.toLowerCase();
+      if (
+        moduleResolution === "nodenext" ||
+        moduleResolution === "node16" ||
+        moduleKind === "nodenext" ||
+        moduleKind === "node16"
+      ) {
+        return ".js";
+      }
+    } catch {
+      // Ignore unreadable tsconfig variants and fall back to extensionless imports.
+    }
+  }
+
+  // Source-generated files are usually consumed directly by app bundlers before any
   // local transpilation step. Extensionless specifiers keep Next/Webpack and
-  // tsx aligned with the same source tree.
+  // tsx aligned with the same source tree unless the app opts into NodeNext rules.
   return "";
 }
 
@@ -1797,6 +2166,15 @@ export async function startDevHub(options: {
     return;
   }
 
+  let projectTargetBackend: ProjectTargetBackend | null = null;
+  try {
+    projectTargetBackend = await createProjectTargetBackend(options.cwd);
+  } catch (error) {
+    console.warn(
+      `Project target fallback unavailable: ${formatError(error)}`
+    );
+  }
+
   const httpServer = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ ok: true, wsPort: devtoolsPort }));
@@ -1822,6 +2200,10 @@ export async function startDevHub(options: {
     runtimeId: "syncore-dev-hub",
     platform: "dev"
   };
+  if (projectTargetBackend) {
+    runtimeHellos.set(PROJECT_TARGET_RUNTIME_ID, projectTargetBackend.hello);
+    runtimeEvents.set(PROJECT_TARGET_RUNTIME_ID, []);
+  }
   const appendHubLog = async (
     event: Extract<SyncoreDevtoolsMessage, { type: "event" }>["event"]
   ) => {
@@ -1834,6 +2216,8 @@ export async function startDevHub(options: {
     const targetId =
       event.runtimeId === "syncore-dev-hub"
         ? "all"
+        : runtimeHello?.targetKind === "project"
+          ? `project:${stableRuntimeTargetId(targetIdentity)}`
         : `client:${stableRuntimeTargetId(targetIdentity)}`;
     const category =
       event.type === "query.executed"
@@ -1907,6 +2291,28 @@ export async function startDevHub(options: {
         if (!targetRuntimeId) {
           return;
         }
+        if (
+          targetRuntimeId === PROJECT_TARGET_RUNTIME_ID &&
+          projectTargetBackend
+        ) {
+          void (async () => {
+            const payload = await projectTargetBackend.handleCommand(
+              message.payload
+            );
+            if (socket.readyState !== WebSocket.OPEN) {
+              return;
+            }
+            socket.send(
+              JSON.stringify({
+                type: "command.result",
+                commandId: message.commandId,
+                runtimeId: PROJECT_TARGET_RUNTIME_ID,
+                payload
+              } satisfies SyncoreDevtoolsMessage)
+            );
+          })();
+          return;
+        }
         const target = runtimeSockets.get(targetRuntimeId);
         if (target && target.readyState === WebSocket.OPEN) {
           target.send(JSON.stringify(message));
@@ -1926,6 +2332,39 @@ export async function startDevHub(options: {
           payload: message
         });
         dashboardSubscriptions.set(socket, subscriptions);
+        if (
+          targetRuntimeId === PROJECT_TARGET_RUNTIME_ID &&
+          projectTargetBackend
+        ) {
+          void projectTargetBackend
+            .subscribe(message.subscriptionId, message.payload, (payload) => {
+              if (socket.readyState !== WebSocket.OPEN) {
+                return;
+              }
+              socket.send(
+                JSON.stringify({
+                  type: "subscription.data",
+                  subscriptionId: message.subscriptionId,
+                  runtimeId: PROJECT_TARGET_RUNTIME_ID,
+                  payload
+                } satisfies SyncoreDevtoolsMessage)
+              );
+            })
+            .catch((error) => {
+              if (socket.readyState !== WebSocket.OPEN) {
+                return;
+              }
+              socket.send(
+                JSON.stringify({
+                  type: "subscription.error",
+                  subscriptionId: message.subscriptionId,
+                  runtimeId: PROJECT_TARGET_RUNTIME_ID,
+                  error: formatError(error)
+                } satisfies SyncoreDevtoolsMessage)
+              );
+            });
+          return;
+        }
         const target = runtimeSockets.get(targetRuntimeId);
         if (target && target.readyState === WebSocket.OPEN) {
           target.send(JSON.stringify(message));
@@ -1936,6 +2375,17 @@ export async function startDevHub(options: {
         const subscriptions = dashboardSubscriptions.get(socket);
         const subscription = subscriptions?.get(message.subscriptionId);
         if (!subscription) {
+          return;
+        }
+        if (
+          subscription.runtimeId === PROJECT_TARGET_RUNTIME_ID &&
+          projectTargetBackend
+        ) {
+          projectTargetBackend.unsubscribe(message.subscriptionId);
+          subscriptions?.delete(message.subscriptionId);
+          if (subscriptions && subscriptions.size === 0) {
+            dashboardSubscriptions.delete(socket);
+          }
           return;
         }
         const target = runtimeSockets.get(subscription.runtimeId);
@@ -2022,6 +2472,13 @@ export async function startDevHub(options: {
       const subscriptions = dashboardSubscriptions.get(socket);
       if (subscriptions) {
         for (const [subscriptionId, subscription] of subscriptions) {
+          if (
+            subscription.runtimeId === PROJECT_TARGET_RUNTIME_ID &&
+            projectTargetBackend
+          ) {
+            projectTargetBackend.unsubscribe(subscriptionId);
+            continue;
+          }
           const target = runtimeSockets.get(subscription.runtimeId);
           if (target && target.readyState === WebSocket.OPEN) {
             const message: SyncoreDevtoolsUnsubscribe = {
@@ -2065,24 +2522,6 @@ export async function startDevHub(options: {
       socketRuntimeIds.delete(socket);
     });
   });
-
-  const heartbeat = setInterval(() => {
-    const event: SyncoreDevtoolsMessage = {
-      type: "event",
-      event: {
-        type: "log",
-        runtimeId: "syncore-dev-hub",
-        level: "info",
-        message: "Syncore devtools hub is alive.",
-        timestamp: Date.now()
-      }
-    };
-    const payload = JSON.stringify(event);
-    void appendHubLog(event.event);
-    for (const client of websocketServer.clients) {
-      client.send(payload);
-    }
-  }, 4000);
 
   httpServer.on("error", (error) => {
     console.error(`Syncore devtools hub failed: ${formatError(error)}`);
@@ -2130,7 +2569,7 @@ export async function startDevHub(options: {
   });
 
   const close = () => {
-    clearInterval(heartbeat);
+    void projectTargetBackend?.dispose();
     websocketServer.close();
     httpServer.close();
     process.exit(0);

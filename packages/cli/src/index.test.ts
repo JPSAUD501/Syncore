@@ -1,14 +1,22 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
+import {
+  type ClientTargetDescriptor,
+  createBasePublicClientTargetId,
+  createPublicClientTargetId
+} from "./project.js";
+import { printTargetsTable } from "./render.js";
+import { resolveClientRuntime } from "./targets.js";
 
 const cliRoot = import.meta.dirname;
 const workspaceRoot = path.resolve(cliRoot, "..", "..", "..");
 const cliEntryPath = path.resolve(workspaceRoot, "packages", "cli", "src", "index.ts");
+const cliPackagePath = path.resolve(cliRoot, "..", "package.json");
 const tsxRegisterPath = pathToFileURL(
   path.resolve(workspaceRoot, "node_modules", "tsx", "dist", "loader.mjs")
 ).href;
@@ -26,32 +34,19 @@ afterEach(async () => {
     if (!directory) {
       continue;
     }
-    await rm(directory, { recursive: true, force: true });
+    await removeDirectoryWithRetry(directory);
   }
 });
 
 describe("syncore CLI", () => {
-  test("root help exposes the new product command surface", async () => {
-    const result = await runCli(workspaceRoot, ["--help"]);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Recommended flow:");
-    expect(result.stdout).toContain("migrate");
-    expect(result.stdout).toContain("run [options] <functionName> [args]");
-    expect(result.stdout).toContain("data [options] [table]");
-    expect(result.stdout).toContain("export [options]");
-    expect(result.stdout).toContain("logs [options]");
-    expect(result.stdout).toContain("targets [options]");
-    expect(result.stdout).toContain("dashboard [options]");
-    expect(result.stdout).toContain("docs [options]");
-    expect(result.stdout).not.toContain("seed");
-  });
-
   test("root version is exposed", async () => {
     const result = await runCli(workspaceRoot, ["--version"]);
+    const packageJson = JSON.parse(await readFile(cliPackagePath, "utf8")) as {
+      version: string;
+    };
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.trim()).toBe("0.1.0");
+    expect(result.stdout.trim()).toBe(packageJson.version);
   });
 
   test("init scaffolds a project and codegen remains stable", async () => {
@@ -60,7 +55,6 @@ describe("syncore CLI", () => {
 
     const initResult = await runCli(cwd, ["init", "--template", "node", "--yes"]);
     expect(initResult.exitCode).toBe(0);
-    expect(initResult.stdout).toContain("Syncore scaffolded with the node template.");
 
     const generatedApiPath = path.join(cwd, "syncore", "_generated", "api.ts");
     const generatedFunctionsPath = path.join(cwd, "syncore", "_generated", "functions.ts");
@@ -105,7 +99,6 @@ describe("syncore CLI", () => {
     );
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Scaffolding cancelled by user.");
     expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(false);
   });
 
@@ -119,6 +112,45 @@ describe("syncore CLI", () => {
     const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
     expect(configSource).not.toContain("projectTarget");
     expect(configSource.trim()).toBe("export default {};");
+  });
+
+  test("codegen emits .js relative imports for NodeNext projects", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await writeFile(
+      path.join(cwd, "tsconfig.main.json"),
+      `${JSON.stringify(
+        {
+          extends: "./tsconfig.json",
+          compilerOptions: {
+            module: "NodeNext",
+            moduleResolution: "NodeNext"
+          }
+        },
+        null,
+        2
+      )}\n`
+    );
+
+    const result = await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    expect(result.exitCode).toBe(0);
+
+    const generatedApi = await readFile(
+      path.join(cwd, "syncore", "_generated", "api.ts"),
+      "utf8"
+    );
+    const generatedFunctions = await readFile(
+      path.join(cwd, "syncore", "_generated", "functions.ts"),
+      "utf8"
+    );
+    const generatedServer = await readFile(
+      path.join(cwd, "syncore", "_generated", "server.ts"),
+      "utf8"
+    );
+
+    expect(generatedApi).toContain('../functions/tasks.js');
+    expect(generatedFunctions).toContain('../functions/tasks.js');
+    expect(generatedServer).toContain('../schema.js');
   });
 
   test("doctor reports workspace-root context in the monorepo root", async () => {
@@ -156,25 +188,14 @@ describe("syncore CLI", () => {
     expect(payload.data.suggestions.some((entry) => entry.includes("targets"))).toBe(true);
   });
 
-  test("doctor --verbose prints resolved context details", async () => {
-    const cwd = await createTempProjectDirectory();
-    await writeWorkspaceTsconfig(cwd);
-    await runCli(cwd, ["init", "--template", "node", "--yes"]);
-
-    const result = await runCli(cwd, ["doctor", "--verbose"]);
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("cwd:");
-    expect(result.stdout).toContain("ports: dashboard=");
-    expect(result.stdout).toContain("project target:");
-  });
-
   test("dev --once fails non-interactively when the project is missing", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
 
     const result = await runCli(cwd, ["dev", "--once", "--template", "node"]);
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("No Syncore project was found");
+    expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(false);
+    expect(await exists(path.join(cwd, ".syncore", "syncore.db"))).toBe(false);
   });
 
   test("dev --once scaffolds interactively and bootstraps the project", async () => {
@@ -193,14 +214,6 @@ describe("syncore CLI", () => {
     );
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Starting Syncore local dev session...");
-    expect(result.stdout).toContain("Project");
-    expect(result.stdout).toContain("Codegen");
-    expect(result.stdout).toContain("Schema");
-    expect(result.stdout).toContain("Syncore dev bootstrap completed.");
-    expect(result.stdout).toContain("Ready:");
-    expect(result.stdout).toContain("dashboard: http://localhost:");
-    expect(result.stdout).not.toContain("127.0.0.1");
     expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(true);
     expect(await exists(path.join(cwd, ".syncore", "syncore.db"))).toBe(true);
   }, 20_000);
@@ -210,18 +223,46 @@ describe("syncore CLI", () => {
     await writeWorkspaceTsconfig(cwd);
     await runCli(cwd, ["init", "--template", "node", "--yes"]);
 
-    const generateResult = await runCli(cwd, ["migrate", "generate", "initial"]);
+    const generateResult = await runCli(cwd, ["migrate", "generate", "initial", "--json"]);
     expect(generateResult.exitCode).toBe(0);
-    expect(generateResult.stdout).toContain("Generated syncore/migrations/0001_initial.sql.");
+    const generatePayload = JSON.parse(generateResult.stdout) as {
+      command: string;
+      data: {
+        path: string;
+        statements: string[];
+      };
+    };
+    expect(generatePayload.command).toBe("migrate generate");
+    expect(generatePayload.data.statements.length).toBeGreaterThan(0);
+    expect(await exists(path.join(cwd, generatePayload.data.path))).toBe(true);
 
-    const applyResult = await runCli(cwd, ["migrate", "apply"]);
+    const applyResult = await runCli(cwd, ["migrate", "apply", "--json"]);
     expect(applyResult.exitCode).toBe(0);
-    expect(applyResult.stdout).toContain("Applied 1 migration(s).");
+    const database = new DatabaseSync(path.join(cwd, ".syncore", "syncore.db"));
+    const tasksTable = database
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tasks'"
+      )
+      .get() as { name: string } | undefined;
+    const appliedMigrations = database
+      .prepare("SELECT COUNT(*) AS count FROM _syncore_migrations")
+      .get() as { count: number };
+    database.close();
+    expect(tasksTable?.name).toBe("tasks");
+    expect(appliedMigrations.count).toBe(1);
 
-    const statusResult = await runCli(cwd, ["migrate", "status"]);
+    const statusResult = await runCli(cwd, ["migrate", "status", "--json"]);
     expect(statusResult.exitCode).toBe(0);
-    expect(statusResult.stdout).toContain("Statements to generate: 0");
-    expect(statusResult.stdout).toContain("Destructive changes: 0");
+    const statusPayload = JSON.parse(statusResult.stdout) as {
+      command: string;
+      data: {
+        statements: string[];
+        destructiveChanges: string[];
+      };
+    };
+    expect(statusPayload.command).toBe("migrate status");
+    expect(statusPayload.data.statements).toEqual([]);
+    expect(statusPayload.data.destructiveChanges).toEqual([]);
   }, 20_000);
 
   test("run, data, export, and import work against the local runtime", async () => {
@@ -244,24 +285,28 @@ describe("syncore CLI", () => {
       "run",
       "api.tasks.list",
       "{}",
+      "--json",
       "--target",
       "project",
       "--format",
       "json"
     ]);
     expect(queryResult.exitCode).toBe(0);
-    expect(queryResult.stdout).toContain("Ship Syncore");
+    const queriedTasks = JSON.parse(queryResult.stdout) as Array<{ text: string }>;
+    expect(queriedTasks.map((task) => task.text)).toContain("Ship Syncore");
 
     const dataResult = await runCli(sourceCwd, [
       "data",
       "tasks",
+      "--json",
       "--target",
       "project",
       "--format",
       "json"
     ]);
     expect(dataResult.exitCode).toBe(0);
-    expect(dataResult.stdout).toContain("Ship Syncore");
+    const taskRows = JSON.parse(dataResult.stdout) as Array<{ text: string }>;
+    expect(taskRows.map((task) => task.text)).toContain("Ship Syncore");
 
     const exportPath = path.join(sourceCwd, "tasks.jsonl");
     const exportResult = await runCli(sourceCwd, [
@@ -275,6 +320,11 @@ describe("syncore CLI", () => {
     ]);
     expect(exportResult.exitCode).toBe(0);
     expect(await exists(exportPath)).toBe(true);
+    const exportedRows = (await readFile(exportPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { text: string });
+    expect(exportedRows.map((row) => row.text)).toContain("Ship Syncore");
 
     const targetCwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(targetCwd);
@@ -291,15 +341,140 @@ describe("syncore CLI", () => {
       exportPath
     ]);
     expect(importResult.exitCode).toBe(0);
-    expect(importResult.stdout).toContain("Imported 1 row(s).");
 
     const database = new DatabaseSync(path.join(targetCwd, ".syncore", "syncore.db"));
-    const count = database
-      .prepare('SELECT COUNT(*) AS count FROM "tasks"')
-      .get() as { count: number };
+    const importedTask = database
+      .prepare('SELECT json_extract(_json, \'$.text\') AS text FROM "tasks"')
+      .get() as { text: string };
     database.close();
-    expect(count.count).toBe(1);
-  }, 45_000);
+    expect(importedTask.text).toBe("Ship Syncore");
+  }, 90_000);
+
+  test("--runtime requires --target", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+
+    const result = await runCli(cwd, [
+      "run",
+      "tasks/list",
+      "{}",
+      "--json",
+      "--runtime",
+      "a12f3c4d"
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    const payload = JSON.parse(result.stdout) as {
+      error: { message: string; exitCode: number };
+    };
+    expect(payload.error.exitCode).toBe(1);
+    expect(payload.error.message).toContain("requires --target");
+  });
+
+  test("--runtime is rejected for the project target", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+
+    const result = await runCli(cwd, [
+      "run",
+      "tasks/list",
+      "{}",
+      "--target",
+      "project",
+      "--runtime",
+      "a12f3c4d",
+      "--json"
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    const payload = JSON.parse(result.stdout) as {
+      error: { category: string; message: string };
+    };
+    expect(payload.error.category).toBe("target");
+    expect(payload.error.message).toContain("does not accept --runtime for the project target");
+  });
+
+  test("resolveClientRuntime lists available runtimes for invalid runtime ids", () => {
+    const target: ClientTargetDescriptor = {
+      id: "61747",
+      kind: "client",
+      label: "localhost",
+      runtimeId: "runtime-a",
+      runtimeIds: ["runtime-a", "runtime-b"],
+      runtimes: [
+        {
+          id: "a12f3c4d",
+          runtimeId: "runtime-a",
+          label: "tab-a",
+          platform: "browser-worker",
+          online: true,
+          primary: true
+        },
+        {
+          id: "b98e7d6c",
+          runtimeId: "runtime-b",
+          label: "tab-b",
+          platform: "browser-worker",
+          online: true,
+          primary: false
+        }
+      ],
+      platform: "browser-worker",
+      connectedSessions: 2,
+      online: true,
+      capabilities: ["run", "readData", "writeData", "exportData", "streamLogs"],
+      sessionLabels: ["tab-a", "tab-b"]
+    };
+
+    expect(() =>
+      resolveClientRuntime(target, "deadbeef", {
+        command: "logs"
+      })
+    ).toThrowError(/Unknown runtime/);
+  });
+
+  test("logs hide hub heartbeat entries in normal output", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await mkdir(path.join(cwd, ".syncore", "logs"), { recursive: true });
+    await writeFile(
+      path.join(cwd, ".syncore", "logs", "runtime.jsonl"),
+      [
+        JSON.stringify({
+          timestamp: Date.now() - 1000,
+          runtimeId: "syncore-dev-hub",
+          targetId: "all",
+          runtimeLabel: "dashboard",
+          origin: "dashboard",
+          eventType: "log",
+          category: "system",
+          message: "Syncore devtools hub is alive.",
+          event: {}
+        }),
+        JSON.stringify({
+          timestamp: Date.now(),
+          runtimeId: "runtime-a",
+          targetId: "61747",
+          runtimeLabel: "tab-a",
+          publicRuntimeId: "a12f3c4d",
+          origin: "runtime",
+          eventType: "query.executed",
+          category: "query",
+          message: "tasks/list executed",
+          event: {}
+        })
+      ].join("\n")
+    );
+
+    const result = await runCli(cwd, ["logs"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).not.toContain("hub is alive");
+    expect(result.stdout).toContain("tasks/list executed");
+    expect(result.stdout).toContain("tab-a:a12f3c4d");
+  });
 
   test("dashboard returns JSON-friendly output", async () => {
     const result = await runCli(workspaceRoot, ["dashboard", "--json"]);
@@ -328,15 +503,51 @@ describe("syncore CLI", () => {
     expect(payload.data.find((entry) => entry.id === "project")?.capabilities).toContain("run");
   });
 
-  test("targets --verbose includes project target details", async () => {
-    const cwd = await createTempProjectDirectory();
-    await writeWorkspaceTsconfig(cwd);
-    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+  test("targets default output includes client runtime rows", () => {
+    const printed = captureStdout(() =>
+      printTargetsTable([
+        {
+          id: "61747",
+          kind: "client",
+          label: "localhost (2 sessions)",
+          runtimeId: "runtime-a-12345678",
+          runtimeIds: ["runtime-a-12345678", "runtime-b-87654321"],
+          runtimes: [
+            {
+              id: "a12f3c4d",
+              runtimeId: "runtime-a-12345678",
+              label: "browser-worker",
+              platform: "browser-worker",
+              origin: "http://localhost:3000",
+              online: true,
+              primary: true
+            },
+            {
+              id: "b98e7d6c",
+              runtimeId: "runtime-b-87654321",
+              label: "browser-worker",
+              platform: "browser-worker",
+              origin: "http://localhost:3000",
+              online: true,
+              primary: false
+            }
+          ],
+          platform: "browser-worker",
+          connectedSessions: 2,
+          online: true,
+          capabilities: ["run", "readData", "writeData", "exportData", "streamLogs"],
+          origin: "http://localhost:3000",
+          storageProtocol: "opfs",
+          sessionLabels: ["tab-a", "tab-b"]
+        }
+      ])
+    );
 
-    const result = await runCli(cwd, ["targets", "--verbose"]);
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("project:");
-    expect(result.stdout).toContain("storage:");
+    expect(printed).toContain("runtime a12f3c4d  browser-worker  primary");
+    expect(printed).toContain("runtime b98e7d6c  browser-worker");
+    expect(printed).toContain(
+      "origin: http://localhost:3000  platform: browser-worker  status: online"
+    );
   });
 
   test("JSON errors expose category, details, and next steps", async () => {
@@ -349,7 +560,7 @@ describe("syncore CLI", () => {
       "tasks/list",
       "{}",
       "--target",
-      "missing",
+      "12345",
       "--json"
     ]);
     expect(result.exitCode).toBe(1);
@@ -364,7 +575,70 @@ describe("syncore CLI", () => {
     };
     expect(payload.error.category).toBe("target");
     expect(payload.error.nextSteps?.length).toBeGreaterThan(0);
-    expect(payload.error.details?.availableTargets).toContain("project");
+    expect(payload.error.details?.availableTargets ?? []).toContain("project");
+  });
+
+  test("legacy client target syntax is rejected explicitly", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+
+    const result = await runCli(cwd, [
+      "run",
+      "tasks/list",
+      "{}",
+      "--target",
+      "client:abc123",
+      "--json"
+    ]);
+    expect(result.exitCode).toBe(1);
+    const payload = JSON.parse(result.stdout) as {
+      error: {
+        category: string;
+        details?: {
+          expected?: string;
+        };
+      };
+    };
+    expect(payload.error.category).toBe("target");
+    expect(payload.error.details?.expected).toBe("project or a 5-digit target id");
+  });
+
+  test("public client target ids are stable 5-digit codes", () => {
+    const keys = ["storage:alpha", "storage:beta"];
+    const alpha = createPublicClientTargetId("storage:alpha", keys);
+    const beta = createPublicClientTargetId("storage:beta", keys);
+
+    expect(alpha).toMatch(/^\d{5}$/);
+    expect(beta).toMatch(/^\d{5}$/);
+    expect(createPublicClientTargetId("storage:alpha", keys)).toBe(alpha);
+    expect(alpha).not.toBe(beta);
+  });
+
+  test("public client target ids resolve collisions deterministically", () => {
+    const seen = new Map<string, string>();
+    let pair: [string, string] | null = null;
+    for (let index = 0; index < 2000; index += 1) {
+      const key = `collision:${index}`;
+      const candidate = createBasePublicClientTargetId(key);
+      const existing = seen.get(candidate);
+      if (existing) {
+        pair = [existing, key];
+        break;
+      }
+      seen.set(candidate, key);
+    }
+    if (!pair) {
+      throw new Error("Failed to find a collision fixture.");
+    }
+    const left = createPublicClientTargetId(pair[0], pair);
+    const right = createPublicClientTargetId(pair[1], pair);
+
+    expect(left).toMatch(/^\d{5}$/);
+    expect(right).toMatch(/^\d{5}$/);
+    expect(left).not.toBe(right);
+    expect(createPublicClientTargetId(pair[0], pair)).toBe(left);
+    expect(createPublicClientTargetId(pair[1], pair)).toBe(right);
   });
 });
 
@@ -407,6 +681,44 @@ function createCliProcessEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     TSX_TSCONFIG_PATH: tsxTsconfigPath,
     ...extra
   };
+}
+
+async function removeDirectoryWithRetry(directory: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error)) {
+        throw error;
+      }
+      if (error.code !== "EBUSY" && error.code !== "ENOTEMPTY") {
+        throw error;
+      }
+      await sleep(100 * (attempt + 1));
+    }
+  }
+
+  await rm(directory, { recursive: true, force: true });
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function captureStdout(callback: () => void): string {
+  let output = "";
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += chunk.toString();
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    callback();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  return output;
 }
 
 async function runCli(

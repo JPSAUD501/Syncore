@@ -32,7 +32,7 @@ import {
 import { EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { useConnection } from "@/hooks";
+import { usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { useActiveRuntime } from "@/lib/store";
 import { sendRequest } from "@/lib/store";
@@ -55,7 +55,7 @@ export const Route = createLazyFileRoute("/data")({
 });
 
 function DataPage() {
-  const { isReady, runtimeConnected } = useConnection();
+  const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
   const activeRuntime = useActiveRuntime();
   const { pushToast } = useToast();
 
@@ -94,8 +94,8 @@ function DataPage() {
   /* ---------------------------------------------------------------- */
 
   const schemaSubscription = useDevtoolsSubscription(
-    isReady ? { kind: "schema.tables" } : null,
-    { enabled: isReady }
+    targetRuntimeId ? { kind: "schema.tables" } : null,
+    { enabled: Boolean(targetRuntimeId), targetRuntimeId }
   );
 
   const tableList = useMemo(
@@ -124,7 +124,7 @@ function DataPage() {
   /* ---------------------------------------------------------------- */
 
   const dataSubscription = useDevtoolsSubscription(
-    isReady && selectedTable
+    targetRuntimeId && selectedTable
       ? {
           kind: "data.table",
           table: selectedTable,
@@ -132,7 +132,10 @@ function DataPage() {
           limit: 100
         }
       : null,
-    { enabled: isReady && !!selectedTable }
+    {
+      enabled: Boolean(targetRuntimeId) && !!selectedTable,
+      targetRuntimeId
+    }
   );
 
   useEffect(() => {
@@ -149,13 +152,13 @@ function DataPage() {
   }, [dataSubscription.data]);
 
   useEffect(() => {
-    if (isReady && !dataSubscription.loading) {
+    if (targetRuntimeId && !dataSubscription.loading) {
       return;
     }
     setRows((current) => (current.length === 0 ? current : []));
     setTotalCount((current) => (current === 0 ? current : 0));
     setSelectedRowIds((current) => (current.length === 0 ? current : []));
-  }, [dataSubscription.loading, isReady]);
+  }, [dataSubscription.loading, targetRuntimeId]);
 
   useEffect(() => {
     setDataLoading((current) =>
@@ -169,13 +172,13 @@ function DataPage() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!isReady || !selectedTable) return;
+      if (!targetRuntimeId || !selectedTable) return;
       try {
         await sendRequest({
           kind: "data.delete",
           table: selectedTable,
           id
-        });
+        }, { targetRuntimeId });
         setSelectedRowIds((current) => current.filter((rowId) => rowId !== id));
         pushToast({
           tone: "success",
@@ -190,19 +193,19 @@ function DataPage() {
         });
       }
     },
-    [isReady, selectedTable, pushToast]
+    [pushToast, selectedTable, targetRuntimeId]
   );
 
   const handleDeleteMany = useCallback(
     async (ids: string[]) => {
-      if (!isReady || !selectedTable || ids.length === 0) return;
+      if (!targetRuntimeId || !selectedTable || ids.length === 0) return;
       await Promise.all(
         ids.map((id) =>
           sendRequest({
             kind: "data.delete",
             table: selectedTable,
             id
-          })
+          }, { targetRuntimeId })
         )
       );
       setSelectedRowIds([]);
@@ -212,7 +215,7 @@ function DataPage() {
         description: `${ids.length} document${ids.length === 1 ? "" : "s"} removed from ${selectedTable}.`
       });
     },
-    [isReady, selectedTable, pushToast]
+    [pushToast, selectedTable, targetRuntimeId]
   );
 
   const handleInsert = useCallback(
@@ -220,12 +223,12 @@ function DataPage() {
       document: Record<string, unknown>,
       options?: { silent?: boolean }
     ) => {
-      if (!isReady || !selectedTable) return;
+      if (!targetRuntimeId || !selectedTable) return;
       const res = await sendRequest({
         kind: "data.insert",
         table: selectedTable,
         document
-      });
+      }, { targetRuntimeId });
       if (res.kind === "data.mutate.result" && !res.success) {
         throw new Error(res.error ?? "Failed to insert document.");
       }
@@ -237,18 +240,18 @@ function DataPage() {
         });
       }
     },
-    [isReady, selectedTable, pushToast]
+    [pushToast, selectedTable, targetRuntimeId]
   );
 
   const handlePatch = useCallback(
     async (id: string, fields: Record<string, unknown>) => {
-      if (!isReady || !selectedTable) return;
+      if (!targetRuntimeId || !selectedTable) return;
       const res = await sendRequest({
         kind: "data.patch",
         table: selectedTable,
         id,
         fields
-      });
+      }, { targetRuntimeId });
       if (res.kind === "data.mutate.result" && !res.success) {
         throw new Error(res.error ?? "Failed to update document.");
       }
@@ -258,7 +261,7 @@ function DataPage() {
         description: `${id} was updated.`
       });
     },
-    [isReady, selectedTable, pushToast]
+    [pushToast, selectedTable, targetRuntimeId]
   );
 
   const handleFieldEdit = useCallback(
@@ -505,7 +508,8 @@ function DataPage() {
       <div className="hidden min-h-0 w-72 shrink-0 md:flex">
         <TableDirectory
           filteredTables={filteredTables}
-          runtimeConnected={runtimeConnected}
+          targetAvailable={Boolean(targetRuntimeId)}
+          usingProjectTarget={usingProjectTarget}
           schemaLoading={schemaSubscription.loading}
           hasSchemaData={Boolean(schemaSubscription.data)}
           selectedTable={selectedTable}
@@ -998,7 +1002,8 @@ function DataPage() {
         <DialogContent className="max-w-[calc(100%-1.5rem)] p-0 sm:max-w-lg">
           <TableDirectory
             filteredTables={filteredTables}
-            runtimeConnected={runtimeConnected}
+            targetAvailable={Boolean(targetRuntimeId)}
+            usingProjectTarget={usingProjectTarget}
             schemaLoading={schemaSubscription.loading}
             hasSchemaData={Boolean(schemaSubscription.data)}
             selectedTable={selectedTable}
@@ -1021,7 +1026,8 @@ function DataPage() {
 
 function TableDirectory({
   filteredTables,
-  runtimeConnected,
+  targetAvailable,
+  usingProjectTarget,
   schemaLoading,
   hasSchemaData,
   selectedTable,
@@ -1035,7 +1041,8 @@ function TableDirectory({
     name: string;
     documentCount: number;
   }>;
-  runtimeConnected: boolean;
+  targetAvailable: boolean;
+  usingProjectTarget: boolean;
   schemaLoading: boolean;
   hasSchemaData: boolean;
   selectedTable: string | null;
@@ -1084,9 +1091,11 @@ function TableDirectory({
             <div className="py-10 text-center">
               <Database size={20} className="mx-auto mb-2 text-text-tertiary" />
               <p className="text-[11px] text-text-tertiary">
-                {runtimeConnected
+                {targetAvailable
                   ? "No tables found"
-                  : "Connect to an active runtime to browse tables"}
+                  : usingProjectTarget
+                    ? "Project target unavailable"
+                    : "Connect a runtime or configure a project target"}
               </p>
             </div>
           ) : (

@@ -1,4 +1,4 @@
-import { runSyncoreCli } from "@syncore/core/cli";
+import { runSyncoreCli } from "@syncore/cli";
 import { realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
