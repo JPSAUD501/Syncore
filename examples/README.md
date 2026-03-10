@@ -1,10 +1,12 @@
 # Examples
 
-These examples are reference integrations for the first Syncore targets:
+These examples are reference integrations for the current Syncore targets:
 
-- [`electron`](D:\GitHub\Syncore\examples\electron)
-- [`expo`](D:\GitHub\Syncore\examples\expo)
-- [`next-pwa`](D:\GitHub\Syncore\examples\next-pwa)
+- [`browser-esm`](browser-esm)
+- [`electron`](electron)
+- [`expo`](expo)
+- [`next-pwa`](next-pwa)
+- [`sveltekit`](sveltekit)
 
 They are intentionally small and focused on runtime wiring, not polished UI.
 

@@ -1,15 +1,12 @@
 ---
 name: syncore-schema-migrations
-displayName: Syncore Schema And Migrations
-description: Schema design and migration workflow for Syncore, including validators, indexes, search indexes, drift detection, stored snapshots, and SQL migration files.
-version: 1.1.0
-author: Syncore
-tags: [syncore, schema, migrations, validators, sqlite]
+description: Schema design and migration workflow for Syncore, including validators, indexes, search indexes, drift detection, stored snapshots, and SQL migration files. Use when changing `syncore/schema.ts`, indexes, or files under `syncore/migrations`.
 ---
 
 # Syncore Schema And Migrations
 
-Use this skill when changing `syncore/schema.ts`, indexes, search indexes, or migration files under `syncore/migrations`.
+Use this skill when changing `syncore/schema.ts`, indexes, search indexes, or
+migration files under `syncore/migrations`.
 
 ## Documentation Sources
 
@@ -23,12 +20,14 @@ Read these first:
 - `examples/electron/syncore/schema.ts`
 - `examples/expo/syncore/schema.ts`
 - `examples/next-pwa/syncore/schema.ts`
+- `examples/sveltekit/syncore/schema.ts`
 
 ## Instructions
 
 ### Schema Is The Source Of Truth
 
-Define tables in `syncore/schema.ts` with `defineSchema`, `defineTable`, and validators from `v`.
+Define tables in `syncore/schema.ts` with `defineSchema`, `defineTable`, and
+validators from `v`.
 
 ```ts
 import { defineSchema, defineTable, v } from "syncorejs";
@@ -54,7 +53,9 @@ Syncore's migration workflow is local and CLI-driven:
 5. Apply it with `npx syncorejs migrate:apply`
 6. Regenerate typed files with `npx syncorejs codegen` or let `npx syncorejs dev` keep them fresh
 
-The CLI stores a schema snapshot in `syncore/migrations/_schema_snapshot.json` and compares the current schema against that saved snapshot. Destructive drift is intentionally surfaced early.
+The CLI stores a schema snapshot in
+`syncore/migrations/_schema_snapshot.json` and compares the current schema
+against that saved snapshot. Destructive drift is intentionally surfaced early.
 
 ### Drift Safety
 
@@ -87,7 +88,8 @@ export default defineSchema({
 });
 ```
 
-Define indexes before relying on `withIndex(...)` or `withSearchIndex(...)` in functions.
+Define indexes before relying on `withIndex(...)` or `withSearchIndex(...)` in
+functions.
 
 ### Keep Consumers In Sync
 
@@ -97,6 +99,9 @@ Schema changes usually require updating:
 - React or other UI code using generated references
 - examples used as integration fixtures
 - tests covering inference or runtime behavior
+
+`npx syncorejs dev` helps during the inner loop, but explicit migration review
+is still required when the schema changes intentionally.
 
 ## Examples
 
@@ -138,7 +143,8 @@ export default defineSchema({
 });
 ```
 
-Add the index in schema before expecting search-related queries or migration SQL to work.
+Add the index in schema before expecting search-related queries or migration SQL
+to work.
 
 ## Best Practices
 

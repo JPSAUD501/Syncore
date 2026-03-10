@@ -96,4 +96,6 @@ The dashboard is a dev-only surface. Runtimes emit protocol events to a local hu
 
 ## Reference policy
 
-`./reference/Convex` remains in this repository during development and is consulted continuously for architecture and DX decisions. Syncore stays a clean implementation designed for local runtimes.
+`./references/convex-backend` remains in this repository during development and
+is consulted continuously for architecture and DX decisions. Syncore stays a
+clean implementation designed for local runtimes.

@@ -10,12 +10,12 @@ This example shows the intended desktop setup after the quickstart, with a fulle
 
 ## Files
 
-- [`package.json`](D:\GitHub\Syncore\examples\electron\package.json)
-- [`src/main.ts`](D:\GitHub\Syncore\examples\electron\src\main.ts)
-- [`src/preload.cjs`](D:\GitHub\Syncore\examples\electron\src\preload.cjs)
-- [`src/renderer/App.tsx`](D:\GitHub\Syncore\examples\electron\src\renderer\App.tsx)
-- [`syncore/schema.ts`](D:\GitHub\Syncore\examples\electron\syncore\schema.ts)
-- [`syncore/functions/tasks.ts`](D:\GitHub\Syncore\examples\electron\syncore\functions\tasks.ts)
+- [`package.json`](package.json)
+- [`src/main.ts`](src/main.ts)
+- [`src/preload.cjs`](src/preload.cjs)
+- [`src/renderer/App.tsx`](src/renderer/App.tsx)
+- [`syncore/schema.ts`](syncore/schema.ts)
+- [`syncore/functions/entries.ts`](syncore/functions/entries.ts)
 
 The renderer uses `SyncoreElectronProvider`, so app code no longer needs to
 manually create and dispose the renderer client.

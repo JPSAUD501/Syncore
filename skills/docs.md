@@ -26,12 +26,13 @@ Quick reference to the Syncore skill documents in this directory.
 
 ## Primary Repo References
 
-| Document                                          | Purpose                                     |
-| ------------------------------------------------- | ------------------------------------------- |
-| [`README.md`](../README.md)                       | Product overview and workspace commands     |
-| [`docs/architecture.md`](../docs/architecture.md) | Runtime model, storage, scheduler, devtools |
-| [`docs/development.md`](../docs/development.md)   | Dev loop, smoke tests, and reference policy |
-| [`examples/README.md`](../examples/README.md)     | Working target-platform integrations        |
+| Document                                                                  | Purpose                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------- |
+| [`README.md`](../README.md)                                               | Product overview and workspace commands     |
+| [`docs/architecture.md`](../docs/architecture.md)                         | Runtime model, storage, scheduler, devtools |
+| [`docs/development.md`](../docs/development.md)                           | Dev loop, smoke tests, and reference policy |
+| [`docs/guides/syncore-vs-convex.md`](../docs/guides/syncore-vs-convex.md) | Local-first differences from Convex         |
+| [`examples/README.md`](../examples/README.md)                             | Working target-platform integrations        |
 
 ## Package Guides
 
@@ -47,7 +48,7 @@ Quick reference to the Syncore skill documents in this directory.
 
 ## Reference Material
 
-| Document                                              | Purpose                                            |
-| ----------------------------------------------------- | -------------------------------------------------- |
-| [`reference/Convex`](../reference/Convex)             | Behavioral reference material kept in-tree         |
-| [`reference/convexskills`](../reference/convexskills) | Format and organization reference for these skills |
+| Document                                                    | Purpose                                               |
+| ----------------------------------------------------------- | ----------------------------------------------------- |
+| [`references/convex-backend`](../references/convex-backend) | Behavioral reference material kept in-tree            |
+| [`skills/README.md`](README.md)                             | Local conventions for this Syncore-specific skill set |

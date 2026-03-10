@@ -1,1 +1,3 @@
-interface: {}
+interface:
+  display_name: "Syncore CLI And Codegen"
+  short_description: "Scaffolding, codegen, migrations, and dev loop guidance"

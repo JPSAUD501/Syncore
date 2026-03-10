@@ -1,15 +1,13 @@
 ---
 name: syncore-best-practices
-displayName: Syncore Best Practices
-description: Guidelines for building production-ready Syncore apps covering project structure, generated files, typed DX, example usage, public entrypoints, and monorepo-aware validation habits.
-version: 1.1.0
-author: Syncore
-tags: [syncore, best-practices, dx, codegen, local-first]
+description: Guidelines for building production-ready Syncore apps. Use when you need project structure, generated-file rules, typed DX guardrails, public entrypoint guidance, monorepo-aware validation habits, or a sanity check on whether a workaround belongs in shared packages instead of examples.
 ---
 
 # Syncore Best Practices
 
-Build Syncore applications around the current source of truth in this repository: local runtimes, generated typed APIs, thin app bindings, and platform-specific bootstrap layers.
+Build Syncore applications around the current source of truth in this
+repository: local runtimes, generated typed APIs, thin app bindings, and
+platform-specific bootstrap layers.
 
 ## Documentation Sources
 
@@ -56,46 +54,51 @@ Inside an app, the main local loop is:
 npx syncorejs dev
 ```
 
-`syncorejs dev` can scaffold a missing Syncore project, keep generated files fresh, check schema drift, apply local migrations, and run the local hub.
+`syncorejs dev` can scaffold a missing Syncore project, keep generated files
+fresh, check schema drift, apply local migrations, and run the local hub.
 
-Use `npx syncorejs init --template <platform>` when you want explicit scaffolding instead of auto-detection.
+Use `npx syncorejs init --template <template>` when you want explicit
+scaffolding instead of auto-detection.
 
 ### Generated Files Are Outputs
 
 Treat these as generated artifacts:
 
-- `syncore/_generated/api`
-- `syncore/_generated/functions`
-- `syncore/_generated/server`
+- `syncore/_generated/api.ts`
+- `syncore/_generated/functions.ts`
+- `syncore/_generated/server.ts`
 
 Do not hand-edit them. If they are wrong, fix:
 
 - source functions
 - schema validators
 - CLI codegen
-- runtime, React, or adapter inference
+- runtime, React, Svelte, or adapter inference
 
 ### Prefer Public Entry Points In App Code
 
-User-facing code should normally import from public `syncore/*` entrypoints such as:
+User-facing code should normally import from public `syncorejs/*` entrypoints
+such as:
 
-- `syncore`
-- `syncore/react`
-- `syncore/browser`
-- `syncore/browser/react`
-- `syncore/node`
-- `syncore/node/ipc/react`
-- `syncore/expo`
-- `syncore/expo/react`
-- `syncore/next`
-- `syncore/next/config`
-- `syncore/svelte`
+- `syncorejs`
+- `syncorejs/react`
+- `syncorejs/browser`
+- `syncorejs/browser/react`
+- `syncorejs/node`
+- `syncorejs/node/ipc`
+- `syncorejs/node/ipc/react`
+- `syncorejs/expo`
+- `syncorejs/expo/react`
+- `syncorejs/next`
+- `syncorejs/next/config`
+- `syncorejs/svelte`
 
 Reach for `@syncore/*` package names mainly when editing monorepo internals.
 
 ### Optimize For DX At The Type Source
 
-Syncore's DX depends on types flowing from source definitions into generated references and hooks.
+Syncore's DX depends on types flowing from source definitions into generated
+references and hooks.
 
 Prefer this:
 
@@ -111,7 +114,8 @@ const tasks = useQuery<{ _id: string; text: string }[]>(api.tasks.list) ?? [];
 const createTask = useMutation<string>(api.tasks.create);
 ```
 
-If manual generics become necessary in app code, investigate core, codegen, or adapter typing before normalizing the workaround.
+If manual generics become necessary in app code, investigate core, codegen, or
+adapter typing before normalizing the workaround.
 
 ### Let Examples Stay Small
 
@@ -123,10 +127,12 @@ Examples are integration fixtures, not product apps.
 
 ### Use Built-In Local Data Workflows
 
-For local sample data, prefer CLI workflows over ad hoc SQL or edited generated artifacts:
+For local sample data, prefer CLI workflows over ad hoc SQL or edited generated
+artifacts:
 
 - `npx syncorejs import --table <table> <file>` for explicit JSONL imports
 - `npx syncorejs seed --table <table>` for conventional seed files under `syncore/seed`
+- `npx syncorejs seed --table <table> --file <file>` when the fixture lives elsewhere
 
 ### Validate Cross-Package Changes Together
 
@@ -141,6 +147,9 @@ DX changes often span:
 - examples
 
 When you change a type boundary, verify all affected layers together.
+
+If you intentionally change public exports, refresh the API Extractor baselines
+with `bun run api:update` and confirm `bun run api:check` passes.
 
 ## Examples
 
@@ -203,12 +212,13 @@ function Tasks() {
 1. Editing generated files directly instead of fixing codegen or source definitions
 2. Solving type regressions with app-level casts instead of shared fixes
 3. Forgetting that examples are smoke fixtures and must stay deterministic
-4. Importing internal `@syncore/*` packages in app docs when the public `syncore/*` surface is the intended API
+4. Importing internal `@syncore/*` packages in app docs when the public `syncorejs/*` surface is the intended API
 5. Assuming Convex conventions apply unchanged when Syncore's local runtime differs
 
 ## References
 
 - `README.md`
+- `docs/development.md`
 - `docs/guides/syncore-vs-convex.md`
 - `examples/AGENTS.md`
 - `packages/core/AGENTS.md`

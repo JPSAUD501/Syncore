@@ -15,7 +15,7 @@ npm pkg set type="module"
 ## 2. Install packages
 
 ```bash
-npm install syncore
+npm install syncorejs
 ```
 
 ## 3. Start the Syncore dev loop

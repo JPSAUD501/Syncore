@@ -13,7 +13,7 @@ cd my-syncore-next
 ## 2. Install packages
 
 ```bash
-npm install syncore next react react-dom sql.js
+npm install syncorejs next react react-dom sql.js
 ```
 
 ## 3. Start the Syncore dev loop

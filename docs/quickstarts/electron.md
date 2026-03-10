@@ -11,7 +11,7 @@ and a React renderer.
 ## 2. Install packages
 
 ```bash
-npm install syncore react react-dom electron
+npm install syncorejs react react-dom electron
 ```
 
 ## 3. Start the Syncore dev loop
@@ -77,7 +77,7 @@ void app.whenReady().then(createWindow);
 `src/preload.cjs`
 
 ```js
-const { installSyncoreWindowBridge } = require("syncore/node/ipc");
+const { installSyncoreWindowBridge } = require("syncorejs/node/ipc");
 
 eval(installSyncoreWindowBridge());
 ```

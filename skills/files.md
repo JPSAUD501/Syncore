@@ -13,7 +13,8 @@ Brief description of each file in the Syncore skills directory.
 
 ## Skills Directory (`skills/`)
 
-Each skill follows the same broad structure as the Convex reference set. Every skill includes a `SKILL.md` and a minimal `agents/openai.yaml` placeholder for future agent-specific metadata.
+Each skill includes a `SKILL.md` plus `agents/openai.yaml` metadata used by
+skill pickers.
 
 | Skill                                | Description                                 |
 | ------------------------------------ | ------------------------------------------- |
@@ -28,9 +29,9 @@ Each skill follows the same broad structure as the Convex reference set. Every s
 
 ## Metadata Files
 
-| File Pattern                  | Description                                                 |
-| ----------------------------- | ----------------------------------------------------------- |
-| `skills/*/agents/openai.yaml` | Minimal placeholder metadata for agent UIs and future icons |
+| File Pattern                  | Description                                      |
+| ----------------------------- | ------------------------------------------------ |
+| `skills/*/agents/openai.yaml` | Display name and short description for skill UIs |
 
 ## Design Notes
 

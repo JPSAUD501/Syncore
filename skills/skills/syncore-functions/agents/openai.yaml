@@ -1,1 +1,3 @@
-interface: {}
+interface:
+  display_name: "Syncore Functions"
+  short_description: "Queries, mutations, actions, and typed function references"

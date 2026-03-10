@@ -1,15 +1,12 @@
 ---
 name: syncore-scheduler-storage
-displayName: Syncore Scheduler And Storage
-description: Local scheduling and file storage patterns for Syncore, including recurring jobs, runAfter, runAt, misfire policies, and storage metadata consistency.
-version: 1.1.0
-author: Syncore
-tags: [syncore, scheduler, storage, cron, offline]
+description: Local scheduling and file storage patterns for Syncore, including recurring jobs, runAfter, runAt, misfire policies, and storage metadata consistency. Use when building features that depend on durable local jobs, missed-run reconciliation, or device-local file storage.
 ---
 
 # Syncore Scheduler And Storage
 
-Use this skill when building features that depend on durable local jobs, missed-run reconciliation, or device-local file storage.
+Use this skill when building features that depend on durable local jobs,
+missed-run reconciliation, or device-local file storage.
 
 ## Documentation Sources
 
@@ -32,7 +29,8 @@ Mutations and actions can schedule future work through `ctx.scheduler`:
 - `runAt(timestamp, reference, args?, misfirePolicy?)`
 - `cancel(id)`
 
-The scheduler persists jobs locally and reconciles missed executions on restart.
+The scheduler persists jobs locally and reconciles missed executions on
+restart.
 
 ### Misfire Policies
 
@@ -43,7 +41,8 @@ Current misfire policies are:
 - `{ type: "run_once_if_missed" }`
 - `{ type: "windowed", windowMs: number }`
 
-Pick the policy based on user expectations after the app has been paused or closed.
+Pick the policy based on user expectations after the app has been paused or
+closed.
 
 ### Scheduling Example
 
@@ -64,7 +63,14 @@ export const scheduleCreateCatchUp = mutation({
 
 ### Recurring Jobs
 
-Use `cronJobs()` to build a recurring job registry, then pass its `jobs` array into runtime or bootstrap `scheduler.recurringJobs`.
+Use `cronJobs()` to build a recurring job registry, then pass its `jobs` array
+into runtime or bootstrap `scheduler.recurringJobs`.
+
+Available helpers are:
+
+- `crons.interval(...)`
+- `crons.daily(...)`
+- `crons.weekly(...)`
 
 Syncore currently does not auto-load a special `syncore/crons.ts` file.
 
@@ -103,6 +109,8 @@ Queries, mutations, and actions can use `ctx.storage`:
 - `read(id)`
 - `delete(id)`
 
+`put(...)` returns the generated storage id.
+
 ```ts
 import { mutation, query, v } from "../_generated/server";
 
@@ -136,7 +144,7 @@ Syncore's storage and scheduler are designed for local durability:
 - scheduled jobs are persisted in SQLite
 - missed jobs are reconciled on restart according to the policy
 - storage metadata is tracked in system tables
-- orphan cleanup can only be as complete as the storage adapter capabilities; adapters that implement `storage.list()` allow fuller reconciliation
+- orphan cleanup depends on adapter capabilities; adapters that implement `storage.list()` allow fuller reconciliation
 
 ## Examples
 

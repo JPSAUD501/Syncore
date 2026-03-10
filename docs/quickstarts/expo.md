@@ -14,7 +14,7 @@ cd my-syncore-expo
 ## 2. Install packages
 
 ```bash
-npm install syncore expo expo-sqlite expo-file-system react react-native
+npm install syncorejs expo expo-sqlite expo-file-system react react-native
 ```
 
 ## 3. Start the Syncore dev loop

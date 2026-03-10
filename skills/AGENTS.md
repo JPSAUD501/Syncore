@@ -14,7 +14,7 @@ For Syncore work, read the repository docs and package guides before relying on 
 |quickstarts:{docs/quickstarts/react-web.md,docs/quickstarts/expo.md,docs/quickstarts/electron.md,docs/quickstarts/next-pwa.md,docs/quickstarts/node-script.md}
 |packages:{packages/core/AGENTS.md,packages/schema/AGENTS.md,packages/cli/AGENTS.md,packages/react/AGENTS.md,packages/platform-node/AGENTS.md,packages/platform-web/AGENTS.md,packages/testing/AGENTS.md}
 |examples:{examples/README.md,examples/browser-esm,examples/electron,examples/expo,examples/next-pwa,examples/sveltekit}
-|reference:{reference/Convex,reference/convexskills}
+|reference:{references/convex-backend}
 ```
 
 When working on Syncore code, treat the repo as the source of truth for architecture, public API shape, and DX goals.
@@ -41,15 +41,12 @@ This directory provides two complementary layers for AI coding agents:
 
 ## Skill Format
 
-Each skill follows the Agent Skills specification with YAML frontmatter:
+Each skill follows the current skill format with minimal YAML frontmatter:
 
 ```markdown
 ---
 name: skill-name
 description: What the skill does and when to use it
-version: 1.0.0
-author: Syncore
-tags: [syncore, ...]
 ---
 
 # Skill Name
@@ -95,7 +92,8 @@ Inside an app project:
 - `npx syncorejs migrate:status`, `migrate:generate [name]`, and `migrate:apply` manage schema drift, `_schema_snapshot.json`, and SQL
 - `npx syncorejs import --table <table> <file>` and `npx syncorejs seed --table <table>` load local sample data
 
-Recurring jobs are configured through runtime or bootstrap `scheduler` options. Syncore currently does not auto-load a special `syncore/crons.ts` file.
+Recurring jobs are configured through runtime or bootstrap `scheduler` options.
+Syncore currently does not auto-load a special `syncore/crons.ts` file.
 
 ## DO NOT
 

@@ -1,15 +1,13 @@
 ---
 name: syncore-functions
-displayName: Syncore Functions
-description: Writing Syncore queries, mutations, and actions with typed validators, richer query builders, function references, scheduler calls, and inference-friendly patterns.
-version: 1.1.0
-author: Syncore
-tags: [syncore, functions, query, mutation, action, types]
+description: Writing Syncore queries, mutations, and actions with typed validators, richer query builders, function references, scheduler calls, and inference-friendly patterns. Use when editing `syncore/functions/**/*.ts`, reviewing function typing, or validating generated API behavior against source definitions.
 ---
 
 # Syncore Functions
 
-Use this skill when writing or reviewing `syncore/functions/**/*.ts` files. The focus is preserving typed DX from function definitions through generated references and client APIs.
+Use this skill when writing or reviewing `syncore/functions/**/*.ts` files. The
+focus is preserving typed DX from function definitions through generated
+references and client APIs.
 
 ## Documentation Sources
 
@@ -21,9 +19,10 @@ Read these repo-local references first:
 - `packages/core/AGENTS.md`
 - `README.md`
 - `docs/architecture.md`
-- `examples/electron/syncore/functions/tasks.ts`
+- `examples/electron/syncore/functions/entries.ts`
 - `examples/expo/syncore/functions/notes.ts`
-- `examples/next-pwa/syncore/functions/todos.ts`
+- `examples/next-pwa/syncore/functions/bookmarks.ts`
+- `examples/sveltekit/syncore/functions/habits.ts`
 
 ## Instructions
 
@@ -43,11 +42,13 @@ Inside `syncore/functions/*.ts`, import from `../_generated/server`:
 import { mutation, query, v } from "../_generated/server";
 ```
 
-This keeps app code aligned with current codegen output and shared validator types.
+This keeps app code aligned with current codegen output and shared validator
+types.
 
 ### Prefer Strong Validators
 
-Use the most specific validators you can. For document ids, prefer table-aware ids over plain strings:
+Use the most specific validators you can. For document ids, prefer table-aware
+ids over plain strings:
 
 ```ts
 args: {
@@ -90,7 +91,8 @@ The current query builder surface includes:
 - `unique()`
 - `paginate({ cursor, numItems })`
 
-Use indexes and search indexes from schema before depending on those query paths in functions.
+Use indexes and search indexes from schema before depending on those query paths
+in functions.
 
 ### Mutations
 
@@ -112,7 +114,8 @@ export const toggleDone = mutation({
 });
 ```
 
-Mutations have `ctx.db`, `ctx.storage`, `ctx.scheduler`, `ctx.runQuery`, `ctx.runMutation`, and `ctx.runAction`.
+Mutations have `ctx.db`, `ctx.storage`, `ctx.scheduler`, `ctx.runQuery`,
+`ctx.runMutation`, and `ctx.runAction`.
 
 ### Actions
 
@@ -146,7 +149,8 @@ There are two main reference flows:
 - generated client references via `syncore/_generated/api`
 - direct references via `createFunctionReference` or `createFunctionReferenceFor`
 
-Generated references are preferred in app code. Direct references are useful for scheduler jobs and low-level runtime tests.
+Generated references are preferred in app code. Direct references are useful
+for scheduler jobs, browser-ESM samples, and low-level runtime tests.
 
 ```ts
 import { createFunctionReference, mutation, v } from "../_generated/server";
@@ -165,7 +169,8 @@ export const scheduleCreate = mutation({
 
 ### Empty Args Ergonomics Matter
 
-Syncore intentionally supports optional call signatures for empty-object args. Preserve these patterns:
+Syncore intentionally supports optional call signatures for empty-object args.
+Preserve these patterns:
 
 ```ts
 export const list = query({
@@ -180,7 +185,8 @@ That enables client usage like:
 const tasks = useQuery(api.tasks.list) ?? [];
 ```
 
-Do not introduce type changes that force useless `{}` arguments at every callsite unless the public API is intentionally changing.
+Do not introduce type changes that force useless `{}` arguments at every
+callsite unless the public API is intentionally changing.
 
 ## Examples
 
@@ -259,4 +265,6 @@ export const scheduleCreateSkip = mutation({
 - `packages/core/src/runtime/runtime.ts`
 - `packages/schema/src/validators.ts`
 - `packages/core/AGENTS.md`
+- `examples/electron/syncore/functions/entries.ts`
 - `examples/expo/syncore/functions/notes.ts`
+- `examples/next-pwa/syncore/functions/bookmarks.ts`

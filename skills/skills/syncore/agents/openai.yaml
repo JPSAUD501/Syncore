@@ -1,1 +1,3 @@
-interface: {}
+interface:
+  display_name: "Syncore"
+  short_description: "Route Syncore work to the right focused skill"

@@ -41,7 +41,10 @@ Use `npx syncorejs codegen` when you only want a one-off refresh of generated fi
 
 ## Reference material
 
-The `reference/Convex` directory stays available while Syncore is under active development. It is used to study how Convex solved problems such as developer ergonomics, scheduling, and dashboard workflows, then adapt those ideas to a fully local architecture.
+The `references/convex-backend` directory stays available while Syncore is
+under active development. It is used to study how Convex solved problems such
+as developer ergonomics, scheduling, and dashboard workflows, then adapt those
+ideas to a fully local architecture.
 
 ## Smoke tests
 

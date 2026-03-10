@@ -1,1 +1,3 @@
-interface: {}
+interface:
+  display_name: "Syncore Schema And Migrations"
+  short_description: "Schema design, drift checks, and SQL migration workflow"
