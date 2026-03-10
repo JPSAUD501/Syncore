@@ -21,6 +21,50 @@ Inside an app project, `syncorejs dev` is the main development loop. If
 Syncore has not been initialized yet, it scaffolds a minimal local backend
 first. Then it regenerates `syncore/_generated/*`, checks schema drift, applies
 local migrations, starts the local hub, and watches `syncore/` sources.
+The public CLI always prints local URLs with `localhost`, and the `dev`
+bootstrap is intentionally compact so the ready state is easy to scan.
+
+Syncore should feel like Convex for local-first apps: one CLI that scaffolds,
+explains the current project state, runs local functions, inspects local data,
+and keeps generated types plus SQLite state in sync.
+
+## CLI
+
+The public CLI now centers on a small product surface:
+
+```bash
+npx syncorejs init
+npx syncorejs dev
+npx syncorejs doctor
+npx syncorejs targets
+npx syncorejs run <function> [args]
+npx syncorejs data [table]
+npx syncorejs export --path <path>
+npx syncorejs import <path>
+npx syncorejs logs
+npx syncorejs migrate status
+npx syncorejs migrate generate [name]
+npx syncorejs migrate apply
+npx syncorejs dashboard
+npx syncorejs docs
+```
+
+Useful conventions:
+
+- `--json` for machine-readable output
+- `--cwd <path>` to target another package
+- `--verbose` for extra diagnostics
+- `--yes` for non-interactive confirmations
+- `--no-interactive` for CI or scripts
+- `--format pretty|json|jsonl` on read-style commands like `run`, `data`, and `logs`
+- `--target project|client:<id>` on operational commands like `run`, `data`, `import`, and `export`
+
+Recommended flow:
+
+- `npx syncorejs init`
+- `npx syncorejs dev`
+- `npx syncorejs targets`
+- `npx syncorejs run ...` / `data` / `logs`
 
 ## Scope
 
@@ -140,9 +184,22 @@ The current DX model is:
 - `npx syncorejs init --template <minimal|node|react-web|expo|electron|next>` is available when you want explicit scaffolding
 - `npx syncorejs dev` keeps `syncore/_generated/api`, `syncore/_generated/functions`, and `syncore/_generated/server` in sync during development
 - `npx syncorejs codegen` is available for one-off generation without the full dev loop
+- `npx syncorejs doctor` explains whether you are in an app package, a monorepo root, or an incomplete Syncore project
+- `npx syncorejs targets` lists project and connected client targets with their capabilities
+- `npx syncorejs run tasks/list` and `npx syncorejs run api.tasks.create '{"text":"Ship"}'` execute local functions directly
+- `npx syncorejs data tasks --format json` inspects local SQLite rows without opening the dashboard
+- `npx syncorejs export --table tasks --path tasks.jsonl` and `npx syncorejs import --table tasks tasks.jsonl` roundtrip local data
+- `npx syncorejs migrate status|generate|apply` is the grouped migration surface
+- `npx syncorejs dashboard` prints the local dashboard URL and `npx syncorejs docs` resolves the most relevant quickstart
 - `npx syncorejs import --table tasks sampleData.jsonl` imports local sample data
 - React code imports typed references from `syncore/_generated/api`
 - function files import server helpers from `syncore/_generated/server`
+
+Target model:
+
+- `node` and `electron` usually expose a `project` target
+- `react-web`, `next`, and `expo` use connected `client:<id>` targets
+- `npx syncorejs targets` is the primary way to inspect what is currently available
 
 ## How Syncore differs from Convex
 
@@ -164,4 +221,5 @@ product code.
 
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/development.md`](docs/development.md)
+- [`docs/guides/cli-product-contract.md`](docs/guides/cli-product-contract.md)
 - [`docs/guides/syncore-vs-convex.md`](docs/guides/syncore-vs-convex.md)

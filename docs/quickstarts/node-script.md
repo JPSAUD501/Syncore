@@ -29,6 +29,16 @@ npx syncorejs dev
 On a fresh project, `syncorejs dev` scaffolds the minimal local backend and keeps
 `syncore/_generated/*` up to date.
 
+Useful follow-up commands:
+
+```bash
+npx syncorejs doctor
+npx syncorejs targets
+npx syncorejs run tasks/list --target project
+npx syncorejs data tasks --target project
+npx syncorejs dashboard
+```
+
 ## 4. Create the script
 
 `script.mjs`
@@ -68,4 +78,10 @@ To preload sample data from JSONL, use:
 
 ```bash
 npx syncorejs import --table tasks sampleData.jsonl
+```
+
+To export the local table again:
+
+```bash
+npx syncorejs export --table tasks --path tasks.jsonl
 ```

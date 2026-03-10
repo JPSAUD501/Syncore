@@ -9,11 +9,11 @@
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
 
-import { getByDate as entries__getByDate } from "../functions/entries.js";
-import { list as entries__list } from "../functions/entries.js";
-import { remove as entries__remove } from "../functions/entries.js";
-import { search as entries__search } from "../functions/entries.js";
-import { upsert as entries__upsert } from "../functions/entries.js";
+import { getByDate as entries__getByDate } from "../functions/entries";
+import { list as entries__list } from "../functions/entries";
+import { remove as entries__remove } from "../functions/entries";
+import { search as entries__search } from "../functions/entries";
+import { upsert as entries__upsert } from "../functions/entries";
 
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.

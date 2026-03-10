@@ -34,6 +34,12 @@ export function Header({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const connected = useDevtoolsStore((s) => s.connected);
   const selectRuntime = useDevtoolsStore((s) => s.selectRuntime);
+  const includeDashboardActivity = useDevtoolsStore(
+    (s) => s.includeDashboardActivity
+  );
+  const toggleIncludeDashboardActivity = useDevtoolsStore(
+    (s) => s.toggleIncludeDashboardActivity
+  );
   const activeRuntime = useActiveRuntime();
   const runtimeConnected = useSelectedRuntimeConnected();
   const runtimes = useConnectedRuntimes();
@@ -123,6 +129,20 @@ export function Header({
             {platform}
           </Badge>
         )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleIncludeDashboardActivity}
+          className="h-8 px-2.5 text-[11px]"
+          title={
+            includeDashboardActivity
+              ? "Hide dashboard-origin activity from counts and logs"
+              : "Include dashboard-origin activity in counts and logs"
+          }
+        >
+          {includeDashboardActivity ? "All activity" : "App only"}
+        </Button>
 
         {/* Connection indicator */}
         <Badge

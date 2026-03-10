@@ -658,7 +658,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
     createClient(): SyncoreClient;
     // (undocumented)
-    forceRefreshDevtools(reason: string): Promise<void>;
+    forceRefreshDevtools(reason: string, meta?: DevtoolsEventMeta): Promise<void>;
     // Warning: (ae-forgotten-export) The symbol "SyncoreActiveQueryInfo" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
@@ -678,15 +678,17 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     // (undocumented)
     notifyDevtoolsScopes(scopes: Iterable<DevtoolsLiveQueryScope>): void;
     // (undocumented)
-    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
+    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
+    // Warning: (ae-forgotten-export) The symbol "DevtoolsEventMeta" needs to be exported by the entry point index.d.ts
+    //
     // (undocumented)
     runDevtoolsMutation<TResult>(callback: (ctx: {
         db: SyncoreDatabaseWriter<TSchema>;
-    }) => Promise<TResult>): Promise<TResult>;
+    }) => Promise<TResult>, meta?: DevtoolsEventMeta): Promise<TResult>;
     // (undocumented)
-    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
+    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     // (undocumented)
-    runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
+    runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     start(): Promise<void>;
     stop(): Promise<void>;
     // (undocumented)

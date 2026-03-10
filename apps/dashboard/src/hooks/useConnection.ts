@@ -6,10 +6,21 @@ import {
   useDevtoolsStore
 } from "@/lib/store";
 
+interface ConnectionState {
+  connected: boolean;
+  runtimeConnected: boolean;
+  runtimeId: string | null;
+  platform: string | null;
+  liveQueryVersion: number;
+  runtimeCount: number;
+  selectedRuntimeCount: number;
+  isReady: boolean;
+}
+
 /**
  * Hook to access the connection state of the devtools WebSocket.
  */
-export function useConnection() {
+export function useConnection(): ConnectionState {
   const connected = useDevtoolsStore((s) => s.connected);
   const activeRuntime = useActiveRuntime();
   const runtimeConnected = useSelectedRuntimeConnected();

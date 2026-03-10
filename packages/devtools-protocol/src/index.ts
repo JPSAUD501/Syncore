@@ -1,69 +1,59 @@
+export type SyncoreDevtoolsEventOrigin = "runtime" | "dashboard";
+
+type SyncoreDevtoolsEventBase = {
+  runtimeId: string;
+  timestamp: number;
+  origin?: SyncoreDevtoolsEventOrigin;
+};
+
 export type SyncoreDevtoolsEvent =
-  | {
+  | (SyncoreDevtoolsEventBase & {
       type: "runtime.connected";
-      runtimeId: string;
       platform: string;
-      timestamp: number;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "runtime.disconnected";
-      runtimeId: string;
-      timestamp: number;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "query.executed";
-      runtimeId: string;
       queryId: string;
       functionName: string;
       dependencies: string[];
       durationMs: number;
-      timestamp: number;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "query.invalidated";
-      runtimeId: string;
       queryId: string;
       reason: string;
-      timestamp: number;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "mutation.committed";
-      runtimeId: string;
       mutationId: string;
       functionName: string;
       changedTables: string[];
       durationMs: number;
-      timestamp: number;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "action.completed";
-      runtimeId: string;
       actionId: string;
       functionName: string;
       durationMs: number;
-      timestamp: number;
       error?: string;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "scheduler.tick";
-      runtimeId: string;
       executedJobIds: string[];
-      timestamp: number;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "storage.updated";
-      runtimeId: string;
       storageId: string;
       operation: "put" | "delete";
-      timestamp: number;
-    }
-  | {
+    })
+  | (SyncoreDevtoolsEventBase & {
       type: "log";
-      runtimeId: string;
       level: "info" | "warn" | "error";
       message: string;
-      timestamp: number;
-    };
+    });
 
 export interface SyncoreActiveQueryInfo {
   id: string;
@@ -78,6 +68,10 @@ export interface SyncoreRuntimeSummary {
   appName?: string;
   origin?: string;
   sessionLabel?: string;
+  targetKind?: "client";
+  storageProtocol?: string;
+  databaseLabel?: string;
+  storageIdentity?: string;
   connectedAt: number;
   activeQueryCount: number;
   recentEventCount: number;
@@ -95,8 +89,17 @@ export type SyncoreDevtoolsMessage =
       appName?: string;
       origin?: string;
       sessionLabel?: string;
+      targetKind?: "client";
+      storageProtocol?: string;
+      databaseLabel?: string;
+      storageIdentity?: string;
     }
   | { type: "event"; event: SyncoreDevtoolsEvent }
+  | {
+      type: "event.batch";
+      runtimeId: string;
+      events: SyncoreDevtoolsEvent[];
+    }
   | { type: "ping" }
   | { type: "pong" }
   | {
@@ -175,6 +178,12 @@ export type SyncoreDevtoolsSubscriptionPayload =
   | { kind: "runtime.activeQueries" }
   | { kind: "schema.tables" }
   | {
+      kind: "fn.watch";
+      functionName: string;
+      functionType: "query";
+      args: Record<string, unknown>;
+    }
+  | {
       kind: "data.table";
       table: string;
       filters?: DataFilter[];
@@ -236,6 +245,11 @@ export type SyncoreDevtoolsSubscriptionResultPayload =
   | {
       kind: "runtime.activeQueries.result";
       activeQueries: SyncoreActiveQueryInfo[];
+    }
+  | {
+      kind: "fn.watch.result";
+      result?: unknown;
+      error?: string;
     }
   | { kind: "schema.tables.result"; tables: TableSchema[] }
   | {

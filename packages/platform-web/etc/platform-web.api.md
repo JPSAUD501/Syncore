@@ -96,11 +96,19 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
     // (undocumented)
     appName?: string;
     // (undocumented)
+    databaseLabel?: string;
+    // (undocumented)
     origin?: string;
     // (undocumented)
     reconnectDelayMs?: number;
     // (undocumented)
     sessionLabel?: string;
+    // (undocumented)
+    storageIdentity?: string;
+    // (undocumented)
+    storageProtocol?: string;
+    // (undocumented)
+    targetKind?: "client";
     // (undocumented)
     url: string;
 }

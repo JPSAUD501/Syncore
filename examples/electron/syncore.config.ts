@@ -1,4 +1,6 @@
 export default {
-  databasePath: ".syncore/syncore.db",
-  storageDirectory: ".syncore/storage"
+  projectTarget: {
+    databasePath: ".syncore/syncore.db",
+    storageDirectory: ".syncore/storage"
+  }
 };

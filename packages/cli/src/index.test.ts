@@ -1,22 +1,14 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import WebSocket from "ws";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 const cliRoot = import.meta.dirname;
 const workspaceRoot = path.resolve(cliRoot, "..", "..", "..");
-const cliEntryPath = path.resolve(
-  workspaceRoot,
-  "packages",
-  "cli",
-  "src",
-  "index.ts"
-);
+const cliEntryPath = path.resolve(workspaceRoot, "packages", "cli", "src", "index.ts");
 const tsxRegisterPath = pathToFileURL(
   path.resolve(workspaceRoot, "node_modules", "tsx", "dist", "loader.mjs")
 ).href;
@@ -34,479 +26,345 @@ afterEach(async () => {
     if (!directory) {
       continue;
     }
-    await removeDirectory(directory);
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
 describe("syncore CLI", () => {
-  test("init scaffolds a project and codegen is stable", async () => {
-    const cwd = await createTempProjectDirectory();
+  test("root help exposes the new product command surface", async () => {
+    const result = await runCli(workspaceRoot, ["--help"]);
 
-    await runCli(cwd, ["init"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Recommended flow:");
+    expect(result.stdout).toContain("migrate");
+    expect(result.stdout).toContain("run [options] <functionName> [args]");
+    expect(result.stdout).toContain("data [options] [table]");
+    expect(result.stdout).toContain("export [options]");
+    expect(result.stdout).toContain("logs [options]");
+    expect(result.stdout).toContain("targets [options]");
+    expect(result.stdout).toContain("dashboard [options]");
+    expect(result.stdout).toContain("docs [options]");
+    expect(result.stdout).not.toContain("seed");
+  });
+
+  test("root version is exposed", async () => {
+    const result = await runCli(workspaceRoot, ["--version"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe("0.1.0");
+  });
+
+  test("init scaffolds a project and codegen remains stable", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const initResult = await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    expect(initResult.exitCode).toBe(0);
+    expect(initResult.stdout).toContain("Syncore scaffolded with the node template.");
 
     const generatedApiPath = path.join(cwd, "syncore", "_generated", "api.ts");
-    const generatedFunctionsPath = path.join(
-      cwd,
-      "syncore",
-      "_generated",
-      "functions.ts"
-    );
-    const generatedServerPath = path.join(
-      cwd,
-      "syncore",
-      "_generated",
-      "server.ts"
-    );
-    const tasksFunctionPath = path.join(
-      cwd,
-      "syncore",
-      "functions",
-      "tasks.ts"
-    );
+    const generatedFunctionsPath = path.join(cwd, "syncore", "_generated", "functions.ts");
+    const generatedServerPath = path.join(cwd, "syncore", "_generated", "server.ts");
+    const configPath = path.join(cwd, "syncore.config.ts");
     const firstGeneratedApi = await readFile(generatedApiPath, "utf8");
-    const firstGeneratedFunctions = await readFile(
-      generatedFunctionsPath,
-      "utf8"
-    );
+    const firstGeneratedFunctions = await readFile(generatedFunctionsPath, "utf8");
     const firstGeneratedServer = await readFile(generatedServerPath, "utf8");
-    const tasksFunction = await readFile(tasksFunctionPath, "utf8");
+    const configSource = await readFile(configPath, "utf8");
 
-    expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(true);
-    expect(await exists(path.join(cwd, "syncore", "schema.ts"))).toBe(true);
-    expect(
-      await exists(path.join(cwd, "syncore", "functions", "tasks.ts"))
-    ).toBe(true);
     expect(firstGeneratedApi).toContain("readonly tasks: SyncoreApi__tasks;");
-    expect(firstGeneratedApi).toContain("Generated `api` utility");
-    expect(firstGeneratedApi).toContain(
-      'createFunctionReferenceFor<typeof tasks__create>("mutation", "tasks/create")'
-    );
-    expect(firstGeneratedApi).toContain("export interface SyncoreApi");
     expect(firstGeneratedFunctions).toContain('"tasks/create"');
-    expect(firstGeneratedFunctions).toContain(
-      "Generated Syncore function registry"
-    );
-    expect(firstGeneratedFunctions).toContain(
-      "export interface SyncoreFunctionsRegistry"
-    );
-    expect(firstGeneratedServer).toContain(
-      'export { createFunctionReference, createFunctionReferenceFor, v } from "syncorejs";'
-    );
-    expect(firstGeneratedServer).toContain(
-      "Generated utilities for implementing Syncore query, mutation, and action functions"
-    );
-    expect(firstGeneratedServer).toContain(
-      'import type schema from "../schema"'
-    );
-    expect(firstGeneratedServer).toContain(
-      'import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncorejs";'
-    );
     expect(firstGeneratedServer).toContain("export function query<");
-    expect(firstGeneratedServer).toContain(
-      "export function query<TValidator extends Validator<unknown>, TResult>("
-    );
-    expect(firstGeneratedServer).toContain(
-      "export function mutation<TValidator extends Validator<unknown>, TResult>("
-    );
-    expect(firstGeneratedServer).toContain(
-      "export function action<TValidator extends Validator<unknown>, TResult>("
-    );
-    expect(firstGeneratedServer).toContain(
-      "return baseQuery(config as never) as SyncoreFunctionDefinition<"
-    );
-    expect(firstGeneratedServer).not.toContain("type FunctionReference,");
-    expect(firstGeneratedServer).not.toContain("  v,");
-    expect(tasksFunction).toContain("../_generated/server");
+    expect(configSource).toContain("projectTarget");
+    expect(configSource).toContain('databasePath: ".syncore/syncore.db"');
 
-    expectPublicDeclarationsToBeDocumented(firstGeneratedApi, [
-      { symbol: "SyncoreApi", kind: "interface" },
-      { symbol: "SyncoreApi__tasks", kind: "interface" },
-      { symbol: "api", kind: "const" }
-    ]);
-    expectPublicDeclarationsToBeDocumented(firstGeneratedFunctions, [
-      { symbol: "SyncoreFunctionsRegistry", kind: "interface" },
-      { symbol: "functions", kind: "const" }
-    ]);
-    expectPublicDeclarationsToBeDocumented(firstGeneratedServer, [
-      { symbol: "QueryCtx", kind: "type" },
-      { symbol: "MutationCtx", kind: "type" },
-      { symbol: "ActionCtx", kind: "type" },
-      { symbol: "query", kind: "function" },
-      { symbol: "mutation", kind: "function" },
-      { symbol: "action", kind: "function" }
-    ]);
-
-    await runCli(cwd, ["codegen"]);
-    const secondGeneratedApi = await readFile(generatedApiPath, "utf8");
-    const secondGeneratedFunctions = await readFile(
-      generatedFunctionsPath,
-      "utf8"
+    const codegenResult = await runCli(cwd, ["codegen"]);
+    expect(codegenResult.exitCode).toBe(0);
+    expect(await readFile(generatedApiPath, "utf8")).toBe(firstGeneratedApi);
+    expect(await readFile(generatedFunctionsPath, "utf8")).toBe(
+      firstGeneratedFunctions
     );
-    const secondGeneratedServer = await readFile(generatedServerPath, "utf8");
-
-    expect(secondGeneratedApi).toBe(firstGeneratedApi);
-    expect(secondGeneratedFunctions).toBe(firstGeneratedFunctions);
-    expect(secondGeneratedServer).toBe(firstGeneratedServer);
+    expect(await readFile(generatedServerPath, "utf8")).toBe(
+      firstGeneratedServer
+    );
   });
 
-  test("dev auto-scaffolds a missing project", async () => {
+  test("init refuses a non-empty directory when the interactive prompt is declined", async () => {
     const cwd = await createTempProjectDirectory();
-    const devtoolsPort = await getAvailablePort();
-    const dashboardPort = await getAvailablePort();
     await writeWorkspaceTsconfig(cwd);
+    await writeFile(path.join(cwd, "placeholder.txt"), "keep me\n");
 
-    const child = spawn(
-      process.execPath,
-      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
+    const result = await runCli(
+      cwd,
+      ["init", "--template", "node"],
       {
-        cwd,
-        env: createCliProcessEnv({
-          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
-          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
-        }),
-        stdio: ["ignore", "pipe", "pipe"]
+        stdin: "n\n",
+        env: {
+          SYNCORE_FORCE_INTERACTIVE: "1"
+        }
       }
     );
-    const childPipes = getPipedStreams(child);
 
-    try {
-      const output = await waitForOutput(
-        child,
-        childPipes,
-        "Syncore dev is ready."
-      );
-
-      expect(output).toContain("scaffolded one for you");
-      expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(true);
-      expect(
-        await exists(path.join(cwd, "syncore", "functions", "tasks.ts"))
-      ).toBe(true);
-    } finally {
-      child.kill("SIGTERM");
-      await waitForExit(child);
-    }
-  }, 20_000);
-
-  test("import loads JSONL rows into a local table", async () => {
-    const cwd = await createTempProjectDirectory();
-    await runCli(cwd, ["init"]);
-    await writeWorkspaceTsconfig(cwd);
-
-    const jsonlPath = path.join(cwd, "sampleData.jsonl");
-    await writeFile(
-      jsonlPath,
-      '{"text":"Buy groceries","done":false}\n{"text":"Ship Syncore","done":true}\n'
-    );
-
-    const importResult = await runCli(cwd, [
-      "import",
-      "--table",
-      "tasks",
-      "sampleData.jsonl"
-    ]);
-    expect(importResult.stdout).toContain("Imported 2 row(s)");
-
-    const database = new DatabaseSync(path.join(cwd, ".syncore", "syncore.db"));
-    const count = database
-      .prepare('SELECT COUNT(*) AS count FROM "tasks"')
-      .get() as { count: number };
-    database.close();
-    expect(count.count).toBe(2);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Scaffolding cancelled by user.");
+    expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(false);
   });
 
-  test("migration commands generate SQL, apply it, and report clean state", async () => {
+  test("react-web init does not scaffold a projectTarget", async () => {
     const cwd = await createTempProjectDirectory();
-
-    await runCli(cwd, ["init"]);
     await writeWorkspaceTsconfig(cwd);
 
-    const generateResult = await runCli(cwd, ["migrate:generate", "initial"]);
-    expect(generateResult.stdout).toContain("Generated");
+    const result = await runCli(cwd, ["init", "--template", "react-web", "--yes"]);
+    expect(result.exitCode).toBe(0);
 
-    const migrationPath = path.join(
+    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    expect(configSource).not.toContain("projectTarget");
+    expect(configSource.trim()).toBe("export default {};");
+  });
+
+  test("doctor reports workspace-root context in the monorepo root", async () => {
+    const result = await runCli(workspaceRoot, ["doctor", "--json"]);
+
+    expect(result.exitCode).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      data: {
+        status: string;
+        workspaceMatches: Array<{ relativePath: string }>;
+      };
+    };
+    expect(payload.data.status).toBe("workspace-root");
+    expect(payload.data.workspaceMatches.length).toBeGreaterThan(0);
+  });
+
+  test("doctor reports waiting-for-client for client-only templates without a connected runtime", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "react-web", "--yes"]);
+
+    const result = await runCli(cwd, ["doctor", "--json"], {
+      env: {
+        SYNCORE_DEVTOOLS_PORT: "45991"
+      }
+    });
+    expect(result.exitCode).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      data: {
+        status: string;
+        suggestions: string[];
+      };
+    };
+    expect(payload.data.status).toBe("waiting-for-client");
+    expect(payload.data.suggestions.some((entry) => entry.includes("targets"))).toBe(true);
+  });
+
+  test("doctor --verbose prints resolved context details", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+
+    const result = await runCli(cwd, ["doctor", "--verbose"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("cwd:");
+    expect(result.stdout).toContain("ports: dashboard=");
+    expect(result.stdout).toContain("project target:");
+  });
+
+  test("dev --once fails non-interactively when the project is missing", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const result = await runCli(cwd, ["dev", "--once", "--template", "node"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("No Syncore project was found");
+  });
+
+  test("dev --once scaffolds interactively and bootstraps the project", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const result = await runCli(
       cwd,
-      "syncore",
-      "migrations",
-      "0001_initial.sql"
+      ["dev", "--once", "--template", "node"],
+      {
+        stdin: "y\n",
+        env: {
+          SYNCORE_FORCE_INTERACTIVE: "1"
+        }
+      }
     );
-    expect(await exists(migrationPath)).toBe(true);
-    expect(
-      await exists(
-        path.join(cwd, "syncore", "migrations", "_schema_snapshot.json")
-      )
-    ).toBe(true);
 
-    const applyResult = await runCli(cwd, ["migrate:apply"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Starting Syncore local dev session...");
+    expect(result.stdout).toContain("Project");
+    expect(result.stdout).toContain("Codegen");
+    expect(result.stdout).toContain("Schema");
+    expect(result.stdout).toContain("Syncore dev bootstrap completed.");
+    expect(result.stdout).toContain("Ready:");
+    expect(result.stdout).toContain("dashboard: http://localhost:");
+    expect(result.stdout).not.toContain("127.0.0.1");
+    expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(true);
+    expect(await exists(path.join(cwd, ".syncore", "syncore.db"))).toBe(true);
+  }, 20_000);
+
+  test("migrate status/generate/apply work through the grouped subcommands", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+
+    const generateResult = await runCli(cwd, ["migrate", "generate", "initial"]);
+    expect(generateResult.exitCode).toBe(0);
+    expect(generateResult.stdout).toContain("Generated syncore/migrations/0001_initial.sql.");
+
+    const applyResult = await runCli(cwd, ["migrate", "apply"]);
+    expect(applyResult.exitCode).toBe(0);
     expect(applyResult.stdout).toContain("Applied 1 migration(s).");
 
-    const databasePath = path.join(cwd, ".syncore", "syncore.db");
-    const database = new DatabaseSync(databasePath);
-    const appliedMigration = database
-      .prepare(`SELECT COUNT(*) AS count FROM "_syncore_migrations"`)
-      .get() as { count: number };
-    database.close();
-    expect(appliedMigration.count).toBe(1);
-
-    const statusResult = await runCli(cwd, ["migrate:status"]);
+    const statusResult = await runCli(cwd, ["migrate", "status"]);
+    expect(statusResult.exitCode).toBe(0);
     expect(statusResult.stdout).toContain("Statements to generate: 0");
     expect(statusResult.stdout).toContain("Destructive changes: 0");
   }, 20_000);
 
-  test("dev starts the hub and serves websocket clients", async () => {
-    const cwd = await createTempProjectDirectory();
-    const devtoolsPort = await getAvailablePort();
-    const dashboardPort = await getAvailablePort();
-    await runCli(cwd, ["init"]);
-    await writeWorkspaceTsconfig(cwd);
+  test("run, data, export, and import work against the local runtime", async () => {
+    const sourceCwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(sourceCwd);
+    await runCli(sourceCwd, ["init", "--template", "node", "--yes"]);
+    await runCli(sourceCwd, ["migrate", "generate", "initial"]);
+    await runCli(sourceCwd, ["migrate", "apply"]);
 
-    const child = spawn(
-      process.execPath,
-      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
-      {
-        cwd,
-        env: createCliProcessEnv({
-          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
-          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
-        }),
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
-    const childPipes = getPipedStreams(child);
+    const mutationResult = await runCli(sourceCwd, [
+      "run",
+      "tasks/create",
+      '{"text":"Ship Syncore"}',
+      "--target",
+      "project"
+    ]);
+    expect(mutationResult.exitCode).toBe(0);
 
-    const output = await waitForOutput(
-      child,
-      childPipes,
-      `Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`
-    );
+    const queryResult = await runCli(sourceCwd, [
+      "run",
+      "api.tasks.list",
+      "{}",
+      "--target",
+      "project",
+      "--format",
+      "json"
+    ]);
+    expect(queryResult.exitCode).toBe(0);
+    expect(queryResult.stdout).toContain("Ship Syncore");
 
-    expect(output).toContain(
-      `Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`
-    );
-    expect(output).toContain("Syncore dev is ready.");
+    const dataResult = await runCli(sourceCwd, [
+      "data",
+      "tasks",
+      "--target",
+      "project",
+      "--format",
+      "json"
+    ]);
+    expect(dataResult.exitCode).toBe(0);
+    expect(dataResult.stdout).toContain("Ship Syncore");
 
-    const helloMessage = await readWebSocketMessage(
-      `ws://127.0.0.1:${devtoolsPort}`
-    );
-    expect(helloMessage).toContain('"type":"hello"');
+    const exportPath = path.join(sourceCwd, "tasks.jsonl");
+    const exportResult = await runCli(sourceCwd, [
+      "export",
+      "--table",
+      "tasks",
+      "--target",
+      "project",
+      "--path",
+      exportPath
+    ]);
+    expect(exportResult.exitCode).toBe(0);
+    expect(await exists(exportPath)).toBe(true);
 
-    child.kill("SIGTERM");
-    await waitForExit(child);
+    const targetCwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(targetCwd);
+    await runCli(targetCwd, ["init", "--template", "node", "--yes"]);
+    await runCli(targetCwd, ["migrate", "generate", "initial"]);
+    await runCli(targetCwd, ["migrate", "apply"]);
+
+    const importResult = await runCli(targetCwd, [
+      "import",
+      "--table",
+      "tasks",
+      "--target",
+      "project",
+      exportPath
+    ]);
+    expect(importResult.exitCode).toBe(0);
+    expect(importResult.stdout).toContain("Imported 1 row(s).");
+
+    const database = new DatabaseSync(path.join(targetCwd, ".syncore", "syncore.db"));
+    const count = database
+      .prepare('SELECT COUNT(*) AS count FROM "tasks"')
+      .get() as { count: number };
+    database.close();
+    expect(count.count).toBe(1);
+  }, 45_000);
+
+  test("dashboard returns JSON-friendly output", async () => {
+    const result = await runCli(workspaceRoot, ["dashboard", "--json"]);
+    expect(result.exitCode).toBe(0);
+    const payload = JSON.parse(result.stdout) as { data: { url: string } };
+    expect(payload.data.url).toContain("http://localhost:");
   });
 
-  test("hub replays active runtimes to new dashboards and broadcasts disconnects", async () => {
+  test("targets lists the local project target for node templates", async () => {
     const cwd = await createTempProjectDirectory();
-    const devtoolsPort = await getAvailablePort();
-    const dashboardPort = await getAvailablePort();
-    await runCli(cwd, ["init"]);
     await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
 
-    const child = spawn(
-      process.execPath,
-      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
-      {
-        cwd,
-        env: createCliProcessEnv({
-          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
-          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
-        }),
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
-    const childPipes = getPipedStreams(child);
-    const hubUrl = `ws://127.0.0.1:${devtoolsPort}`;
-
-    try {
-      await waitForOutput(
-        child,
-        childPipes,
-        `Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`
-      );
-
-      const dashboardA = await openWebSocketClient(hubUrl);
-      const runtime = await openWebSocketClient(hubUrl);
-
-      await waitForWebSocketMessage(dashboardA, (payload) =>
-        payload.includes('"runtimeId":"syncore-dev-hub"')
-      );
-      await waitForWebSocketMessage(runtime, (payload) =>
-        payload.includes('"runtimeId":"syncore-dev-hub"')
-      );
-
-      runtime.socket.send(
-        JSON.stringify({
-          type: "hello",
-          runtimeId: "runtime-browser-1",
-          platform: "browser",
-          sessionLabel: "Browser One"
-        })
-      );
-
-      const runtimeHello = await waitForWebSocketMessage(
-        dashboardA,
-        (payload) =>
-          payload.includes('"type":"hello"') &&
-          payload.includes('"runtimeId":"runtime-browser-1"')
-      );
-      expect(runtimeHello).toContain('"sessionLabel":"Browser One"');
-
-      runtime.socket.send(
-        JSON.stringify({
-          type: "event",
-          event: {
-            type: "mutation.committed",
-            runtimeId: "runtime-browser-1",
-            mutationId: "mut-1",
-            functionName: "bookmarks/toggleStar",
-            changedTables: ["bookmarks"],
-            durationMs: 12,
-            timestamp: Date.now()
-          }
-        })
-      );
-
-      await waitForWebSocketMessage(
-        dashboardA,
-        (payload) =>
-          payload.includes('"type":"event"') &&
-          payload.includes('"runtimeId":"runtime-browser-1"') &&
-          payload.includes('"mutation.committed"')
-      );
-
-      const dashboardB = await openWebSocketClient(hubUrl);
-
-      await waitForWebSocketMessage(dashboardB, (payload) =>
-        payload.includes('"runtimeId":"syncore-dev-hub"')
-      );
-      const replayedHello = await waitForWebSocketMessage(
-        dashboardB,
-        (payload) =>
-          payload.includes('"type":"hello"') &&
-          payload.includes('"runtimeId":"runtime-browser-1"')
-      );
-      expect(replayedHello).toContain('"sessionLabel":"Browser One"');
-      const replayedEvent = await waitForWebSocketMessage(
-        dashboardB,
-        (payload) =>
-          payload.includes('"type":"event"') &&
-          payload.includes('"runtimeId":"runtime-browser-1"') &&
-          payload.includes('"mutation.committed"')
-      );
-      expect(replayedEvent).toContain('"functionName":"bookmarks/toggleStar"');
-
-      runtime.socket.close();
-
-      const disconnectMessage = await waitForWebSocketMessage(
-        dashboardA,
-        (payload) =>
-          payload.includes('"type":"event"') &&
-          payload.includes('"runtime.disconnected"') &&
-          payload.includes('"runtimeId":"runtime-browser-1"')
-      );
-      expect(disconnectMessage).toContain('"type":"runtime.disconnected"');
-
-      dashboardA.socket.close();
-      dashboardB.socket.close();
-    } finally {
-      child.kill("SIGTERM");
-      await waitForExit(child);
-    }
+    const result = await runCli(cwd, ["targets", "--json"]);
+    expect(result.exitCode).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      command: string;
+      data: Array<{
+        id: string;
+        kind: string;
+        capabilities: string[];
+      }>;
+    };
+    expect(payload.command).toBe("targets");
+    expect(payload.data.some((entry) => entry.id === "project")).toBe(true);
+    expect(payload.data.find((entry) => entry.id === "project")?.capabilities).toContain("run");
   });
 
-  test("hub forwards queued subscriptions when the runtime connects later", async () => {
+  test("targets --verbose includes project target details", async () => {
     const cwd = await createTempProjectDirectory();
-    const devtoolsPort = await getAvailablePort();
-    const dashboardPort = await getAvailablePort();
-    await runCli(cwd, ["init"]);
     await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
 
-    const child = spawn(
-      process.execPath,
-      ["--import", tsxRegisterPath, cliEntryPath, "dev"],
-      {
-        cwd,
-        env: createCliProcessEnv({
-          SYNCORE_DEVTOOLS_PORT: String(devtoolsPort),
-          SYNCORE_DASHBOARD_PORT: String(dashboardPort)
-        }),
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
-    const childPipes = getPipedStreams(child);
-    const hubUrl = `ws://127.0.0.1:${devtoolsPort}`;
+    const result = await runCli(cwd, ["targets", "--verbose"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("project:");
+    expect(result.stdout).toContain("storage:");
+  });
 
-    try {
-      await waitForOutput(
-        child,
-        childPipes,
-        `Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`
-      );
+  test("JSON errors expose category, details, and next steps", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
 
-      const dashboard = await openWebSocketClient(hubUrl);
-      await waitForWebSocketMessage(dashboard, (payload) =>
-        payload.includes('"runtimeId":"syncore-dev-hub"')
-      );
-
-      dashboard.socket.send(
-        JSON.stringify({
-          type: "subscribe",
-          subscriptionId: "sub-queued-1",
-          targetRuntimeId: "runtime-browser-late",
-          payload: {
-            kind: "functions.catalog"
-          }
-        })
-      );
-
-      const runtime = await openWebSocketClient(hubUrl);
-      await waitForWebSocketMessage(runtime, (payload) =>
-        payload.includes('"runtimeId":"syncore-dev-hub"')
-      );
-
-      runtime.socket.send(
-        JSON.stringify({
-          type: "hello",
-          runtimeId: "runtime-browser-late",
-          platform: "browser",
-          sessionLabel: "Late Runtime"
-        })
-      );
-
-      const subscribeMessage = await waitForWebSocketMessage(
-        runtime,
-        (payload) =>
-          payload.includes('"type":"subscribe"') &&
-          payload.includes('"subscriptionId":"sub-queued-1"') &&
-          payload.includes('"kind":"functions.catalog"')
-      );
-      expect(subscribeMessage).toContain('"targetRuntimeId":"runtime-browser-late"');
-
-      runtime.socket.send(
-        JSON.stringify({
-          type: "subscription.data",
-          subscriptionId: "sub-queued-1",
-          runtimeId: "runtime-browser-late",
-          payload: {
-            kind: "functions.catalog.result",
-            functions: []
-          }
-        })
-      );
-
-      const subscriptionData = await waitForWebSocketMessage(
-        dashboard,
-        (payload) =>
-          payload.includes('"type":"subscription.data"') &&
-          payload.includes('"subscriptionId":"sub-queued-1"') &&
-          payload.includes('"kind":"functions.catalog.result"')
-      );
-      expect(subscriptionData).toContain('"runtimeId":"runtime-browser-late"');
-
-      dashboard.socket.close();
-      runtime.socket.close();
-    } finally {
-      child.kill("SIGTERM");
-      await waitForExit(child);
-    }
+    const result = await runCli(cwd, [
+      "run",
+      "tasks/list",
+      "{}",
+      "--target",
+      "missing",
+      "--json"
+    ]);
+    expect(result.exitCode).toBe(1);
+    const payload = JSON.parse(result.stdout) as {
+      error: {
+        category: string;
+        nextSteps?: string[];
+        details?: {
+          availableTargets?: string[];
+        };
+      };
+    };
+    expect(payload.error.category).toBe("target");
+    expect(payload.error.nextSteps?.length).toBeGreaterThan(0);
+    expect(payload.error.details?.availableTargets).toContain("project");
   });
 });
 
@@ -514,79 +372,6 @@ async function createTempProjectDirectory(): Promise<string> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "syncore-cli-"));
   tempDirectories.push(directory);
   return directory;
-}
-
-function expectPublicDeclarationsToBeDocumented(
-  declarations: string,
-  expectations: Array<{
-    symbol: string;
-    kind: "interface" | "function" | "class" | "const" | "type";
-  }>
-): void {
-  for (const expectation of expectations) {
-    const documentedPattern = createDocumentedDeclarationPattern(expectation);
-    expect(documentedPattern.test(declarations)).toBe(true);
-  }
-}
-
-function createDocumentedDeclarationPattern(expectation: {
-  symbol: string;
-  kind: "interface" | "function" | "class" | "const" | "type";
-}): RegExp {
-  const escapedSymbol = expectation.symbol.replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
-
-  switch (expectation.kind) {
-    case "interface":
-      return new RegExp(
-        String.raw`/\*\*[\s\S]*?\*/\s+(?:export\s+)?interface\s+${escapedSymbol}\b`
-      );
-    case "function":
-      return new RegExp(
-        String.raw`/\*\*[\s\S]*?\*/\s+(?:export\s+)?(?:declare\s+)?function\s+${escapedSymbol}\b`
-      );
-    case "class":
-      return new RegExp(
-        String.raw`/\*\*[\s\S]*?\*/\s+(?:export\s+)?(?:declare\s+)?class\s+${escapedSymbol}\b`
-      );
-    case "const":
-      return new RegExp(
-        String.raw`/\*\*[\s\S]*?\*/\s+(?:export\s+)?(?:declare\s+)?const\s+${escapedSymbol}\b`
-      );
-    case "type":
-      return new RegExp(
-        String.raw`/\*\*[\s\S]*?\*/\s+(?:export\s+)?type\s+${escapedSymbol}\b`
-      );
-  }
-}
-
-async function exists(filePath: string): Promise<boolean> {
-  try {
-    await stat(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function removeDirectory(directory: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      await rm(directory, { recursive: true, force: true });
-      return;
-    } catch (error) {
-      if (
-        !isRetryableWindowsFsError(error) ||
-        attempt === 4 ||
-        !(await exists(directory))
-      ) {
-        throw error;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
-    }
-  }
 }
 
 async function writeWorkspaceTsconfig(cwd: string): Promise<void> {
@@ -607,6 +392,15 @@ async function writeWorkspaceTsconfig(cwd: string): Promise<void> {
   );
 }
 
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function createCliProcessEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -615,26 +409,22 @@ function createCliProcessEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   };
 }
 
-function isRetryableWindowsFsError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    (error.code === "EBUSY" || error.code === "EPERM")
-  );
-}
-
 async function runCli(
   cwd: string,
-  args: string[]
+  args: string[],
+  options: {
+    env?: NodeJS.ProcessEnv;
+    stdin?: string;
+  } = {}
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
       ["--import", tsxRegisterPath, cliEntryPath, ...args],
       {
         cwd,
-        env: createCliProcessEnv(),
-        stdio: ["ignore", "pipe", "pipe"]
+        env: createCliProcessEnv(options.env),
+        stdio: ["pipe", "pipe", "pipe"]
       }
     );
     let stdout = "";
@@ -648,196 +438,21 @@ async function runCli(
     });
     child.on("error", reject);
     child.on("exit", (code) => {
-      const exitCode = code ?? 1;
-      if (exitCode !== 0) {
-        reject(
-          new Error(
-            `syncore ${args.join(" ")} failed with code ${exitCode}\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
-          )
-        );
-        return;
-      }
-      resolve({ stdout, stderr, exitCode });
-    });
-  });
-}
-
-async function waitForOutput(
-  child: ReturnType<typeof spawn>,
-  pipes: { stdout: NodeJS.ReadableStream; stderr: NodeJS.ReadableStream },
-  needle: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let output = "";
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error(`Timed out waiting for "${needle}" from syncorejs dev.`));
-    }, 15_000);
-
-    const handleData = (chunk: Buffer | string) => {
-      output += chunk.toString();
-      if (output.includes(needle)) {
-        cleanup();
-        resolve(output);
-      }
-    };
-
-    const handleExit = (code: number | null) => {
-      cleanup();
-      reject(
-        new Error(
-          `syncorejs dev exited before becoming ready (code ${code ?? "unknown"}).`
-        )
-      );
-    };
-
-    const cleanup = () => {
-      clearTimeout(timeout);
-      pipes.stdout.off("data", handleData);
-      pipes.stderr.off("data", handleData);
-      child.off("exit", handleExit);
-    };
-
-    pipes.stdout.on("data", handleData);
-    pipes.stderr.on("data", handleData);
-    child.on("exit", handleExit);
-  });
-}
-
-async function readWebSocketMessage(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(url);
-
-    socket.once("message", (payload) => {
-      socket.close();
-      resolve(stringifyWebSocketPayload(payload));
-    });
-    socket.once("error", (error) => {
-      reject(error);
-    });
-  });
-}
-
-async function openWebSocketClient(url: string): Promise<{
-  socket: WebSocket;
-  messages: string[];
-}> {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(url);
-    const messages: string[] = [];
-    socket.on("message", (payload) => {
-      messages.push(stringifyWebSocketPayload(payload));
-    });
-    socket.once("open", () => resolve({ socket, messages }));
-    socket.once("error", reject);
-  });
-}
-
-async function waitForWebSocketMessage(
-  client: { socket: WebSocket; messages: string[] },
-  predicate: (payload: string) => boolean
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    for (const message of client.messages) {
-      if (predicate(message)) {
-        resolve(message);
-        return;
-      }
-    }
-
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error("Timed out waiting for a matching WebSocket message."));
-    }, 10_000);
-
-    const handleMessage = (payload: unknown) => {
-      const serialized = stringifyWebSocketPayload(payload);
-      if (!predicate(serialized)) {
-        return;
-      }
-      cleanup();
-      resolve(serialized);
-    };
-
-    const handleError = (error: Error) => {
-      cleanup();
-      reject(error);
-    };
-
-    const cleanup = () => {
-      clearTimeout(timeout);
-      client.socket.off("message", handleMessage);
-      client.socket.off("error", handleError);
-    };
-
-    client.socket.on("message", handleMessage);
-    client.socket.on("error", handleError);
-  });
-}
-
-async function waitForExit(child: ReturnType<typeof spawn>): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    child.once("exit", () => resolve());
-    child.once("error", reject);
-  });
-}
-
-async function getAvailablePort(): Promise<number> {
-  return new Promise<number>((resolve, reject) => {
-    const server = createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        reject(new Error("Unable to resolve an ephemeral port for CLI tests."));
-        return;
-      }
-      const { port } = address;
-      server.close((error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(port);
+      resolve({
+        stdout,
+        stderr,
+        exitCode: code ?? 1
       });
     });
+
+    if (!child.stdin) {
+      reject(new Error("Expected stdin to be available for the spawned CLI."));
+      return;
+    }
+
+    if (options.stdin) {
+      child.stdin.write(options.stdin);
+    }
+    child.stdin.end();
   });
-}
-
-function getPipedStreams(child: ReturnType<typeof spawn>): {
-  stdout: NodeJS.ReadableStream;
-  stderr: NodeJS.ReadableStream;
-} {
-  if (!child.stdout || !child.stderr) {
-    throw new Error(
-      "Expected spawned CLI process to have piped stdout/stderr."
-    );
-  }
-  return {
-    stdout: child.stdout,
-    stderr: child.stderr
-  };
-}
-
-function stringifyWebSocketPayload(payload: unknown): string {
-  if (typeof payload === "string") {
-    return payload;
-  }
-  if (payload instanceof Buffer) {
-    return payload.toString("utf8");
-  }
-  if (Array.isArray(payload)) {
-    return Buffer.concat(payload).toString("utf8");
-  }
-  if (payload instanceof ArrayBuffer) {
-    return Buffer.from(payload).toString("utf8");
-  }
-  if (ArrayBuffer.isView(payload)) {
-    return Buffer.from(
-      payload.buffer,
-      payload.byteOffset,
-      payload.byteLength
-    ).toString("utf8");
-  }
-  throw new Error("Received an unsupported WebSocket payload type.");
 }

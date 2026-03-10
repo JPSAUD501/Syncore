@@ -10,6 +10,10 @@ import type {
   SyncoreRuntimeSummary,
   SyncoreDevtoolsCommandResultPayload
 } from "@syncore/devtools-protocol";
+import {
+  readDashboardActivityPreference,
+  writeDashboardActivityPreference
+} from "./activity";
 
 const MAX_EVENTS = 500;
 const HUB_RUNTIME_ID = "syncore-dev-hub";
@@ -103,10 +107,13 @@ interface DevtoolsState {
   connected: boolean;
   runtimes: Record<string, RuntimeState>;
   selectedRuntimeId: string | null;
+  includeDashboardActivity: boolean;
   _handleMessage: (msg: SyncoreDevtoolsMessage) => void;
   _setConnected: (v: boolean) => void;
   _markAllRuntimesDisconnected: () => void;
   selectRuntime: (runtimeId: string | null) => void;
+  setIncludeDashboardActivity: (value: boolean) => void;
+  toggleIncludeDashboardActivity: () => void;
   clearEvents: (runtimeId?: string) => void;
 }
 
@@ -115,6 +122,18 @@ function createRuntimeState(meta: RuntimeMeta): RuntimeState {
     ...meta,
     connected: true,
     ...EMPTY_RUNTIME_STATE
+  };
+}
+
+function resetRuntimeState(
+  runtime: RuntimeState,
+  overrides?: Partial<Pick<RuntimeState, "connected" | "events">>
+): RuntimeState {
+  return {
+    ...runtime,
+    ...EMPTY_RUNTIME_STATE,
+    connected: overrides?.connected ?? runtime.connected,
+    events: overrides?.events ?? EMPTY_RUNTIME_STATE.events
   };
 }
 
@@ -134,6 +153,99 @@ function ensureRuntime(
     ...(meta.origin ? { origin: meta.origin } : {}),
     ...(meta.sessionLabel ? { sessionLabel: meta.sessionLabel } : {})
   };
+}
+
+function countRuntimeEvents(events: SyncoreDevtoolsEvent[]) {
+  let queryCount = 0;
+  let mutationCount = 0;
+  let actionCount = 0;
+  let errorCount = 0;
+
+  for (const event of events) {
+    if (event.type === "query.executed") {
+      queryCount += 1;
+    }
+    if (event.type === "mutation.committed") {
+      mutationCount += 1;
+    }
+    if (event.type === "action.completed") {
+      actionCount += 1;
+      if (event.error) {
+        errorCount += 1;
+      }
+    }
+    if (event.type === "log" && event.level === "error") {
+      errorCount += 1;
+    }
+  }
+
+  return {
+    queryCount,
+    mutationCount,
+    actionCount,
+    errorCount
+  };
+}
+
+function getEventDedupKey(event: SyncoreDevtoolsEvent): string {
+  switch (event.type) {
+    case "mutation.committed":
+      return `${event.type}:${event.runtimeId}:${event.mutationId}`;
+    case "action.completed":
+      return `${event.type}:${event.runtimeId}:${event.actionId}`;
+    case "query.executed":
+      return [
+        event.type,
+        event.runtimeId,
+        event.functionName,
+        event.timestamp,
+        event.durationMs,
+        JSON.stringify(event.dependencies),
+        event.origin ?? "app"
+      ].join(":");
+    case "log":
+      return [
+        event.type,
+        event.runtimeId,
+        event.level,
+        event.message,
+        event.timestamp,
+        event.origin ?? "app"
+      ].join(":");
+    case "runtime.connected":
+      return `${event.type}:${event.runtimeId}:${event.timestamp}`;
+    case "runtime.disconnected":
+      return `${event.type}:${event.runtimeId}:${event.timestamp}`;
+    default:
+      return JSON.stringify(event);
+  }
+}
+
+function prependUniqueEvents(
+  existingEvents: SyncoreDevtoolsEvent[],
+  incomingEvents: SyncoreDevtoolsEvent[]
+): SyncoreDevtoolsEvent[] {
+  if (incomingEvents.length === 0) {
+    return existingEvents;
+  }
+
+  const knownKeys = new Set(existingEvents.map(getEventDedupKey));
+  const uniqueIncoming: SyncoreDevtoolsEvent[] = [];
+
+  for (const event of incomingEvents) {
+    const key = getEventDedupKey(event);
+    if (knownKeys.has(key)) {
+      continue;
+    }
+    knownKeys.add(key);
+    uniqueIncoming.push(event);
+  }
+
+  if (uniqueIncoming.length === 0) {
+    return existingEvents;
+  }
+
+  return [...uniqueIncoming, ...existingEvents].slice(0, MAX_EVENTS);
 }
 
 function getActiveRuntime(state: DevtoolsState): RuntimeState | null {
@@ -180,6 +292,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   connected: false,
   runtimes: {},
   selectedRuntimeId: null,
+  includeDashboardActivity: readDashboardActivityPreference(),
 
   _setConnected: (v) =>
     set((state) => (state.connected === v ? state : { connected: v })),
@@ -193,13 +306,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
             return [runtimeId, runtime];
           }
           changed = true;
-          return [
-            runtimeId,
-            {
-              ...runtime,
-              connected: false
-            }
-          ];
+          return [runtimeId, resetRuntimeState(runtime, { connected: false })];
         })
       );
       return changed ? { runtimes } : state;
@@ -211,6 +318,22 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
         ? state
         : { selectedRuntimeId: runtimeId }
     ),
+
+  setIncludeDashboardActivity: (value) => {
+    writeDashboardActivityPreference(value);
+    set((state) =>
+      state.includeDashboardActivity === value
+        ? state
+        : { includeDashboardActivity: value }
+    );
+  },
+
+  toggleIncludeDashboardActivity: () =>
+    set((state) => {
+      const nextValue = !state.includeDashboardActivity;
+      writeDashboardActivityPreference(nextValue);
+      return { includeDashboardActivity: nextValue };
+    }),
 
   _handleMessage: (msg) => {
     switch (msg.type) {
@@ -255,26 +378,74 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               state.runtimes[runtimeId]?.summary?.platform ??
               "unknown"
           });
-          const events = [msg.event, ...baseRuntime.events].slice(
-            0,
-            MAX_EVENTS
-          );
+          const events = prependUniqueEvents(baseRuntime.events, [msg.event]);
+          if (events === baseRuntime.events) {
+            return state;
+          }
           const e = msg.event;
+          const counts = countRuntimeEvents(events);
+          const nextRuntime: RuntimeState =
+            e.type === "runtime.disconnected"
+              ? {
+                  ...baseRuntime,
+                  connected: false,
+                  events,
+                  ...counts,
+                  liveQueryVersion: baseRuntime.liveQueryVersion + 1,
+                  lastSubscriptionError: null
+                }
+              : {
+                  ...baseRuntime,
+                  connected: true,
+                  events,
+                  ...counts,
+                  liveQueryVersion: baseRuntime.liveQueryVersion + 1,
+                  lastSubscriptionError: null
+                };
+          const runtimes = {
+            ...state.runtimes,
+            [runtimeId]: nextRuntime
+          };
+          return {
+            runtimes,
+            selectedRuntimeId: resolveSelectedRuntimeId(
+              runtimes,
+              state.selectedRuntimeId,
+              e.type === "runtime.disconnected" ? undefined : runtimeId
+            )
+          };
+        });
+        break;
+
+      case "event.batch":
+        if (msg.runtimeId === HUB_RUNTIME_ID || msg.events.length === 0) {
+          break;
+        }
+        set((state) => {
+          const runtimeId = msg.runtimeId;
+          const baseRuntime = ensureRuntime(state.runtimes, {
+            runtimeId,
+            platform:
+              state.runtimes[runtimeId]?.platform ??
+              state.runtimes[runtimeId]?.summary?.platform ??
+              "unknown"
+          });
+          const batchEvents = msg.events.filter(
+            (event) => event.runtimeId === runtimeId
+          );
+          if (batchEvents.length === 0) {
+            return state;
+          }
+          const events = prependUniqueEvents(baseRuntime.events, batchEvents);
+          if (events === baseRuntime.events) {
+            return state;
+          }
+          const counts = countRuntimeEvents(events);
           const nextRuntime: RuntimeState = {
             ...baseRuntime,
-            connected: msg.event.type === "runtime.disconnected" ? false : true,
+            connected: true,
             events,
-            queryCount:
-              baseRuntime.queryCount + (e.type === "query.executed" ? 1 : 0),
-            mutationCount:
-              baseRuntime.mutationCount +
-              (e.type === "mutation.committed" ? 1 : 0),
-            actionCount:
-              baseRuntime.actionCount + (e.type === "action.completed" ? 1 : 0),
-            errorCount:
-              baseRuntime.errorCount +
-              (e.type === "log" && e.level === "error" ? 1 : 0) +
-              (e.type === "action.completed" && e.error ? 1 : 0),
+            ...counts,
             liveQueryVersion: baseRuntime.liveQueryVersion + 1,
             lastSubscriptionError: null
           };
@@ -287,7 +458,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
             selectedRuntimeId: resolveSelectedRuntimeId(
               runtimes,
               state.selectedRuntimeId,
-              e.type === "runtime.disconnected" ? undefined : runtimeId
+              runtimeId
             )
           };
         });
@@ -589,20 +760,29 @@ export function subscribe(
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let connectionStarted = false;
+let connectionGeneration = 0;
 
 function connect() {
   if (ws || !connectionStarted) return;
 
   const socket = new WebSocket(WS_URL);
+  const generation = ++connectionGeneration;
   ws = socket;
 
   socket.onopen = () => {
+    if (socket !== ws || generation !== connectionGeneration) {
+      socket.close();
+      return;
+    }
     debugLog("ws-open", "[dashboard] websocket open", { url: WS_URL });
     useDevtoolsStore.getState()._setConnected(true);
     flushSubscriptions();
   };
 
   socket.onmessage = (e) => {
+    if (socket !== ws || generation !== connectionGeneration) {
+      return;
+    }
     if (typeof e.data !== "string") return;
     try {
       const msg = JSON.parse(e.data) as SyncoreDevtoolsMessage;
@@ -621,6 +801,9 @@ function connect() {
   };
 
   socket.onclose = () => {
+    if (socket !== ws || generation !== connectionGeneration) {
+      return;
+    }
     ws = null;
     debugLog("ws-close", "[dashboard] websocket close", {
       reconnecting: connectionStarted
@@ -642,6 +825,9 @@ function connect() {
   };
 
   socket.onerror = () => {
+    if (socket !== ws || generation !== connectionGeneration) {
+      return;
+    }
     socket.close();
   };
 }
@@ -663,6 +849,7 @@ export function initDevtoolsConnection() {
 /** Tear down the WebSocket connection. */
 export function destroyDevtoolsConnection() {
   connectionStarted = false;
+  connectionGeneration += 1;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;

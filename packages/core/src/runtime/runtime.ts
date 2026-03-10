@@ -2,7 +2,8 @@ import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import type {
   SyncoreDevtoolsEvent,
   SyncoreActiveQueryInfo,
-  SyncoreRuntimeSummary
+  SyncoreRuntimeSummary,
+  SyncoreDevtoolsEventOrigin
 } from "@syncore/devtools-protocol";
 import {
   describeValidator,
@@ -86,6 +87,10 @@ type ActiveQueryRecord = {
   lastResult: unknown;
   lastError: Error | undefined;
   lastRunAt: number;
+};
+
+type DevtoolsEventMeta = {
+  origin?: SyncoreDevtoolsEventOrigin;
 };
 
 type ScheduledJobRow = {
@@ -997,7 +1002,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
   }
 
   async runDevtoolsMutation<TResult>(
-    callback: (ctx: { db: SyncoreDatabaseWriter<TSchema> }) => Promise<TResult>
+    callback: (ctx: { db: SyncoreDatabaseWriter<TSchema> }) => Promise<TResult>,
+    meta: DevtoolsEventMeta = {}
   ): Promise<TResult> {
     const mutationId = generateId();
     const startedAt = Date.now();
@@ -1039,12 +1045,16 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
       functionName: "__devtools__/mutation",
       changedTables: [...changedTables],
       durationMs: Date.now() - startedAt,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      ...(meta.origin ? { origin: meta.origin } : {})
     });
     return result;
   }
 
-  async forceRefreshDevtools(reason: string): Promise<void> {
+  async forceRefreshDevtools(
+    reason: string,
+    meta: DevtoolsEventMeta = {}
+  ): Promise<void> {
     await this.refreshAllActiveQueries();
     await this.publishExternalChange({
       scope: "database",
@@ -1056,7 +1066,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
       runtimeId: this.runtimeId,
       level: "info",
       message: reason,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      ...(meta.origin ? { origin: meta.origin } : {})
     });
   }
 
@@ -1066,7 +1077,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
 
   async runQuery<TArgs, TResult>(
     reference: FunctionReference<"query", TArgs, TResult>,
-    args: JsonObject = {}
+    args: JsonObject = {},
+    meta: DevtoolsEventMeta = {}
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "query");
     const dependencyCollector = new Set<DependencyKey>();
@@ -1085,7 +1097,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
       functionName: reference.name,
       dependencies: [...dependencyCollector],
       durationMs: Date.now() - startedAt,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      ...(meta.origin ? { origin: meta.origin } : {})
     });
 
     return result;
@@ -1093,7 +1106,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
 
   async runMutation<TArgs, TResult>(
     reference: FunctionReference<"mutation", TArgs, TResult>,
-    args: JsonObject = {}
+    args: JsonObject = {},
+    meta: DevtoolsEventMeta = {}
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "mutation");
     const mutationId = generateId();
@@ -1135,7 +1149,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
       functionName: reference.name,
       changedTables: [...changedTables],
       durationMs: Date.now() - startedAt,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      ...(meta.origin ? { origin: meta.origin } : {})
     });
 
     return result;
@@ -1143,7 +1158,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
 
   async runAction<TArgs, TResult>(
     reference: FunctionReference<"action", TArgs, TResult>,
-    args: JsonObject = {}
+    args: JsonObject = {},
+    meta: DevtoolsEventMeta = {}
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "action");
     const actionId = generateId();
@@ -1161,7 +1177,8 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         actionId,
         functionName: reference.name,
         durationMs: Date.now() - startedAt,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...(meta.origin ? { origin: meta.origin } : {})
       });
       return result;
     } catch (error) {
@@ -1172,6 +1189,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
         functionName: reference.name,
         durationMs: Date.now() - startedAt,
         timestamp: Date.now(),
+        ...(meta.origin ? { origin: meta.origin } : {}),
         error: error instanceof Error ? error.message : String(error)
       });
       throw error;

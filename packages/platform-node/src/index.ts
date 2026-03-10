@@ -443,7 +443,11 @@ export function createNodeSyncoreRuntime(
           ...(options.origin ? { origin: options.origin } : {}),
           ...(options.sessionLabel
             ? { sessionLabel: options.sessionLabel }
-            : {})
+            : {}),
+          targetKind: "client",
+          storageProtocol: "file",
+          databaseLabel: path.basename(options.databasePath),
+          storageIdentity: `file::${path.resolve(options.databasePath)}`
         })
       : undefined;
   const runtimeOptions: SyncoreRuntimeOptions<NodeSyncoreSchema> = {
@@ -470,7 +474,7 @@ export function createNodeSyncoreRuntime(
     runtimeOptions.scheduler = options.scheduler;
   }
   const runtime = new SyncoreRuntime(runtimeOptions);
-  websocketDevtools?.attachRuntime(runtime as SyncoreRuntime<AnySyncoreSchema>);
+  websocketDevtools?.attachRuntime(runtime);
   if (websocketDevtools) {
     websocketDevtools.attachCommandHandler(
       createDevtoolsCommandHandler({
@@ -655,6 +659,10 @@ export interface NodeWebSocketDevtoolsSinkOptions {
   appName?: string;
   origin?: string;
   sessionLabel?: string;
+  targetKind?: "client";
+  storageProtocol?: string;
+  databaseLabel?: string;
+  storageIdentity?: string;
 }
 
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
@@ -696,6 +704,14 @@ export function createNodeWebSocketDevtoolsSink(
           ...(options.origin ? { origin: options.origin } : {}),
           ...(options.sessionLabel
             ? { sessionLabel: options.sessionLabel }
+            : {}),
+          ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.storageProtocol
+            ? { storageProtocol: options.storageProtocol }
+            : {}),
+          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.storageIdentity
+            ? { storageIdentity: options.storageIdentity }
             : {})
         });
       }
@@ -832,6 +848,14 @@ export function createNodeWebSocketDevtoolsSink(
           ...(options.origin ? { origin: options.origin } : {}),
           ...(options.sessionLabel
             ? { sessionLabel: options.sessionLabel }
+            : {}),
+          ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.storageProtocol
+            ? { storageProtocol: options.storageProtocol }
+            : {}),
+          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.storageIdentity
+            ? { storageIdentity: options.storageIdentity }
             : {})
         });
       }
@@ -869,7 +893,15 @@ function withRuntimeSummaryMeta(
     ...summary,
     ...(options.appName ? { appName: options.appName } : {}),
     ...(options.origin ? { origin: options.origin } : {}),
-    ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {})
+    ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {}),
+    ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+    ...(options.storageProtocol
+      ? { storageProtocol: options.storageProtocol }
+      : {}),
+    ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+    ...(options.storageIdentity
+      ? { storageIdentity: options.storageIdentity }
+      : {})
   };
 }
 

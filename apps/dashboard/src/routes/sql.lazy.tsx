@@ -296,13 +296,17 @@ function SqlPage() {
   useEffect(() => {
     if (mode !== "live") {
       liveStartedAtRef.current = null;
+      setResult((prev) => (prev?.mode === "live" ? null : prev));
       return;
     }
     const queryText = query.trim();
-    if (!queryText) {
+    if (!isReady || !queryText) {
       liveStartedAtRef.current = null;
       setResult(null);
       return;
+    }
+    if (liveSubscription.loading) {
+      setResult(null);
     }
     if (liveStartedAtRef.current === null) {
       liveStartedAtRef.current = performance.now();
@@ -338,7 +342,7 @@ function SqlPage() {
         return [nextEntry, ...prev.slice(0, 49)];
       });
     }
-  }, [liveSubscription.data, liveSubscription.loading, mode, query]);
+  }, [isReady, liveSubscription.data, liveSubscription.loading, mode, query]);
 
   /* ---------------------------------------------------------------- */
   /*  Clear history                                                    */

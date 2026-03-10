@@ -25,6 +25,16 @@ npx syncorejs dev
 If this is a fresh app, Syncore scaffolds a minimal local backend for you and
 keeps `syncore/_generated/*` up to date.
 
+Useful follow-up commands:
+
+```bash
+npx syncorejs doctor
+npx syncorejs targets
+npx syncorejs run tasks/list --target project
+npx syncorejs data tasks --target project
+npx syncorejs dashboard
+```
+
 ## 4. Start the runtime in the main process
 
 `src/main.ts`

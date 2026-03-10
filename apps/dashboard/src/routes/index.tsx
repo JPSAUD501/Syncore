@@ -27,10 +27,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   useDevtoolsSubscription,
   useDidJustChange,
-  useRefreshTimer
+  useRefreshTimer,
+  useConnection,
+  useDevtools
 } from "@/hooks";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useRef, useEffect } from "react";
+import { getActivityOriginLabel } from "@/lib/activity";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage
@@ -204,10 +207,29 @@ function getEventDetail(event: SyncoreDevtoolsEvent): string {
 /* ------------------------------------------------------------------ */
 
 function ActiveQueries() {
-  const queries = useActiveRuntime()?.activeQueries ?? [];
+  const { runtimeConnected } = useConnection();
+  const activeRuntime = useActiveRuntime();
+  const runtimeId = activeRuntime?.runtimeId ?? null;
+  const activeQueriesSubscription = useDevtoolsSubscription(
+    runtimeConnected && runtimeId ? { kind: "runtime.activeQueries" } : null,
+    { enabled: runtimeConnected && !!runtimeId }
+  );
+  const queries =
+    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
+      ? activeQueriesSubscription.data.activeQueries
+      : (activeRuntime?.activeQueries ?? []);
 
   // Keep relative timestamps ticking
   useRefreshTimer(1000);
+
+  if (runtimeConnected && activeQueriesSubscription.loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-6 text-[12px] text-text-tertiary">
+        <Activity size={13} className="animate-pulse" />
+        Waiting for live query data.
+      </div>
+    );
+  }
 
   if (queries.length === 0) {
     return (
@@ -240,35 +262,80 @@ function ActiveQueries() {
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
-function OverviewPage() {
+export function OverviewPage() {
   const connected = useDevtoolsStore((s) => s.connected);
   const activeRuntime = useActiveRuntime();
+  const { runtimeConnected } = useConnection();
+  const {
+    events,
+    queryCount,
+    mutationCount,
+    actionCount,
+    errorCount,
+    includeDashboardActivity
+  } = useDevtools();
   const connectedRuntimeCount = useConnectedRuntimeCount();
   const runtimeId = activeRuntime?.runtimeId ?? null;
   const platform = activeRuntime?.platform ?? null;
-  const events = activeRuntime?.events ?? [];
-  const queryCount = activeRuntime?.queryCount ?? 0;
-  const mutationCount = activeRuntime?.mutationCount ?? 0;
-  const actionCount = activeRuntime?.actionCount ?? 0;
-  const errorCount = activeRuntime?.errorCount ?? 0;
-  const summary = activeRuntime?.summary ?? null;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
 
-  useDevtoolsSubscription(
-    connected && runtimeId ? { kind: "runtime.summary" } : null,
-    { enabled: connected && !!runtimeId }
+  const summarySubscription = useDevtoolsSubscription(
+    runtimeConnected && runtimeId ? { kind: "runtime.summary" } : null,
+    { enabled: runtimeConnected && !!runtimeId }
   );
-  useDevtoolsSubscription(
-    connected && runtimeId ? { kind: "runtime.activeQueries" } : null,
-    { enabled: connected && !!runtimeId }
+  const activeQueriesSubscription = useDevtoolsSubscription(
+    runtimeConnected && runtimeId ? { kind: "runtime.activeQueries" } : null,
+    { enabled: runtimeConnected && !!runtimeId }
   );
+  const summary =
+    summarySubscription.data?.kind === "runtime.summary.result"
+      ? summarySubscription.data.summary
+      : (activeRuntime?.summary ?? null);
+  const activeQueries =
+    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
+      ? activeQueriesSubscription.data.activeQueries
+      : (activeRuntime?.activeQueries ?? []);
+  const runtimeDataLoading =
+    runtimeConnected &&
+    (summarySubscription.loading || activeQueriesSubscription.loading);
+  const runtimeSnapshotPending = Boolean(runtimeId) && runtimeDataLoading;
+  const statValue = (value: number) =>
+    runtimeSnapshotPending ? "..." : value;
+  const statSubtitle = (defaultText: string) => {
+    if (runtimeSnapshotPending) {
+      return "Waiting for runtime data";
+    }
+    if (runtimeId && !runtimeConnected) {
+      return "Captured before disconnect";
+    }
+    return defaultText;
+  };
 
-  // Track known event count for fade-in on new events
-  const prevEventCountRef = useRef(events.length);
-  const newEventOffset = prevEventCountRef.current;
+  // Only animate events that arrive after the first batch for a runtime.
+  const previousRuntimeIdRef = useRef<string | null>(runtimeId);
+  const previousEventCountRef = useRef(events.length);
+  const hasHydratedInitialEventsRef = useRef(events.length > 0);
+  let newEventCount = 0;
+  if (previousRuntimeIdRef.current !== runtimeId) {
+    previousRuntimeIdRef.current = runtimeId;
+    previousEventCountRef.current = events.length;
+    hasHydratedInitialEventsRef.current = events.length > 0;
+  } else if (!hasHydratedInitialEventsRef.current) {
+    if (events.length > 0) {
+      hasHydratedInitialEventsRef.current = true;
+    }
+    previousEventCountRef.current = events.length;
+  } else if (events.length > previousEventCountRef.current) {
+    newEventCount = events.length - previousEventCountRef.current;
+  }
+
   useEffect(() => {
-    prevEventCountRef.current = events.length;
-  }, [events.length]);
+    if (previousRuntimeIdRef.current !== runtimeId) {
+      previousRuntimeIdRef.current = runtimeId;
+      hasHydratedInitialEventsRef.current = events.length > 0;
+    }
+    previousEventCountRef.current = events.length;
+  }, [events.length, runtimeId]);
 
   return (
     <div className="space-y-4">
@@ -324,7 +391,7 @@ function OverviewPage() {
             <div className="flex items-center gap-1">
               <span className="text-text-tertiary">Watching</span>
               <span className="font-mono text-fn-query">
-                {activeRuntime?.activeQueries.length ?? 0} queries
+                {activeQueries.length} queries
               </span>
             </div>
           )}
@@ -332,7 +399,7 @@ function OverviewPage() {
             <div className="flex items-center gap-1">
               <span className="text-text-tertiary">Recent</span>
               <span className="font-mono text-text-primary">
-                {summary.recentEventCount} events
+                {events.length} events
               </span>
             </div>
           )}
@@ -343,31 +410,31 @@ function OverviewPage() {
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Queries"
-          value={queryCount}
+          value={statValue(queryCount)}
           icon={Search}
           color="text-fn-query"
-          subtitle="Total executed"
+          subtitle={statSubtitle("Total executed")}
         />
         <StatCard
           label="Mutations"
-          value={mutationCount}
+          value={statValue(mutationCount)}
           icon={Database}
           color="text-fn-mutation"
-          subtitle="Total committed"
+          subtitle={statSubtitle("Total committed")}
         />
         <StatCard
           label="Actions"
-          value={actionCount}
+          value={statValue(actionCount)}
           icon={Zap}
           color="text-fn-action"
-          subtitle="Total completed"
+          subtitle={statSubtitle("Total completed")}
         />
         <StatCard
           label="Errors"
-          value={errorCount}
+          value={statValue(errorCount)}
           icon={AlertTriangle}
           color="text-error"
-          subtitle="Total errors"
+          subtitle={statSubtitle("Total errors")}
         />
       </div>
 
@@ -380,6 +447,11 @@ function OverviewPage() {
               Recent Activity
             </h2>
             <div className="flex items-center gap-2">
+              {!includeDashboardActivity && (
+                <Badge variant="outline" className="text-[10px]">
+                  App only
+                </Badge>
+              )}
               <span className="text-[11px] text-text-tertiary tabular-nums">
                 {events.length} events
               </span>
@@ -397,7 +469,12 @@ function OverviewPage() {
             </div>
           </div>
           <ScrollArea className="max-h-[420px] bg-bg-base/30">
-            {events.length === 0 ? (
+            {runtimeSnapshotPending && events.length === 0 ? (
+              <div className="flex h-28 items-center justify-center gap-2 px-4 text-[12px] text-text-tertiary">
+                <Activity size={13} className="animate-pulse" />
+                Waiting for runtime data.
+              </div>
+            ) : events.length === 0 ? (
               <div className="flex h-28 items-center justify-center px-4 text-[12px] text-text-tertiary">
                 Waiting for runtime activity.
               </div>
@@ -406,13 +483,13 @@ function OverviewPage() {
                 {events.slice(0, 50).map((event, i) => {
                   const config = getEventConfig(event.type);
                   const detail = getEventDetail(event);
-                  const isNew = i >= newEventOffset;
+                  const isNew = i < newEventCount;
                   return (
                     <div
                       key={`${event.type}-${event.timestamp}-${i}`}
                       className={cn(
                         "flex items-center gap-3 px-4 py-2.5 hover:bg-bg-elevated/50 transition-colors",
-                        isNew && "animate-fade-in"
+                        isNew && "animate-fade-in-fast"
                       )}
                     >
                       <config.icon size={13} className={config.color} />
@@ -421,6 +498,12 @@ function OverviewPage() {
                         className="w-20 shrink-0 justify-center text-[10px]"
                       >
                         {config.label}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="hidden w-20 shrink-0 justify-center text-[10px] lg:inline-flex"
+                      >
+                        {getActivityOriginLabel(event)}
                       </Badge>
                       <span className="flex-1 truncate font-mono text-[12px] text-text-secondary">
                         {detail}
@@ -443,7 +526,7 @@ function OverviewPage() {
               Active Queries
             </h2>
             <Badge variant="secondary" className="tabular-nums">
-              {activeRuntime?.activeQueries.length ?? 0} watching
+              {runtimeSnapshotPending ? "..." : `${activeQueries.length} watching`}
             </Badge>
           </div>
           <ScrollArea className="max-h-[420px] p-3">

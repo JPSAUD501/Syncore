@@ -92,19 +92,22 @@ export function createDevtoolsCommandHandler(
             case "query":
               result = await runtime.runQuery(
                 createFunctionReference("query", payload.functionName),
-                payload.args
+                payload.args,
+                { origin: "dashboard" }
               );
               break;
             case "mutation":
               result = await runtime.runMutation(
                 createFunctionReference("mutation", payload.functionName),
-                payload.args
+                payload.args,
+                { origin: "dashboard" }
               );
               break;
             case "action":
               result = await runtime.runAction(
                 createFunctionReference("action", payload.functionName),
-                payload.args
+                payload.args,
+                { origin: "dashboard" }
               );
               break;
           }
@@ -126,7 +129,7 @@ export function createDevtoolsCommandHandler(
         try {
           const id = await runDevtoolsMutation(runtime, async (ctx) =>
             ctx.db.insert(payload.table as never, payload.document as never)
-          );
+          , { origin: "dashboard" });
           return { kind: "data.mutate.result", success: true, id };
         } catch (error) {
           return {
@@ -146,7 +149,7 @@ export function createDevtoolsCommandHandler(
               payload.fields as never
             );
             return null;
-          });
+          }, { origin: "dashboard" });
           return {
             kind: "data.mutate.result",
             success: true,
@@ -166,7 +169,7 @@ export function createDevtoolsCommandHandler(
           await runDevtoolsMutation(runtime, async (ctx) => {
             await ctx.db.delete(payload.table as never, payload.id);
             return null;
-          });
+          }, { origin: "dashboard" });
           return { kind: "data.mutate.result", success: true };
         } catch (error) {
           return {
@@ -215,7 +218,8 @@ export function createDevtoolsCommandHandler(
           const result = await driver.run(payload.query);
           runtime.notifyDevtoolsScopes(analysis.observedScopes);
           await runtime.forceRefreshDevtools(
-            "SQL write executed from devtools dashboard."
+            "SQL write executed from devtools dashboard.",
+            { origin: "dashboard" }
           );
           return {
             kind: "sql.write.result",
@@ -240,7 +244,7 @@ export function createDevtoolsCommandHandler(
               [Date.now(), payload.jobId]
             );
             return null;
-          });
+          }, { origin: "dashboard" });
           return { kind: "scheduler.cancel.result", success: true };
         } catch (error) {
           return {
@@ -292,6 +296,47 @@ export function createDevtoolsSubscriptionHost(
 
   return {
     async subscribe(subscriptionId, payload, listener) {
+      if (payload.kind === "fn.watch") {
+        const definition = functions[payload.functionName];
+        if (!definition || definition.kind !== "query") {
+          listener({
+            kind: "fn.watch.result",
+            error: `Unknown query function: ${payload.functionName}`
+          });
+          return;
+        }
+        const client = runtime.createClient();
+        const watch = client.watchQuery(
+          createFunctionReference("query", payload.functionName),
+          payload.args
+        );
+        const emitWatchResult = () => {
+          const error = watch.localQueryError();
+          listener({
+            kind: "fn.watch.result",
+            ...(error
+              ? {
+                  error: error.message
+                }
+              : {
+                  result: watch.localQueryResult()
+                })
+          });
+        };
+        const unsubscribeUpdates = watch.onUpdate(emitWatchResult);
+        subscriptions.set(subscriptionId, {
+          payload,
+          listener,
+          unsubscribeRuntime: () => {
+            unsubscribeUpdates();
+            watch.dispose?.();
+          },
+          scopes: new Set<DevtoolsInvalidationScope>(["all"])
+        });
+        emitWatchResult();
+        return;
+      }
+
       const unsubscribeRuntime = runtime.subscribeToDevtoolsInvalidations(
         (scopes) => {
           void handleInvalidation(scopes);
@@ -347,6 +392,8 @@ async function resolveSubscriptionPayload(
         kind: "runtime.activeQueries.result",
         activeQueries: runtime.getActiveQueryInfos()
       };
+    case "fn.watch":
+      throw new Error("Function watches are pushed incrementally and have no snapshot payload.");
     case "schema.tables": {
       const tables = await getSchemaTables(driver, schema);
       console.debug("[devtools] schema.tables", {
@@ -667,12 +714,13 @@ async function runDevtoolsMutation<TResult>(
         id: string,
         value: Record<string, unknown>
       ): Promise<void>;
-      delete(tableName: string, id: string): Promise<void>;
-    };
-  }) => Promise<TResult>
-): Promise<TResult> {
-  return runtime.runDevtoolsMutation(callback as never);
-}
+        delete(tableName: string, id: string): Promise<void>;
+      };
+    }) => Promise<TResult>,
+  meta?: { origin?: "dashboard" }
+  ): Promise<TResult> {
+    return runtime.runDevtoolsMutation(callback as never, meta);
+  }
 
 function scopesForSubscription(
   payload: SyncoreDevtoolsSubscriptionPayload,
@@ -683,6 +731,8 @@ function scopesForSubscription(
       return new Set(["runtime.summary"]);
     case "runtime.activeQueries":
       return new Set(["runtime.activeQueries"]);
+    case "fn.watch":
+      return new Set(["all"]);
     case "schema.tables":
       return new Set(["schema.tables"]);
     case "data.table":

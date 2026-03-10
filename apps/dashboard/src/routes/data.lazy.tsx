@@ -149,6 +149,15 @@ function DataPage() {
   }, [dataSubscription.data]);
 
   useEffect(() => {
+    if (isReady && !dataSubscription.loading) {
+      return;
+    }
+    setRows((current) => (current.length === 0 ? current : []));
+    setTotalCount((current) => (current === 0 ? current : 0));
+    setSelectedRowIds((current) => (current.length === 0 ? current : []));
+  }, [dataSubscription.loading, isReady]);
+
+  useEffect(() => {
     setDataLoading((current) =>
       current === dataSubscription.loading ? current : dataSubscription.loading
     );

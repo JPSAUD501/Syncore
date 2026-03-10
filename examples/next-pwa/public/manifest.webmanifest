@@ -1,0 +1,17 @@
+{
+  "name": "Syncore Planner Workspace",
+  "short_name": "Syncore Planner",
+  "description": "A local-first planner workspace that keeps working after install.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#efe8dc",
+  "theme_color": "#241b14",
+  "icons": [
+    {
+      "src": "/planner-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

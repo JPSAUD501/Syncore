@@ -1,17 +1,19 @@
 "use client";
 
 import { SyncoreNextProvider } from "syncorejs/next";
-import { BookmarksScreen } from "./bookmarks-screen";
-
-const createWorker = () =>
-  new Worker(new URL("./syncore.worker", import.meta.url), {
-    type: "module"
-  });
+import { PlannerScreen } from "./planner-screen";
 
 export default function Page() {
   return (
-    <SyncoreNextProvider createWorker={createWorker}>
-      <BookmarksScreen />
+    <SyncoreNextProvider
+      createWorker={() =>
+        new Worker(new URL("./syncore.worker.ts", import.meta.url), {
+          type: "module",
+          name: "syncore-planner"
+        })
+      }
+    >
+      <PlannerScreen />
     </SyncoreNextProvider>
   );
 }

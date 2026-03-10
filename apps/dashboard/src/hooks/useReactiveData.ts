@@ -140,7 +140,8 @@ export function useDevtoolsSubscription<
   return {
     data,
     loading,
-    error
+    error,
+    hasData: data !== null
   };
 }
 

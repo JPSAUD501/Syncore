@@ -28,6 +28,22 @@ npx syncorejs dev
 If this is a fresh app, Syncore scaffolds a minimal local backend for you and
 keeps `syncore/_generated/*` up to date.
 
+Useful follow-up commands:
+
+```bash
+npx syncorejs doctor
+npx syncorejs targets
+npx syncorejs logs
+npx syncorejs data
+npx syncorejs dashboard
+```
+
+For Expo apps, operational commands use connected `client:<id>` targets. Start the app, then inspect the available targets with:
+
+```bash
+npx syncorejs targets
+```
+
 ## 4. Create the Expo bootstrap
 
 `lib/syncore.ts`
@@ -92,5 +108,5 @@ Scan the Expo QR code or run on a simulator, then confirm the task list renders 
 To preload sample data from JSONL, use:
 
 ```bash
-npx syncorejs import --table tasks sampleData.jsonl
+npx syncorejs import --table tasks sampleData.jsonl --target client:<id>
 ```

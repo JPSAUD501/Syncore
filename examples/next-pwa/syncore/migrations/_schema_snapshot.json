@@ -2,24 +2,28 @@
   "version": 1,
   "tables": [
     {
-      "name": "bookmarks",
+      "name": "artifacts",
       "validator": {
         "kind": "object",
         "shape": {
-          "url": {
+          "taskId": {
+            "kind": "id",
+            "tableName": "tasks"
+          },
+          "kind": {
             "kind": "string"
           },
           "title": {
             "kind": "string"
           },
-          "description": {
+          "storageId": {
             "kind": "string"
           },
-          "tag": {
+          "contentType": {
             "kind": "string"
           },
-          "starred": {
-            "kind": "boolean"
+          "size": {
+            "kind": "number"
           },
           "createdAt": {
             "kind": "number"
@@ -28,22 +32,155 @@
       },
       "indexes": [
         {
-          "name": "by_starred",
-          "fields": ["starred", "createdAt"]
+          "name": "by_task_created",
+          "fields": [
+            "taskId",
+            "createdAt"
+          ]
+        }
+      ],
+      "searchIndexes": []
+    },
+    {
+      "name": "projects",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "name": {
+            "kind": "string"
+          },
+          "slug": {
+            "kind": "string"
+          },
+          "color": {
+            "kind": "string"
+          },
+          "sortOrder": {
+            "kind": "number"
+          },
+          "createdAt": {
+            "kind": "number"
+          },
+          "archivedAt": {
+            "kind": "optional",
+            "inner": {
+              "kind": "number"
+            }
+          }
+        }
+      },
+      "indexes": [
+        {
+          "name": "by_sort",
+          "fields": [
+            "sortOrder"
+          ]
+        }
+      ],
+      "searchIndexes": []
+    },
+    {
+      "name": "tasks",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "title": {
+            "kind": "string"
+          },
+          "details": {
+            "kind": "string"
+          },
+          "status": {
+            "kind": "string"
+          },
+          "priority": {
+            "kind": "string"
+          },
+          "projectId": {
+            "kind": "optional",
+            "inner": {
+              "kind": "id",
+              "tableName": "projects"
+            }
+          },
+          "dueAt": {
+            "kind": "optional",
+            "inner": {
+              "kind": "number"
+            }
+          },
+          "reminderAt": {
+            "kind": "optional",
+            "inner": {
+              "kind": "number"
+            }
+          },
+          "reminderJobId": {
+            "kind": "optional",
+            "inner": {
+              "kind": "string"
+            }
+          },
+          "completedAt": {
+            "kind": "optional",
+            "inner": {
+              "kind": "number"
+            }
+          },
+          "createdAt": {
+            "kind": "number"
+          },
+          "updatedAt": {
+            "kind": "number"
+          },
+          "searchText": {
+            "kind": "string"
+          }
+        }
+      },
+      "indexes": [
+        {
+          "name": "by_dueAt",
+          "fields": [
+            "dueAt",
+            "status"
+          ]
         },
         {
-          "name": "by_tag",
-          "fields": ["tag", "createdAt"]
+          "name": "by_project_status",
+          "fields": [
+            "projectId",
+            "status",
+            "updatedAt"
+          ]
+        },
+        {
+          "name": "by_reminderAt",
+          "fields": [
+            "reminderAt",
+            "status"
+          ]
+        },
+        {
+          "name": "by_status_updated",
+          "fields": [
+            "status",
+            "updatedAt"
+          ]
         }
       ],
       "searchIndexes": [
         {
-          "name": "search_bookmarks",
-          "searchField": "title",
-          "filterFields": ["tag", "starred"]
+          "name": "search_tasks",
+          "searchField": "searchText",
+          "filterFields": [
+            "status",
+            "priority",
+            "projectId"
+          ]
         }
       ]
     }
   ],
-  "hash": "{\"tables\":[{\"indexes\":[{\"fields\":[\"starred\",\"createdAt\"],\"name\":\"by_starred\"},{\"fields\":[\"tag\",\"createdAt\"],\"name\":\"by_tag\"}],\"name\":\"bookmarks\",\"searchIndexes\":[{\"filterFields\":[\"tag\",\"starred\"],\"name\":\"search_bookmarks\",\"searchField\":\"title\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"createdAt\":{\"kind\":\"number\"},\"description\":{\"kind\":\"string\"},\"starred\":{\"kind\":\"boolean\"},\"tag\":{\"kind\":\"string\"},\"title\":{\"kind\":\"string\"},\"url\":{\"kind\":\"string\"}}}}],\"version\":1}"
+  "hash": "{\"tables\":[{\"indexes\":[{\"fields\":[\"taskId\",\"createdAt\"],\"name\":\"by_task_created\"}],\"name\":\"artifacts\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"contentType\":{\"kind\":\"string\"},\"createdAt\":{\"kind\":\"number\"},\"kind\":{\"kind\":\"string\"},\"size\":{\"kind\":\"number\"},\"storageId\":{\"kind\":\"string\"},\"taskId\":{\"kind\":\"id\",\"tableName\":\"tasks\"},\"title\":{\"kind\":\"string\"}}}},{\"indexes\":[{\"fields\":[\"sortOrder\"],\"name\":\"by_sort\"}],\"name\":\"projects\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"archivedAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"color\":{\"kind\":\"string\"},\"createdAt\":{\"kind\":\"number\"},\"name\":{\"kind\":\"string\"},\"slug\":{\"kind\":\"string\"},\"sortOrder\":{\"kind\":\"number\"}}}},{\"indexes\":[{\"fields\":[\"dueAt\",\"status\"],\"name\":\"by_dueAt\"},{\"fields\":[\"projectId\",\"status\",\"updatedAt\"],\"name\":\"by_project_status\"},{\"fields\":[\"reminderAt\",\"status\"],\"name\":\"by_reminderAt\"},{\"fields\":[\"status\",\"updatedAt\"],\"name\":\"by_status_updated\"}],\"name\":\"tasks\",\"searchIndexes\":[{\"filterFields\":[\"status\",\"priority\",\"projectId\"],\"name\":\"search_tasks\",\"searchField\":\"searchText\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"completedAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"createdAt\":{\"kind\":\"number\"},\"details\":{\"kind\":\"string\"},\"dueAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"priority\":{\"kind\":\"string\"},\"projectId\":{\"inner\":{\"kind\":\"id\",\"tableName\":\"projects\"},\"kind\":\"optional\"},\"reminderAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"reminderJobId\":{\"inner\":{\"kind\":\"string\"},\"kind\":\"optional\"},\"searchText\":{\"kind\":\"string\"},\"status\":{\"kind\":\"string\"},\"title\":{\"kind\":\"string\"},\"updatedAt\":{\"kind\":\"number\"}}}}],\"version\":1}"
 }

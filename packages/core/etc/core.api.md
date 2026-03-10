@@ -296,6 +296,11 @@ export class IdValidator<TTableName extends string> implements Validator<string>
 }
 
 // @public (undocumented)
+export namespace index_d_exports {
+    export { ActionCtx, AnySyncoreSchema, ComparisonOperator, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionResult, FunctionResultFromDefinition, IndexRangeBuilder, InferArgs, InsertValueForTable, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreCapabilities, SyncoreClient, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExperimentalPlugin, SyncoreExperimentalPluginContext, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreRuntime, SyncoreRuntimeOptions, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, action, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, cronJobs, generateId, mutation, query };
+}
+
+// @public (undocumented)
 export interface IndexDefinition {
     // (undocumented)
     fields: string[];
@@ -716,64 +721,48 @@ export interface SyncoreDatabaseWriter<TSchema extends AnySyncoreSchema = AnySyn
     replace<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: InsertValueForTable<TSchema, TTableName>): Promise<void>;
 }
 
+// Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsEventBase" needs to be exported by the entry point index.d.mts
+//
 // @public (undocumented)
-export type SyncoreDevtoolsEvent = {
+export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     type: "runtime.connected";
-    runtimeId: string;
     platform: string;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "runtime.disconnected";
-    runtimeId: string;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "query.executed";
-    runtimeId: string;
     queryId: string;
     functionName: string;
     dependencies: string[];
     durationMs: number;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "query.invalidated";
-    runtimeId: string;
     queryId: string;
     reason: string;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "mutation.committed";
-    runtimeId: string;
     mutationId: string;
     functionName: string;
     changedTables: string[];
     durationMs: number;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "action.completed";
-    runtimeId: string;
     actionId: string;
     functionName: string;
     durationMs: number;
-    timestamp: number;
     error?: string;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "scheduler.tick";
-    runtimeId: string;
     executedJobIds: string[];
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "storage.updated";
-    runtimeId: string;
     storageId: string;
     operation: "put" | "delete";
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "log";
-    runtimeId: string;
     level: "info" | "warn" | "error";
     message: string;
-    timestamp: number;
-};
+});
 
 // @public (undocumented)
 export interface SyncoreExperimentalPlugin<TSchema extends AnySyncoreSchema> {
@@ -876,7 +865,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
     createClient(): SyncoreClient;
     // (undocumented)
-    forceRefreshDevtools(reason: string): Promise<void>;
+    forceRefreshDevtools(reason: string, meta?: DevtoolsEventMeta): Promise<void>;
     // (undocumented)
     getActiveQueryInfos(): SyncoreActiveQueryInfo[];
     // (undocumented)
@@ -890,15 +879,17 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     // (undocumented)
     notifyDevtoolsScopes(scopes: Iterable<DevtoolsLiveQueryScope>): void;
     // (undocumented)
-    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
+    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
+    // Warning: (ae-forgotten-export) The symbol "DevtoolsEventMeta" needs to be exported by the entry point index.d.mts
+    //
     // (undocumented)
     runDevtoolsMutation<TResult>(callback: (ctx: {
         db: SyncoreDatabaseWriter<TSchema>;
-    }) => Promise<TResult>): Promise<TResult>;
+    }) => Promise<TResult>, meta?: DevtoolsEventMeta): Promise<TResult>;
     // (undocumented)
-    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
+    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     // (undocumented)
-    runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): Promise<TResult>;
+    runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     start(): Promise<void>;
     stop(): Promise<void>;
     // (undocumented)
@@ -944,6 +935,8 @@ export interface SyncoreRuntimeSummary {
     // (undocumented)
     connectedAt: number;
     // (undocumented)
+    databaseLabel?: string;
+    // (undocumented)
     origin?: string;
     // (undocumented)
     platform: string;
@@ -953,6 +946,12 @@ export interface SyncoreRuntimeSummary {
     runtimeId: string;
     // (undocumented)
     sessionLabel?: string;
+    // (undocumented)
+    storageIdentity?: string;
+    // (undocumented)
+    storageProtocol?: string;
+    // (undocumented)
+    targetKind?: "client";
 }
 
 // @public (undocumented)

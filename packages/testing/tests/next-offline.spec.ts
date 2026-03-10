@@ -1,10 +1,14 @@
 import { expect, test } from "@playwright/test";
 
 test("Next PWA stays usable offline after the first load", async ({ context, page }) => {
+  const taskInList = (title: string) =>
+    page.locator(".task-list").getByText(title, { exact: true });
+  const plannerHeading = page.getByRole("heading", {
+    name: "Plan locally. Stay useful offline."
+  });
+
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Syncore runs fully local in the browser." })
-  ).toBeVisible();
+  await expect(plannerHeading).toBeVisible();
 
   await page.waitForFunction(async () => {
     if (!("serviceWorker" in navigator)) {
@@ -18,19 +22,21 @@ test("Next PWA stays usable offline after the first load", async ({ context, pag
   await page.waitForFunction(
     () => "serviceWorker" in navigator && navigator.serviceWorker.controller !== null
   );
+  await page.waitForFunction(
+    () => (window as Window & { __syncorePlannerReady?: boolean }).__syncorePlannerReady === true
+  );
+  await expect(plannerHeading).toBeVisible();
 
-  const todoText = `Offline todo ${Date.now()}`;
-  await page.getByPlaceholder("Write a local task").fill(todoText);
-  await page.getByRole("button", { name: "Add offline" }).click();
-  await expect(page.getByText(todoText)).toBeVisible();
+  const taskTitle = `Offline task ${Date.now()}`;
+  await page.getByPlaceholder("Capture the next thing").fill(taskTitle);
+  await page.getByRole("button", { name: "Add task" }).click();
+  await expect(taskInList(taskTitle)).toBeVisible();
 
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
 
-  await expect(
-    page.getByRole("heading", { name: "Syncore runs fully local in the browser." })
-  ).toBeVisible();
-  await expect(page.getByText(todoText)).toBeVisible();
+  await expect(plannerHeading).toBeVisible();
+  await expect(taskInList(taskTitle)).toBeVisible();
 
   await context.setOffline(false);
 });

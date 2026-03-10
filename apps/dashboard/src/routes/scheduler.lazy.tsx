@@ -8,7 +8,7 @@ import {
   CalendarClock,
   Timer
 } from "lucide-react";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -45,6 +45,16 @@ function SchedulerPage() {
         : [],
     [jobsSubscription.data]
   );
+
+  useEffect(() => {
+    if (!isReady) {
+      setSelectedJob(null);
+      return;
+    }
+    if (selectedJob && !jobs.some((job) => job.id === selectedJob.id)) {
+      setSelectedJob(null);
+    }
+  }, [isReady, jobs, selectedJob]);
 
   /* ---------------------------------------------------------------- */
   /*  Cancel job                                                       */

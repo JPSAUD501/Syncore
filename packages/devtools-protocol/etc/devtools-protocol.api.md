@@ -140,64 +140,51 @@ export type SyncoreDevtoolsCommandResultPayload = {
     message: string;
 };
 
+// Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsEventBase" needs to be exported by the entry point index.d.ts
+//
 // @public (undocumented)
-export type SyncoreDevtoolsEvent = {
+export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     type: "runtime.connected";
-    runtimeId: string;
     platform: string;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "runtime.disconnected";
-    runtimeId: string;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "query.executed";
-    runtimeId: string;
     queryId: string;
     functionName: string;
     dependencies: string[];
     durationMs: number;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "query.invalidated";
-    runtimeId: string;
     queryId: string;
     reason: string;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "mutation.committed";
-    runtimeId: string;
     mutationId: string;
     functionName: string;
     changedTables: string[];
     durationMs: number;
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "action.completed";
-    runtimeId: string;
     actionId: string;
     functionName: string;
     durationMs: number;
-    timestamp: number;
     error?: string;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "scheduler.tick";
-    runtimeId: string;
     executedJobIds: string[];
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "storage.updated";
-    runtimeId: string;
     storageId: string;
     operation: "put" | "delete";
-    timestamp: number;
-} | {
+}) | (SyncoreDevtoolsEventBase & {
     type: "log";
-    runtimeId: string;
     level: "info" | "warn" | "error";
     message: string;
-    timestamp: number;
-};
+});
+
+// @public (undocumented)
+export type SyncoreDevtoolsEventOrigin = "runtime" | "dashboard";
 
 // @public (undocumented)
 export type SyncoreDevtoolsMessage = {
@@ -207,9 +194,17 @@ export type SyncoreDevtoolsMessage = {
     appName?: string;
     origin?: string;
     sessionLabel?: string;
+    targetKind?: "client";
+    storageProtocol?: string;
+    databaseLabel?: string;
+    storageIdentity?: string;
 } | {
     type: "event";
     event: SyncoreDevtoolsEvent;
+} | {
+    type: "event.batch";
+    runtimeId: string;
+    events: SyncoreDevtoolsEvent[];
 } | {
     type: "ping";
 } | {
@@ -251,6 +246,11 @@ export type SyncoreDevtoolsSubscriptionPayload = {
 } | {
     kind: "schema.tables";
 } | {
+    kind: "fn.watch";
+    functionName: string;
+    functionType: "query";
+    args: Record<string, unknown>;
+} | {
     kind: "data.table";
     table: string;
     filters?: DataFilter[];
@@ -272,6 +272,10 @@ export type SyncoreDevtoolsSubscriptionResultPayload = {
 } | {
     kind: "runtime.activeQueries.result";
     activeQueries: SyncoreActiveQueryInfo[];
+} | {
+    kind: "fn.watch.result";
+    result?: unknown;
+    error?: string;
 } | {
     kind: "schema.tables.result";
     tables: TableSchema[];
@@ -312,6 +316,8 @@ export interface SyncoreRuntimeSummary {
     // (undocumented)
     connectedAt: number;
     // (undocumented)
+    databaseLabel?: string;
+    // (undocumented)
     origin?: string;
     // (undocumented)
     platform: string;
@@ -321,6 +327,12 @@ export interface SyncoreRuntimeSummary {
     runtimeId: string;
     // (undocumented)
     sessionLabel?: string;
+    // (undocumented)
+    storageIdentity?: string;
+    // (undocumented)
+    storageProtocol?: string;
+    // (undocumented)
+    targetKind?: "client";
 }
 
 // @public (undocumented)

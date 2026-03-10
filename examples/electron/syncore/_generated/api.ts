@@ -9,11 +9,11 @@
 
 import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
-import type { getByDate as entries__getByDate } from "../functions/entries.js";
-import type { list as entries__list } from "../functions/entries.js";
-import type { remove as entries__remove } from "../functions/entries.js";
-import type { search as entries__search } from "../functions/entries.js";
-import type { upsert as entries__upsert } from "../functions/entries.js";
+import type { getByDate as entries__getByDate } from "../functions/entries";
+import type { list as entries__list } from "../functions/entries";
+import type { remove as entries__remove } from "../functions/entries";
+import type { search as entries__search } from "../functions/entries";
+import type { upsert as entries__upsert } from "../functions/entries";
 
 /**
  * Type-safe references to functions exported from `syncore/functions/entries.ts`.

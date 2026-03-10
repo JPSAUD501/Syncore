@@ -165,11 +165,21 @@ export async function createWebSyncoreRuntime(
   const appName = resolveWebAppName();
   const origin = resolveWebOrigin();
   const sessionLabel = resolveWebSessionLabel();
+  const databaseLabel = options.databaseName ?? "syncore";
+  const storageIdentity = [
+    origin ?? "unknown-origin",
+    persistence.storageProtocol,
+    databaseLabel
+  ].join("::");
   const autoDevtools =
     options.devtools === undefined && shouldAutoConnectDevtools()
       ? (() => {
           const sinkOptions: BrowserWebSocketDevtoolsSinkOptions = {
-            url: resolveDefaultDevtoolsUrl()
+            url: resolveDefaultDevtoolsUrl(),
+            targetKind: "client",
+            storageProtocol: persistence.storageProtocol,
+            databaseLabel,
+            storageIdentity
           };
           if (appName) {
             sinkOptions.appName = appName;
@@ -216,7 +226,7 @@ export async function createWebSyncoreRuntime(
   });
 
   if (autoDevtools) {
-    autoDevtools.attachRuntime(runtime as SyncoreRuntime<AnySyncoreSchema>);
+    autoDevtools.attachRuntime(runtime);
     autoDevtools.attachCommandHandler(
       createDevtoolsCommandHandler({
         driver,
@@ -347,6 +357,10 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
   appName?: string;
   origin?: string;
   sessionLabel?: string;
+  targetKind?: "client";
+  storageProtocol?: string;
+  databaseLabel?: string;
+  storageIdentity?: string;
 }
 
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
@@ -388,6 +402,14 @@ export function createBrowserWebSocketDevtoolsSink(
           ...(options.origin ? { origin: options.origin } : {}),
           ...(options.sessionLabel
             ? { sessionLabel: options.sessionLabel }
+            : {}),
+          ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.storageProtocol
+            ? { storageProtocol: options.storageProtocol }
+            : {}),
+          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.storageIdentity
+            ? { storageIdentity: options.storageIdentity }
             : {})
         });
       }
@@ -511,6 +533,14 @@ export function createBrowserWebSocketDevtoolsSink(
           ...(options.origin ? { origin: options.origin } : {}),
           ...(options.sessionLabel
             ? { sessionLabel: options.sessionLabel }
+            : {}),
+          ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.storageProtocol
+            ? { storageProtocol: options.storageProtocol }
+            : {}),
+          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.storageIdentity
+            ? { storageIdentity: options.storageIdentity }
             : {})
         });
       }
@@ -545,7 +575,15 @@ function withRuntimeSummaryMeta(
     ...summary,
     ...(options.appName ? { appName: options.appName } : {}),
     ...(options.origin ? { origin: options.origin } : {}),
-    ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {})
+    ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {}),
+    ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+    ...(options.storageProtocol
+      ? { storageProtocol: options.storageProtocol }
+      : {}),
+    ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+    ...(options.storageIdentity
+      ? { storageIdentity: options.storageIdentity }
+      : {})
   };
 }
 

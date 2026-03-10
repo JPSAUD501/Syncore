@@ -291,6 +291,12 @@ button {
   animation-timing-function: ease-out;
 }
 
+.animate-fade-in-fast {
+  animation-duration: 0.1s;
+  animation-timing-function: ease-out;
+  animation-name: fadeInA;
+}
+
 .animate-fade-in,
 .animate-fade-in-a {
   animation-name: fadeInA;

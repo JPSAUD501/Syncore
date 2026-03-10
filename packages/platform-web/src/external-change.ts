@@ -21,7 +21,7 @@ export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChan
   constructor(options: BroadcastChannelExternalChangeSignalOptions) {
     if (typeof BroadcastChannel !== "undefined") {
       this.channel = new BroadcastChannel(options.channelName);
-      this.channel.addEventListener("message", this.handleMessage);
+      this.channel.addEventListener("message", this.messageListener);
     }
   }
 
@@ -37,11 +37,11 @@ export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChan
   }
 
   close(): void {
-    this.channel?.removeEventListener("message", this.handleMessage);
+    this.channel?.removeEventListener("message", this.messageListener);
     this.channel?.close();
   }
 
-  private readonly handleMessage = (event: MessageEvent<unknown>) => {
+  private readonly messageListener = (event: MessageEvent<unknown>) => {
     if (!isExternalChangeEvent(event.data)) {
       return;
     }
@@ -67,8 +67,8 @@ export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier 
   constructor(options: SqlJsExternalChangeApplierOptions) {
     this.databaseName = options.databaseName;
     this.persistence = options.persistence;
-    this.createDatabase = options.createDatabase;
-    this.replaceDatabase = options.replaceDatabase;
+    this.createDatabase = (bytes) => options.createDatabase(bytes);
+    this.replaceDatabase = (database) => options.replaceDatabase(database);
   }
 
   async applyExternalChange(event: SyncoreExternalChangeEvent) {

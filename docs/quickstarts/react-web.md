@@ -39,6 +39,22 @@ syncore.config.ts
 `syncorejs dev` also regenerates `syncore/_generated/*`, checks schema drift,
 applies local migrations, and watches `syncore/` for changes.
 
+Useful follow-up commands:
+
+```bash
+npx syncorejs doctor
+npx syncorejs targets
+npx syncorejs logs
+npx syncorejs data
+npx syncorejs dashboard
+```
+
+For web apps, operational commands run against connected `client:<id>` targets, not a project-local database. After your app connects, inspect the active targets with:
+
+```bash
+npx syncorejs targets
+```
+
 ## 4. Add the worker runtime
 
 `src/syncore.worker.ts`
@@ -118,7 +134,7 @@ Open the Vite URL, click the button, and confirm the task list updates reactivel
 To preload sample data from JSONL, use:
 
 ```bash
-npx syncorejs import --table tasks sampleData.jsonl
+npx syncorejs import --table tasks sampleData.jsonl --target client:<id>
 ```
 
 Use `npx syncorejs codegen` only when you need a one-off generation pass without the full dev loop.

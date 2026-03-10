@@ -24,6 +24,16 @@ Run this in one terminal and leave it running:
 npx syncorejs dev
 ```
 
+Useful follow-up commands:
+
+```bash
+npx syncorejs doctor
+npx syncorejs targets
+npx syncorejs logs
+npx syncorejs data
+npx syncorejs dashboard
+```
+
 ## 4. Enable the Next integration
 
 `next.config.ts`
@@ -99,7 +109,7 @@ into `public/`.
 You can optionally preload sample data with:
 
 ```bash
-npx syncorejs import --table tasks sampleData.jsonl
+npx syncorejs import --table tasks sampleData.jsonl --target client:<id>
 ```
 
 ## 8. Run the app

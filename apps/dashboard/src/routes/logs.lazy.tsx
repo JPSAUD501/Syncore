@@ -1,5 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useActiveRuntime } from "@/lib/store";
+import { useActiveRuntime, useDevtoolsStore } from "@/lib/store";
 import { cn, formatTime, formatDuration } from "@/lib/utils";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +22,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  filterActivityEvents,
+  getActivityOriginLabel
+} from "@/lib/activity";
 
 export const Route = createLazyFileRoute("/logs")({
   component: LogsPage
@@ -174,6 +178,12 @@ function LogEntry({
       >
         {EVENT_LABELS[event.type]}
       </Badge>
+      <Badge
+        variant="outline"
+        className="hidden w-[84px] justify-center text-[10px] shrink-0 lg:inline-flex"
+      >
+        {getActivityOriginLabel(event)}
+      </Badge>
       <span className="text-[12px] text-text-secondary font-mono truncate flex-1">
         {summary}
       </span>
@@ -201,6 +211,7 @@ function LogDetail({ event }: { event: SyncoreDevtoolsEvent }) {
         <Badge variant={EVENT_BADGE_VARIANTS[event.type]}>
           {EVENT_LABELS[event.type]}
         </Badge>
+        <Badge variant="outline">{getActivityOriginLabel(event)}</Badge>
         <span className="text-[11px] text-text-tertiary">
           {new Date(event.timestamp).toLocaleString()}
         </span>
@@ -330,7 +341,17 @@ function DetailRow({
 
 function LogsPage() {
   const activeRuntime = useActiveRuntime();
-  const events = useMemo(() => activeRuntime?.events ?? [], [activeRuntime]);
+  const includeDashboardActivity = useDevtoolsStore(
+    (state) => state.includeDashboardActivity
+  );
+  const events = useMemo(
+    () =>
+      filterActivityEvents(
+        activeRuntime?.events ?? [],
+        includeDashboardActivity
+      ),
+    [activeRuntime, includeDashboardActivity]
+  );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
   const [searchText, setSearchText] = useState("");
@@ -405,6 +426,11 @@ function LogsPage() {
       {/* Toolbar */}
       <div className="shrink-0 rounded-md border border-border bg-bg-surface p-3">
       <div className="flex items-center gap-2 flex-wrap">
+        {!includeDashboardActivity && (
+          <Badge variant="outline" className="text-[10px]">
+            App only
+          </Badge>
+        )}
         {/* Search */}
         <div className="relative flex-1 max-w-sm min-w-48">
           <Search

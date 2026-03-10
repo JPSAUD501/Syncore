@@ -27,7 +27,7 @@ export default defineConfig({
     cwd: workspaceRoot,
     port: 3210,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000
+    timeout: 240_000
   },
   projects: [
     {

@@ -5,20 +5,62 @@ import {
 } from "@/lib/store";
 import { useMemo } from "react";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
+import type {
+  SyncoreActiveQueryInfo,
+  SyncoreRuntimeSummary
+} from "@syncore/devtools-protocol";
+import {
+  filterActivityEvents,
+  summarizeActivityEvents
+} from "@/lib/activity";
+
+interface DevtoolsStateSnapshot {
+  connected: boolean;
+  runtimeConnected: boolean;
+  isReady: boolean;
+  includeDashboardActivity: boolean;
+  events: SyncoreDevtoolsEvent[];
+  summary: SyncoreRuntimeSummary | null;
+  activeQueries: SyncoreActiveQueryInfo[];
+  queryCount: number;
+  mutationCount: number;
+  actionCount: number;
+  errorCount: number;
+  clearEvents: (runtimeId?: string) => void;
+  functionEvents: Array<Extract<SyncoreDevtoolsEvent, { functionName: string }>>;
+  functionMetrics: Array<{
+    functionName: string;
+    type: string;
+    invocations: number;
+    totalDuration: number;
+    errors: number;
+    lastInvoked: number;
+    avgDuration: number;
+    errorRate: number;
+  }>;
+  eventSparkline: number[];
+}
 
 /**
  * Hook to access computed devtools metrics.
  * Provides derived data from the event stream for dashboard panels.
  */
-export function useDevtools() {
+export function useDevtools(): DevtoolsStateSnapshot {
   const activeRuntime = useActiveRuntime();
   const connected = useDevtoolsStore((s) => s.connected);
   const runtimeConnected = useSelectedRuntimeConnected();
-  const events = useMemo(() => activeRuntime?.events ?? [], [activeRuntime]);
-  const queryCount = activeRuntime?.queryCount ?? 0;
-  const mutationCount = activeRuntime?.mutationCount ?? 0;
-  const actionCount = activeRuntime?.actionCount ?? 0;
-  const errorCount = activeRuntime?.errorCount ?? 0;
+  const includeDashboardActivity = useDevtoolsStore(
+    (s) => s.includeDashboardActivity
+  );
+  const events = useMemo(
+    () =>
+      filterActivityEvents(
+        activeRuntime?.events ?? [],
+        includeDashboardActivity
+      ),
+    [activeRuntime, includeDashboardActivity]
+  );
+  const counts = useMemo(() => summarizeActivityEvents(events), [events]);
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
 
   const functionEvents = useMemo(() => {
@@ -99,13 +141,14 @@ export function useDevtools() {
     connected,
     runtimeConnected,
     isReady: connected && runtimeConnected,
+    includeDashboardActivity,
     events,
     summary: activeRuntime?.summary ?? null,
     activeQueries: activeRuntime?.activeQueries ?? [],
-    queryCount,
-    mutationCount,
-    actionCount,
-    errorCount,
+    queryCount: counts.queryCount,
+    mutationCount: counts.mutationCount,
+    actionCount: counts.actionCount,
+    errorCount: counts.errorCount,
     clearEvents,
     functionEvents,
     functionMetrics,

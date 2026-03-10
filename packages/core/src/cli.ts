@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdir, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { appendFile, readdir, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { connect as connectToNet } from "node:net";
 import path from "node:path";
@@ -28,16 +28,23 @@ import {
   searchIndexTableName,
   type SchemaSnapshot,
   type SyncoreSchema,
+  type SyncoreFunctionRegistry,
   type TableDefinition,
   type Validator
 } from "./index.js";
 
-interface SyncoreConfig {
+export interface SyncoreProjectTargetConfig {
   databasePath: string;
   storageDirectory: string;
 }
 
-type SyncoreTemplateName =
+export interface SyncoreConfig {
+  projectTarget?: SyncoreProjectTargetConfig;
+  databasePath?: string;
+  storageDirectory?: string;
+}
+
+export type SyncoreTemplateName =
   | "minimal"
   | "node"
   | "react-web"
@@ -50,12 +57,12 @@ interface SyncoreTemplateFile {
   content: string;
 }
 
-interface ScaffoldProjectOptions {
+export interface ScaffoldProjectOptions {
   template: SyncoreTemplateName;
   force?: boolean;
 }
 
-interface ScaffoldProjectResult {
+export interface ScaffoldProjectResult {
   template: SyncoreTemplateName;
   created: string[];
   updated: string[];
@@ -77,8 +84,8 @@ const CORE_PACKAGE_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
 );
-const migrationSnapshotFileName = "_schema_snapshot.json";
-const validTemplates: SyncoreTemplateName[] = [
+export const SYNCORE_MIGRATION_SNAPSHOT_FILE_NAME = "_schema_snapshot.json";
+export const VALID_SYNCORE_TEMPLATES: SyncoreTemplateName[] = [
   "minimal",
   "node",
   "react-web",
@@ -99,7 +106,7 @@ program
   .description("Scaffold Syncore in the current directory")
   .option(
     "--template <template>",
-    `Template to scaffold (${validTemplates.join(", ")}, or auto)`,
+    `Template to scaffold (${VALID_SYNCORE_TEMPLATES.join(", ")}, or auto)`,
     "auto"
   )
   .option("--force", "Overwrite Syncore-managed files when they already exist")
@@ -266,7 +273,7 @@ program
   .description("Start the Syncore dev loop and devtools hub")
   .option(
     "--template <template>",
-    `Template to scaffold when Syncore is missing (${validTemplates.join(", ")}, or auto)`,
+    `Template to scaffold when Syncore is missing (${VALID_SYNCORE_TEMPLATES.join(", ")}, or auto)`,
     "auto"
   )
   .action(async (options: { template: string }) => {
@@ -283,7 +290,7 @@ if (isCliEntryPoint()) {
   await runSyncoreCli();
 }
 
-async function runCodegen(cwd: string): Promise<void> {
+export async function runCodegen(cwd: string): Promise<void> {
   const functionsDir = path.join(cwd, "syncore", "functions");
   const generatedDir = path.join(cwd, "syncore", "_generated");
   await mkdir(generatedDir, { recursive: true });
@@ -496,7 +503,7 @@ async function runCodegen(cwd: string): Promise<void> {
   await writeFile(path.join(generatedDir, "server.ts"), serverSource);
 }
 
-async function scaffoldProject(
+export async function scaffoldProject(
   cwd: string,
   options: ScaffoldProjectOptions
 ): Promise<ScaffoldProjectResult> {
@@ -543,11 +550,7 @@ function buildTemplateFiles(
   const files: SyncoreTemplateFile[] = [
     {
       path: "syncore.config.ts",
-      content: `export default {
-  databasePath: ".syncore/syncore.db",
-  storageDirectory: ".syncore/storage"
-};
-`
+      content: renderSyncoreConfigTemplate(template)
     },
     {
       path: path.join("syncore", "schema.ts"),
@@ -729,7 +732,22 @@ export function createAppSyncoreRuntime() {
   return files;
 }
 
-function logScaffoldResult(
+function renderSyncoreConfigTemplate(template: SyncoreTemplateName): string {
+  if (template === "node" || template === "electron") {
+    return `export default {
+  projectTarget: {
+    databasePath: ".syncore/syncore.db",
+    storageDirectory: ".syncore/storage"
+  }
+};
+`;
+  }
+
+  return `export default {};
+`;
+}
+
+export function logScaffoldResult(
   result: ScaffoldProjectResult,
   heading: string
 ): void {
@@ -760,7 +778,7 @@ async function ensureProjectScaffolded(
   );
 }
 
-async function hasSyncoreProject(cwd: string): Promise<boolean> {
+export async function hasSyncoreProject(cwd: string): Promise<boolean> {
   return (
     (await fileExists(path.join(cwd, "syncore.config.ts"))) &&
     (await fileExists(path.join(cwd, "syncore", "schema.ts"))) &&
@@ -768,14 +786,18 @@ async function hasSyncoreProject(cwd: string): Promise<boolean> {
   );
 }
 
-async function resolveRequestedTemplate(
+export async function resolveRequestedTemplate(
   cwd: string,
   requestedTemplate: string
 ): Promise<SyncoreTemplateName> {
   if (requestedTemplate !== "auto") {
-    if (!validTemplates.includes(requestedTemplate as SyncoreTemplateName)) {
+    if (
+      !VALID_SYNCORE_TEMPLATES.includes(
+        requestedTemplate as SyncoreTemplateName
+      )
+    ) {
       throw new Error(
-        `Unknown template ${JSON.stringify(requestedTemplate)}. Expected one of ${validTemplates.join(", ")} or auto.`
+        `Unknown template ${JSON.stringify(requestedTemplate)}. Expected one of ${VALID_SYNCORE_TEMPLATES.join(", ")} or auto.`
       );
     }
     return requestedTemplate as SyncoreTemplateName;
@@ -783,7 +805,7 @@ async function resolveRequestedTemplate(
   return detectProjectTemplate(cwd);
 }
 
-async function detectProjectTemplate(
+export async function detectProjectTemplate(
   cwd: string
 ): Promise<SyncoreTemplateName> {
   const packageJson = await readPackageJson(cwd);
@@ -815,7 +837,9 @@ async function detectProjectTemplate(
   return "minimal";
 }
 
-async function readPackageJson(cwd: string): Promise<PackageJsonShape | null> {
+export async function readPackageJson(
+  cwd: string
+): Promise<PackageJsonShape | null> {
   const packageJsonPath = path.join(cwd, "package.json");
   if (!(await fileExists(packageJsonPath))) {
     return null;
@@ -963,7 +987,7 @@ async function writeManagedFile(
   return "updated";
 }
 
-async function importJsonlIntoProject(
+export async function importJsonlIntoProject(
   cwd: string,
   tableName: string,
   sourcePath: string
@@ -973,8 +997,9 @@ async function importJsonlIntoProject(
     Validator<unknown>
   >;
   const config = await loadProjectConfig(cwd);
-  const databasePath = path.resolve(cwd, config.databasePath);
-  const storageDirectory = path.resolve(cwd, config.storageDirectory);
+  const projectTarget = requireProjectTargetConfig(config);
+  const databasePath = path.resolve(cwd, projectTarget.databasePath);
+  const storageDirectory = path.resolve(cwd, projectTarget.storageDirectory);
   const sourceFilePath = path.resolve(cwd, sourcePath);
   await mkdir(path.dirname(databasePath), { recursive: true });
   await mkdir(storageDirectory, { recursive: true });
@@ -1032,7 +1057,7 @@ async function importJsonlIntoProject(
   }
 }
 
-async function resolveDefaultSeedFile(
+export async function resolveDefaultSeedFile(
   cwd: string,
   tableName: string
 ): Promise<string | null> {
@@ -1382,23 +1407,56 @@ function renderFunctionImportName(entry: {
   ].join("__");
 }
 
-async function loadProjectConfig(cwd: string): Promise<SyncoreConfig> {
-  const filePath = path.join(cwd, "syncore.config.ts");
-  const config = await loadDefaultExport<SyncoreConfig>(filePath);
+export function resolveProjectTargetConfig(
+  config: SyncoreConfig
+): SyncoreProjectTargetConfig | null {
   if (
-    !config ||
-    typeof config !== "object" ||
-    typeof config.databasePath !== "string" ||
-    typeof config.storageDirectory !== "string"
+    config.projectTarget &&
+    typeof config.projectTarget === "object" &&
+    typeof config.projectTarget.databasePath === "string" &&
+    typeof config.projectTarget.storageDirectory === "string"
   ) {
-    throw new Error(
-      "syncore.config.ts must export { databasePath, storageDirectory }."
-    );
+    return config.projectTarget;
   }
-  return config;
+
+  if (
+    typeof config.databasePath === "string" &&
+    typeof config.storageDirectory === "string"
+  ) {
+    return {
+      databasePath: config.databasePath,
+      storageDirectory: config.storageDirectory
+    };
+  }
+
+  return null;
 }
 
-async function loadProjectSchema(
+export async function loadProjectConfig(cwd: string): Promise<SyncoreConfig> {
+  const filePath = path.join(cwd, "syncore.config.ts");
+  const config = await loadDefaultExport<SyncoreConfig>(filePath);
+  if (!config || typeof config !== "object") {
+    throw new Error(
+      "syncore.config.ts must default export a Syncore config object."
+    );
+  }
+  const projectTarget = resolveProjectTargetConfig(config);
+  return projectTarget ? { ...config, projectTarget } : config;
+}
+
+function requireProjectTargetConfig(
+  config: SyncoreConfig
+): SyncoreProjectTargetConfig {
+  const projectTarget = resolveProjectTargetConfig(config);
+  if (!projectTarget) {
+    throw new Error(
+      "This Syncore project does not define a projectTarget. Use a connected client target instead."
+    );
+  }
+  return projectTarget;
+}
+
+export async function loadProjectSchema(
   cwd: string
 ): Promise<SyncoreSchema<Record<string, AnyTableDefinition>>> {
   const filePath = path.join(cwd, "syncore", "schema.ts");
@@ -1438,12 +1496,61 @@ async function loadDefaultExport<TValue>(filePath: string): Promise<TValue> {
   return resolvedDefault;
 }
 
-async function readStoredSnapshot(cwd: string): Promise<SchemaSnapshot | null> {
+async function loadNamedExport<TValue>(
+  filePath: string,
+  exportName: string
+): Promise<TValue> {
+  if (!(await fileExists(filePath))) {
+    throw new Error(`Missing file: ${path.relative(process.cwd(), filePath)}`);
+  }
+  const moduleUrl = pathToFileURL(filePath).href;
+  const loaded = (await tsImport(moduleUrl, {
+    parentURL: import.meta.url
+  })) as Record<string, TValue | undefined>;
+  const defaultExport =
+    loaded.default &&
+    typeof loaded.default === "object" &&
+    exportName in (loaded.default as Record<string, unknown>)
+      ? (loaded.default as Record<string, TValue | undefined>)[exportName]
+      : undefined;
+  if (!(exportName in loaded) && defaultExport === undefined) {
+    throw new Error(
+      `File ${path.relative(process.cwd(), filePath)} must export ${exportName}.`
+    );
+  }
+  const resolvedValue = unwrapDefaultExport(loaded[exportName] ?? defaultExport);
+  if (resolvedValue === undefined) {
+    throw new Error(
+      `File ${path.relative(process.cwd(), filePath)} exported undefined for ${exportName}.`
+    );
+  }
+  return resolvedValue;
+}
+
+export async function loadProjectFunctions(
+  cwd: string
+): Promise<SyncoreFunctionRegistry> {
+  const filePath = path.join(cwd, "syncore", "_generated", "functions.ts");
+  const functions = await loadNamedExport<SyncoreFunctionRegistry>(
+    filePath,
+    "functions"
+  );
+  if (!functions || typeof functions !== "object") {
+    throw new Error(
+      "syncore/_generated/functions.ts must export a functions registry."
+    );
+  }
+  return functions;
+}
+
+export async function readStoredSnapshot(
+  cwd: string
+): Promise<SchemaSnapshot | null> {
   const snapshotPath = path.join(
     cwd,
     "syncore",
     "migrations",
-    migrationSnapshotFileName
+    SYNCORE_MIGRATION_SNAPSHOT_FILE_NAME
   );
   if (!(await fileExists(snapshotPath))) {
     return null;
@@ -1451,19 +1558,21 @@ async function readStoredSnapshot(cwd: string): Promise<SchemaSnapshot | null> {
   return parseSchemaSnapshot(await readFile(snapshotPath, "utf8"));
 }
 
-async function writeStoredSnapshot(
+export async function writeStoredSnapshot(
   cwd: string,
   snapshot: SchemaSnapshot
 ): Promise<void> {
   const migrationsDirectory = path.join(cwd, "syncore", "migrations");
   await mkdir(migrationsDirectory, { recursive: true });
   await writeFile(
-    path.join(migrationsDirectory, migrationSnapshotFileName),
+    path.join(migrationsDirectory, SYNCORE_MIGRATION_SNAPSHOT_FILE_NAME),
     `${JSON.stringify(snapshot, null, 2)}\n`
   );
 }
 
-async function getNextMigrationNumber(directory: string): Promise<number> {
+export async function getNextMigrationNumber(
+  directory: string
+): Promise<number> {
   if (!(await fileExists(directory))) {
     return 1;
   }
@@ -1478,20 +1587,18 @@ async function getNextMigrationNumber(directory: string): Promise<number> {
   return Math.max(...migrationNumbers) + 1;
 }
 
-async function applyProjectMigrations(cwd: string): Promise<number> {
+export async function applyProjectMigrations(
+  cwd: string
+): Promise<number> {
   const config = await loadProjectConfig(cwd);
-  const databasePath = path.resolve(cwd, config.databasePath);
-  const storageDirectory = path.resolve(cwd, config.storageDirectory);
+  const projectTarget = requireProjectTargetConfig(config);
+  const databasePath = path.resolve(cwd, projectTarget.databasePath);
+  const storageDirectory = path.resolve(cwd, projectTarget.storageDirectory);
   await mkdir(path.dirname(databasePath), { recursive: true });
   await mkdir(storageDirectory, { recursive: true });
 
   const database = new DatabaseSync(databasePath);
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS "_syncore_migrations" (
-      name TEXT PRIMARY KEY,
-      applied_at TEXT NOT NULL
-    );
-  `);
+  ensureCliMigrationTrackingTable(database);
 
   const migrationsDirectory = path.join(cwd, "syncore", "migrations");
   if (!(await fileExists(migrationsDirectory))) {
@@ -1500,9 +1607,9 @@ async function applyProjectMigrations(cwd: string): Promise<number> {
   }
 
   const appliedRows = database
-    .prepare(`SELECT name FROM "_syncore_migrations" ORDER BY name ASC`)
-    .all() as Array<{ name: string }>;
-  const appliedNames = new Set(appliedRows.map((row) => row.name));
+    .prepare(`SELECT id FROM "_syncore_migrations" ORDER BY id ASC`)
+    .all() as Array<{ id: string }>;
+  const appliedNames = new Set(appliedRows.map((row) => row.id));
   const migrationFiles = (await readdir(migrationsDirectory))
     .filter((name) => /\.sql$/i.test(name))
     .sort((left, right) => left.localeCompare(right));
@@ -1523,9 +1630,9 @@ async function applyProjectMigrations(cwd: string): Promise<number> {
       applyMigrationSql(database, sql, fileName);
       database
         .prepare(
-          `INSERT INTO "_syncore_migrations" (name, applied_at) VALUES (?, ?)`
+          `INSERT OR REPLACE INTO "_syncore_migrations" (id, applied_at, sql) VALUES (?, ?, ?)`
         )
-        .run(fileName, new Date().toISOString());
+        .run(fileName, Date.now(), sql);
       database.exec("COMMIT");
       appliedCount += 1;
     } catch (error) {
@@ -1539,7 +1646,66 @@ async function applyProjectMigrations(cwd: string): Promise<number> {
   return appliedCount;
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
+function ensureCliMigrationTrackingTable(database: DatabaseSync): void {
+  const tableExists = (
+    database
+      .prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_syncore_migrations'`
+      )
+      .get() as { name?: string } | undefined
+  )?.name === "_syncore_migrations";
+
+  if (!tableExists) {
+    database.exec(`
+      CREATE TABLE "_syncore_migrations" (
+        id TEXT PRIMARY KEY,
+        applied_at INTEGER NOT NULL,
+        sql TEXT NOT NULL
+      );
+    `);
+    return;
+  }
+
+  const columns = database
+    .prepare(`PRAGMA table_info("_syncore_migrations")`)
+    .all() as Array<{ name: string }>;
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (
+    columnNames.has("id") &&
+    columnNames.has("applied_at") &&
+    columnNames.has("sql")
+  ) {
+    return;
+  }
+
+  database.exec(`
+    ALTER TABLE "_syncore_migrations" RENAME TO "_syncore_migrations_legacy";
+    CREATE TABLE "_syncore_migrations" (
+      id TEXT PRIMARY KEY,
+      applied_at INTEGER NOT NULL,
+      sql TEXT NOT NULL
+    );
+  `);
+
+  if (columnNames.has("name")) {
+    database.exec(`
+      INSERT INTO "_syncore_migrations" (id, applied_at, sql)
+      SELECT
+        name,
+        CASE
+          WHEN typeof(applied_at) = 'integer' THEN applied_at
+          ELSE CAST(strftime('%s', applied_at) AS INTEGER) * 1000
+        END,
+        ''
+      FROM "_syncore_migrations_legacy";
+    `);
+  }
+
+  database.exec(`DROP TABLE "_syncore_migrations_legacy";`);
+}
+
+export async function fileExists(filePath: string): Promise<boolean> {
   try {
     await stat(filePath);
     return true;
@@ -1551,41 +1717,21 @@ async function fileExists(filePath: string): Promise<boolean> {
 async function resolveFunctionImportExtension(
   cwd: string
 ): Promise<"" | ".js"> {
-  const candidateConfigFiles = (await readdir(cwd, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && /^tsconfig.*\.json$/i.test(entry.name))
-    .map((entry) => path.join(cwd, entry.name))
-    .sort((left, right) => left.localeCompare(right));
-
-  for (const filePath of candidateConfigFiles) {
-    try {
-      const rawConfig = JSON.parse(await readFile(filePath, "utf8")) as {
-        compilerOptions?: {
-          module?: string;
-          moduleResolution?: string;
-        };
-      };
-      const moduleResolution =
-        rawConfig.compilerOptions?.moduleResolution?.toLowerCase();
-      const moduleTarget = rawConfig.compilerOptions?.module?.toLowerCase();
-      if (moduleResolution === "nodenext" || moduleTarget === "nodenext") {
-        return ".js";
-      }
-    } catch {
-      continue;
-    }
-  }
-
+  void cwd;
+  // Source-generated files are consumed directly by app bundlers before any
+  // local transpilation step. Extensionless specifiers keep Next/Webpack and
+  // tsx aligned with the same source tree.
   return "";
 }
 
-function formatError(error: unknown): string {
+export function formatError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
   return String(error);
 }
 
-async function isLocalPortInUse(port: number): Promise<boolean> {
+export async function isLocalPortInUse(port: number): Promise<boolean> {
   return await new Promise((resolve) => {
     const socket = connectToNet({ host: "127.0.0.1", port });
     socket.once("connect", () => {
@@ -1598,7 +1744,7 @@ async function isLocalPortInUse(port: number): Promise<boolean> {
   });
 }
 
-function slugify(value: string): string {
+export function slugify(value: string): string {
   const slug = value
     .trim()
     .toLowerCase()
@@ -1632,18 +1778,21 @@ function applyMigrationSql(
   }
 }
 
-async function startDevHub(options: {
+export async function startDevHub(options: {
   cwd: string;
   template: SyncoreTemplateName;
 }): Promise<void> {
   const dashboardPort = resolvePortFromEnv("SYNCORE_DASHBOARD_PORT", 4310);
   const devtoolsPort = resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311);
+  const logsDirectory = path.join(options.cwd, ".syncore", "logs");
+  const logFilePath = path.join(logsDirectory, "runtime.jsonl");
+  await mkdir(logsDirectory, { recursive: true });
   await runDevProjectBootstrap(options.cwd, options.template);
   await setupDevProjectWatch(options.cwd, options.template);
 
   if (await isLocalPortInUse(devtoolsPort)) {
     console.log(
-      `Syncore devtools hub already running at ws://127.0.0.1:${devtoolsPort}. Reusing existing hub/dashboard.`
+      `Syncore devtools hub already running at ws://localhost:${devtoolsPort}. Reusing existing hub/dashboard.`
     );
     return;
   }
@@ -1673,6 +1822,49 @@ async function startDevHub(options: {
     runtimeId: "syncore-dev-hub",
     platform: "dev"
   };
+  const appendHubLog = async (
+    event: Extract<SyncoreDevtoolsMessage, { type: "event" }>["event"]
+  ) => {
+    const runtimeHello = runtimeHellos.get(event.runtimeId);
+    const targetIdentity =
+      runtimeHello?.storageIdentity ??
+      (event.runtimeId === "syncore-dev-hub"
+        ? "syncore-dev-hub"
+        : `runtime::${event.runtimeId}`);
+    const targetId =
+      event.runtimeId === "syncore-dev-hub"
+        ? "all"
+        : `client:${stableRuntimeTargetId(targetIdentity)}`;
+    const category =
+      event.type === "query.executed"
+        ? "query"
+        : event.type === "mutation.committed"
+          ? "mutation"
+          : event.type === "action.completed"
+            ? "action"
+            : "system";
+    const message =
+      event.type === "log"
+        ? event.message
+        : event.type === "query.executed" ||
+            event.type === "mutation.committed" ||
+            event.type === "action.completed"
+          ? event.functionName
+          : event.type;
+    await appendFile(
+      logFilePath,
+      `${JSON.stringify({
+        timestamp: event.timestamp,
+        runtimeId: event.runtimeId,
+        targetId,
+        ...(runtimeHello?.platform ? { platform: runtimeHello.platform } : {}),
+        eventType: event.type,
+        category,
+        message,
+        event
+      })}\n`
+    );
+  };
 
   websocketServer.on("connection", (socket: WebSocket) => {
     dashboardSockets.add(socket);
@@ -1684,14 +1876,16 @@ async function startDevHub(options: {
       if (!runtimeHellos.has(runtimeId)) {
         continue;
       }
-      for (const event of [...history].reverse()) {
-        socket.send(
-          JSON.stringify({
-            type: "event",
-            event
-          } satisfies SyncoreDevtoolsMessage)
-        );
+      if (history.length === 0) {
+        continue;
       }
+      socket.send(
+        JSON.stringify({
+          type: "event.batch",
+          runtimeId,
+          events: [...history]
+        })
+      );
     }
 
     socket.on("message", (payload) => {
@@ -1724,7 +1918,9 @@ async function startDevHub(options: {
         if (!targetRuntimeId) {
           return;
         }
-        const subscriptions = dashboardSubscriptions.get(socket) ?? new Map();
+        const subscriptions =
+          dashboardSubscriptions.get(socket) ??
+          new Map<string, { runtimeId: string; payload: SyncoreDevtoolsSubscribe }>();
         subscriptions.set(message.subscriptionId, {
           runtimeId: targetRuntimeId,
           payload: message
@@ -1797,6 +1993,9 @@ async function startDevHub(options: {
         if (message.event.type === "runtime.disconnected") {
           runtimeEvents.delete(message.event.runtimeId);
         }
+        void appendHubLog(message.event);
+      } else if (message.type === "event") {
+        void appendHubLog(message.event);
       }
       if (
         message.type === "command.result" ||
@@ -1851,6 +2050,7 @@ async function startDevHub(options: {
               }
             };
             const payload = JSON.stringify(disconnectedEvent);
+            void appendHubLog(disconnectedEvent.event);
             for (const client of dashboardSockets) {
               if (client.readyState === WebSocket.OPEN) {
                 client.send(payload);
@@ -1878,6 +2078,7 @@ async function startDevHub(options: {
       }
     };
     const payload = JSON.stringify(event);
+    void appendHubLog(event.event);
     for (const client of websocketServer.clients) {
       client.send(payload);
     }
@@ -1890,12 +2091,12 @@ async function startDevHub(options: {
 
   httpServer.listen(devtoolsPort, "127.0.0.1", () => {
     void (async () => {
-      console.log(`Syncore devtools hub: ws://127.0.0.1:${devtoolsPort}`);
+      console.log(`Syncore devtools hub: ws://localhost:${devtoolsPort}`);
       console.log(
-        `Electron/Node runtimes: set devtoolsUrl to ws://127.0.0.1:${devtoolsPort}.`
+        `Electron/Node runtimes: set devtoolsUrl to ws://localhost:${devtoolsPort}.`
       );
       console.log(
-        `Web/Next apps: connect the dashboard or worker bridge to ws://127.0.0.1:${devtoolsPort}.`
+        `Web/Next apps: connect the dashboard or worker bridge to ws://localhost:${devtoolsPort}.`
       );
       console.log(
         "Expo apps: use the same hub URL through LAN or adb reverse while developing."
@@ -1918,7 +2119,7 @@ async function startDevHub(options: {
             }
           });
           await server.listen();
-          console.log(`Dashboard shell: http://127.0.0.1:${dashboardPort}`);
+          console.log(`Dashboard shell: http://localhost:${dashboardPort}`);
         } catch (error) {
           console.log(
             `Dashboard source not started automatically: ${formatError(error)}`
@@ -1980,7 +2181,7 @@ function scheduleDevProjectBootstrap(
   }, 150);
 }
 
-async function runDevProjectBootstrap(
+export async function runDevProjectBootstrap(
   cwd: string,
   template: SyncoreTemplateName
 ): Promise<void> {
@@ -2145,7 +2346,7 @@ function unwrapDefaultExport<TValue>(value: TValue): TValue {
   return value;
 }
 
-function resolvePortFromEnv(
+export function resolvePortFromEnv(
   environmentVariable: string,
   fallback: number
 ): number {
@@ -2176,6 +2377,15 @@ function isCliEntryPoint(): boolean {
 
 function stableStringify(value: unknown): string {
   return JSON.stringify(sortValue(value));
+}
+
+function stableRuntimeTargetId(input: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0).toString(36);
 }
 
 function sortValue(value: unknown): unknown {

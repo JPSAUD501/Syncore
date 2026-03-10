@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "bun run clean && tsdown --config tsdown.config.ts",
-    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build",
+    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build && bun run --filter @syncore/platform-node build",
     "clean": "node -e \"const fs=require('node:fs');for (const target of ['dist','node_modules/.unrun','node_modules/.vite','node_modules/.vite-temp']) { fs.rmSync(target,{recursive:true,force:true}); }\"",
     "lint": "eslint src --ext .ts",
     "test": "bun run build:deps && vitest run",
@@ -28,6 +28,9 @@
   "dependencies": {
     "@syncore/core": "workspace:*",
     "@syncore/devtools-protocol": "workspace:*",
+    "@syncore/platform-node": "workspace:*",
+    "adm-zip": "^0.5.16",
+    "commander": "^13.1.0",
     "tsx": "^4.19.3",
     "ws": "^8.18.0"
   }
