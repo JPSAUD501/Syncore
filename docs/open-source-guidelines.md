@@ -55,10 +55,19 @@ For this repository, the practical public surface is `syncorejs`.
 Release management is based on Changesets.
 
 - `main` is the integration branch
+- `beta` is the prerelease branch
 - normal PRs land on `main`
 - user-facing package changes include a changeset
-- the release workflow uses `changesets/action` to open or update a release PR
-- merging the release PR publishes to npm
+- the stable release workflow uses `changesets/action` to open or update a release PR on `main`
+- the beta release workflow uses `changesets/action` in prerelease mode to open or update a beta release PR on `beta`
+- merging the stable release PR publishes to npm `latest`
+- merging the beta release PR publishes to npm `beta`
+
+Channel expectations:
+
+- `latest` is the supported production channel
+- `beta` is an opt-in prerelease channel for validation before promotion to stable
+- beta releases use semver prerelease identifiers such as `0.3.0-beta.0`
 
 Trusted publishing:
 
