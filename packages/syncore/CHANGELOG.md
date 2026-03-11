@@ -1,5 +1,12 @@
 # syncorejs
 
+## 0.2.1
+
+### Patch Changes
+
+- Patch release for repository maintenance updates that improve CI, release
+  automation, and published-package validation.
+
 ## 0.2.0
 
 ### Minor Changes
