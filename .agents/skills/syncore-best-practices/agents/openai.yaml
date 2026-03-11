@@ -1,0 +1,3 @@
+interface:
+  display_name: "Syncore Best Practices"
+  short_description: "Project structure, public entrypoints, and DX guardrails"
