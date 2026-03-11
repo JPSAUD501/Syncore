@@ -823,8 +823,32 @@ async function extractImportSourcesFromZip(
   );
   cleanupDirectories.push(tempDirectory);
   const zip = new AdmZip(sourcePath);
+  assertSafeZipExtractionPaths(zip, tempDirectory);
   zip.extractAllTo(tempDirectory, true);
   return await resolveImportSources(tempDirectory, undefined, cleanupDirectories);
+}
+
+function assertSafeZipExtractionPaths(zip: AdmZip, extractionDirectory: string): void {
+  const resolvedExtractionDirectory = path.resolve(extractionDirectory);
+  const extractionRoot = `${resolvedExtractionDirectory}${path.sep}`;
+
+  for (const entry of zip.getEntries()) {
+    const entryPath = entry.entryName.replaceAll("\\", "/");
+    if (
+      path.posix.isAbsolute(entryPath) ||
+      /^[A-Za-z]:/.test(entryPath)
+    ) {
+      throw new Error(`Invalid ZIP entry path: ${entry.entryName}`);
+    }
+
+    const extractionTarget = path.resolve(resolvedExtractionDirectory, entryPath);
+    if (
+      extractionTarget !== resolvedExtractionDirectory &&
+      !extractionTarget.startsWith(extractionRoot)
+    ) {
+      throw new Error(`Invalid ZIP entry path: ${entry.entryName}`);
+    }
+  }
 }
 
 async function writeRowsToTempJsonl(rows: unknown[]): Promise<{

@@ -1,8 +1,13 @@
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import AdmZip from "adm-zip";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   connectToProjectHub,
   listConnectedClientTargets,
+  loadImportDocumentBatches,
   resolveDevtoolsUrl
 } from "./project.js";
 
@@ -71,3 +76,43 @@ async function listen(server: Server): Promise<void> {
     });
   });
 }
+
+
+describe("import zip security", () => {
+  it("rejects zip entries that escape the extraction directory", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "syncore-cli-test-cwd-"));
+
+    try {
+      const zipPath = path.join(cwd, "import.zip");
+      const zip = new AdmZip();
+      zip.addFile("../../escape.jsonl", Buffer.from('{"id":1}\n'));
+      zip.addFile("tasks.jsonl", Buffer.from('{"id":1}\n'));
+      zip.writeZip(zipPath);
+
+      await expect(loadImportDocumentBatches(cwd, zipPath)).rejects.toThrow(
+        "Invalid ZIP entry path"
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("imports a safe zip archive", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "syncore-cli-test-cwd-"));
+
+    try {
+      const zipPath = path.join(cwd, "import.zip");
+      const zip = new AdmZip();
+      zip.addFile("tasks.jsonl", Buffer.from('{"id":1}\n'));
+      zip.addFile("notes/documents.jsonl", Buffer.from('{"id":2}\n'));
+      zip.writeZip(zipPath);
+
+      await expect(loadImportDocumentBatches(cwd, zipPath)).resolves.toEqual([
+        { table: "notes", rows: [{ id: 2 }] },
+        { table: "tasks", rows: [{ id: 1 }] }
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
