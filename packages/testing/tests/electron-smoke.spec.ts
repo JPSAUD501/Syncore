@@ -67,11 +67,17 @@ test("Electron example persists local state across app relaunches", async () => 
 async function launchElectronApp(userDataDirectory: string) {
   const requireFromExample = createRequire(path.join(exampleRoot, "package.json"));
   const executablePath = requireFromExample("electron") as string;
+  const electronArgs = [electronMainEntry];
+
+  // GitHub-hosted Linux runners do not provide a configured setuid sandbox.
+  if (process.platform === "linux") {
+    electronArgs.unshift("--disable-setuid-sandbox", "--no-sandbox");
+  }
 
   return electron.launch({
     executablePath,
     cwd: exampleRoot,
-    args: [electronMainEntry],
+    args: electronArgs,
     env: {
       ...process.env,
       SYNCORE_ELECTRON_USER_DATA_DIR: userDataDirectory
