@@ -8,7 +8,7 @@
     "build:deps": "bun run --filter syncorejs build:standalone",
     "dev": "concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
     "dev:app": "bun run build && electron ./dist/examples/electron/src/main.js",
-    "build": "bun run build:deps && bun run build:main && bun run build:renderer",
+    "build": "bun run build:main && bun run build:renderer",
     "build:main": "tsc -p tsconfig.main.json && node ./scripts/copy-preload.mjs",
     "build:renderer": "vite build --config vite.renderer.config.ts && node ./scripts/fix-renderer-html.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",

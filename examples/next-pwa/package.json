@@ -9,7 +9,7 @@
     "build:deps": "bun run --filter syncorejs build:standalone",
     "dev": "bun run build:deps && bun run copy:sqljs-wasm && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
     "dev:app": "next dev",
-    "build": "bun run build:deps && bun run clean && bun run copy:sqljs-wasm && next build",
+    "build": "bun run clean && bun run copy:sqljs-wasm && next build",
     "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true});require('node:fs').rmSync('public/sql-wasm.wasm',{force:true})\"",
     "copy:sqljs-wasm": "node ./scripts/copy-sqljs-wasm.mjs",
     "lint": "eslint app syncore next.config.ts --ext .ts,.tsx",
