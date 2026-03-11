@@ -29,6 +29,8 @@ Use these companion commands during normal development:
 
 - `bun run api:update`: refresh checked-in API Extractor reports after intentional public API changes
 - `bun run changeset`: create the release note/version entry for a user-facing change
+- `bun run changeset:beta:enter`: enable Changesets prerelease mode for the `beta` channel
+- `bun run changeset:beta:exit`: leave Changesets prerelease mode before the next stable promotion
 - `bun run clean`: remove generated build output from the workspace and examples
 
 For contributor workflow and project policy, see:
@@ -75,3 +77,20 @@ The repository CI runs:
 - `bun run test:smoke`
 
 Electron and browser smoke jobs run under `xvfb` on Linux. Expo smoke keeps its skip behavior when Android tooling is unavailable.
+
+## Release channels
+
+Syncore uses two release channels:
+
+- `main` is the stable integration branch and publishes `syncorejs` to npm `latest`
+- `beta` is the prerelease branch and publishes `syncorejs` prereleases to npm `beta`
+
+Operational flow:
+
+1. Run `bun run changeset` for user-facing work as usual
+2. Merge prerelease candidates into `beta`
+3. On `beta`, ensure prerelease mode is active with `bun run changeset:beta:enter`
+4. The beta release workflow opens or updates a `chore: version beta packages` PR against `beta`
+5. Merging that PR publishes the next `-beta.N` release
+6. After the beta line is approved, merge the changes into `main`
+7. Before the next stable promotion, exit prerelease mode on `beta` with `bun run changeset:beta:exit`
