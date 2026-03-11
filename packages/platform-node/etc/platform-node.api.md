@@ -259,9 +259,13 @@ export interface SyncoreElectronIpcBinding {
 // @public
 export interface SyncoreElectronIpcMain {
     // (undocumented)
-    off(channel: string, listener: (event: unknown, message: unknown) => void): void;
+    off(channel: string, listener: (event: {
+        sender: unknown;
+    }, message: unknown) => void): void;
     // (undocumented)
-    on(channel: string, listener: (event: unknown, message: unknown) => void): void;
+    on(channel: string, listener: (event: {
+        sender: unknown;
+    }, message: unknown) => void): void;
 }
 
 // @public (undocumented)
