@@ -13,6 +13,7 @@ const syncorePublishedBinName = "syncorejs";
 
 async function main(): Promise<void> {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "syncore-pack-"));
+  let tarballPath: string | undefined;
 
   try {
     await execCommand(
@@ -32,7 +33,7 @@ async function main(): Promise<void> {
       throw new Error("Failed to determine syncore tarball name.");
     }
 
-    const tarballPath = path.join(syncorePackageRoot, tarballName);
+    tarballPath = path.join(syncorePackageRoot, tarballName);
     const fixtureDir = path.join(tempRoot, "fixture");
 
     await execCommand("npm", ["init", "-y"], fixtureDir, { createCwd: true });
@@ -149,6 +150,9 @@ async function main(): Promise<void> {
 
     console.log(`Validated ${tarballName}`);
   } finally {
+    if (tarballPath) {
+      await rm(tarballPath, { force: true }).catch(() => undefined);
+    }
     await rm(tempRoot, { recursive: true, force: true });
   }
 }
