@@ -13,9 +13,8 @@ This is the balanced default for an open source maintainer-led project:
 - no force pushes
 - linear history required
 - pull requests required for branch updates
-- 1 approving review required
+- no approving review required
 - stale approvals dismissed after new pushes
-- the last push must be approved by someone else
 - all review threads must be resolved before merge
 - required checks:
   - `quality`
