@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -85,9 +85,14 @@ describe("import zip security", () => {
     try {
       const zipPath = path.join(cwd, "import.zip");
       const zip = new AdmZip();
-      zip.addFile("../../escape.jsonl", Buffer.from('{"id":1}\n'));
+      zip.addFile("safe/folder1.jsonl", Buffer.from('{"id":1}\n'));
       zip.addFile("tasks.jsonl", Buffer.from('{"id":1}\n'));
       zip.writeZip(zipPath);
+      await rewriteZipEntryName(
+        zipPath,
+        "safe/folder1.jsonl",
+        "../../escape.jsonl"
+      );
 
       await expect(loadImportDocumentBatches(cwd, zipPath)).rejects.toThrow(
         "Invalid ZIP entry path"
@@ -116,3 +121,29 @@ describe("import zip security", () => {
     }
   });
 });
+
+async function rewriteZipEntryName(
+  zipPath: string,
+  safeEntryName: string,
+  unsafeEntryName: string
+): Promise<void> {
+  if (safeEntryName.length !== unsafeEntryName.length) {
+    throw new Error("ZIP test entry names must have the same length.");
+  }
+
+  const source = await readFile(zipPath);
+  const safeBuffer = Buffer.from(safeEntryName, "latin1");
+  const unsafeBuffer = Buffer.from(unsafeEntryName, "latin1");
+  let replacements = 0;
+
+  for (let index = source.indexOf(safeBuffer); index >= 0; index = source.indexOf(safeBuffer, index + safeBuffer.length)) {
+    unsafeBuffer.copy(source, index);
+    replacements += 1;
+  }
+
+  if (replacements < 2) {
+    throw new Error("Expected to rewrite ZIP entry names in both ZIP headers.");
+  }
+
+  await writeFile(zipPath, source);
+}

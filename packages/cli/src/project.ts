@@ -823,32 +823,116 @@ async function extractImportSourcesFromZip(
   );
   cleanupDirectories.push(tempDirectory);
   const zip = new AdmZip(sourcePath);
-  assertSafeZipExtractionPaths(zip, tempDirectory);
+  await assertSafeZipExtractionPaths(sourcePath, zip, tempDirectory);
   zip.extractAllTo(tempDirectory, true);
   return await resolveImportSources(tempDirectory, undefined, cleanupDirectories);
 }
 
-function assertSafeZipExtractionPaths(zip: AdmZip, extractionDirectory: string): void {
+async function assertSafeZipExtractionPaths(
+  sourcePath: string,
+  zip: AdmZip,
+  extractionDirectory: string
+): Promise<void> {
   const resolvedExtractionDirectory = path.resolve(extractionDirectory);
   const extractionRoot = `${resolvedExtractionDirectory}${path.sep}`;
 
+  for (const entryPath of await readRawZipEntryPaths(sourcePath)) {
+    assertSafeZipEntryPath(
+      entryPath,
+      resolvedExtractionDirectory,
+      extractionRoot
+    );
+  }
+
   for (const entry of zip.getEntries()) {
-    const entryPath = entry.entryName.replaceAll("\\", "/");
-    if (
-      path.posix.isAbsolute(entryPath) ||
-      /^[A-Za-z]:/.test(entryPath)
-    ) {
-      throw new Error(`Invalid ZIP entry path: ${entry.entryName}`);
+    assertSafeZipEntryPath(
+      entry.entryName,
+      resolvedExtractionDirectory,
+      extractionRoot
+    );
+  }
+}
+
+function assertSafeZipEntryPath(
+  entryName: string,
+  resolvedExtractionDirectory: string,
+  extractionRoot: string
+): void {
+  const entryPath = entryName.replaceAll("\\", "/");
+  if (path.posix.isAbsolute(entryPath) || /^[A-Za-z]:/.test(entryPath)) {
+    throw new Error(`Invalid ZIP entry path: ${entryName}`);
+  }
+
+  const extractionTarget = path.resolve(resolvedExtractionDirectory, entryPath);
+  if (
+    extractionTarget !== resolvedExtractionDirectory &&
+    !extractionTarget.startsWith(extractionRoot)
+  ) {
+    throw new Error(`Invalid ZIP entry path: ${entryName}`);
+  }
+}
+
+async function readRawZipEntryPaths(sourcePath: string): Promise<string[]> {
+  const archive = await readFile(sourcePath);
+  const endOfCentralDirectoryOffset = findEndOfCentralDirectoryOffset(archive);
+  if (endOfCentralDirectoryOffset < 0) {
+    throw new Error(`Invalid ZIP archive: ${sourcePath}`);
+  }
+
+  const entryCount = archive.readUInt16LE(endOfCentralDirectoryOffset + 10);
+  const centralDirectorySize = archive.readUInt32LE(
+    endOfCentralDirectoryOffset + 12
+  );
+  const centralDirectoryOffset = archive.readUInt32LE(
+    endOfCentralDirectoryOffset + 16
+  );
+  const centralDirectoryEnd = centralDirectoryOffset + centralDirectorySize;
+  if (centralDirectoryEnd > archive.length) {
+    throw new Error(`Invalid ZIP archive: ${sourcePath}`);
+  }
+
+  const entryPaths: string[] = [];
+  let cursor = centralDirectoryOffset;
+  for (let index = 0; index < entryCount; index += 1) {
+    if (cursor + 46 > centralDirectoryEnd) {
+      throw new Error(`Invalid ZIP archive: ${sourcePath}`);
+    }
+    if (archive.readUInt32LE(cursor) !== 0x02014b50) {
+      throw new Error(`Invalid ZIP archive: ${sourcePath}`);
     }
 
-    const extractionTarget = path.resolve(resolvedExtractionDirectory, entryPath);
-    if (
-      extractionTarget !== resolvedExtractionDirectory &&
-      !extractionTarget.startsWith(extractionRoot)
-    ) {
-      throw new Error(`Invalid ZIP entry path: ${entry.entryName}`);
+    const flags = archive.readUInt16LE(cursor + 8);
+    const fileNameLength = archive.readUInt16LE(cursor + 28);
+    const extraFieldLength = archive.readUInt16LE(cursor + 30);
+    const commentLength = archive.readUInt16LE(cursor + 32);
+    const fileNameStart = cursor + 46;
+    const fileNameEnd = fileNameStart + fileNameLength;
+    const nextEntryOffset = fileNameEnd + extraFieldLength + commentLength;
+    if (nextEntryOffset > centralDirectoryEnd) {
+      throw new Error(`Invalid ZIP archive: ${sourcePath}`);
+    }
+
+    entryPaths.push(
+      decodeZipEntryPath(archive.subarray(fileNameStart, fileNameEnd), flags)
+    );
+    cursor = nextEntryOffset;
+  }
+
+  return entryPaths;
+}
+
+function findEndOfCentralDirectoryOffset(archive: Buffer): number {
+  const minOffset = Math.max(0, archive.length - 0xffff - 22);
+  for (let offset = archive.length - 22; offset >= minOffset; offset -= 1) {
+    if (archive.readUInt32LE(offset) === 0x06054b50) {
+      return offset;
     }
   }
+  return -1;
+}
+
+function decodeZipEntryPath(entryPath: Buffer, flags: number): string {
+  return entryPath.toString((flags & 0x0800) === 0 ? "latin1" : "utf8");
 }
 
 async function writeRowsToTempJsonl(rows: unknown[]): Promise<{
