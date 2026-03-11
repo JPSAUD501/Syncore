@@ -29,6 +29,11 @@ jobs:
           node-version: 22.18.0
           registry-url: https://registry.npmjs.org
 
+      - name: Setup npm for trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -47,4 +52,3 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
