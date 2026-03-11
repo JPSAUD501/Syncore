@@ -3,13 +3,16 @@ name: CI
 on:
   push:
     branches:
-      - main
-      - master
       - "codex/**"
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
@@ -71,9 +74,6 @@ jobs:
 
       - name: Install Playwright browsers
         run: bun run playwright install --with-deps chromium
-
-      - name: Build workspace
-        run: bun run build
 
       - name: Run smoke suite
         run: xvfb-run -a bun run test:smoke
