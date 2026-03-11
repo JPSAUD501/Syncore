@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { appendFile, readdir, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { connect as connectToNet } from "node:net";
 import path from "node:path";
@@ -2159,6 +2160,8 @@ export async function startDevHub(options: {
   const devtoolsPort = resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311);
   const logsDirectory = path.join(options.cwd, ".syncore", "logs");
   const logFilePath = path.join(logsDirectory, "runtime.jsonl");
+  const hubAccessToken =
+    process.env.SYNCORE_DEVTOOLS_TOKEN ?? randomBytes(24).toString("base64url");
   await mkdir(logsDirectory, { recursive: true });
   await writeFile(logFilePath, "");
   await runDevProjectBootstrap(options.cwd, options.template);
@@ -2274,26 +2277,31 @@ export async function startDevHub(options: {
     );
   };
 
-  websocketServer.on("connection", (socket: WebSocket) => {
-    dashboardSockets.add(socket);
-    socket.send(JSON.stringify(hello));
-    for (const runtimeHello of runtimeHellos.values()) {
-      socket.send(JSON.stringify(runtimeHello));
-    }
-    for (const [runtimeId, history] of runtimeEvents) {
-      if (!runtimeHellos.has(runtimeId)) {
-        continue;
+  websocketServer.on("connection", (socket, request) => {
+    const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+    const isAuthenticatedDashboard =
+      requestUrl.searchParams.get("hubToken") === hubAccessToken;
+    if (isAuthenticatedDashboard) {
+      dashboardSockets.add(socket);
+      socket.send(JSON.stringify(hello));
+      for (const runtimeHello of runtimeHellos.values()) {
+        socket.send(JSON.stringify(runtimeHello));
       }
-      if (history.length === 0) {
-        continue;
+      for (const [runtimeId, history] of runtimeEvents) {
+        if (!runtimeHellos.has(runtimeId)) {
+          continue;
+        }
+        if (history.length === 0) {
+          continue;
+        }
+        socket.send(
+          JSON.stringify({
+            type: "event.batch",
+            runtimeId,
+            events: [...history]
+          })
+        );
       }
-      socket.send(
-        JSON.stringify({
-          type: "event.batch",
-          runtimeId,
-          events: [...history]
-        })
-      );
     }
 
     socket.on("message", (payload) => {
@@ -2305,12 +2313,20 @@ export async function startDevHub(options: {
         | SyncoreDevtoolsMessage
         | (SyncoreDevtoolsClientMessage & { targetRuntimeId?: string });
       if (message.type === "ping") {
+        if (!isAuthenticatedDashboard) {
+          socket.close(1008, "Unauthorized devtools client");
+          return;
+        }
         socket.send(
           JSON.stringify({ type: "pong" } satisfies SyncoreDevtoolsMessage)
         );
         return;
       }
       if (message.type === "command") {
+        if (!isAuthenticatedDashboard) {
+          socket.close(1008, "Unauthorized devtools client");
+          return;
+        }
         const targetRuntimeId = message.targetRuntimeId;
         if (!targetRuntimeId) {
           return;
@@ -2344,6 +2360,10 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "subscribe") {
+        if (!isAuthenticatedDashboard) {
+          socket.close(1008, "Unauthorized devtools client");
+          return;
+        }
         const targetRuntimeId = message.targetRuntimeId;
         if (!targetRuntimeId) {
           return;
@@ -2396,6 +2416,10 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "unsubscribe") {
+        if (!isAuthenticatedDashboard) {
+          socket.close(1008, "Unauthorized devtools client");
+          return;
+        }
         const subscriptions = dashboardSubscriptions.get(socket);
         const subscription = subscriptions?.get(message.subscriptionId);
         if (!subscription) {
@@ -2555,6 +2579,7 @@ export async function startDevHub(options: {
   httpServer.listen(devtoolsPort, "127.0.0.1", () => {
     void (async () => {
       console.log(`Syncore devtools hub: ws://localhost:${devtoolsPort}`);
+      console.log(`Devtools dashboard token: ${hubAccessToken}`);
       console.log(
         `Electron/Node runtimes: set devtoolsUrl to ws://localhost:${devtoolsPort}.`
       );
@@ -2582,7 +2607,9 @@ export async function startDevHub(options: {
             }
           });
           await server.listen();
-          console.log(`Dashboard shell: http://localhost:${dashboardPort}`);
+          console.log(
+            `Dashboard shell: http://localhost:${dashboardPort}/?hubToken=${hubAccessToken}`
+          );
         } catch (error) {
           console.log(
             `Dashboard source not started automatically: ${formatError(error)}`
