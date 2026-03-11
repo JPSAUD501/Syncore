@@ -1,0 +1,65 @@
+name: Feature request
+description: Propose a scoped product or DX improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for concrete feature requests. If the idea is still broad
+        or exploratory, start a GitHub Discussion first.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: Add a CLI command for...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      options:
+        - syncorejs
+        - cli
+        - core
+        - schema
+        - react
+        - platform-web
+        - platform-node
+        - platform-expo
+        - next
+        - svelte
+        - examples
+        - docs
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user or maintainer problem does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful version of the feature.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workaround, prior approach, or competing idea.
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Potential impact
+      options:
+        - label: This changes public API
+        - label: This changes CLI behavior
+        - label: This changes generated code
+        - label: This affects release or packaging behavior

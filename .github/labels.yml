@@ -1,0 +1,57 @@
+- name: bug
+  color: "d73a4a"
+  description: Reproducible defect or regression
+- name: enhancement
+  color: "a2eeef"
+  description: Scoped product or developer experience improvement
+- name: docs
+  color: "0075ca"
+  description: Documentation changes or documentation debt
+- name: question
+  color: "d876e3"
+  description: Question that may need clarification or routing
+- name: discussion-needed
+  color: "cfd3d7"
+  description: Needs product or design alignment before implementation
+- name: good first issue
+  color: "7057ff"
+  description: Good entry point for new contributors
+- name: help wanted
+  color: "008672"
+  description: Extra contributor help is welcome
+- name: breaking-change
+  color: "b60205"
+  description: Intentional breaking change or incompatibility
+- name: release
+  color: "fbca04"
+  description: Release process, versioning, or publishing work
+- name: cli
+  color: "1d76db"
+  description: CLI behavior and DX
+- name: core
+  color: "0e8a16"
+  description: Runtime, scheduler, storage, or function execution
+- name: schema
+  color: "5319e7"
+  description: Schema, validators, migrations, and planning
+- name: react
+  color: "0366d6"
+  description: React bindings and hooks
+- name: platform-web
+  color: "0052cc"
+  description: Web runtime, worker bridge, or persistence adapters
+- name: platform-node
+  color: "006b75"
+  description: Node or Electron platform integration
+- name: platform-expo
+  color: "2cbe4e"
+  description: Expo platform integration
+- name: next
+  color: "24292f"
+  description: Next integration and helpers
+- name: svelte
+  color: "e36209"
+  description: Svelte bindings
+- name: examples
+  color: "bfdadc"
+  description: Example apps and integration fixtures

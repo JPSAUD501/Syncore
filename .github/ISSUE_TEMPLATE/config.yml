@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and design discussions
+    url: https://github.com/JPSAUD501/Syncore/discussions
+    about: Use Discussions for usage questions, architecture tradeoffs, and early proposals.
+  - name: Security issue
+    url: https://github.com/JPSAUD501/Syncore/security
+    about: Do not file sensitive vulnerabilities in public issues.

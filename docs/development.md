@@ -31,6 +31,12 @@ Use these companion commands during normal development:
 - `bun run changeset`: create the release note/version entry for a user-facing change
 - `bun run clean`: remove generated build output from the workspace and examples
 
+For contributor workflow and project policy, see:
+
+- [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+- [`../SUPPORT.md`](../SUPPORT.md)
+- [`open-source-guidelines.md`](open-source-guidelines.md)
+
 ## Dev dashboard
 
 The current dashboard is intentionally a shell. The protocol, connection model, and placeholder routes are already in place so a later UI/UX pass can focus on actual tooling workflows instead of wiring.

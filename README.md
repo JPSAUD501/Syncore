@@ -95,6 +95,23 @@ plugins.
 Published packages are built with `tsdown`. Static type-checking stays explicit
 via `tsc --noEmit`.
 
+## Project status / stability
+
+Syncore is usable today, but the project is still early and evolving.
+
+Current expectations:
+
+- `syncorejs` is the supported public package surface
+- core local-first runtime building blocks are functional across the main targets
+- the CLI and examples are actively used to shape the product contract
+- dashboard UX and some broader product ergonomics are still in progress
+
+Stability should be read as:
+
+- stable enough for active evaluation and early adopters
+- not yet frozen as a mature long-term API in every area
+- explicit API review matters when public behavior changes
+
 Platform status right now:
 
 - Node/Electron: local SQLite + filesystem adapter is functional
@@ -201,6 +218,39 @@ Target model:
 - `react-web`, `next`, and `expo` use connected `client:<id>` targets
 - `npx syncorejs targets` is the primary way to inspect what is currently available
 
+## Getting help
+
+Use the channel that matches the request:
+
+- bugs and scoped feature requests: [GitHub Issues](https://github.com/JPSAUD501/Syncore/issues)
+- usage questions and design discussion: [GitHub Discussions](https://github.com/JPSAUD501/Syncore/discussions)
+- security-sensitive reports: [`SECURITY.md`](SECURITY.md)
+
+Useful starting points:
+
+- [`docs/architecture.md`](docs/architecture.md)
+- [`docs/development.md`](docs/development.md)
+- [`docs/quickstarts/react-web.md`](docs/quickstarts/react-web.md)
+- [`docs/quickstarts/next-pwa.md`](docs/quickstarts/next-pwa.md)
+- [`docs/quickstarts/expo.md`](docs/quickstarts/expo.md)
+- [`docs/quickstarts/electron.md`](docs/quickstarts/electron.md)
+- [`docs/quickstarts/node-script.md`](docs/quickstarts/node-script.md)
+
+## Contributing
+
+Contributions are welcome.
+
+Default contribution model:
+
+- small fixes, tests, and docs can go straight to a PR
+- larger features, public API changes, and architectural shifts should start in an Issue or Discussion
+
+Before opening a substantial PR, read:
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- [`SUPPORT.md`](SUPPORT.md)
+- [`docs/open-source-guidelines.md`](docs/open-source-guidelines.md)
+
 ## How Syncore differs from Convex
 
 Syncore keeps the Convex-style programming model, but the runtime is local to
@@ -223,3 +273,4 @@ product code.
 - [`docs/development.md`](docs/development.md)
 - [`docs/guides/cli-product-contract.md`](docs/guides/cli-product-contract.md)
 - [`docs/guides/syncore-vs-convex.md`](docs/guides/syncore-vs-convex.md)
+- [`docs/open-source-guidelines.md`](docs/open-source-guidelines.md)
