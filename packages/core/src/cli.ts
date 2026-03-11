@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { appendFile, readdir, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 import { connect as connectToNet } from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -2126,6 +2126,34 @@ export function slugify(value: string): string {
   return slug || "auto";
 }
 
+function isLoopbackAddress(address: string | undefined): boolean {
+  if (!address) {
+    return false;
+  }
+  const normalized = address.replace(/^::ffff:/, "");
+  return (
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "localhost"
+  );
+}
+
+function isTrustedDevtoolsConnection(request: IncomingMessage): boolean {
+  if (!isLoopbackAddress(request.socket.remoteAddress)) {
+    return false;
+  }
+  const origin = request.headers.origin;
+  if (!origin) {
+    return true;
+  }
+  try {
+    const originUrl = new URL(origin);
+    return isLoopbackAddress(originUrl.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function applyMigrationSql(
   database: DatabaseSync,
   sql: string,
@@ -2274,7 +2302,11 @@ export async function startDevHub(options: {
     );
   };
 
-  websocketServer.on("connection", (socket: WebSocket) => {
+  websocketServer.on("connection", (socket: WebSocket, request) => {
+    if (!isTrustedDevtoolsConnection(request)) {
+      socket.close(1008, "Forbidden");
+      return;
+    }
     dashboardSockets.add(socket);
     socket.send(JSON.stringify(hello));
     for (const runtimeHello of runtimeHellos.values()) {
