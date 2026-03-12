@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
+    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev --open-dashboard",
     "syncorejs:codegen": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
     "syncorejs:migrate:generate": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts migrate generate init_planner",
     "build:deps": "bun run --filter syncorejs build:standalone",
