@@ -1,14 +1,20 @@
 import type { ReactNode } from "react";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { JetBrains_Mono, Literata, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-const plexSans = IBM_Plex_Sans({
+const literata = Literata({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-serif"
+});
+
+const sourceSans = Source_Sans_3({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-sans"
 });
 
-const plexMono = IBM_Plex_Mono({
+const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
   variable: "--font-mono"
@@ -25,11 +31,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <link rel="icon" href="/planner-icon.svg" type="image/svg+xml" />
-        <meta name="theme-color" content="#241b14" />
+        <meta name="theme-color" content="#2a1f16" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body
-        className={`${plexSans.variable} ${plexMono.variable}`}
+        className={`${literata.variable} ${sourceSans.variable} ${jetBrainsMono.variable}`}
         style={{
           margin: 0,
           padding: 0,

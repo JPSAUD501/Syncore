@@ -4,8 +4,10 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
-  type FormEvent
+  type FormEvent,
+  type KeyboardEvent
 } from "react";
 import { skip, useAction, useMutation, useQuery } from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
@@ -41,9 +43,7 @@ type PlannerWindow = Window & {
 };
 
 function formatRelative(timestamp?: number): string {
-  if (!timestamp) {
-    return "No date";
-  }
+  if (!timestamp) return "—";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -53,9 +53,7 @@ function formatRelative(timestamp?: number): string {
 }
 
 function toDateTimeInputValue(timestamp?: number): string {
-  if (!timestamp) {
-    return "";
-  }
+  if (!timestamp) return "";
   const date = new Date(timestamp);
   const offset = date.getTimezoneOffset();
   const normalized = new Date(date.getTime() - offset * 60 * 1000);
@@ -63,9 +61,7 @@ function toDateTimeInputValue(timestamp?: number): string {
 }
 
 function fromDateTimeInputValue(value: string): number | undefined {
-  if (!value) {
-    return undefined;
-  }
+  if (!value) return undefined;
   const parsed = new Date(value);
   const timestamp = parsed.getTime();
   return Number.isNaN(timestamp) ? undefined : timestamp;
@@ -79,19 +75,20 @@ export function PlannerScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [quickTitle, setQuickTitle] = useState("");
   const [projectName, setProjectName] = useState("");
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
-    "idle"
-  );
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [isOnline, setIsOnline] = useState(true);
-  const [installPrompt, setInstallPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
-  const [previewArtifactId, setPreviewArtifactId] = useState<string | null>(
-    null
-  );
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [previewArtifactId, setPreviewArtifactId] = useState<string | null>(null);
   const [isGeneratingKind, setIsGeneratingKind] = useState<string | null>(null);
   const [isRailOpen, setIsRailOpen] = useState(false);
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState("");
+  const [isAddingProject, setIsAddingProject] = useState(false);
 
   const deferredSearchQuery = useDeferredValue(searchQuery.trim());
+  const didAutoSeed = useRef(false);
+  const quickAddRef = useRef<HTMLInputElement>(null);
 
   const workspace = useQuery(api.tasks.workspace, {
     projectId: activeProjectId ?? undefined
@@ -100,19 +97,12 @@ export function PlannerScreen() {
   const rawSearchResults = useQuery(
     api.tasks.search,
     deferredSearchQuery
-      ? {
-          query: deferredSearchQuery,
-          projectId: activeProjectId ?? undefined
-        }
+      ? { query: deferredSearchQuery, projectId: activeProjectId ?? undefined }
       : skip
   );
-  const searchResults = useMemo(
-    () => rawSearchResults ?? [],
-    [rawSearchResults]
-  );
+  const searchResults = useMemo(() => rawSearchResults ?? [], [rawSearchResults]);
   const task =
-    useQuery(api.tasks.get, selectedTaskId ? { id: selectedTaskId } : skip) ??
-    null;
+    useQuery(api.tasks.get, selectedTaskId ? { id: selectedTaskId } : skip) ?? null;
   const artifacts =
     useQuery(
       api.artifacts.listByTask,
@@ -133,6 +123,8 @@ export function PlannerScreen() {
   const scheduleReminder = useMutation(api.tasks.scheduleReminder);
   const deleteTask = useMutation(api.tasks.remove);
   const createProject = useMutation(api.projects.create);
+  const updateProject = useMutation(api.projects.update);
+  const archiveProject = useMutation(api.projects.archive);
   const removeArtifact = useMutation(api.artifacts.remove);
   const generateArtifact = useAction(api.artifacts.generate);
 
@@ -151,18 +143,25 @@ export function PlannerScreen() {
     [activeSection, deferredSearchQuery, searchResults, workspace]
   );
   const totalTasks = workspace?.totals.all ?? 0;
-  const activeProject =
-    projects.find((project) => project._id === activeProjectId) ?? null;
+  const activeProject = projects.find((p) => p._id === activeProjectId) ?? null;
   const activeSectionLabel =
-    SECTIONS.find((section) => section.key === activeSection)?.label ?? "Today";
+    SECTIONS.find((s) => s.key === activeSection)?.label ?? "Today";
   const headingTitle = deferredSearchQuery
-    ? `Search for "${deferredSearchQuery}"`
+    ? `"${deferredSearchQuery}"`
     : activeProject?.name ?? activeSectionLabel;
   const headingMeta = deferredSearchQuery
-    ? `${visibleTasks.length} matching tasks on this device`
+    ? `${visibleTasks.length} result${visibleTasks.length !== 1 ? "s" : ""}`
     : activeProject
-      ? `${visibleTasks.length} tasks in this project`
-      : `${workspace?.totals[activeSection] ?? 0} tasks in ${activeSectionLabel.toLowerCase()}`;
+      ? `${visibleTasks.length} task${visibleTasks.length !== 1 ? "s" : ""}`
+      : `${workspace?.totals[activeSection] ?? 0} task${(workspace?.totals[activeSection] ?? 0) !== 1 ? "s" : ""}`;
+
+  // Auto-seed demo workspace on first load if empty
+  useEffect(() => {
+    if (workspace && totalTasks === 0 && !didAutoSeed.current) {
+      didAutoSeed.current = true;
+      void seedDemo({});
+    }
+  }, [workspace, totalTasks, seedDemo]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -171,21 +170,16 @@ export function PlannerScreen() {
   }, [workspace]);
 
   useEffect(() => {
-    if (typeof navigator !== "undefined") {
-      setIsOnline(navigator.onLine);
-    }
-
+    if (typeof navigator !== "undefined") setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
-
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("beforeinstallprompt", handleInstallPrompt);
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
@@ -202,9 +196,9 @@ export function PlannerScreen() {
       setDraftDueAt("");
       setDraftReminderAt("");
       setPreviewArtifactId(null);
+      setConfirmDeleteTaskId(null);
       return;
     }
-
     setDraftTitle(task.title);
     setDraftDetails(task.details);
     setDraftPriority(task.priority);
@@ -212,21 +206,17 @@ export function PlannerScreen() {
     setDraftDueAt(toDateTimeInputValue(task.dueAt));
     setDraftReminderAt(toDateTimeInputValue(task.reminderAt));
     setSaveState("saved");
+    setConfirmDeleteTaskId(null);
   }, [task]);
 
   useEffect(() => {
-    if (visibleTasks.length === 0) {
-      setSelectedTaskId(null);
-      return;
-    }
-
-    if (
-      selectedTaskId &&
-      !visibleTasks.some((entry) => entry._id === selectedTaskId)
-    ) {
+    if (visibleTasks.length === 0) { setSelectedTaskId(null); return; }
+    if (selectedTaskId && !visibleTasks.some((e) => e._id === selectedTaskId)) {
       setSelectedTaskId(null);
     }
   }, [selectedTaskId, visibleTasks]);
+
+  // ── Handlers ──────────────────────────────────────────────
 
   function handleSelectSection(sectionKey: (typeof SECTIONS)[number]["key"]) {
     setSearchQuery("");
@@ -243,23 +233,12 @@ export function PlannerScreen() {
     setSelectedTaskId(taskId);
   }
 
-  async function handleSeedDemo() {
-    await seedDemo({});
-    setIsRailOpen(false);
-  }
-
   async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!quickTitle.trim()) {
-      return;
-    }
+    if (!quickTitle.trim()) return;
 
     const nextStatus =
-      activeSection === "done"
-        ? "inbox"
-        : deferredSearchQuery
-          ? "inbox"
-          : activeSection;
+      activeSection === "done" || deferredSearchQuery ? "inbox" : activeSection;
     const id = await createTask({
       title: quickTitle.trim(),
       details: undefined,
@@ -272,27 +251,48 @@ export function PlannerScreen() {
     setQuickTitle("");
     setSelectedTaskId(id);
     setActiveSection(nextStatus);
+    // Return focus to input for rapid entry
+    quickAddRef.current?.focus();
   }
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!projectName.trim()) {
-      return;
-    }
-
-    const id = await createProject({
-      name: projectName.trim(),
-      color: undefined
-    });
+    if (!projectName.trim()) return;
+    const id = await createProject({ name: projectName.trim(), color: undefined });
     setProjectName("");
+    setIsAddingProject(false);
     setActiveProjectId(id);
   }
 
-  async function handleSaveTask() {
-    if (!task) {
-      return;
-    }
+  function handleStartEditProject(projectId: string, currentName: string) {
+    setEditingProjectId(projectId);
+    setEditingProjectName(currentName);
+  }
 
+  async function handleSaveProjectName(projectId: string) {
+    if (!editingProjectName.trim()) { setEditingProjectId(null); return; }
+    const project = projects.find((p) => p._id === projectId);
+    if (!project) { setEditingProjectId(null); return; }
+    await updateProject({
+      id: projectId as Parameters<typeof updateProject>[0]["id"],
+      name: editingProjectName.trim(),
+      color: project.color
+    });
+    setEditingProjectId(null);
+  }
+
+  function handleProjectNameKeyDown(event: KeyboardEvent, projectId: string) {
+    if (event.key === "Enter") { event.preventDefault(); void handleSaveProjectName(projectId); }
+    if (event.key === "Escape") setEditingProjectId(null);
+  }
+
+  async function handleArchiveProject(projectId: string) {
+    if (activeProjectId === projectId) setActiveProjectId(null);
+    await archiveProject({ id: projectId as Parameters<typeof archiveProject>[0]["id"] });
+  }
+
+  async function handleSaveTask() {
+    if (!task) return;
     const nextTitle = draftTitle.trim() || task.title;
     const nextDetails = draftDetails.trim();
     const nextProjectId = draftProjectId || undefined;
@@ -307,10 +307,7 @@ export function PlannerScreen() {
       nextDueAt !== task.dueAt;
     const reminderChanged = nextReminderAt !== task.reminderAt;
 
-    if (!contentChanged && !reminderChanged) {
-      setSaveState("saved");
-      return;
-    }
+    if (!contentChanged && !reminderChanged) { setSaveState("saved"); return; }
 
     setSaveState("saving");
     if (contentChanged) {
@@ -324,52 +321,43 @@ export function PlannerScreen() {
       });
     }
     if (reminderChanged) {
-      await scheduleReminder({
-        id: task._id,
-        reminderAt: nextReminderAt
-      });
+      await scheduleReminder({ id: task._id, reminderAt: nextReminderAt });
     }
     setSaveState("saved");
   }
 
   async function handleMoveTask(status: (typeof SECTIONS)[number]["key"]) {
-    if (!task) {
-      return;
-    }
+    if (!task) return;
     await moveTask({ id: task._id, status });
     setActiveSection(status);
   }
 
   async function handleCompleteTask() {
-    if (!task) {
-      return;
-    }
+    if (!task) return;
     await completeTask({ id: task._id });
     setActiveSection("done");
   }
 
   async function handleReopenTask() {
-    if (!task) {
-      return;
-    }
+    if (!task) return;
     await reopenTask({ id: task._id, status: "today" });
     setActiveSection("today");
   }
 
   async function handleDeleteTask() {
-    if (!task) {
+    if (!task) return;
+    if (confirmDeleteTaskId !== task._id) {
+      setConfirmDeleteTaskId(task._id);
       return;
     }
-    const nextTaskId =
-      visibleTasks.find((entry) => entry._id !== task._id)?._id ?? null;
+    const nextTaskId = visibleTasks.find((e) => e._id !== task._id)?._id ?? null;
     await deleteTask({ id: task._id });
     setSelectedTaskId(nextTaskId);
+    setConfirmDeleteTaskId(null);
   }
 
   async function handleGenerateArtifact(kind: string) {
-    if (!task) {
-      return;
-    }
+    if (!task) return;
     setIsGeneratingKind(kind);
     const result = await generateArtifact({ taskId: task._id, kind });
     setPreviewArtifactId(result.artifactId);
@@ -378,26 +366,25 @@ export function PlannerScreen() {
 
   async function handleRemoveArtifact(id: string) {
     await removeArtifact({ id });
-    if (previewArtifactId === id) {
-      setPreviewArtifactId(null);
-    }
+    if (previewArtifactId === id) setPreviewArtifactId(null);
   }
 
   async function handleInstall() {
-    if (!installPrompt) {
-      return;
-    }
+    if (!installPrompt) return;
     await installPrompt.prompt();
     await installPrompt.userChoice;
     setInstallPrompt(null);
     setIsRailOpen(false);
   }
 
+  // ── Other sections to move to (not current, not done when already there) ──
+  const moveSections = SECTIONS.filter(
+    (s) => s.key !== task?.status && s.key !== "done"
+  );
+
   return (
     <main className="planner-app">
-      <div
-        className={`planner-shell ${task ? "planner-shell--detail-open" : "planner-shell--detail-closed"}`}
-      >
+      <div className={`planner-shell ${task ? "planner-shell--detail-open" : "planner-shell--detail-closed"}`}>
         <button
           aria-hidden={!isRailOpen}
           className={`planner-overlay ${isRailOpen ? "planner-overlay--visible" : ""}`}
@@ -406,33 +393,16 @@ export function PlannerScreen() {
           type="button"
         />
 
+        {/* ── Sidebar ── */}
         <aside className={`planner-rail ${isRailOpen ? "planner-rail--open" : ""}`}>
           <div className="planner-rail__header">
             <span className="planner-mark">Syncore planner</span>
-            <button
-              className="icon-button rail-close"
-              onClick={() => setIsRailOpen(false)}
-              type="button"
-            >
-              Close
-            </button>
+            <button className="icon-button rail-close" onClick={() => setIsRailOpen(false)} type="button">✕</button>
           </div>
 
           <div className="planner-intro">
-            <h1>Plan locally. Stay useful offline.</h1>
-            <p>
-              {isOnline ? "Everything is writing to the local runtime." : "The app is offline and still usable."}
-            </p>
-          </div>
-
-          <div className="planner-actions">
-            <button
-              className="button button--quiet"
-              onClick={() => void handleSeedDemo()}
-              type="button"
-            >
-              Load demo workspace
-            </button>
+            <h1>Your workspace</h1>
+            <p>{isOnline ? "Stored locally on this device." : "Offline — everything still works."}</p>
           </div>
 
           <nav aria-label="Sections" className="section-list">
@@ -444,505 +414,498 @@ export function PlannerScreen() {
                 type="button"
               >
                 <span>{section.label}</span>
-                <span className="section-count">
-                  {workspace?.totals[section.key] ?? 0}
-                </span>
+                <span className="section-count">{workspace?.totals[section.key] ?? 0}</span>
               </button>
             ))}
           </nav>
 
+          {/* ── Projects ── */}
           <div className="rail-block">
             <div className="rail-heading">
               <span>Projects</span>
-              {activeProjectId ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {activeProjectId ? (
+                  <button className="text-button" onClick={() => handleToggleProject(null)} type="button">Clear</button>
+                ) : null}
                 <button
-                  className="text-button"
-                  onClick={() => handleToggleProject(null)}
+                  className="text-button text-button--icon"
+                  onClick={() => setIsAddingProject((v) => !v)}
+                  title="New project"
                   type="button"
                 >
-                  Clear
+                  {isAddingProject ? "✕" : "+"}
                 </button>
-              ) : null}
+              </div>
             </div>
+
+            {isAddingProject ? (
+              <form className="inline-form" onSubmit={(event) => void handleCreateProject(event)}>
+                <div className="inline-form__row">
+                  <input
+                    autoFocus
+                    className="field-input"
+                    id="project-name"
+                    onChange={(event) => setProjectName(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === "Escape") { setIsAddingProject(false); setProjectName(""); } }}
+                    placeholder="Project name"
+                    value={projectName}
+                  />
+                  <button className="button button--primary" type="submit">Add</button>
+                </div>
+              </form>
+            ) : null}
 
             <div className="project-list">
               {projects.map((project) => (
-                <button
+                <div
                   key={project._id}
-                  className={`project-link ${activeProjectId === project._id ? "project-link--active" : ""}`}
-                  onClick={() => handleToggleProject(project._id)}
-                  type="button"
+                  className={`project-list-item ${activeProjectId === project._id ? "project-list-item--active" : ""}`}
                 >
-                  <span className="project-link__name">
-                    <span
-                      className="project-swatch"
-                      style={{ backgroundColor: project.color }}
+                  {editingProjectId === project._id ? (
+                    <input
+                      autoFocus
+                      className="field-input project-name-input"
+                      onBlur={() => void handleSaveProjectName(project._id)}
+                      onChange={(event) => setEditingProjectName(event.target.value)}
+                      onKeyDown={(event) => handleProjectNameKeyDown(event, project._id)}
+                      value={editingProjectName}
                     />
-                    <span>{project.name}</span>
-                  </span>
-                </button>
+                  ) : (
+                    <button
+                      className="project-link"
+                      onClick={() => handleToggleProject(project._id)}
+                      type="button"
+                    >
+                      <span
+                        className="project-swatch"
+                        style={{ backgroundColor: project.color }}
+                      />
+                      <span className="project-link__label">{project.name}</span>
+                    </button>
+                  )}
+                  <div className="project-actions">
+                    <button
+                      className="text-button text-button--icon"
+                      onClick={() => handleStartEditProject(project._id, project.name)}
+                      title="Rename"
+                      type="button"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      className="text-button text-button--icon text-button--danger"
+                      onClick={() => void handleArchiveProject(project._id)}
+                      title="Archive project"
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
               ))}
-            </div>
-
-            <form
-              className="inline-form"
-              onSubmit={(event) => void handleCreateProject(event)}
-            >
-              <label className="field-label" htmlFor="project-name">
-                New project
-              </label>
-              <div className="inline-form__row">
-                <input
-                  className="field-input"
-                  id="project-name"
-                  onChange={(event) => setProjectName(event.target.value)}
-                  placeholder="Add project"
-                  value={projectName}
-                />
-                <button className="button" type="submit">
-                  Add
-                </button>
-              </div>
-            </form>
-          </div>
-        </aside>
-
-        <section className="planner-main">
-          <header className="planner-topbar">
-            <div className="planner-topbar__left">
-              <button
-                className="icon-button rail-toggle"
-                onClick={() => setIsRailOpen(true)}
-                type="button"
-              >
-                Menu
-              </button>
-              <div>
-                <h2>{headingTitle}</h2>
-                <p className="planner-summary">{headingMeta}</p>
-              </div>
-            </div>
-
-            <div className="planner-topbar__right">
-              <div className="status-line">
-                <span
-                  className={`status-indicator ${isOnline ? "" : "status-indicator--offline"}`}
-                />
-                <span>{isOnline ? "Saved locally" : "Offline mode"}</span>
-              </div>
-              {installPrompt ? (
-                <button
-                  className="button button--quiet planner-install"
-                  onClick={() => void handleInstall()}
-                  type="button"
-                >
-                  Install
-                </button>
+              {projects.length === 0 && !isAddingProject ? (
+                <p className="rail-empty">No projects yet. Click + to create one.</p>
               ) : null}
             </div>
-          </header>
-
-          <div className="workspace-tools">
-            <div className="tool-row">
-              <div className="search-panel">
-                <label className="field-label" htmlFor="task-search">
-                  Search tasks
-                </label>
-                <input
-                  className="field-input"
-                  id="task-search"
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search tasks and notes"
-                  value={searchQuery}
-                />
-              </div>
-
-              <form
-                className="quick-add"
-                onSubmit={(event) => void handleCreateTask(event)}
-              >
-                <label className="field-label" htmlFor="quick-task">
-                  Quick add
-                </label>
-                <div className="quick-add__row">
-                  <input
-                    className="quick-add__input"
-                    id="quick-task"
-                    onChange={(event) => setQuickTitle(event.target.value)}
-                    placeholder="Capture the next thing"
-                    value={quickTitle}
-                  />
-                  <button className="button button--primary" type="submit">
-                    Add task
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div className="section-tabs" role="tablist" aria-label="Task sections">
-              {SECTIONS.map((section) => (
-                <button
-                  key={section.key}
-                  className={`tab-button ${activeSection === section.key && !deferredSearchQuery ? "tab-button--active" : ""}`}
-                  onClick={() => handleSelectSection(section.key)}
-                  role="tab"
-                  type="button"
-                >
-                  <span>{section.label}</span>
-                  <span className="mono-text">
-                    {workspace?.totals[section.key] ?? 0}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <div className="project-strip" aria-label="Project filters">
-              <button
-                className={`project-chip ${activeProjectId === null ? "project-chip--active" : ""}`}
-                onClick={() => handleToggleProject(null)}
-                type="button"
-              >
-                All projects
-              </button>
-              {projects.map((project) => (
-                <button
-                  key={project._id}
-                  className={`project-chip ${activeProjectId === project._id ? "project-chip--active" : ""}`}
-                  onClick={() => handleToggleProject(project._id)}
-                  type="button"
-                >
-                  <span
-                    className="project-swatch"
-                    style={{ backgroundColor: project.color }}
-                  />
-                  <span>{project.name}</span>
-                </button>
-              ))}
-            </div>
           </div>
 
-          {totalTasks === 0 ? (
-            <div className="empty-state">
-              <h3>The planner starts empty on purpose.</h3>
-              <p>
-                Load the seeded workspace to inspect local search, reminders,
-                generated artifacts, and offline persistence without any remote
-                service.
-              </p>
-              <button
-                className="button button--primary"
-                onClick={() => void handleSeedDemo()}
-                type="button"
-              >
-                Load demo workspace
+          {installPrompt ? (
+            <div style={{ marginTop: "auto" }}>
+              <button className="button button--quiet" onClick={() => void handleInstall()} style={{ width: "100%" }} type="button">
+                Install app
               </button>
             </div>
-          ) : visibleTasks.length === 0 ? (
-            <div className="empty-state empty-state--quiet">
-              <h3>No tasks here yet.</h3>
-              <p>Switch sections, clear the search, or add a task above.</p>
-            </div>
-          ) : (
-            <>
-              <div className="list-meta">
-                <span>{visibleTasks.length} visible</span>
-                <span>{activeProject ? activeProject.name : "All projects"}</span>
+          ) : null}
+        </aside>
+
+        {/* ── Main content ── */}
+        <section className="planner-main">
+          <div className="planner-main__header">
+            <header className="planner-topbar">
+              <div className="planner-topbar__left">
+                <button className="icon-button rail-toggle" onClick={() => setIsRailOpen(true)} type="button">☰</button>
+                <div>
+                  <h2>{headingTitle}</h2>
+                  <p className="planner-summary">{headingMeta}</p>
+                </div>
+              </div>
+              <div className="planner-topbar__right">
+                <div className="status-line">
+                  <span className={`status-indicator ${isOnline ? "" : "status-indicator--offline"}`} />
+                  <span>{isOnline ? "Local" : "Offline"}</span>
+                </div>
+              </div>
+            </header>
+
+            <div className="workspace-tools">
+              <div className="tool-row">
+                <div className="search-panel">
+                  <label className="field-label" htmlFor="task-search">Search</label>
+                  <div className="search-input-wrap">
+                    <input
+                      className="field-input"
+                      id="task-search"
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search tasks…"
+                      value={searchQuery}
+                    />
+                    {searchQuery ? (
+                      <button
+                        className="search-clear"
+                        onClick={() => setSearchQuery("")}
+                        title="Clear search"
+                        type="button"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <form className="quick-add" onSubmit={(event) => void handleCreateTask(event)}>
+                  <label className="field-label" htmlFor="quick-task">New task</label>
+                  <div className="quick-add__row">
+                    <input
+                      ref={quickAddRef}
+                      className="quick-add__input"
+                      id="quick-task"
+                      onChange={(event) => setQuickTitle(event.target.value)}
+                      placeholder="What needs to be done?"
+                      value={quickTitle}
+                    />
+                    <button className="button button--primary" disabled={!quickTitle.trim()} type="submit">+</button>
+                  </div>
+                </form>
               </div>
 
-              <div className="task-list" role="list">
-                {visibleTasks.map((entry) => (
+              <div className="section-tabs" role="tablist" aria-label="Task sections">
+                {SECTIONS.map((section) => (
                   <button
-                    key={entry._id}
-                    className={`task-row ${selectedTaskId === entry._id ? "task-row--active" : ""}`}
-                    onClick={() => handleSelectTask(entry._id)}
-                    role="listitem"
+                    key={section.key}
+                    className={`tab-button ${activeSection === section.key && !deferredSearchQuery ? "tab-button--active" : ""}`}
+                    onClick={() => handleSelectSection(section.key)}
+                    role="tab"
                     type="button"
                   >
-                    <div className="task-row__meta">
-                      <span className={`priority priority--${entry.priority}`}>
-                        {entry.priority}
-                      </span>
-                      <span className="task-row__time">
-                        {formatRelative(
-                          entry.reminderAt ?? entry.dueAt ?? entry.updatedAt
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="task-row__content">
-                      <strong>{entry.title}</strong>
-                      <p>{entry.details || "No supporting notes yet."}</p>
-                    </div>
-
-                    <div className="task-row__footer">
-                      <span>{entry.projectName ?? "Unassigned"}</span>
-                      <span>{entry.status}</span>
-                    </div>
+                    <span>{section.label}</span>
+                    <span className="mono-text">{workspace?.totals[section.key] ?? 0}</span>
                   </button>
                 ))}
               </div>
-            </>
-          )}
+
+              {projects.length > 0 ? (
+                <div className="project-strip" aria-label="Project filters">
+                  <button
+                    className={`project-chip ${activeProjectId === null ? "project-chip--active" : ""}`}
+                    onClick={() => handleToggleProject(null)}
+                    type="button"
+                  >
+                    All
+                  </button>
+                  {projects.map((project) => (
+                    <button
+                      key={project._id}
+                      className={`project-chip ${activeProjectId === project._id ? "project-chip--active" : ""}`}
+                      onClick={() => handleToggleProject(project._id)}
+                      type="button"
+                    >
+                      <span className="project-swatch" style={{ backgroundColor: project.color }} />
+                      <span>{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="planner-main__body">
+            {visibleTasks.length === 0 ? (
+              <div className="empty-state empty-state--quiet">
+                <h3>No tasks here</h3>
+                <p>Add a task above or switch to another section.</p>
+              </div>
+            ) : (
+              <>
+                <div className="list-meta">
+                  <span>{visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""}</span>
+                  <span>{activeProject ? activeProject.name : "All projects"}</span>
+                </div>
+
+                <div className="task-list" role="list">
+                  {visibleTasks.map((entry) => (
+                    <button
+                      key={entry._id}
+                      className={`task-row task-row--priority-${entry.priority} ${selectedTaskId === entry._id ? "task-row--active" : ""}`}
+                      onClick={() => handleSelectTask(entry._id)}
+                      role="listitem"
+                      type="button"
+                    >
+                      <div className="task-row__indicator" />
+                      <div className="task-row__body">
+                        <div className="task-row__top">
+                          <span className="task-row__title">{entry.title}</span>
+                          <span className="task-row__time">
+                            {formatRelative(entry.reminderAt ?? entry.dueAt ?? entry.updatedAt)}
+                          </span>
+                        </div>
+                        {entry.details ? (
+                          <span className="task-row__detail">{entry.details}</span>
+                        ) : null}
+                        <div className="task-row__footer">
+                          <span>{entry.projectName ?? "—"}</span>
+                          <span>{entry.status}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </section>
 
+        {/* ── Detail panel ── */}
         {task ? (
           <aside className="planner-detail planner-detail--open">
             <div className="detail-header">
-                <div className="detail-title">
-                  <div className="detail-meta">
-                    <span className={`priority priority--${task.priority}`}>
-                      {task.priority}
-                    </span>
-                    <span className="detail-meta__item">
-                      {task.projectName ?? "Unassigned"}
-                    </span>
-                    <span className="detail-meta__item">{task.status}</span>
-                  </div>
-                  <h3>{task.title}</h3>
-                  <p className="planner-summary">
-                    Due {formatRelative(task.dueAt)}. Reminder{" "}
-                    {formatRelative(task.reminderAt)}.
-                  </p>
+              <div className="detail-title">
+                <div className="detail-meta">
+                  <span className={`priority priority--${task.priority}`}>{task.priority}</span>
+                  {task.projectName ? (
+                    <span className="detail-meta__item">{task.projectName}</span>
+                  ) : null}
+                  <span className="detail-meta__item">{task.status}</span>
                 </div>
-                <button
-                  className="icon-button detail-close"
-                  onClick={() => handleSelectTask(null)}
-                  type="button"
-                >
-                  Close
-                </button>
+                <h3>{task.title}</h3>
+                {(task.dueAt || task.reminderAt) ? (
+                  <p className="planner-summary">
+                    {task.dueAt ? `Due ${formatRelative(task.dueAt)}` : ""}
+                    {task.dueAt && task.reminderAt ? " · " : ""}
+                    {task.reminderAt ? `Reminder ${formatRelative(task.reminderAt)}` : ""}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                className="icon-button detail-close"
+                onClick={() => handleSelectTask(null)}
+                type="button"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="detail-body">
-                <section className="detail-section">
-                  <div className="detail-grid">
+              {/* ── Fields ── */}
+              <section className="detail-section">
+                <div className="detail-grid">
+                  <div>
+                    <label className="field-label" htmlFor="task-title">Title</label>
+                    <input
+                      className="field-input"
+                      id="task-title"
+                      onChange={(event) => { setDraftTitle(event.target.value); setSaveState("idle"); }}
+                      value={draftTitle}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="field-label" htmlFor="task-details">Notes</label>
+                    <textarea
+                      className="field-textarea"
+                      id="task-details"
+                      onChange={(event) => { setDraftDetails(event.target.value); setSaveState("idle"); }}
+                      rows={6}
+                      value={draftDetails}
+                    />
+                  </div>
+
+                  <div className="detail-columns">
                     <div>
-                      <label className="field-label" htmlFor="task-title">
-                        Title
-                      </label>
+                      <label className="field-label" htmlFor="task-priority">Priority</label>
+                      <select
+                        className="field-input"
+                        id="task-priority"
+                        onChange={(event) => { setDraftPriority(event.target.value); setSaveState("idle"); }}
+                        value={draftPriority}
+                      >
+                        {PRIORITIES.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="field-label" htmlFor="task-project">Project</label>
+                      <select
+                        className="field-input"
+                        id="task-project"
+                        onChange={(event) => { setDraftProjectId(event.target.value); setSaveState("idle"); }}
+                        value={draftProjectId}
+                      >
+                        <option value="">None</option>
+                        {projects.map((p) => (
+                          <option key={p._id} value={p._id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="detail-columns">
+                    <div>
+                      <label className="field-label" htmlFor="task-dueAt">Due date</label>
                       <input
                         className="field-input"
-                        id="task-title"
-                        onChange={(event) => {
-                          setDraftTitle(event.target.value);
-                          setSaveState("idle");
-                        }}
-                        value={draftTitle}
+                        id="task-dueAt"
+                        onChange={(event) => { setDraftDueAt(event.target.value); setSaveState("idle"); }}
+                        type="datetime-local"
+                        value={draftDueAt}
                       />
                     </div>
 
                     <div>
-                      <label className="field-label" htmlFor="task-details">
-                        Notes
-                      </label>
-                      <textarea
-                        className="field-textarea"
-                        id="task-details"
-                        onChange={(event) => {
-                          setDraftDetails(event.target.value);
-                          setSaveState("idle");
-                        }}
-                        rows={8}
-                        value={draftDetails}
+                      <label className="field-label" htmlFor="task-reminderAt">Reminder</label>
+                      <input
+                        className="field-input"
+                        id="task-reminderAt"
+                        onChange={(event) => { setDraftReminderAt(event.target.value); setSaveState("idle"); }}
+                        type="datetime-local"
+                        value={draftReminderAt}
                       />
                     </div>
-
-                    <div className="detail-columns">
-                      <div>
-                        <label className="field-label" htmlFor="task-priority">
-                          Priority
-                        </label>
-                        <select
-                          className="field-input"
-                          id="task-priority"
-                          onChange={(event) => {
-                            setDraftPriority(event.target.value);
-                            setSaveState("idle");
-                          }}
-                          value={draftPriority}
-                        >
-                          {PRIORITIES.map((priority) => (
-                            <option key={priority.value} value={priority.value}>
-                              {priority.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="field-label" htmlFor="task-project">
-                          Project
-                        </label>
-                        <select
-                          className="field-input"
-                          id="task-project"
-                          onChange={(event) => {
-                            setDraftProjectId(event.target.value);
-                            setSaveState("idle");
-                          }}
-                          value={draftProjectId}
-                        >
-                          <option value="">Unassigned</option>
-                          {projects.map((project) => (
-                            <option key={project._id} value={project._id}>
-                              {project.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="detail-columns">
-                      <div>
-                        <label className="field-label" htmlFor="task-dueAt">
-                          Due
-                        </label>
-                        <input
-                          className="field-input"
-                          id="task-dueAt"
-                          onChange={(event) => {
-                            setDraftDueAt(event.target.value);
-                            setSaveState("idle");
-                          }}
-                          type="datetime-local"
-                          value={draftDueAt}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="field-label" htmlFor="task-reminderAt">
-                          Reminder
-                        </label>
-                        <input
-                          className="field-input"
-                          id="task-reminderAt"
-                          onChange={(event) => {
-                            setDraftReminderAt(event.target.value);
-                            setSaveState("idle");
-                          }}
-                          type="datetime-local"
-                          value={draftReminderAt}
-                        />
-                      </div>
-                    </div>
                   </div>
-                </section>
+                </div>
+              </section>
 
-                <section className="detail-section">
-                  <div className="detail-actions">
+              {/* ── Save + Move ── */}
+              <section className="detail-section">
+                <div className="detail-actions">
+                  <button
+                    className="button button--primary"
+                    disabled={saveState === "saving"}
+                    onClick={() => void handleSaveTask()}
+                    type="button"
+                  >
+                    {saveState === "saving" ? "Saving…" : "Save"}
+                  </button>
+                  <span className={`detail-status ${saveState === "idle" ? "detail-status--idle" : ""}`}>
+                    {saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving…" : "Unsaved changes"}
+                  </span>
+                </div>
+
+                <div className="detail-divider" />
+
+                <div className="detail-row-label">Move to</div>
+                <div className="move-group">
+                  {moveSections.map((section) => (
                     <button
-                      className="button button--primary"
-                      onClick={() => void handleSaveTask()}
+                      key={section.key}
+                      className="button button--quiet"
+                      onClick={() => void handleMoveTask(section.key)}
                       type="button"
                     >
-                      {saveState === "saving" ? "Saving..." : "Save changes"}
+                      {section.label}
                     </button>
-                    <span className="detail-status">
-                      {saveState === "saved"
-                        ? "Saved locally"
-                        : saveState === "saving"
-                          ? "Writing to local runtime"
-                          : "Unsaved edits"}
-                    </span>
-                  </div>
+                  ))}
+                  {task.status === "done" ? (
+                    <button className="button button--quiet" onClick={() => void handleReopenTask()} type="button">
+                      Reopen
+                    </button>
+                  ) : (
+                    <button className="button button--quiet" onClick={() => void handleCompleteTask()} type="button">
+                      ✓ Mark done
+                    </button>
+                  )}
+                </div>
 
-                  <div className="move-group">
-                    {SECTIONS.filter((section) => section.key !== "done").map(
-                      (section) => (
-                        <button
-                          key={section.key}
-                          className="button button--quiet"
-                          onClick={() => void handleMoveTask(section.key)}
-                          type="button"
-                        >
-                          Move to {section.label}
-                        </button>
-                      )
-                    )}
-                    {task.status === "done" ? (
-                      <button
-                        className="button button--quiet"
-                        onClick={() => void handleReopenTask()}
-                        type="button"
-                      >
-                        Reopen into Today
+                <div className="detail-divider" />
+
+                {confirmDeleteTaskId === task._id ? (
+                  <div className="delete-confirm">
+                    <span className="detail-status">Delete this task? This cannot be undone.</span>
+                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      <button className="button button--danger" onClick={() => void handleDeleteTask()} type="button">
+                        Yes, delete
                       </button>
-                    ) : (
-                      <button
-                        className="button button--quiet"
-                        onClick={() => void handleCompleteTask()}
-                        type="button"
-                      >
-                        Mark done
+                      <button className="button button--quiet" onClick={() => setConfirmDeleteTaskId(null)} type="button">
+                        Cancel
                       </button>
-                    )}
+                    </div>
+                  </div>
+                ) : (
+                  <button className="button button--danger" onClick={() => void handleDeleteTask()} type="button">
+                    Delete task
+                  </button>
+                )}
+              </section>
+
+              {/* ── Artifacts ── */}
+              <section className="detail-section">
+                <div className="rail-heading" style={{ marginBottom: 10 }}>
+                  <span>Artifacts</span>
+                  <span className="mono-text">{artifacts.length}</span>
+                </div>
+
+                <div className="artifact-actions">
+                  {ARTIFACT_KINDS.map((artifact) => (
                     <button
-                      className="button button--danger"
-                      onClick={() => void handleDeleteTask()}
+                      key={artifact.key}
+                      className="button button--quiet"
+                      disabled={isGeneratingKind !== null}
+                      onClick={() => void handleGenerateArtifact(artifact.key)}
                       type="button"
                     >
-                      Delete task
+                      {isGeneratingKind === artifact.key ? "Generating…" : `+ ${artifact.label}`}
                     </button>
-                  </div>
-                </section>
+                  ))}
+                </div>
 
-                <section className="detail-section">
-                  <div className="rail-heading">
-                    <span>Local artifacts</span>
-                    <span className="mono-text">{artifacts.length}</span>
-                  </div>
-
-                  <div className="artifact-actions">
-                    {ARTIFACT_KINDS.map((artifact) => (
-                      <button
-                        key={artifact.key}
-                        className="button button--quiet"
-                        onClick={() => void handleGenerateArtifact(artifact.key)}
-                        type="button"
-                      >
-                        {isGeneratingKind === artifact.key
-                          ? "Generating..."
-                          : artifact.label}
-                      </button>
-                    ))}
-                  </div>
-
+                {artifacts.length > 0 ? (
                   <div className="artifact-list">
                     {artifacts.map((artifact) => (
                       <div key={artifact._id} className="artifact-row">
                         <button
                           className={`artifact-link ${previewArtifactId === artifact._id ? "artifact-link--active" : ""}`}
-                          onClick={() => setPreviewArtifactId(artifact._id)}
+                          onClick={() =>
+                            setPreviewArtifactId(
+                              previewArtifactId === artifact._id ? null : artifact._id
+                            )
+                          }
                           type="button"
                         >
                           <strong>{artifact.title}</strong>
-                          <span>
-                            {artifact.kind.replace("_", " ")} / {artifact.size}b
-                          </span>
+                          <span>{artifact.kind.replace("_", " ")} · {artifact.size}b</span>
                         </button>
                         <button
-                          className="text-button"
+                          className="text-button text-button--icon text-button--danger"
                           onClick={() => void handleRemoveArtifact(artifact._id)}
+                          title="Remove artifact"
                           type="button"
                         >
-                          Remove
+                          ✕
                         </button>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <p className="rail-empty" style={{ marginTop: 8 }}>No artifacts yet. Generate one above.</p>
+                )}
 
-                  {artifactPreview ? (
-                    <div className="artifact-preview">
-                      <div className="rail-heading">
-                        <span>{artifactPreview.title}</span>
-                        <span className="mono-text">
-                          {artifactPreview.contentType}
-                        </span>
-                      </div>
-                      <pre>{artifactPreview.content}</pre>
+                {artifactPreview ? (
+                  <div className="artifact-preview">
+                    <div className="rail-heading">
+                      <span>{artifactPreview.title}</span>
+                      <button
+                        className="text-button"
+                        onClick={() => setPreviewArtifactId(null)}
+                        type="button"
+                      >
+                        Close
+                      </button>
                     </div>
-                  ) : null}
-                </section>
+                    <pre>{artifactPreview.content}</pre>
+                  </div>
+                ) : null}
+              </section>
             </div>
           </aside>
         ) : null}
