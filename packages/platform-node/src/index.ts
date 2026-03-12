@@ -413,11 +413,11 @@ export interface CreateElectronSyncoreBridgeOptions {
 export interface SyncoreElectronIpcMain {
   on(
     channel: string,
-    listener: (event: unknown, message: unknown) => void
+    listener: (event: { sender: unknown }, message: unknown) => void
   ): void;
   off(
     channel: string,
-    listener: (event: unknown, message: unknown) => void
+    listener: (event: { sender: unknown }, message: unknown) => void
   ): void;
 }
 
@@ -609,7 +609,13 @@ export function bindElectronWindowToSyncoreRuntime(options: {
       );
     }
     const listeners = new Set<(message: unknown) => void>();
-    const handleRendererMessage = (_event: unknown, message: unknown) => {
+    const handleRendererMessage = (
+      event: { sender: unknown },
+      message: unknown
+    ) => {
+      if (event.sender !== options.window.webContents) {
+        return;
+      }
       for (const listener of listeners) {
         listener(message);
       }

@@ -226,6 +226,70 @@ describe("Node Syncore runtime", () => {
     await binding.dispose();
   });
 
+
+  it("ignores messages from other renderers when using ipcMain", async () => {
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: v.string(),
+        done: v.boolean()
+      })
+    });
+    const runtime = createNodeSyncoreRuntime({
+      databasePath: path.join(rootDir, "electron-ipc.db"),
+      storageDirectory: path.join(rootDir, "electron-ipc-storage"),
+      schema,
+      functions: {
+        "tasks/list": query({
+          args: {},
+          handler: async (ctx: QueryCtx<typeof schema>) =>
+            ctx.db.query("tasks").collect()
+        })
+      }
+    });
+
+    const messagesToWindow: unknown[] = [];
+    const windowWebContents = {
+      send(_channel: string, message: unknown) {
+        messagesToWindow.push(message);
+      }
+    };
+    let registeredListener:
+      | ((event: { sender: unknown }, message: unknown) => void)
+      | undefined;
+    const ipcMain = {
+      on(
+        _channel: string,
+        listener: (event: { sender: unknown }, message: unknown) => void
+      ) {
+        registeredListener = listener;
+      },
+      off() {
+        registeredListener = undefined;
+      }
+    };
+
+    const binding = bindElectronWindowToSyncoreRuntime({
+      runtime,
+      window: {
+        isDestroyed: () => false,
+        webContents: windowWebContents
+      },
+      ipcMain
+    });
+
+    await binding.ready;
+    expect(registeredListener).toBeDefined();
+
+    const baseline = messagesToWindow.length;
+    registeredListener?.(
+      { sender: {} },
+      { type: "watch", id: "other-renderer" }
+    );
+    expect(messagesToWindow).toHaveLength(baseline);
+
+    await binding.dispose();
+  });
+
   it("creates a managed node client for scripts", async () => {
     const schema = defineSchema({
       tasks: defineTable({
