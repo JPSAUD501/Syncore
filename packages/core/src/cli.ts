@@ -2303,10 +2303,10 @@ export async function startDevHub(options: {
   };
 
   websocketServer.on("connection", (socket: WebSocket, request) => {
-    if (!isTrustedDevtoolsConnection(request)) {
-      socket.close(1008, "Forbidden");
-      return;
-    }
+    const allowedDashboardOrigin = isAllowedDashboardOrigin(
+      request.headers.origin,
+      dashboardPort
+    );
     dashboardSockets.add(socket);
     socket.send(JSON.stringify(hello));
     for (const runtimeHello of runtimeHellos.values()) {
@@ -2343,6 +2343,9 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "command") {
+        if (!allowedDashboardOrigin) {
+          return;
+        }
         const targetRuntimeId = message.targetRuntimeId;
         if (!targetRuntimeId) {
           return;
@@ -2376,6 +2379,9 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "subscribe") {
+        if (!allowedDashboardOrigin) {
+          return;
+        }
         const targetRuntimeId = message.targetRuntimeId;
         if (!targetRuntimeId) {
           return;
@@ -2428,6 +2434,9 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "unsubscribe") {
+        if (!allowedDashboardOrigin) {
+          return;
+        }
         const subscriptions = dashboardSubscriptions.get(socket);
         const subscription = subscriptions?.get(message.subscriptionId);
         if (!subscription) {
@@ -2815,6 +2824,38 @@ function decodeWebSocketPayload(
     payload.byteOffset,
     payload.byteLength
   ).toString("utf8");
+}
+
+function isAllowedDashboardOrigin(
+  originHeader: string | undefined,
+  dashboardPort: number
+): boolean {
+  if (!originHeader) {
+    return false;
+  }
+  try {
+    const origin = new URL(originHeader);
+    if (!isLoopbackHostname(origin.hostname)) {
+      return false;
+    }
+    const expectedPort = String(dashboardPort);
+    const originPort =
+      origin.port ||
+      (origin.protocol === "https:" ? "443" : origin.protocol === "http:" ? "80" : "");
+    return originPort === expectedPort;
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  );
 }
 
 function isUnsupportedFts5Statement(
