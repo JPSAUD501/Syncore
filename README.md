@@ -9,6 +9,12 @@ Convex-like programming model to fully local runtimes backed by SQLite.
 npm add syncorejs
 ```
 
+Install the current beta channel:
+
+```bash
+npm add syncorejs@beta
+```
+
 ## Quick feel
 
 The intended happy path is:
@@ -163,6 +169,14 @@ Release metadata is managed with Changesets:
 bun run changeset
 ```
 
+Beta prereleases use the same changesets plus prerelease mode on the `beta`
+branch:
+
+```bash
+bun run changeset:beta:enter
+bun run changeset
+```
+
 To remove generated build artifacts across the workspace:
 
 ```bash
@@ -185,6 +199,12 @@ is unavailable.
 
 CI runs the same workspace quality gates plus the smoke suite for web, Electron,
 and environment-aware Expo coverage.
+
+Release channels:
+
+- `main` publishes stable releases to the npm `latest` dist-tag
+- `beta` publishes prereleases like `0.3.0-beta.0` to the npm `beta` dist-tag
+- install beta builds explicitly with `npm add syncorejs@beta`
 
 ## Quickstarts
 
