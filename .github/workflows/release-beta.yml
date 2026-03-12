@@ -1,16 +1,16 @@
-name: Release
+name: Beta Release
 
 on:
   push:
     branches:
-      - main
+      - beta
   workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.ref }}
+  group: beta-release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -50,12 +50,15 @@ jobs:
       - name: Validate published package readiness
         run: bun run validate:pack:syncore
 
-      - name: Create release PR or publish
+      - name: Target beta as the Changesets release branch
+        run: node ./scripts/set-changeset-base-branch.mjs beta
+
+      - name: Create beta release PR or publish
         uses: changesets/action@v1
         with:
-          version: bunx changeset version
-          publish: bunx changeset publish
-          commit: "chore: version packages"
-          title: "chore: version packages"
+          version: bun run changeset:beta:version
+          publish: bun run changeset:beta:publish
+          commit: "chore: version beta packages"
+          title: "chore: version beta packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
