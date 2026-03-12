@@ -274,7 +274,7 @@ export function PlannerScreen() {
     const project = projects.find((p) => p._id === projectId);
     if (!project) { setEditingProjectId(null); return; }
     await updateProject({
-      id: projectId as Parameters<typeof updateProject>[0]["id"],
+      id: projectId,
       name: editingProjectName.trim(),
       color: project.color
     });
@@ -288,7 +288,7 @@ export function PlannerScreen() {
 
   async function handleArchiveProject(projectId: string) {
     if (activeProjectId === projectId) setActiveProjectId(null);
-    await archiveProject({ id: projectId as Parameters<typeof archiveProject>[0]["id"] });
+    await archiveProject({ id: projectId });
   }
 
   async function handleSaveTask() {
