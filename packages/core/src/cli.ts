@@ -2291,21 +2291,16 @@ export async function startDevHub(options: {
       if (!runtimeHellos.has(runtimeId)) {
         continue;
       }
-      for (const [runtimeId, history] of runtimeEvents) {
-        if (!runtimeHellos.has(runtimeId)) {
-          continue;
-        }
-        if (history.length === 0) {
-          continue;
-        }
-        socket.send(
-          JSON.stringify({
-            type: "event.batch",
-            runtimeId,
-            events: [...history]
-          })
-        );
+      if (history.length === 0) {
+        continue;
       }
+      socket.send(
+        JSON.stringify({
+          type: "event.batch",
+          runtimeId,
+          events: [...history]
+        })
+      );
     }
 
     socket.on("message", (payload) => {
@@ -2317,7 +2312,7 @@ export async function startDevHub(options: {
         | SyncoreDevtoolsMessage
         | (SyncoreDevtoolsClientMessage & { targetRuntimeId?: string });
       if (message.type === "ping") {
-        if (!isAuthenticatedDashboard) {
+        if (!allowedDashboardOrigin) {
           socket.close(1008, "Unauthorized devtools client");
           return;
         }

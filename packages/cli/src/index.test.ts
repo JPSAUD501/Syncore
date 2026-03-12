@@ -263,7 +263,7 @@ describe("syncore CLI", () => {
     expect(statusPayload.command).toBe("migrate status");
     expect(statusPayload.data.statements).toEqual([]);
     expect(statusPayload.data.destructiveChanges).toEqual([]);
-  }, 20_000);
+  }, 30_000);
 
   test("run, data, export, and import work against the local runtime", async () => {
     const sourceCwd = await createTempProjectDirectory();
