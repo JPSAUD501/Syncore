@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { appendFile, readdir, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { connect as connectToNet } from "node:net";
 import path from "node:path";
@@ -2159,6 +2160,8 @@ export async function startDevHub(options: {
   const devtoolsPort = resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311);
   const logsDirectory = path.join(options.cwd, ".syncore", "logs");
   const logFilePath = path.join(logsDirectory, "runtime.jsonl");
+  const hubAccessToken =
+    process.env.SYNCORE_DEVTOOLS_TOKEN ?? randomBytes(24).toString("base64url");
   await mkdir(logsDirectory, { recursive: true });
   await writeFile(logFilePath, "");
   await runDevProjectBootstrap(options.cwd, options.template);
@@ -2309,6 +2312,10 @@ export async function startDevHub(options: {
         | SyncoreDevtoolsMessage
         | (SyncoreDevtoolsClientMessage & { targetRuntimeId?: string });
       if (message.type === "ping") {
+        if (!allowedDashboardOrigin) {
+          socket.close(1008, "Unauthorized devtools client");
+          return;
+        }
         socket.send(
           JSON.stringify({ type: "pong" } satisfies SyncoreDevtoolsMessage)
         );
@@ -2568,6 +2575,7 @@ export async function startDevHub(options: {
   httpServer.listen(devtoolsPort, "127.0.0.1", () => {
     void (async () => {
       console.log(`Syncore devtools hub: ws://localhost:${devtoolsPort}`);
+      console.log(`Devtools dashboard token: ${hubAccessToken}`);
       console.log(
         `Electron/Node runtimes: set devtoolsUrl to ws://localhost:${devtoolsPort}.`
       );
@@ -2595,7 +2603,9 @@ export async function startDevHub(options: {
             }
           });
           await server.listen();
-          console.log(`Dashboard shell: http://localhost:${dashboardPort}`);
+          console.log(
+            `Dashboard shell: http://localhost:${dashboardPort}/?hubToken=${hubAccessToken}`
+          );
         } catch (error) {
           console.log(
             `Dashboard source not started automatically: ${formatError(error)}`
