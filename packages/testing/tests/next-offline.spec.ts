@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("Next PWA stays usable offline after the first load", async ({ context, page }) => {
   const taskInList = (title: string) =>
     page.locator(".task-list").getByText(title, { exact: true });
-  const taskInput = page.getByPlaceholder("Capture the next thing");
+  const taskInput = page.getByPlaceholder("What needs to be done?");
   const addTaskButton = page.getByRole("button", { name: "Add task" });
 
   await page.goto("/");

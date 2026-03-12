@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { appendFile, readdir, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { connect as connectToNet } from "node:net";
 import path from "node:path";
@@ -2159,6 +2160,8 @@ export async function startDevHub(options: {
   const devtoolsPort = resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311);
   const logsDirectory = path.join(options.cwd, ".syncore", "logs");
   const logFilePath = path.join(logsDirectory, "runtime.jsonl");
+  const hubAccessToken =
+    process.env.SYNCORE_DEVTOOLS_TOKEN ?? randomBytes(24).toString("base64url");
   await mkdir(logsDirectory, { recursive: true });
   await writeFile(logFilePath, "");
   await runDevProjectBootstrap(options.cwd, options.template);
@@ -2274,7 +2277,11 @@ export async function startDevHub(options: {
     );
   };
 
-  websocketServer.on("connection", (socket: WebSocket) => {
+  websocketServer.on("connection", (socket: WebSocket, request) => {
+    const allowedDashboardOrigin = isAllowedDashboardOrigin(
+      request.headers.origin,
+      dashboardPort
+    );
     dashboardSockets.add(socket);
     socket.send(JSON.stringify(hello));
     for (const runtimeHello of runtimeHellos.values()) {
@@ -2305,12 +2312,19 @@ export async function startDevHub(options: {
         | SyncoreDevtoolsMessage
         | (SyncoreDevtoolsClientMessage & { targetRuntimeId?: string });
       if (message.type === "ping") {
+        if (!allowedDashboardOrigin) {
+          socket.close(1008, "Unauthorized devtools client");
+          return;
+        }
         socket.send(
           JSON.stringify({ type: "pong" } satisfies SyncoreDevtoolsMessage)
         );
         return;
       }
       if (message.type === "command") {
+        if (!allowedDashboardOrigin) {
+          return;
+        }
         const targetRuntimeId = message.targetRuntimeId;
         if (!targetRuntimeId) {
           return;
@@ -2344,6 +2358,9 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "subscribe") {
+        if (!allowedDashboardOrigin) {
+          return;
+        }
         const targetRuntimeId = message.targetRuntimeId;
         if (!targetRuntimeId) {
           return;
@@ -2396,6 +2413,9 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "unsubscribe") {
+        if (!allowedDashboardOrigin) {
+          return;
+        }
         const subscriptions = dashboardSubscriptions.get(socket);
         const subscription = subscriptions?.get(message.subscriptionId);
         if (!subscription) {
@@ -2555,6 +2575,7 @@ export async function startDevHub(options: {
   httpServer.listen(devtoolsPort, "127.0.0.1", () => {
     void (async () => {
       console.log(`Syncore devtools hub: ws://localhost:${devtoolsPort}`);
+      console.log(`Devtools dashboard token: ${hubAccessToken}`);
       console.log(
         `Electron/Node runtimes: set devtoolsUrl to ws://localhost:${devtoolsPort}.`
       );
@@ -2582,7 +2603,9 @@ export async function startDevHub(options: {
             }
           });
           await server.listen();
-          console.log(`Dashboard shell: http://localhost:${dashboardPort}`);
+          console.log(
+            `Dashboard shell: http://localhost:${dashboardPort}/?hubToken=${hubAccessToken}`
+          );
         } catch (error) {
           console.log(
             `Dashboard source not started automatically: ${formatError(error)}`
@@ -2783,6 +2806,38 @@ function decodeWebSocketPayload(
     payload.byteOffset,
     payload.byteLength
   ).toString("utf8");
+}
+
+function isAllowedDashboardOrigin(
+  originHeader: string | undefined,
+  dashboardPort: number
+): boolean {
+  if (!originHeader) {
+    return false;
+  }
+  try {
+    const origin = new URL(originHeader);
+    if (!isLoopbackHostname(origin.hostname)) {
+      return false;
+    }
+    const expectedPort = String(dashboardPort);
+    const originPort =
+      origin.port ||
+      (origin.protocol === "https:" ? "443" : origin.protocol === "http:" ? "80" : "");
+    return originPort === expectedPort;
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  );
 }
 
 function isUnsupportedFts5Statement(

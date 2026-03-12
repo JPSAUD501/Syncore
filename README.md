@@ -1,5 +1,7 @@
 # Syncore
 
+<img width="1920" height="869" alt="image" src="https://github.com/user-attachments/assets/55b00244-95cb-4903-b7a5-0f8f16e4bdb8" />
+
 Syncore is a local-first reactive backend toolkit for offline apps. It brings a
 Convex-like programming model to fully local runtimes backed by SQLite.
 

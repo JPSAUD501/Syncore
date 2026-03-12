@@ -21,7 +21,13 @@ import {
 
 const MAX_EVENTS = 500;
 const HUB_RUNTIME_ID = "syncore-dev-hub";
-const WS_URL = "ws://localhost:4311";
+const HUB_TOKEN_PARAM =
+  typeof window === "undefined"
+    ? null
+    : new URLSearchParams(window.location.search).get("hubToken");
+const WS_URL = HUB_TOKEN_PARAM
+  ? `ws://localhost:4311/?hubToken=${encodeURIComponent(HUB_TOKEN_PARAM)}`
+  : "ws://localhost:4311";
 const RECONNECT_DELAY = 2000;
 const REQUEST_TIMEOUT = 10_000;
 const DEBUG_DEVTOOLS = false;
