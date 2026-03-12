@@ -85,11 +85,35 @@ export function createPublicId(
   key: string,
   keys: Iterable<string>
 ): string {
+  return createPublicIdWithFormatter(key, keys, stablePublicId);
+}
+
+export function createPublicRuntimeId(
+  runtimeId: string,
+  runtimeIds?: Iterable<string>
+): string {
+  return runtimeIds
+    ? createPublicIdWithFormatter(runtimeId, runtimeIds, stableRuntimePublicId)
+    : stableRuntimePublicId(runtimeId, 0);
+}
+
+export function createPublicTargetId(
+  targetKey: string,
+  targetKeys: Iterable<string>
+): string {
+  return createPublicId(targetKey, targetKeys);
+}
+
+function createPublicIdWithFormatter(
+  key: string,
+  keys: Iterable<string>,
+  formatPublicId: (input: string, salt: number) => string
+): string {
   const used = new Set<string>();
   for (const existingKey of [...keys].sort()) {
     let attempt = 0;
     while (true) {
-      const candidate = stablePublicId(existingKey, attempt);
+      const candidate = formatPublicId(existingKey, attempt);
       if (existingKey === key && !used.has(candidate)) {
         return candidate;
       }
@@ -100,32 +124,29 @@ export function createPublicId(
       attempt += 1;
     }
   }
-  return createBasePublicId(key);
-}
-
-export function createPublicRuntimeId(
-  runtimeId: string,
-  runtimeIds?: Iterable<string>
-): string {
-  return runtimeIds ? createPublicId(runtimeId, runtimeIds) : createBasePublicId(runtimeId);
-}
-
-export function createPublicTargetId(
-  targetKey: string,
-  targetKeys: Iterable<string>
-): string {
-  return createPublicId(targetKey, targetKeys);
+  return formatPublicId(key, 0);
 }
 
 function stablePublicId(input: string, salt: number): string {
+  const value = stableHash(input, salt) % 100000;
+  return value.toString().padStart(5, "0");
+}
+
+function stableRuntimePublicId(input: string, salt: number): string {
+  const value = stableHash(input, salt);
+  const letter = String.fromCharCode(65 + (value % 26));
+  const digits = Math.floor(value / 26) % 1000;
+  return `${letter}${digits.toString().padStart(3, "0")}`;
+}
+
+function stableHash(input: string, salt: number): number {
   const hashInput = salt === 0 ? input : `${input}#${salt}`;
   let hash = 2166136261;
   for (let index = 0; index < hashInput.length; index += 1) {
     hash ^= hashInput.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  const value = (hash >>> 0) % 100000;
-  return value.toString().padStart(5, "0");
+  return hash >>> 0;
 }
 
 /* ------------------------------------------------------------------ */

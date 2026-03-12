@@ -53,7 +53,7 @@ function getRuntimeTag(
   if (!runtime) {
     return getPublicRuntimeId(event.runtimeId, runtimeMap.keys());
   }
-  return `${runtime.publicId} ${runtime.label}`;
+  return runtime.label;
 }
 
 function formatInvalidatedQueryId(queryId: string): string {

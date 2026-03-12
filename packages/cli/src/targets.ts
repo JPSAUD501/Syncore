@@ -126,7 +126,8 @@ export function resolveClientRuntime(
     );
   }
 
-  if (!/^\d{5}$/.test(requestedRuntime)) {
+  const normalizedRuntimeId = requestedRuntime.trim().toUpperCase();
+  if (!/^[A-Z]\d{3}$/.test(normalizedRuntimeId)) {
     throw new CliError(
       `Invalid runtime ${JSON.stringify(requestedRuntime)} for \`${options.command}\`.`,
       {
@@ -135,13 +136,13 @@ export function resolveClientRuntime(
         details: {
           targetId: target.id,
           requestedRuntime,
-          expected: "a 5-digit runtime id"
+          expected: "a runtime id like A123"
         }
       }
     );
   }
 
-  const runtime = target.runtimes.find((entry) => entry.id === requestedRuntime);
+  const runtime = target.runtimes.find((entry) => entry.id === normalizedRuntimeId);
   if (!runtime) {
     throw new CliError(
       `Unknown runtime ${JSON.stringify(requestedRuntime)} for target ${JSON.stringify(target.id)}.`,

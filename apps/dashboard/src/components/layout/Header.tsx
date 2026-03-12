@@ -1,6 +1,8 @@
 import { useRouterState } from "@tanstack/react-router";
 import {
   getPublicRuntimeId,
+  getRuntimeLabel,
+  getRuntimeBrowser,
   useActiveRuntime,
   useConnectedTargets,
   useDevtoolsStore,
@@ -10,8 +12,16 @@ import {
   useSelectedTarget,
   useSelectedTargetRuntimes
 } from "@/lib/store";
-import { Wifi, WifiOff, Menu } from "lucide-react";
+import { Wifi, WifiOff, Menu, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -90,23 +100,24 @@ export function Header({
           >
             <SelectTrigger
               size="sm"
-              className="hidden min-w-48 max-w-72 sm:flex"
+              className="hidden min-w-[140px] max-w-[240px] sm:flex"
             >
               <SelectValue placeholder="Select target" />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent position="popper" align="center" className="min-w-[200px] w-[var(--radix-select-trigger-width)]">
               {targets.map((target) => (
                 <SelectItem key={target.id} value={target.id}>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium text-text-primary">
-                      {target.id} - {target.label}
+                  <div className="flex w-full items-center gap-2">
+                    <span className="font-medium text-text-primary">{target.id}</span>
+                    <span className="text-[12px] text-text-tertiary truncate">
+                      {target.label}
                     </span>
-                    <span className="truncate font-mono text-[10px] text-text-tertiary">
-                      {target.kind === "project"
-                        ? "project"
-                        : `${target.connectedSessions} session(s)`}
-                    </span>
-                  </span>
+                    {target.kind !== "project" && (
+                      <span className="ml-auto rounded-full bg-bg-base px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary tabular-nums border border-border">
+                        {target.connectedSessions}
+                      </span>
+                    )}
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -124,36 +135,39 @@ export function Header({
           >
             <SelectTrigger
               size="sm"
-              className="hidden min-w-44 max-w-64 sm:flex"
+              className="hidden min-w-[140px] max-w-[240px] sm:flex"
             >
               <SelectValue placeholder="All sessions" />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent position="popper" align="center" className="min-w-[200px] w-[var(--radix-select-trigger-width)]">
               <SelectItem value="all">
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium text-text-primary">
-                    All sessions
+                <div className="flex w-full items-center gap-2">
+                  <span className="font-medium text-text-primary">All sessions</span>
+                  <span className="ml-auto rounded-full bg-bg-base px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary tabular-nums border border-border">
+                    {selectedTarget.connectedSessions}
                   </span>
-                  <span className="truncate font-mono text-[10px] text-text-tertiary">
-                    {selectedTarget.connectedSessions} session(s)
-                  </span>
-                </span>
+                </div>
               </SelectItem>
-              {selectedTargetRuntimes.map((runtime) => (
-                <SelectItem key={runtime.runtimeId} value={runtime.runtimeId}>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium text-text-primary">
-                      {runtime.sessionLabel ?? runtime.appName ?? runtime.platform}
-                    </span>
-                    <span className="truncate font-mono text-[10px] text-text-tertiary">
-                      {getPublicRuntimeId(
-                        runtime.runtimeId,
-                        selectedTargetRuntimes.map((entry) => entry.runtimeId)
-                      )}
-                    </span>
-                  </span>
-                </SelectItem>
-              ))}
+              {selectedTargetRuntimes.map((runtime) => {
+                const label = getRuntimeLabel(runtime);
+                const browser = getRuntimeBrowser(runtime);
+                return (
+                  <SelectItem key={runtime.runtimeId} value={runtime.runtimeId}>
+                    <div className="flex w-full items-center gap-2">
+                      <span className="font-medium text-text-primary truncate">
+                        {label}
+                      </span>
+                      <span className="ml-auto text-[10px] whitespace-nowrap font-mono text-text-tertiary">
+                        {getPublicRuntimeId(
+                          runtime.runtimeId,
+                          selectedTargetRuntimes.map((entry) => entry.runtimeId)
+                        )}
+                        {browser && ` (${browser})`}
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         )}
@@ -181,19 +195,57 @@ export function Header({
           </Badge>
         )}
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleIncludeDashboardActivity}
-          className="h-8 px-2.5 text-[11px]"
-          title={
-            includeDashboardActivity
-              ? "Hide dashboard-origin activity from counts and logs"
-              : "Include dashboard-origin activity in counts and logs"
-          }
-        >
-          {includeDashboardActivity ? "All activity" : "App only"}
-        </Button>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon-xs"
+              className="hidden md:flex text-text-tertiary hover:text-text-primary"
+              title="Settings"
+            >
+              <Settings size={14} />
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Settings</DialogTitle>
+              <DialogDescription>
+                Configure the dashboard interface and filtering behavior.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-text-primary">
+                    Hide dashboard events
+                  </span>
+                  <span className="text-[13px] text-text-tertiary">
+                    Exclude activity originating from this dashboard (like running queries) from the activity feed and metrics.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!includeDashboardActivity}
+                  onClick={() => toggleIncludeDashboardActivity()}
+                  className={cn(
+                    "peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-base disabled:cursor-not-allowed disabled:opacity-50",
+                    !includeDashboardActivity ? "bg-accent" : "bg-bg-elevated"
+                  )}
+                >
+                  <span
+                    data-state={!includeDashboardActivity ? "checked" : "unchecked"}
+                    className={cn(
+                      "pointer-events-none block size-4 rounded-full bg-white ring-0 transition-transform",
+                      !includeDashboardActivity ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Badge
           variant={connected ? "success" : "destructive"}

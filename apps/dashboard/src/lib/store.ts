@@ -24,9 +24,12 @@ const HUB_RUNTIME_ID = "syncore-dev-hub";
 const HUB_TOKEN_PARAM =
   typeof window === "undefined"
     ? null
-    : new URLSearchParams(window.location.search).get("hubToken");
+    : (() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        return searchParams.get("token") ?? searchParams.get("hubToken");
+      })();
 const WS_URL = HUB_TOKEN_PARAM
-  ? `ws://localhost:4311/?hubToken=${encodeURIComponent(HUB_TOKEN_PARAM)}`
+  ? `ws://localhost:4311/?token=${encodeURIComponent(HUB_TOKEN_PARAM)}`
   : "ws://localhost:4311";
 const RECONNECT_DELAY = 2000;
 const REQUEST_TIMEOUT = 10_000;
@@ -212,10 +215,33 @@ export function getPublicRuntimeId(
   return createSharedPublicRuntimeId(runtimeId, runtimeIds);
 }
 
+export interface ParsedSessionLabel {
+  name: string;
+  browser?: string;
+}
+
+export function parseSessionLabel(label: string | undefined): ParsedSessionLabel | undefined {
+  if (!label) return undefined;
+  const match = label.match(/^(.+?)(?:\s*\(([^)]+)\))?$/);
+  if (!match) return { name: label };
+  return {
+    name: match[1] || label,
+    ...(match[2] ? { browser: match[2] } : {})
+  };
+}
+
 export function getRuntimeLabel(
   runtime: Pick<RuntimeMeta, "sessionLabel" | "appName" | "platform">
 ): string {
-  return runtime.sessionLabel ?? runtime.appName ?? runtime.platform;
+  const parsed = parseSessionLabel(runtime.sessionLabel);
+  return parsed?.name ?? runtime.appName ?? runtime.platform;
+}
+
+export function getRuntimeBrowser(
+  runtime: Pick<RuntimeMeta, "sessionLabel" | "platform">
+): string | undefined {
+  const parsed = parseSessionLabel(runtime.sessionLabel);
+  return parsed?.browser;
 }
 
 function createPublicTargetId(
@@ -231,16 +257,18 @@ function getTargetGroupKey(runtime: RuntimeState): string {
     : runtime.storageIdentity ?? `runtime::${runtime.runtimeId}`;
 }
 
-function getTargetLabel(runtime: RuntimeState, connectedSessions: number): string {
+function getTargetLabel(runtime: RuntimeState, _connectedSessions: number): string {
   if (isProjectRuntime(runtime)) {
     return runtime.databaseLabel ?? runtime.appName ?? runtime.platform;
   }
+  const parsed = parseSessionLabel(runtime.sessionLabel);
   const base =
+    parsed?.name ??
     runtime.appName ??
     runtime.databaseLabel ??
     runtime.origin ??
     `${runtime.platform} client`;
-  return connectedSessions > 1 ? `${base} (${connectedSessions} sessions)` : base;
+  return base;
 }
 
 function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
@@ -1271,3 +1299,4 @@ export function destroyDevtoolsConnection() {
     ws = null;
   }
 }
+

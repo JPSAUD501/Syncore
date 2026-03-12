@@ -8,7 +8,8 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 import {
   type ClientTargetDescriptor,
   createBasePublicClientTargetId,
-  createPublicClientTargetId
+  createPublicClientTargetId,
+  createPublicRuntimeId
 } from "./project.js";
 import { printTargetsTable } from "./render.js";
 import { resolveClientRuntime } from "./targets.js";
@@ -405,7 +406,7 @@ describe("syncore CLI", () => {
       runtimeIds: ["runtime-a", "runtime-b"],
       runtimes: [
         {
-          id: "20318",
+          id: "A203",
           runtimeId: "runtime-a",
           label: "tab-a",
           platform: "browser-worker",
@@ -413,7 +414,7 @@ describe("syncore CLI", () => {
           primary: true
         },
         {
-          id: "40291",
+          id: "B402",
           runtimeId: "runtime-b",
           label: "tab-b",
           platform: "browser-worker",
@@ -429,7 +430,7 @@ describe("syncore CLI", () => {
     };
 
     expect(() =>
-      resolveClientRuntime(target, "99999", {
+      resolveClientRuntime(target, "Z999", {
         command: "logs"
       })
     ).toThrowError(/Unknown runtime/);
@@ -641,6 +642,17 @@ describe("syncore CLI", () => {
     expect(left).not.toBe(right);
     expect(createPublicClientTargetId(pair[0], pair)).toBe(left);
     expect(createPublicClientTargetId(pair[1], pair)).toBe(right);
+  });
+
+  test("public runtime ids are stable letter-plus-3-digit codes", () => {
+    const ids = ["runtime-a", "runtime-b"];
+    const left = createPublicRuntimeId("runtime-a", ids);
+    const right = createPublicRuntimeId("runtime-b", ids);
+
+    expect(left).toMatch(/^[A-Z]\d{3}$/);
+    expect(right).toMatch(/^[A-Z]\d{3}$/);
+    expect(createPublicRuntimeId("runtime-a", ids)).toBe(left);
+    expect(left).not.toBe(right);
   });
 });
 
