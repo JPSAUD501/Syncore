@@ -573,7 +573,14 @@ export function PlannerScreen() {
                       placeholder="What needs to be done?"
                       value={quickTitle}
                     />
-                    <button className="button button--primary" disabled={!quickTitle.trim()} type="submit">+</button>
+                    <button
+                      aria-label="Add task"
+                      className="button button--primary"
+                      disabled={!quickTitle.trim()}
+                      type="submit"
+                    >
+                      +
+                    </button>
                   </div>
                 </form>
               </div>

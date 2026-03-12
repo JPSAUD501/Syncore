@@ -4,7 +4,7 @@ test("Next PWA stays usable offline after the first load", async ({ context, pag
   const taskInList = (title: string) =>
     page.locator(".task-list").getByText(title, { exact: true });
   const taskInput = page.getByPlaceholder("What needs to be done?");
-  const addTaskButton = page.getByRole("button", { name: "+" });
+  const addTaskButton = page.getByRole("button", { name: "Add task" });
 
   await page.goto("/");
   await expect(taskInput).toBeVisible();
