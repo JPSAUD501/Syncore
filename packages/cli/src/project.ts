@@ -22,6 +22,7 @@ import {
   createPublicTargetId as createSharedPublicTargetId
 } from "@syncore/devtools-protocol";
 import {
+  type DevHubSessionState,
   VALID_SYNCORE_TEMPLATES,
   detectProjectTemplate,
   fileExists,
@@ -654,8 +655,43 @@ export function resolveDashboardUrl(): string {
   return `http://localhost:${resolvePortFromEnv("SYNCORE_DASHBOARD_PORT", 4310)}`;
 }
 
+export async function resolveActiveDashboardUrl(cwd: string): Promise<string> {
+  const session = await readDevtoolsSessionState(cwd);
+  return session?.authenticatedDashboardUrl ?? resolveDashboardUrl();
+}
+
 export function resolveDevtoolsUrl(): string {
   return `ws://127.0.0.1:${resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311)}`;
+}
+
+export async function readDevtoolsSessionState(
+  cwd: string
+): Promise<DevHubSessionState | null> {
+  const sessionPath = path.join(cwd, ".syncore", "devtools-session.json");
+  if (!(await fileExists(sessionPath))) {
+    return null;
+  }
+
+  try {
+    const source = await readFile(sessionPath, "utf8");
+    const parsed = JSON.parse(source) as Partial<DevHubSessionState>;
+    if (
+      typeof parsed.dashboardUrl !== "string" ||
+      typeof parsed.authenticatedDashboardUrl !== "string" ||
+      typeof parsed.devtoolsUrl !== "string" ||
+      typeof parsed.token !== "string"
+    ) {
+      return null;
+    }
+    return {
+      dashboardUrl: parsed.dashboardUrl,
+      authenticatedDashboardUrl: parsed.authenticatedDashboardUrl,
+      devtoolsUrl: parsed.devtoolsUrl,
+      token: parsed.token
+    };
+  } catch {
+    return null;
+  }
 }
 
 type RuntimeHello = Extract<SyncoreDevtoolsMessage, { type: "hello" }>;
@@ -996,6 +1032,7 @@ async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
   const hellos = new Map<string, RuntimeHello>();
   const events: RuntimeEventMessage["event"][] = [];
   const eventListeners = new Set<(event: RuntimeEventMessage["event"]) => void>();
+  let lastSnapshotMessageAt = 0;
   const commandResolvers = new Map<
     string,
     {
@@ -1010,11 +1047,6 @@ async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
       onError?(error: string): void;
     }
   >();
-
-  await new Promise<void>((resolve, reject) => {
-    socket.once("open", () => resolve());
-    socket.once("error", (error) => reject(error));
-  });
 
   socket.on("message", (rawPayload) => {
     const payload =
@@ -1036,6 +1068,7 @@ async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
     }
 
     const message = JSON.parse(payload) as SyncoreDevtoolsMessage;
+    lastSnapshotMessageAt = Date.now();
     if (message.type === "hello") {
       hellos.set(message.runtimeId, message);
       return;
@@ -1069,6 +1102,11 @@ async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
     }
   });
 
+  await new Promise<void>((resolve, reject) => {
+    socket.once("open", () => resolve());
+    socket.once("error", (error) => reject(error));
+  });
+
   const dispose = async () => {
     for (const [commandId, resolver] of commandResolvers) {
       commandResolvers.delete(commandId);
@@ -1087,8 +1125,24 @@ async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
   };
 
   return {
-    async collectSnapshot(timeoutMs = 120) {
-      await new Promise((resolve) => setTimeout(resolve, timeoutMs));
+    async collectSnapshot(timeoutMs = 500) {
+      const deadline = Date.now() + timeoutMs;
+      let lastObservedMessageAt = lastSnapshotMessageAt;
+
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        const sawClientHello = [...hellos.keys()].some(
+          (runtimeId) => runtimeId !== "syncore-dev-hub"
+        );
+        if (!sawClientHello) {
+          lastObservedMessageAt = lastSnapshotMessageAt;
+          continue;
+        }
+        if (lastSnapshotMessageAt === lastObservedMessageAt) {
+          break;
+        }
+        lastObservedMessageAt = lastSnapshotMessageAt;
+      }
       return {
         hellos: [...hellos.values()],
         events: [...events]

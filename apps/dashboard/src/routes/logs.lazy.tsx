@@ -1,6 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import {
-  getPublicRuntimeId,
   getRuntimeLabel,
   useRuntimeList,
   useDevtoolsStore
@@ -10,13 +9,8 @@ import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
-  Database,
-  Zap,
   AlertTriangle,
-  Circle,
   Activity,
-  Clock,
-  HardDrive,
   ArrowDown,
   Pause,
   Play,
@@ -28,10 +22,20 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  filterActivityEvents,
-  getActivityOriginLabel
+  filterActivityEvents
 } from "@/lib/activity";
 import { useDevtools } from "@/hooks";
+import {
+  EVENT_BADGE_VARIANTS,
+  EVENT_COLORS,
+  EVENT_ICONS,
+  EVENT_LABELS,
+  type EventType,
+  getEventDetailRows,
+  getEventDuration,
+  getEventRuntimeTag,
+  getEventSummary
+} from "@/lib/eventPresentation";
 
 export const Route = createLazyFileRoute("/logs")({
   component: LogsPage
@@ -40,62 +44,6 @@ export const Route = createLazyFileRoute("/logs")({
 /* ------------------------------------------------------------------ */
 /*  Types & helpers                                                    */
 /* ------------------------------------------------------------------ */
-
-type EventType = SyncoreDevtoolsEvent["type"];
-
-const EVENT_LABELS: Record<EventType, string> = {
-  "query.executed": "Query",
-  "query.invalidated": "Invalidated",
-  "mutation.committed": "Mutation",
-  "action.completed": "Action",
-  "scheduler.tick": "Scheduler",
-  "storage.updated": "Storage",
-  "runtime.connected": "Connected",
-  "runtime.disconnected": "Disconnected",
-  log: "Log"
-};
-
-const EVENT_COLORS: Record<EventType, string> = {
-  "query.executed": "text-fn-query",
-  "query.invalidated": "text-fn-query",
-  "mutation.committed": "text-fn-mutation",
-  "action.completed": "text-fn-action",
-  "scheduler.tick": "text-fn-cron",
-  "storage.updated": "text-info",
-  "runtime.connected": "text-success",
-  "runtime.disconnected": "text-error",
-  log: "text-text-secondary"
-};
-
-const EVENT_BADGE_VARIANTS: Record<
-  EventType,
-  "success" | "info" | "warning" | "destructive" | "secondary" | "default"
-> = {
-  "query.executed": "success",
-  "query.invalidated": "success",
-  "mutation.committed": "info",
-  "action.completed": "default",
-  "scheduler.tick": "warning",
-  "storage.updated": "info",
-  "runtime.connected": "success",
-  "runtime.disconnected": "destructive",
-  log: "secondary"
-};
-
-const EVENT_ICONS: Record<
-  EventType,
-  React.ComponentType<{ size?: number; className?: string }>
-> = {
-  "query.executed": Search,
-  "query.invalidated": Search,
-  "mutation.committed": Database,
-  "action.completed": Zap,
-  "scheduler.tick": Clock,
-  "storage.updated": HardDrive,
-  "runtime.connected": Circle,
-  "runtime.disconnected": Circle,
-  log: Activity
-};
 
 const EVENT_TYPE_FILTERS: { value: EventType; label: string }[] = [
   { value: "query.executed", label: "Queries" },
@@ -106,61 +54,10 @@ const EVENT_TYPE_FILTERS: { value: EventType; label: string }[] = [
   { value: "storage.updated", label: "Storage" }
 ];
 
-function getEventSummary(event: SyncoreDevtoolsEvent): string {
-  switch (event.type) {
-    case "query.executed":
-      return event.functionName;
-    case "query.invalidated":
-      return `${formatInvalidatedQueryId(event.queryId)} - ${event.reason}`;
-    case "mutation.committed":
-      return event.functionName;
-    case "action.completed":
-      return event.functionName;
-    case "scheduler.tick":
-      return `${event.executedJobIds.length} job(s)`;
-    case "storage.updated":
-      return `${event.operation} ${event.storageId}`;
-    case "runtime.connected":
-      return `${event.platform} connected`;
-    case "runtime.disconnected":
-      return "Runtime disconnected";
-    case "log":
-      return event.message;
-    default:
-      return "";
-  }
-}
-
-function getEventDuration(event: SyncoreDevtoolsEvent): string | null {
-  if ("durationMs" in event && typeof event.durationMs === "number") {
-    return formatDuration(event.durationMs);
-  }
-  return null;
-}
-
 function hasError(event: SyncoreDevtoolsEvent): boolean {
   if (event.type === "action.completed" && event.error) return true;
   if (event.type === "log" && event.level === "error") return true;
   return false;
-}
-
-function getEventRuntimeTag(
-  event: SyncoreDevtoolsEvent,
-  runtimeMap: Map<string, { label: string; publicId: string }>
-): string {
-  if (event.origin === "dashboard") {
-    return "dashboard";
-  }
-  const runtime = runtimeMap.get(event.runtimeId);
-  if (!runtime) {
-    return getPublicRuntimeId(event.runtimeId, runtimeMap.keys());
-  }
-  return `${runtime.publicId} ${runtime.label}`;
-}
-
-function formatInvalidatedQueryId(queryId: string): string {
-  const separatorIndex = queryId.indexOf(":");
-  return separatorIndex === -1 ? queryId : queryId.slice(0, separatorIndex);
 }
 
 /* ------------------------------------------------------------------ */
@@ -208,12 +105,6 @@ function LogEntry({
       </Badge>
       <Badge
         variant="outline"
-        className="hidden w-[84px] justify-center text-[10px] shrink-0 lg:inline-flex"
-      >
-        {getActivityOriginLabel(event)}
-      </Badge>
-      <Badge
-        variant="outline"
         className="hidden w-[120px] justify-center text-[10px] shrink-0 xl:inline-flex"
       >
         {runtimeTag}
@@ -251,7 +142,6 @@ function LogDetail({
         <Badge variant={EVENT_BADGE_VARIANTS[event.type]}>
           {EVENT_LABELS[event.type]}
         </Badge>
-        <Badge variant="outline">{getActivityOriginLabel(event)}</Badge>
         <Badge variant="outline">{getEventRuntimeTag(event, runtimeMap)}</Badge>
         <span className="text-[11px] text-text-tertiary">
           {new Date(event.timestamp).toLocaleString()}
@@ -259,72 +149,15 @@ function LogDetail({
       </div>
 
       <div className="flex flex-col gap-2 text-[12px]">
-        {event.type === "query.executed" && (
-          <>
-            <DetailRow label="Function" value={event.functionName} mono />
-            <DetailRow label="Query ID" value={event.queryId} mono />
-            <DetailRow
-              label="Duration"
-              value={formatDuration(event.durationMs)}
-            />
-            <DetailRow
-              label="Dependencies"
-              value={
-                event.dependencies.length > 0
-                  ? event.dependencies.join(", ")
-                  : "none"
-              }
-              mono
-            />
-          </>
-        )}
-        {event.type === "query.invalidated" && (
-          <>
-            <DetailRow label="Query ID" value={event.queryId} mono />
-            <DetailRow label="Reason" value={event.reason} />
-          </>
-        )}
-        {event.type === "mutation.committed" && (
-          <>
-            <DetailRow label="Function" value={event.functionName} mono />
-            <DetailRow label="Mutation ID" value={event.mutationId} mono />
-            <DetailRow
-              label="Duration"
-              value={formatDuration(event.durationMs)}
-            />
-            <DetailRow
-              label="Changed Tables"
-              value={event.changedTables.join(", ") || "none"}
-              mono
-            />
-          </>
-        )}
-        {event.type === "action.completed" && (
-          <>
-            <DetailRow label="Function" value={event.functionName} mono />
-            <DetailRow label="Action ID" value={event.actionId} mono />
-            <DetailRow
-              label="Duration"
-              value={formatDuration(event.durationMs)}
-            />
-            {event.error && (
-              <DetailRow label="Error" value={event.error} error />
-            )}
-          </>
-        )}
-        {event.type === "scheduler.tick" && (
+        {getEventDetailRows(event).map((row) => (
           <DetailRow
-            label="Executed Jobs"
-            value={event.executedJobIds.join(", ") || "none"}
-            mono
+            key={`${event.type}-${row.label}`}
+            label={row.label}
+            value={row.value}
+            {...(row.mono ? { mono: true } : {})}
+            {...(row.error ? { error: true } : {})}
           />
-        )}
-        {event.type === "storage.updated" && (
-          <>
-            <DetailRow label="Storage ID" value={event.storageId} mono />
-            <DetailRow label="Operation" value={event.operation} />
-          </>
-        )}
+        ))}
         {event.type === "runtime.connected" && (
           <>
             <DetailRow
@@ -388,7 +221,7 @@ function DetailRow({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
-function LogsPage() {
+export function LogsPage() {
   const { events } = useDevtools();
   const runtimes = useRuntimeList();
   const includeDashboardActivity = useDevtoolsStore(
@@ -400,13 +233,12 @@ function LogsPage() {
   );
   const runtimeMap = useMemo(
     () => {
-      const runtimeIds = runtimes.map((runtime) => runtime.runtimeId);
       return new Map(
         runtimes.map((runtime) => [
           runtime.runtimeId,
           {
             label: getRuntimeLabel(runtime),
-            publicId: getPublicRuntimeId(runtime.runtimeId, runtimeIds)
+            publicId: runtime.runtimeId.slice(0, 8)
           }
         ])
       );

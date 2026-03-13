@@ -2,6 +2,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { DashboardTokenDialog } from "@/components/layout/DashboardTokenDialog";
 import { InactiveRuntimeNotice } from "@/components/layout/InactiveRuntimeNotice";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { initDevtoolsConnection, destroyDevtoolsConnection } from "@/lib/store";
@@ -67,6 +68,7 @@ function RootLayout() {
             <Outlet />
           </main>
         </div>
+        <DashboardTokenDialog />
         <InactiveRuntimeNotice />
       </div>
     </TooltipProvider>

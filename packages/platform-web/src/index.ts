@@ -5,6 +5,7 @@ import {
   type DevtoolsCommandHandler,
   type DevtoolsSink,
   type DevtoolsSubscriptionHost,
+  generateId,
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,
@@ -42,6 +43,9 @@ export * from "./external-change.js";
 
 export type WebSyncoreSchema = AnySyncoreSchema;
 export type BrowserSyncoreSchema = WebSyncoreSchema;
+
+const DEVTOOLS_META_NAMESPACE = "__syncore_devtools_meta__";
+const STORAGE_SCOPE_ID_PREFIX = "storage-scope";
 
 /**
  * Options for constructing a browser Syncore runtime.
@@ -166,10 +170,15 @@ export async function createWebSyncoreRuntime(
   const origin = resolveWebOrigin();
   const sessionLabel = resolveWebSessionLabel();
   const databaseLabel = options.databaseName ?? "syncore";
+  const storageScopeId = await resolvePersistedStorageScopeId(
+    persistence,
+    databaseLabel
+  );
   const storageIdentity = [
     origin ?? "unknown-origin",
     persistence.storageProtocol,
-    databaseLabel
+    databaseLabel,
+    storageScopeId
   ].join("::");
   const autoDevtools =
     options.devtools === undefined && shouldAutoConnectDevtools()
@@ -732,19 +741,82 @@ function resolveWebSessionLabel(): string | undefined {
       }
     }
 
-    // Detect browser type for additional context
-    const browser = navigator.userAgent.includes("Firefox")
-      ? "Firefox"
-      : navigator.userAgent.includes("Chrome")
-        ? "Chrome"
-        : navigator.userAgent.includes("Safari")
-          ? "Safari"
-          : "Browser";
+    const browser = resolveBrowserName(navigator);
 
     return `${uniqueName} (${browser})`;
   } catch {
     return undefined;
   }
+}
+
+function resolveBrowserName(
+  nav: Navigator & {
+    userAgentData?: {
+      brands?: Array<{
+        brand: string;
+      }>;
+    };
+  }
+): string {
+  const brands = nav.userAgentData?.brands?.map((entry) => entry.brand) ?? [];
+
+  if (brands.some((brand) => /microsoft edge/i.test(brand))) {
+    return "Edge";
+  }
+  if (brands.some((brand) => /firefox/i.test(brand))) {
+    return "Firefox";
+  }
+  if (brands.some((brand) => /opera/i.test(brand))) {
+    return "Opera";
+  }
+  if (brands.some((brand) => /chrome|chromium/i.test(brand))) {
+    return "Chrome";
+  }
+  if (brands.some((brand) => /safari/i.test(brand))) {
+    return "Safari";
+  }
+
+  const userAgent = nav.userAgent;
+  if (/Firefox\//i.test(userAgent)) {
+    return "Firefox";
+  }
+  if (/Edg\//i.test(userAgent)) {
+    return "Edge";
+  }
+  if (/OPR\/|Opera/i.test(userAgent)) {
+    return "Opera";
+  }
+  if (/Chrome\/|CriOS\//i.test(userAgent)) {
+    return "Chrome";
+  }
+  if (/Safari\//i.test(userAgent)) {
+    return "Safari";
+  }
+  return "Browser";
+}
+
+async function resolvePersistedStorageScopeId(
+  persistence: SyncoreWebPersistence,
+  databaseLabel: string
+): Promise<string> {
+  const id = `${STORAGE_SCOPE_ID_PREFIX}:${databaseLabel}`;
+  const existing = await persistence.getFile(DEVTOOLS_META_NAMESPACE, id);
+
+  if (existing) {
+    const value = new TextDecoder().decode(existing.bytes).trim();
+    if (value.length > 0) {
+      return value;
+    }
+  }
+
+  const nextValue = generateId();
+  await persistence.putFile(
+    DEVTOOLS_META_NAMESPACE,
+    id,
+    new TextEncoder().encode(nextValue),
+    "text/plain"
+  );
+  return nextValue;
 }
 
 function announceBrowserSession(options: {

@@ -68,6 +68,13 @@ export interface SyncoreConfig {
   storageDirectory?: string;
 }
 
+export interface DevHubSessionState {
+  dashboardUrl: string;
+  authenticatedDashboardUrl: string;
+  devtoolsUrl: string;
+  token: string;
+}
+
 export type SyncoreTemplateName =
   | "minimal"
   | "node"
@@ -108,6 +115,7 @@ const CORE_PACKAGE_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
 );
+const DEVTOOLS_SESSION_FILE = path.join(".syncore", "devtools-session.json");
 export const SYNCORE_MIGRATION_SNAPSHOT_FILE_NAME = "_schema_snapshot.json";
 export const VALID_SYNCORE_TEMPLATES: SyncoreTemplateName[] = [
   "minimal",
@@ -2160,14 +2168,22 @@ function applyMigrationSql(
 export async function startDevHub(options: {
   cwd: string;
   template: SyncoreTemplateName;
-}): Promise<void> {
+}): Promise<DevHubSessionState> {
   const dashboardPort = resolvePortFromEnv("SYNCORE_DASHBOARD_PORT", 4310);
   const devtoolsPort = resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311);
+  const dashboardUrl = `http://localhost:${dashboardPort}`;
+  const devtoolsUrl = `ws://127.0.0.1:${devtoolsPort}`;
   const logsDirectory = path.join(options.cwd, ".syncore", "logs");
   const logFilePath = path.join(logsDirectory, "runtime.jsonl");
   const hubAccessToken =
     sanitizeDevtoolsToken(process.env.SYNCORE_DEVTOOLS_TOKEN) ??
     generateDevtoolsToken();
+  const sessionState: DevHubSessionState = {
+    dashboardUrl,
+    authenticatedDashboardUrl: `${dashboardUrl}/?token=${hubAccessToken}`,
+    devtoolsUrl,
+    token: hubAccessToken
+  };
   await mkdir(logsDirectory, { recursive: true });
   await writeFile(logFilePath, "");
   await runDevProjectBootstrap(options.cwd, options.template);
@@ -2177,8 +2193,9 @@ export async function startDevHub(options: {
     console.log(
       `Syncore devtools hub already running at ws://localhost:${devtoolsPort}. Reusing existing hub/dashboard.`
     );
-    return;
+    return (await readDevtoolsSessionState(options.cwd)) ?? sessionState;
   }
+  await writeDevtoolsSessionState(options.cwd, sessionState);
 
   let projectTargetBackend: ProjectTargetBackend | null = null;
   try {
@@ -2590,48 +2607,49 @@ export async function startDevHub(options: {
     process.exit(1);
   });
 
-  httpServer.listen(devtoolsPort, "127.0.0.1", () => {
-    void (async () => {
-      console.log(`Syncore devtools hub: ws://localhost:${devtoolsPort}`);
-      console.log(`Devtools dashboard token: ${hubAccessToken}`);
-      console.log(
-        `Electron/Node runtimes: set devtoolsUrl to ws://localhost:${devtoolsPort}.`
-      );
-      console.log(
-        `Web/Next apps: connect the dashboard or worker bridge to ws://localhost:${devtoolsPort}.`
-      );
-      console.log(
-        "Expo apps: use the same hub URL through LAN or adb reverse while developing."
-      );
-      const dashboardRoot = path.resolve(
-        CORE_PACKAGE_ROOT,
-        "..",
-        "..",
-        "apps",
-        "dashboard"
-      );
-      if (await fileExists(path.join(dashboardRoot, "vite.config.ts"))) {
-        try {
-          const viteModule = await import("vite");
-          const server = await viteModule.createServer({
-            configFile: path.join(dashboardRoot, "vite.config.ts"),
-            root: dashboardRoot,
-            server: {
-              port: dashboardPort
-            }
-          });
-          await server.listen();
-          console.log(
-            `Dashboard shell: http://localhost:${dashboardPort}/?token=${hubAccessToken}`
-          );
-        } catch (error) {
-          console.log(
-            `Dashboard source not started automatically: ${formatError(error)}`
-          );
-        }
-      }
-    })();
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once("error", reject);
+    httpServer.listen(devtoolsPort, "127.0.0.1", () => {
+      httpServer.off("error", reject);
+      resolve();
+    });
   });
+  console.log(`Syncore devtools hub: ws://localhost:${devtoolsPort}`);
+  console.log(`Devtools dashboard token: ${hubAccessToken}`);
+  console.log(
+    `Electron/Node runtimes: set devtoolsUrl to ws://localhost:${devtoolsPort}.`
+  );
+  console.log(
+    `Web/Next apps: connect the dashboard or worker bridge to ws://localhost:${devtoolsPort}.`
+  );
+  console.log(
+    "Expo apps: use the same hub URL through LAN or adb reverse while developing."
+  );
+  const dashboardRoot = path.resolve(
+    CORE_PACKAGE_ROOT,
+    "..",
+    "..",
+    "apps",
+    "dashboard"
+  );
+  if (await fileExists(path.join(dashboardRoot, "vite.config.ts"))) {
+    try {
+      const viteModule = await import("vite");
+      const server = await viteModule.createServer({
+        configFile: path.join(dashboardRoot, "vite.config.ts"),
+        root: dashboardRoot,
+        server: {
+          port: dashboardPort
+        }
+      });
+      await server.listen();
+      console.log(`Dashboard shell: ${sessionState.authenticatedDashboardUrl}`);
+    } catch (error) {
+      console.log(
+        `Dashboard source not started automatically: ${formatError(error)}`
+      );
+    }
+  }
 
   const close = () => {
     void projectTargetBackend?.dispose();
@@ -2642,6 +2660,46 @@ export async function startDevHub(options: {
 
   process.on("SIGINT", close);
   process.on("SIGTERM", close);
+  return sessionState;
+}
+
+async function writeDevtoolsSessionState(
+  cwd: string,
+  state: DevHubSessionState
+): Promise<void> {
+  const sessionPath = path.join(cwd, DEVTOOLS_SESSION_FILE);
+  await mkdir(path.dirname(sessionPath), { recursive: true });
+  await writeFile(sessionPath, `${JSON.stringify(state, null, 2)}\n`);
+}
+
+async function readDevtoolsSessionState(
+  cwd: string
+): Promise<DevHubSessionState | null> {
+  const sessionPath = path.join(cwd, DEVTOOLS_SESSION_FILE);
+  if (!(await fileExists(sessionPath))) {
+    return null;
+  }
+
+  try {
+    const source = await readFile(sessionPath, "utf8");
+    const parsed = JSON.parse(source) as Partial<DevHubSessionState>;
+    if (
+      typeof parsed.dashboardUrl !== "string" ||
+      typeof parsed.authenticatedDashboardUrl !== "string" ||
+      typeof parsed.devtoolsUrl !== "string" ||
+      typeof parsed.token !== "string"
+    ) {
+      return null;
+    }
+    return {
+      dashboardUrl: parsed.dashboardUrl,
+      authenticatedDashboardUrl: parsed.authenticatedDashboardUrl,
+      devtoolsUrl: parsed.devtoolsUrl,
+      token: parsed.token
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function setupDevProjectWatch(

@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  getPublicRuntimeId,
   getRuntimeLabel,
   useActiveRuntime,
   useConnectedRuntimeCount,
@@ -9,7 +8,6 @@ import {
 } from "@/lib/store";
 import {
   formatTime,
-  formatDuration,
   formatRelativeTime,
   cn
 } from "@/lib/utils";
@@ -18,10 +16,7 @@ import {
   Database,
   Zap,
   AlertTriangle,
-  Circle,
   Search,
-  Clock,
-  HardDrive,
   Trash2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -36,30 +31,19 @@ import {
 } from "@/hooks";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useMemo, useRef, useEffect } from "react";
-import { getActivityOriginLabel } from "@/lib/activity";
+import {
+  EVENT_BADGE_VARIANTS,
+  EVENT_COLORS,
+  EVENT_ICONS,
+  EVENT_LABELS,
+  getEventDuration,
+  getEventRuntimeTag,
+  getEventSummary
+} from "@/lib/eventPresentation";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage
 });
-
-function getRuntimeTag(
-  event: SyncoreDevtoolsEvent,
-  runtimeMap: Map<string, { label: string; publicId: string }>
-): string {
-  if (event.origin === "dashboard") {
-    return "dashboard";
-  }
-  const runtime = runtimeMap.get(event.runtimeId);
-  if (!runtime) {
-    return getPublicRuntimeId(event.runtimeId, runtimeMap.keys());
-  }
-  return runtime.label;
-}
-
-function formatInvalidatedQueryId(queryId: string): string {
-  const separatorIndex = queryId.indexOf(":");
-  return separatorIndex === -1 ? queryId : queryId.slice(0, separatorIndex);
-}
 
 /* ------------------------------------------------------------------ */
 /*  Stat card with highlight animation                                 */
@@ -115,113 +99,23 @@ function StatCard({
 /*  Event type config                                                  */
 /* ------------------------------------------------------------------ */
 
-const EVENT_CONFIG: Record<
-  string,
-  {
-    label: string;
-    color: string;
-    badgeVariant:
-      | "success"
-      | "info"
-      | "warning"
-      | "destructive"
-      | "secondary"
-      | "default";
-    icon: React.ComponentType<{ size?: number; className?: string }>;
-  }
-> = {
-  "query.executed": {
-    label: "Query",
-    color: "text-fn-query",
-    badgeVariant: "success",
-    icon: Search
-  },
-  "query.invalidated": {
-    label: "Invalidated",
-    color: "text-fn-query",
-    badgeVariant: "success",
-    icon: Search
-  },
-  "mutation.committed": {
-    label: "Mutation",
-    color: "text-fn-mutation",
-    badgeVariant: "info",
-    icon: Database
-  },
-  "action.completed": {
-    label: "Action",
-    color: "text-fn-action",
-    badgeVariant: "default",
-    icon: Zap
-  },
-  "scheduler.tick": {
-    label: "Scheduler",
-    color: "text-fn-cron",
-    badgeVariant: "warning",
-    icon: Clock
-  },
-  "storage.updated": {
-    label: "Storage",
-    color: "text-info",
-    badgeVariant: "info",
-    icon: HardDrive
-  },
-  "runtime.connected": {
-    label: "Connected",
-    color: "text-success",
-    badgeVariant: "success",
-    icon: Circle
-  },
-  "runtime.disconnected": {
-    label: "Disconnected",
-    color: "text-error",
-    badgeVariant: "destructive",
-    icon: Circle
-  },
-  log: {
-    label: "Log",
-    color: "text-text-secondary",
-    badgeVariant: "secondary",
-    icon: Activity
-  }
-};
-
 function getEventConfig(type: string) {
   return (
-    EVENT_CONFIG[type] ?? {
-      label: type,
+    (type in EVENT_LABELS
+      ? {
+          label: EVENT_LABELS[type as keyof typeof EVENT_LABELS],
+          color: EVENT_COLORS[type as keyof typeof EVENT_COLORS],
+          badgeVariant:
+            EVENT_BADGE_VARIANTS[type as keyof typeof EVENT_BADGE_VARIANTS],
+          icon: EVENT_ICONS[type as keyof typeof EVENT_ICONS]
+        }
+      : null) ?? {
+      label: type.replaceAll("/", ":"),
       color: "text-text-secondary",
       badgeVariant: "secondary" as const,
       icon: Activity
     }
   );
-}
-
-function getEventDetail(event: SyncoreDevtoolsEvent): string {
-  switch (event.type) {
-    case "query.executed":
-      return `${event.functionName} (${formatDuration(event.durationMs)})`;
-    case "query.invalidated":
-      return `${formatInvalidatedQueryId(event.queryId)} - ${event.reason}`;
-    case "mutation.committed":
-      return `${event.functionName} (${formatDuration(event.durationMs)})`;
-    case "action.completed":
-      return event.error
-        ? `${event.functionName} — ERROR`
-        : `${event.functionName} (${formatDuration(event.durationMs)})`;
-    case "scheduler.tick":
-      return `${event.executedJobIds.length} job(s) executed`;
-    case "storage.updated":
-      return `${event.operation} ${event.storageId}`;
-    case "runtime.connected":
-      return `${event.platform} connected`;
-    case "runtime.disconnected":
-      return "Runtime disconnected";
-    case "log":
-      return `[${event.level}] ${event.message}`;
-    default:
-      return "";
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -269,7 +163,7 @@ function ActiveQueries() {
           className="flex items-center justify-between px-3 py-2 rounded-md bg-bg-base text-[12px] border border-border hover:border-border-hover transition-colors animate-fade-in"
         >
           <span className="font-mono text-fn-query truncate mr-3">
-            {q.functionName}
+            {q.functionName.replaceAll("/", ":")}
           </span>
           <span className="text-text-tertiary shrink-0 tabular-nums">
             {formatRelativeTime(q.lastRunAt)}
@@ -299,17 +193,15 @@ export function OverviewPage() {
   const connectedRuntimeCount = useConnectedRuntimeCount();
   const runtimes = useRuntimeList();
   const runtimeId = activeRuntime?.runtimeId ?? null;
-  const platform = activeRuntime?.platform ?? null;
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
   const runtimeMap = useMemo(
     () => {
-      const runtimeIds = runtimes.map((runtime) => runtime.runtimeId);
       return new Map(
         runtimes.map((runtime) => [
           runtime.runtimeId,
           {
             label: getRuntimeLabel(runtime),
-            publicId: getPublicRuntimeId(runtime.runtimeId, runtimeIds)
+            publicId: runtime.runtimeId.slice(0, 8)
           }
         ])
       );
@@ -406,43 +298,6 @@ export function OverviewPage() {
       )}
 
       {/* Runtime info strip */}
-      {connected && runtimeId && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-bg-surface px-4 py-3 text-[12px] text-text-secondary">
-          <Badge
-            variant={activeRuntime?.connected ? "success" : "destructive"}
-            className="gap-1.5"
-          >
-            {activeRuntime?.connected ? "Connected" : "Inactive"}
-          </Badge>
-          <div>
-            <span className="text-text-tertiary">ID: </span>
-            <span className="font-mono text-text-secondary">
-              {runtimeId.slice(0, 16)}
-            </span>
-          </div>
-          {platform && (
-            <Badge variant="secondary" className="font-mono">
-              {platform}
-            </Badge>
-          )}
-          {runtimeConnected && summary && (
-            <div className="flex items-center gap-1">
-              <span className="text-text-tertiary">Watching</span>
-              <span className="font-mono text-fn-query">
-                {activeQueries.length} queries
-              </span>
-            </div>
-          )}
-          {runtimeConnected && summary && (
-            <div className="flex items-center gap-1">
-              <span className="text-text-tertiary">Recent</span>
-              <span className="font-mono text-text-primary">
-                {events.length} events
-              </span>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Stats grid — responsive */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -520,7 +375,8 @@ export function OverviewPage() {
               <div className="divide-y divide-border">
                 {events.slice(0, 50).map((event, i) => {
                   const config = getEventConfig(event.type);
-                  const detail = getEventDetail(event);
+                  const summary = getEventSummary(event);
+                  const duration = getEventDuration(event);
                   const isNew = i < newEventCount;
                   return (
                     <div
@@ -539,19 +395,18 @@ export function OverviewPage() {
                       </Badge>
                       <Badge
                         variant="outline"
-                        className="hidden w-20 shrink-0 justify-center text-[10px] lg:inline-flex"
-                      >
-                        {getActivityOriginLabel(event)}
-                      </Badge>
-                      <Badge
-                        variant="outline"
                         className="hidden w-32 shrink-0 justify-center text-[10px] xl:inline-flex"
                       >
-                        {getRuntimeTag(event, runtimeMap)}
+                        {getEventRuntimeTag(event, runtimeMap)}
                       </Badge>
                       <span className="flex-1 truncate font-mono text-[12px] text-text-secondary">
-                        {detail}
+                        {summary}
                       </span>
+                      {duration && (
+                        <span className="shrink-0 font-mono text-[11px] text-text-tertiary tabular-nums">
+                          {duration}
+                        </span>
+                      )}
                       <span className="shrink-0 font-mono text-[11px] text-text-tertiary tabular-nums">
                         {formatTime(event.timestamp)}
                       </span>

@@ -2,6 +2,7 @@
   "name": "syncore-example-expo",
   "private": true,
   "scripts": {
+    "syncorejs": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
     "android:smoke": "expo run:android --variant release --no-bundler --app-id dev.syncore.expoexample",
     "build:deps": "bun run --filter syncorejs build:standalone",
     "clean": "node -e \"require('node:fs').rmSync('.expo',{recursive:true,force:true});require('node:fs').rmSync('android',{recursive:true,force:true})\"",
@@ -9,7 +10,7 @@
     "prelint": "bun run syncorejs:codegen",
     "prestart": "bun run syncorejs:codegen",
     "pretypecheck": "bun run syncorejs:codegen",
-    "syncorejs:codegen": "bun run --cwd ../../packages/cli tsx src/index.ts codegen",
+    "syncorejs:codegen": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
     "start": "expo start",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

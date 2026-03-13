@@ -4,7 +4,8 @@
   "type": "module",
   "main": "./dist/examples/electron/src/main.js",
   "scripts": {
-    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev --open-dashboard",
+    "syncorejs": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
+    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
     "build:deps": "bun run --filter syncorejs build:standalone",
     "dev": "concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
     "dev:app": "bun run build && electron ./dist/examples/electron/src/main.js",

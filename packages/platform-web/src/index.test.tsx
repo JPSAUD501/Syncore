@@ -13,7 +13,8 @@ import { defineSchema, defineTable, v } from "@syncore/schema";
 import {
   createWebSyncoreRuntime,
   createWebWorkerRuntime,
-  BrowserFileStorageAdapter
+  BrowserFileStorageAdapter,
+  type SyncoreWebPersistence
 } from "./index.js";
 import {
   BroadcastChannelExternalChangeSignal,
@@ -311,6 +312,181 @@ describe("platform-web sql.js runtime", () => {
     }
   });
 
+  it("labels Edge sessions as Edge instead of Chrome", async () => {
+    const sentMessages: string[] = [];
+    const storage = new Map<string, string>();
+
+    class MockWebSocket {
+      static OPEN = 1;
+      readyState = MockWebSocket.OPEN;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(public readonly url: string) {
+        expect(url).toBe("ws://127.0.0.1:4311");
+        queueMicrotask(() => this.onopen?.());
+      }
+
+      send(payload: string) {
+        sentMessages.push(payload);
+      }
+
+      close() {}
+    }
+
+    vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
+    vi.stubGlobal(
+      "location",
+      new URL("http://localhost:3000/") as unknown as Location
+    );
+    vi.stubGlobal("navigator", {
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0"
+    } as Navigator);
+    vi.stubGlobal("localStorage", {
+      getItem(key: string) {
+        return storage.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
+      },
+      removeItem(key: string) {
+        storage.delete(key);
+      }
+    } as Storage);
+    globalThis.localStorage.setItem("syncore-session-name", "Crystal Blaze");
+
+    const schema = defineSchema({
+      todos: defineTable({
+        title: v.string(),
+        complete: v.boolean()
+      })
+    });
+
+    const functions = {
+      "todos/list": query({
+        args: {},
+        returns: v.array(v.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
+      })
+    };
+
+    try {
+      const runtime = await createWebSyncoreRuntime({
+        databaseName: "todos-edge",
+        persistenceDatabaseName: "syncore-web-test",
+        schema,
+        functions,
+        locateFile: () => wasmFilePath,
+        platform: "browser"
+      });
+
+      await runtime.start();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const helloPayload = sentMessages.find((payload) =>
+        payload.includes('"type":"hello"')
+      );
+      expect(helloPayload).toBeDefined();
+      expect(helloPayload).toContain('"sessionLabel":"Crystal Blaze (Edge)"');
+
+      await runtime.stop();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("derives different storage identities for different browser stores", async () => {
+    const sentMessages: string[] = [];
+
+    class MockWebSocket {
+      static OPEN = 1;
+      readyState = MockWebSocket.OPEN;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(public readonly url: string) {
+        expect(url).toBe("ws://127.0.0.1:4311");
+        queueMicrotask(() => this.onopen?.());
+      }
+
+      send(payload: string) {
+        sentMessages.push(payload);
+      }
+
+      close() {}
+    }
+
+    vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
+    vi.stubGlobal(
+      "location",
+      new URL("http://localhost:3000/") as unknown as Location
+    );
+
+    const schema = defineSchema({
+      todos: defineTable({
+        title: v.string(),
+        complete: v.boolean()
+      })
+    });
+
+    const functions = {
+      "todos/list": query({
+        args: {},
+        returns: v.array(v.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
+      })
+    };
+
+    const leftPersistence = createMockWebPersistence();
+    const rightPersistence = createMockWebPersistence();
+
+    try {
+      const leftRuntime = await createWebSyncoreRuntime({
+        databaseName: "todos-separate-targets",
+        persistenceDatabaseName: "syncore-web-test",
+        persistence: leftPersistence,
+        schema,
+        functions,
+        locateFile: () => wasmFilePath,
+        platform: "browser-worker"
+      });
+      const rightRuntime = await createWebSyncoreRuntime({
+        databaseName: "todos-separate-targets",
+        persistenceDatabaseName: "syncore-web-test",
+        persistence: rightPersistence,
+        schema,
+        functions,
+        locateFile: () => wasmFilePath,
+        platform: "browser-worker"
+      });
+
+      await leftRuntime.start();
+      await rightRuntime.start();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const helloPayloads = sentMessages
+        .filter((payload) => payload.includes('"type":"hello"'))
+        .map((payload) => JSON.parse(payload) as { storageIdentity?: string });
+
+      expect(helloPayloads).toHaveLength(2);
+      expect(helloPayloads[0]?.storageIdentity).toBeDefined();
+      expect(helloPayloads[1]?.storageIdentity).toBeDefined();
+      expect(helloPayloads[0]?.storageIdentity).not.toBe(
+        helloPayloads[1]?.storageIdentity
+      );
+
+      await leftRuntime.stop();
+      await rightRuntime.stop();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("creates browser runtimes with shared external change support", async () => {
     const restoreBroadcastChannel = stubBroadcastChannel();
 
@@ -465,5 +641,60 @@ function stubBroadcastChannel(): () => void {
 
   return () => {
     vi.unstubAllGlobals();
+  };
+}
+
+function createMockWebPersistence(): SyncoreWebPersistence {
+  const databases = new Map<string, Uint8Array>();
+  const files = new Map<
+    string,
+    { bytes: Uint8Array; contentType: string | null }
+  >();
+
+  return {
+    storageProtocol: "opfs",
+    async loadDatabase(key: string) {
+      return databases.get(key) ?? null;
+    },
+    async saveDatabase(key: string, bytes: Uint8Array) {
+      databases.set(key, bytes.slice());
+    },
+    async getFile(namespace: string, id: string) {
+      const record = files.get(`${namespace}:${id}`);
+      if (!record) {
+        return null;
+      }
+      return {
+        id,
+        bytes: record.bytes.slice(),
+        contentType: record.contentType,
+        size: record.bytes.byteLength
+      };
+    },
+    async putFile(
+      namespace: string,
+      id: string,
+      bytes: Uint8Array,
+      contentType: string | null
+    ) {
+      files.set(`${namespace}:${id}`, {
+        bytes: bytes.slice(),
+        contentType
+      });
+    },
+    async deleteFile(namespace: string, id: string) {
+      files.delete(`${namespace}:${id}`);
+    },
+    async listFiles(namespace: string) {
+      const prefix = `${namespace}:`;
+      return [...files.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, record]) => ({
+          id: key.slice(prefix.length),
+          bytes: record.bytes.slice(),
+          contentType: record.contentType,
+          size: record.bytes.byteLength
+        }));
+    }
   };
 }

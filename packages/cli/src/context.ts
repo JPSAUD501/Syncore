@@ -4,6 +4,44 @@ import process from "node:process";
 import readline from "node:readline/promises";
 import { CliError, type CliErrorCategory, normalizeCliError } from "./errors.js";
 
+const ANSI = {
+  reset: "\u001b[0m",
+  bold: "\u001b[1m",
+  yellow: "\u001b[33m",
+  cyan: "\u001b[36m",
+  green: "\u001b[32m",
+  red: "\u001b[31m",
+  magenta: "\u001b[35m",
+  dim: "\u001b[2m"
+} as const;
+
+function supportsColor(stream: NodeJS.WriteStream): boolean {
+  return Boolean(stream.isTTY) && process.env.NO_COLOR !== "1" && process.env.TERM !== "dumb";
+}
+
+function formatPrefix(
+  stream: NodeJS.WriteStream,
+  level: "info" | "done" | "warn" | "error" | "next" | "work" | "fail"
+): string {
+  const plain = `[syncore] [${level}]`;
+  if (!supportsColor(stream)) {
+    return plain;
+  }
+  const levelColor =
+    level === "info"
+      ? ANSI.cyan
+      : level === "done"
+        ? ANSI.green
+        : level === "warn"
+          ? ANSI.yellow
+          : level === "error" || level === "fail"
+            ? ANSI.red
+            : level === "next"
+              ? ANSI.magenta
+              : ANSI.dim;
+  return `${ANSI.bold}${ANSI.yellow}[syncore]${ANSI.reset} ${levelColor}[${level}]${ANSI.reset}`;
+}
+
 export interface GlobalCliOptions {
   cwd?: string;
   json?: boolean;
@@ -48,31 +86,31 @@ export class CliContext {
 
   info(message: string): void {
     if (!this.json) {
-      process.stdout.write(`[info] ${message}\n`);
+      process.stdout.write(`${formatPrefix(process.stdout, "info")} ${message}\n`);
     }
   }
 
   success(message: string): void {
     if (!this.json) {
-      process.stdout.write(`[done] ${message}\n`);
+      process.stdout.write(`${formatPrefix(process.stdout, "done")} ${message}\n`);
     }
   }
 
   warn(message: string): void {
     if (!this.json) {
-      process.stderr.write(`[warn] ${message}\n`);
+      process.stderr.write(`${formatPrefix(process.stderr, "warn")} ${message}\n`);
     }
   }
 
   error(message: string): void {
     if (!this.json) {
-      process.stderr.write(`[error] ${message}\n`);
+      process.stderr.write(`${formatPrefix(process.stderr, "error")} ${message}\n`);
     }
   }
 
   nextStep(message: string): void {
     if (!this.json) {
-      process.stdout.write(`[next] ${message}\n`);
+      process.stdout.write(`${formatPrefix(process.stdout, "next")} ${message}\n`);
     }
   }
 
@@ -250,20 +288,22 @@ export class CliContext {
 
     const frames = ["-", "\\", "|", "/"];
     let index = 0;
-    process.stderr.write(`[work] ${label}`);
+    process.stderr.write(`${formatPrefix(process.stderr, "work")} ${label}`);
     const timer = setInterval(() => {
-      process.stderr.write(`\r[${frames[index % frames.length]}] ${label}`);
+      process.stderr.write(
+        `\r${formatPrefix(process.stderr, "work")} ${frames[index % frames.length]} ${label}`
+      );
       index += 1;
     }, 80);
 
     try {
       const result = await action();
       clearInterval(timer);
-      process.stderr.write(`\r[done] ${label}\n`);
+      process.stderr.write(`\r${formatPrefix(process.stderr, "done")} ${label}\n`);
       return result;
     } catch (error) {
       clearInterval(timer);
-      process.stderr.write(`\r[fail] ${label}\n`);
+      process.stderr.write(`\r${formatPrefix(process.stderr, "fail")} ${label}\n`);
       throw error;
     }
   }

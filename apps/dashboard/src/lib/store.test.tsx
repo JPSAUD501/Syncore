@@ -94,7 +94,11 @@ function resetStore() {
     selectedTargetId: null,
     selectedRuntimeId: null,
     selectedRuntimeFilter: null,
-    includeDashboardActivity: false
+    selectedRuntimeSelectionMode: null,
+    includeDashboardActivity: false,
+    hubToken: "testtoken",
+    authRequired: false,
+    authError: null
   }));
 }
 
@@ -282,7 +286,35 @@ describe("devtools store runtime selection", () => {
     expect(runtime?.mutationCount).toBe(1);
   });
 
-  it("defaults to the aggregated client target when multiple sessions share a target", () => {
+  it("selects the only session directly when a client target has a single session", () => {
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-a-12345678",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace",
+      sessionLabel: "Solo Session (Chrome)"
+    });
+
+    const { result } = renderHook(() => ({
+      targets: useConnectedTargets(),
+      selectedTarget: useSelectedTarget(),
+      runtimeFilter: useSelectedRuntimeFilter(),
+      activeRuntime: useActiveRuntime()
+    }));
+
+    expect(result.current.targets).toHaveLength(1);
+    expect(result.current.targets[0]?.runtimeIds).toHaveLength(1);
+    expect(result.current.selectedTarget?.kind).toBe("client");
+    expect(result.current.selectedTarget?.label).toBe("Solo Session (Chrome)");
+    expect(result.current.runtimeFilter).toBe("runtime-a-12345678");
+    expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
+  });
+
+  it("defaults to all sessions when a second session joins the same client target", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-a-12345678",
@@ -318,7 +350,7 @@ describe("devtools store runtime selection", () => {
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
   });
 
-  it("falls back to all sessions when the selected runtime filter disconnects", () => {
+  it("falls back to the only remaining session when the selected runtime disconnects", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-a-12345678",
@@ -357,7 +389,7 @@ describe("devtools store runtime selection", () => {
     }));
 
     expect(result.current.selectedTarget?.kind).toBe("client");
-    expect(result.current.runtimeFilter).toBe("all");
+    expect(result.current.runtimeFilter).toBe("runtime-a-12345678");
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
   });
 
@@ -404,6 +436,54 @@ describe("devtools store runtime selection", () => {
 
     expect(result.current.runtimeFilter).toBe("runtime-b-87654321");
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-b-87654321");
+  });
+
+  it("keeps an explicitly selected session when a third session joins the same target", () => {
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-a-12345678",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-b-87654321",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+    useDevtoolsStore.getState().selectRuntime("runtime-b-87654321");
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-c-11223344",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageProtocol: "opfs",
+      storageIdentity: "opfs://workspace"
+    });
+
+    const { result } = renderHook(() => ({
+      runtimeFilter: useSelectedRuntimeFilter(),
+      activeRuntime: useActiveRuntime(),
+      runtimes: useSelectedTargetRuntimes()
+    }));
+
+    expect(result.current.runtimeFilter).toBe("runtime-b-87654321");
+    expect(result.current.activeRuntime?.runtimeId).toBe("runtime-b-87654321");
+    expect(result.current.runtimes.map((runtime) => runtime.runtimeId)).toEqual([
+      "runtime-a-12345678",
+      "runtime-b-87654321",
+      "runtime-c-11223344"
+    ]);
   });
 
   it("does not expose disconnected sessions in the selected target runtime list", () => {
@@ -496,5 +576,23 @@ describe("devtools store runtime selection", () => {
     expect(runtime?.activeQueries).toHaveLength(1);
     expect(runtime?.events[0]?.type).toBe("runtime.disconnected");
     expect(runtime?.events[1]?.type).toBe("mutation.committed");
+  });
+
+  it("requests a token again when the dashboard auth state is reset", () => {
+    useDevtoolsStore.getState().requestHubToken("Token missing");
+
+    const state = useDevtoolsStore.getState();
+    expect(state.hubToken).toBeNull();
+    expect(state.authRequired).toBe(true);
+    expect(state.authError).toBe("Token missing");
+  });
+
+  it("accepts a sanitized token from the auth modal", () => {
+    useDevtoolsStore.getState().setHubToken(" token-123 ");
+
+    const state = useDevtoolsStore.getState();
+    expect(state.hubToken).toBe("token123");
+    expect(state.authRequired).toBe(false);
+    expect(state.authError).toBeNull();
   });
 });

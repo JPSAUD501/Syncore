@@ -486,6 +486,29 @@ describe("syncore CLI", () => {
     expect(payload.data.url).toContain("http://localhost:");
   });
 
+  test("dashboard returns the authenticated URL when a devtools session exists", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await mkdir(path.join(cwd, ".syncore"), { recursive: true });
+    await writeFile(
+      path.join(cwd, ".syncore", "devtools-session.json"),
+      `${JSON.stringify({
+        dashboardUrl: "http://localhost:4310",
+        authenticatedDashboardUrl: "http://localhost:4310/?token=abc123",
+        devtoolsUrl: "ws://127.0.0.1:4311",
+        token: "abc123"
+      })}\n`
+    );
+
+    const result = await runCli(cwd, ["dashboard", "--json"]);
+    expect(result.exitCode).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      data: { url: string; baseUrl: string };
+    };
+    expect(payload.data.url).toBe("http://localhost:4310/?token=abc123");
+    expect(payload.data.baseUrl).toBe("http://localhost:4310");
+  });
+
   test("targets lists the local project target for node templates", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);

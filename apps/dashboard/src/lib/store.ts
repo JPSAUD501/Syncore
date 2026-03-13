@@ -21,20 +21,99 @@ import {
 
 const MAX_EVENTS = 500;
 const HUB_RUNTIME_ID = "syncore-dev-hub";
-const HUB_TOKEN_PARAM =
-  typeof window === "undefined"
-    ? null
-    : (() => {
-        const searchParams = new URLSearchParams(window.location.search);
-        return searchParams.get("token") ?? searchParams.get("hubToken");
-      })();
-const WS_URL = HUB_TOKEN_PARAM
-  ? `ws://localhost:4311/?token=${encodeURIComponent(HUB_TOKEN_PARAM)}`
-  : "ws://localhost:4311";
+const DASHBOARD_TOKEN_STORAGE_KEY = "syncore-dashboard-hub-token";
 const RECONNECT_DELAY = 2000;
 const REQUEST_TIMEOUT = 10_000;
 const DEBUG_DEVTOOLS = false;
 const debugCounters = new Map<string, number>();
+
+function sanitizeHubToken(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const sanitized = value.replace(/[^A-Za-z0-9]/g, "");
+  return sanitized.length > 0 ? sanitized : null;
+}
+
+function readDashboardTokenFromUrl(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const searchParams = new URLSearchParams(window.location.search);
+  return sanitizeHubToken(
+    searchParams.get("token") ?? searchParams.get("hubToken")
+  );
+}
+
+function readStoredDashboardToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    return sanitizeHubToken(
+      window.localStorage.getItem(DASHBOARD_TOKEN_STORAGE_KEY)
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDashboardToken(token: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(DASHBOARD_TOKEN_STORAGE_KEY, token);
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function clearStoredDashboardToken(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(DASHBOARD_TOKEN_STORAGE_KEY);
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function syncDashboardTokenInUrl(token: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const url = new URL(window.location.href);
+  if (token) {
+    url.searchParams.set("token", token);
+    url.searchParams.delete("hubToken");
+  } else {
+    url.searchParams.delete("token");
+    url.searchParams.delete("hubToken");
+  }
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function resolveInitialHubToken(): string | null {
+  const urlToken = readDashboardTokenFromUrl();
+  if (urlToken) {
+    writeStoredDashboardToken(urlToken);
+    return urlToken;
+  }
+  const storedToken = readStoredDashboardToken();
+  if (storedToken) {
+    syncDashboardTokenInUrl(storedToken);
+    return storedToken;
+  }
+  return null;
+}
+
+function buildDevtoolsWebSocketUrl(token: string): string {
+  return `ws://localhost:4311/?token=${encodeURIComponent(token)}`;
+}
+
+const INITIAL_HUB_TOKEN = resolveInitialHubToken();
 
 function debugLog(key: string, ...args: unknown[]) {
   if (!DEBUG_DEVTOOLS) {
@@ -76,6 +155,8 @@ interface RuntimeState extends RuntimeMeta {
   liveQueryVersion: number;
   lastSubscriptionError: string | null;
 }
+
+type RuntimeSelectionMode = "auto-single" | "all" | "runtime" | null;
 
 const EMPTY_RUNTIME_STATE = {
   events: [],
@@ -126,7 +207,11 @@ interface DevtoolsState {
   selectedTargetId: string | null;
   selectedRuntimeId: string | null;
   selectedRuntimeFilter: string | null;
+  selectedRuntimeSelectionMode: RuntimeSelectionMode;
   includeDashboardActivity: boolean;
+  hubToken: string | null;
+  authRequired: boolean;
+  authError: string | null;
   _handleMessage: (msg: SyncoreDevtoolsMessage) => void;
   _setConnected: (v: boolean) => void;
   _markAllRuntimesDisconnected: () => void;
@@ -135,6 +220,8 @@ interface DevtoolsState {
   selectRuntimeFilter: (runtimeId: string | null) => void;
   setIncludeDashboardActivity: (value: boolean) => void;
   toggleIncludeDashboardActivity: () => void;
+  setHubToken: (value: string) => void;
+  requestHubToken: (error?: string | null) => void;
   clearEvents: (runtimeId?: string) => void;
 }
 
@@ -268,7 +355,7 @@ function getTargetLabel(runtime: RuntimeState, _connectedSessions: number): stri
     runtime.databaseLabel ??
     runtime.origin ??
     `${runtime.platform} client`;
-  return base;
+  return parsed?.browser ? `${base} (${parsed.browser})` : base;
 }
 
 function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
@@ -443,18 +530,21 @@ function resolveSelectionState(
   runtimes: Record<string, RuntimeState>,
   currentSelectedTargetId: string | null,
   currentSelectedRuntimeFilter: string | null,
+  currentSelectedRuntimeSelectionMode: RuntimeSelectionMode,
   preferredRuntimeId?: string
 ): {
   selectedTargetId: string | null;
   selectedRuntimeFilter: string | null;
   selectedRuntimeId: string | null;
+  selectedRuntimeSelectionMode: RuntimeSelectionMode;
 } {
   const targets = getTargetsSnapshot(runtimes);
   if (targets.length === 0) {
     return {
       selectedTargetId: null,
       selectedRuntimeFilter: null,
-      selectedRuntimeId: null
+      selectedRuntimeId: null,
+      selectedRuntimeSelectionMode: null
     };
   }
 
@@ -481,7 +571,8 @@ function resolveSelectionState(
     return {
       selectedTargetId: null,
       selectedRuntimeFilter: null,
-      selectedRuntimeId: null
+      selectedRuntimeId: null,
+      selectedRuntimeSelectionMode: null
     };
   }
 
@@ -492,35 +583,59 @@ function resolveSelectionState(
       selectedRuntimeId:
         selectedTarget.runtimes.find((runtime) => runtime.connected)?.runtimeId ??
         selectedTarget.runtimes[0]?.runtimeId ??
-        null
+        null,
+      selectedRuntimeSelectionMode: null
+    };
+  }
+
+  const availableRuntimes = selectedTarget.runtimes.filter(
+    (runtime) => runtime.connected
+  );
+  const candidateRuntimes =
+    availableRuntimes.length > 0 ? availableRuntimes : selectedTarget.runtimes;
+
+  if (candidateRuntimes.length === 1) {
+    const singleRuntimeId = candidateRuntimes[0]?.runtimeId ?? null;
+    return {
+      selectedTargetId: selectedTarget.id,
+      selectedRuntimeFilter: singleRuntimeId,
+      selectedRuntimeId: singleRuntimeId,
+      selectedRuntimeSelectionMode: singleRuntimeId ? "auto-single" : null
     };
   }
 
   const filteredRuntime =
     typeof currentSelectedRuntimeFilter === "string" &&
     currentSelectedRuntimeFilter !== "all"
-      ? selectedTarget.runtimes.find(
+      ? candidateRuntimes.find(
           (runtime) => runtime.runtimeId === currentSelectedRuntimeFilter
         ) ?? null
       : null;
-  const hasCurrentFilter =
+  const hasExplicitRuntimeFilter =
+    currentSelectedRuntimeSelectionMode === "runtime" &&
     typeof currentSelectedRuntimeFilter === "string" &&
     currentSelectedRuntimeFilter !== "all" &&
-    selectedTarget.runtimeIds.includes(currentSelectedRuntimeFilter) &&
-    filteredRuntime?.connected === true;
-  const selectedRuntimeFilter =
-    hasCurrentFilter ? currentSelectedRuntimeFilter : "all";
+    filteredRuntime !== null;
+  const selectedRuntimeFilter = hasExplicitRuntimeFilter
+    ? currentSelectedRuntimeFilter
+    : "all";
   const selectedRuntimeId =
     selectedRuntimeFilter && selectedRuntimeFilter !== "all"
       ? selectedRuntimeFilter
-      : selectedTarget.runtimes.find((runtime) => runtime.connected)?.runtimeId ??
-        selectedTarget.runtimes[0]?.runtimeId ??
+      : candidateRuntimes.find((runtime) => runtime.connected)?.runtimeId ??
+        candidateRuntimes[0]?.runtimeId ??
         null;
 
   return {
     selectedTargetId: selectedTarget.id,
     selectedRuntimeFilter,
-    selectedRuntimeId
+    selectedRuntimeId,
+    selectedRuntimeSelectionMode:
+      selectedRuntimeFilter === "all"
+        ? "all"
+        : selectedRuntimeFilter
+          ? "runtime"
+          : null
   };
 }
 
@@ -548,7 +663,13 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   selectedTargetId: null,
   selectedRuntimeId: null,
   selectedRuntimeFilter: null,
+  selectedRuntimeSelectionMode: null,
   includeDashboardActivity: readDashboardActivityPreference(),
+  hubToken: INITIAL_HUB_TOKEN,
+  authRequired: INITIAL_HUB_TOKEN === null,
+  authError: INITIAL_HUB_TOKEN === null
+    ? "Paste the devtools token printed by `syncorejs dev`."
+    : null,
 
   _setConnected: (v) =>
     set((state) => (state.connected === v ? state : { connected: v })),
@@ -568,27 +689,30 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       if (!changed) {
         return state;
       }
-      return {
-        runtimes,
-        ...resolveSelectionState(
+        return {
           runtimes,
-          state.selectedTargetId,
-          state.selectedRuntimeFilter
-        )
-      };
-    }),
+          ...resolveSelectionState(
+            runtimes,
+            state.selectedTargetId,
+            state.selectedRuntimeFilter,
+            state.selectedRuntimeSelectionMode
+          )
+        };
+      }),
 
   selectTarget: (targetId) =>
     set((state) => {
       const nextSelection = resolveSelectionState(
         state.runtimes,
         targetId,
+        null,
         null
       );
       return {
         selectedTargetId: nextSelection.selectedTargetId,
         selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
-        selectedRuntimeId: nextSelection.selectedRuntimeId
+        selectedRuntimeId: nextSelection.selectedRuntimeId,
+        selectedRuntimeSelectionMode: nextSelection.selectedRuntimeSelectionMode
       };
     }),
 
@@ -598,12 +722,14 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
         const nextSelection = resolveSelectionState(
           state.runtimes,
           state.selectedTargetId,
+          "all",
           "all"
         );
         return {
           selectedTargetId: nextSelection.selectedTargetId,
           selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
-          selectedRuntimeId: nextSelection.selectedRuntimeId
+          selectedRuntimeId: nextSelection.selectedRuntimeId,
+          selectedRuntimeSelectionMode: nextSelection.selectedRuntimeSelectionMode
         };
       }
       const target = getTargetsSnapshot(state.runtimes).find((entry) =>
@@ -615,7 +741,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       return {
         selectedTargetId: target.id,
         selectedRuntimeFilter: runtimeId,
-        selectedRuntimeId: runtimeId
+        selectedRuntimeId: runtimeId,
+        selectedRuntimeSelectionMode: "runtime"
       };
     }),
 
@@ -635,12 +762,14 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       const nextSelection = resolveSelectionState(
         state.runtimes,
         target.id,
-        runtimeId ?? "all"
+        runtimeId ?? "all",
+        runtimeId && runtimeId !== "all" ? "runtime" : "all"
       );
       return {
         selectedTargetId: nextSelection.selectedTargetId,
         selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
-        selectedRuntimeId: nextSelection.selectedRuntimeId
+        selectedRuntimeId: nextSelection.selectedRuntimeId,
+        selectedRuntimeSelectionMode: nextSelection.selectedRuntimeSelectionMode
       };
     }),
 
@@ -659,6 +788,38 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       writeDashboardActivityPreference(nextValue);
       return { includeDashboardActivity: nextValue };
     }),
+
+  setHubToken: (value) => {
+    const nextToken = sanitizeHubToken(value);
+    if (!nextToken) {
+      set({
+        authRequired: true,
+        authError: "Enter a valid devtools token.",
+        hubToken: null
+      });
+      return;
+    }
+    writeStoredDashboardToken(nextToken);
+    syncDashboardTokenInUrl(nextToken);
+    set({
+      hubToken: nextToken,
+      authRequired: false,
+      authError: null
+    });
+    reconnectWithLatestToken();
+  },
+
+  requestHubToken: (error) => {
+    clearStoredDashboardToken();
+    syncDashboardTokenInUrl(null);
+    set({
+      connected: false,
+      hubToken: null,
+      authRequired: true,
+      authError:
+        error ?? "Paste the devtools token printed by `syncorejs dev`."
+    });
+  },
 
   _handleMessage: (msg) => {
     switch (msg.type) {
@@ -693,6 +854,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               runtimes,
               state.selectedTargetId,
               state.selectedRuntimeFilter,
+              state.selectedRuntimeSelectionMode,
               msg.targetKind === "project" ? undefined : msg.runtimeId
             )
           };
@@ -746,6 +908,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               runtimes,
               state.selectedTargetId,
               state.selectedRuntimeFilter,
+              state.selectedRuntimeSelectionMode,
               e.type === "runtime.disconnected" ? undefined : runtimeId
             )
           };
@@ -794,6 +957,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               runtimes,
               state.selectedTargetId,
               state.selectedRuntimeFilter,
+              state.selectedRuntimeSelectionMode,
               runtimeId
             )
           };
@@ -1204,8 +1368,14 @@ let connectionGeneration = 0;
 
 function connect() {
   if (ws || !connectionStarted) return;
+  const hubToken = useDevtoolsStore.getState().hubToken;
+  if (!hubToken) {
+    useDevtoolsStore.getState().requestHubToken();
+    return;
+  }
 
-  const socket = new WebSocket(WS_URL);
+  const wsUrl = buildDevtoolsWebSocketUrl(hubToken);
+  const socket = new WebSocket(wsUrl);
   const generation = ++connectionGeneration;
   ws = socket;
 
@@ -1214,8 +1384,12 @@ function connect() {
       socket.close();
       return;
     }
-    debugLog("ws-open", "[dashboard] websocket open", { url: WS_URL });
+    debugLog("ws-open", "[dashboard] websocket open", { url: wsUrl });
     useDevtoolsStore.getState()._setConnected(true);
+    useDevtoolsStore.setState({
+      authRequired: false,
+      authError: null
+    });
     flushSubscriptions();
   };
 
@@ -1240,13 +1414,14 @@ function connect() {
     }
   };
 
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     if (socket !== ws || generation !== connectionGeneration) {
       return;
     }
     ws = null;
+    const unauthorized = event.code === 1008;
     debugLog("ws-close", "[dashboard] websocket close", {
-      reconnecting: connectionStarted
+      reconnecting: connectionStarted && !unauthorized
     });
     useDevtoolsStore.getState()._setConnected(false);
     useDevtoolsStore.getState()._markAllRuntimesDisconnected();
@@ -1258,6 +1433,12 @@ function connect() {
     pendingRequests.clear();
     for (const subscription of subscriptions.values()) {
       subscription.sent = false;
+    }
+    if (unauthorized) {
+      useDevtoolsStore.getState().requestHubToken(
+        "The devtools token was missing or invalid."
+      );
+      return;
     }
     if (connectionStarted) {
       scheduleReconnect();
@@ -1278,6 +1459,23 @@ function scheduleReconnect() {
     reconnectTimer = null;
     connect();
   }, RECONNECT_DELAY);
+}
+
+function reconnectWithLatestToken() {
+  if (!connectionStarted) {
+    return;
+  }
+  connectionGeneration += 1;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (ws) {
+    const current = ws;
+    ws = null;
+    current.close();
+  }
+  connect();
 }
 
 /** Start the WebSocket connection. Call once at app boot. */

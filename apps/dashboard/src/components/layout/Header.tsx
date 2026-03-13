@@ -2,7 +2,7 @@ import { useRouterState } from "@tanstack/react-router";
 import {
   getPublicRuntimeId,
   getRuntimeLabel,
-  getRuntimeBrowser,
+  parseSessionLabel,
   useActiveRuntime,
   useConnectedTargets,
   useDevtoolsStore,
@@ -41,6 +41,27 @@ const ROUTE_TITLES: Record<string, string> = {
   "/sql": "SQL Console"
 };
 
+function getTargetDisplayParts(target: NonNullable<ReturnType<typeof useSelectedTarget>>) {
+  if (target.kind === "project") {
+    return {
+      name: target.label,
+      browser: null as string | null
+    };
+  }
+  const primaryRuntime =
+    target.runtimes.find((runtime) => runtime.connected) ?? target.runtimes[0] ?? null;
+  const parsed = parseSessionLabel(primaryRuntime?.sessionLabel);
+  return {
+    name:
+      parsed?.name ??
+      primaryRuntime?.appName ??
+      primaryRuntime?.databaseLabel ??
+      primaryRuntime?.origin ??
+      target.label,
+    browser: parsed?.browser ?? null
+  };
+}
+
 export function Header({
   onToggleSidebar
 }: {
@@ -66,10 +87,7 @@ export function Header({
   const projectTarget = useProjectTargetRuntime();
 
   const title = ROUTE_TITLES[pathname] ?? "Dashboard";
-  const sessionLabel = activeRuntime?.sessionLabel ?? null;
   const platform = activeRuntime?.platform ?? null;
-
-  const displayName = sessionLabel ?? platform ?? null;
   const supportsProjectFallback = ["/data", "/functions", "/scheduler", "/sql"].includes(
     pathname
   );
@@ -100,31 +118,41 @@ export function Header({
           >
             <SelectTrigger
               size="sm"
-              className="hidden min-w-[140px] max-w-[240px] sm:flex"
+              className="hidden min-w-[180px] max-w-[320px] sm:flex"
             >
               <SelectValue placeholder="Select target" />
             </SelectTrigger>
             <SelectContent position="popper" align="center" className="min-w-[200px] w-[var(--radix-select-trigger-width)]">
-              {targets.map((target) => (
-                <SelectItem key={target.id} value={target.id}>
-                  <div className="flex w-full items-center gap-2">
-                    <span className="font-medium text-text-primary">{target.id}</span>
-                    <span className="text-[12px] text-text-tertiary truncate">
-                      {target.label}
-                    </span>
-                    {target.kind !== "project" && (
-                      <span className="ml-auto rounded-full bg-bg-base px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary tabular-nums border border-border">
-                        {target.connectedSessions}
+              {targets.map((target) => {
+                const parts = getTargetDisplayParts(target);
+                return (
+                  <SelectItem key={target.id} value={target.id}>
+                    <div className="flex min-w-0 w-full items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
+                        {parts.name}
                       </span>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
+                      <span className="text-[10px] font-mono text-text-tertiary whitespace-nowrap">
+                        {target.id}
+                      </span>
+                      {parts.browser && (
+                        <span className="rounded-full border border-border bg-bg-base px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary whitespace-nowrap">
+                          {parts.browser}
+                        </span>
+                      )}
+                      {target.kind !== "project" && (
+                        <span className="rounded-full bg-bg-base px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary tabular-nums border border-border">
+                          {target.connectedSessions}
+                        </span>
+                      )}
+                    </div>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         )}
 
-        {selectedTarget?.kind === "client" && selectedTargetRuntimes.length > 1 && (
+        {selectedTarget?.kind === "client" && (
           <Select
             value={selectedRuntimeFilter ?? "all"}
             onValueChange={(value) =>
@@ -137,20 +165,21 @@ export function Header({
               size="sm"
               className="hidden min-w-[140px] max-w-[240px] sm:flex"
             >
-              <SelectValue placeholder="All sessions" />
+              <SelectValue placeholder="Select session" />
             </SelectTrigger>
             <SelectContent position="popper" align="center" className="min-w-[200px] w-[var(--radix-select-trigger-width)]">
-              <SelectItem value="all">
-                <div className="flex w-full items-center gap-2">
-                  <span className="font-medium text-text-primary">All sessions</span>
-                  <span className="ml-auto rounded-full bg-bg-base px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary tabular-nums border border-border">
-                    {selectedTarget.connectedSessions}
-                  </span>
-                </div>
-              </SelectItem>
+              {selectedTargetRuntimes.length > 1 && (
+                <SelectItem value="all">
+                  <div className="flex w-full items-center gap-2">
+                    <span className="font-medium text-text-primary">All sessions</span>
+                    <span className="ml-auto rounded-full bg-bg-base px-1.5 py-0.5 text-[10px] font-medium text-text-tertiary tabular-nums border border-border">
+                      {selectedTarget.connectedSessions}
+                    </span>
+                  </div>
+                </SelectItem>
+              )}
               {selectedTargetRuntimes.map((runtime) => {
                 const label = getRuntimeLabel(runtime);
-                const browser = getRuntimeBrowser(runtime);
                 return (
                   <SelectItem key={runtime.runtimeId} value={runtime.runtimeId}>
                     <div className="flex w-full items-center gap-2">
@@ -162,7 +191,6 @@ export function Header({
                           runtime.runtimeId,
                           selectedTargetRuntimes.map((entry) => entry.runtimeId)
                         )}
-                        {browser && ` (${browser})`}
                       </span>
                     </div>
                   </SelectItem>
@@ -170,14 +198,6 @@ export function Header({
               })}
             </SelectContent>
           </Select>
-        )}
-
-        {displayName && targets.length <= 1 && (
-          <div className="hidden min-w-0 sm:block">
-            <div className="truncate text-[11px] font-medium text-text-secondary">
-              {displayName}
-            </div>
-          </div>
         )}
 
         {platform && (

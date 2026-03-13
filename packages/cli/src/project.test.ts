@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +8,7 @@ import {
   connectToProjectHub,
   listConnectedClientTargets,
   loadImportDocumentBatches,
+  resolveActiveDashboardUrl,
   resolveDevtoolsUrl
 } from "./project.js";
 
@@ -34,6 +35,29 @@ describe("project hub discovery", () => {
 
   it("uses the IPv4 loopback URL for the local devtools hub", () => {
     expect(resolveDevtoolsUrl()).toBe("ws://127.0.0.1:4311");
+  });
+
+  it("prefers the authenticated dashboard URL from the local session file", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "syncore-cli-dashboard-"));
+
+    try {
+      await mkdir(path.join(cwd, ".syncore"), { recursive: true });
+      await writeFile(
+        path.join(cwd, ".syncore", "devtools-session.json"),
+        JSON.stringify({
+          dashboardUrl: "http://localhost:4310",
+          authenticatedDashboardUrl: "http://localhost:4310/?token=testtoken",
+          devtoolsUrl: "ws://127.0.0.1:4311",
+          token: "testtoken"
+        })
+      );
+
+      await expect(resolveActiveDashboardUrl(cwd)).resolves.toBe(
+        "http://localhost:4310/?token=testtoken"
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("treats a reset socket on the hub port as no connected targets", async () => {
@@ -65,6 +89,7 @@ describe("project hub discovery", () => {
 
     await expect(connectToProjectHub(`ws://127.0.0.1:${address.port}`)).resolves.toBeNull();
   });
+
 });
 
 async function listen(server: Server): Promise<void> {

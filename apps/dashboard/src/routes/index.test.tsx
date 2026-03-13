@@ -260,8 +260,29 @@ describe("OverviewPage", () => {
   it("renders fresh subscription data once it arrives", () => {
     render(<OverviewPage />);
 
-    expect(screen.getAllByText("Watching").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("1 queries").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("8 events").length).toBeGreaterThan(0);
+    expect(screen.queryByText("1 queries")).toBeNull();
+    expect(screen.getAllByText("1 watching").length).toBeGreaterThan(0);
+  });
+
+  it("shows normalized function names and short ids in recent activity", () => {
+    storeState.activeRuntime = {
+      ...storeState.activeRuntime!,
+      events: [
+        {
+          type: "query.executed",
+          runtimeId: "runtime-1",
+          queryId: "1234567890abcdef",
+          functionName: "auth/signIn",
+          dependencies: [],
+          durationMs: 12,
+          timestamp: 1
+        }
+      ]
+    };
+
+    render(<OverviewPage />);
+
+    expect(screen.getByText("auth:signIn · 12345678")).toBeTruthy();
+    expect(screen.getByText("12.0ms")).toBeTruthy();
   });
 });

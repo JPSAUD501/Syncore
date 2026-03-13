@@ -8,6 +8,7 @@ import {
   renderMigrationSql
 } from "@syncore/core";
 import {
+  type DevHubSessionState,
   type SyncoreTemplateName,
   VALID_SYNCORE_TEMPLATES,
   applyProjectMigrations,
@@ -51,6 +52,7 @@ import {
   listAvailableTargets,
   listConnectedClientTargets,
   listProjectTables,
+  resolveActiveDashboardUrl,
   loadImportDocumentBatches,
   readProjectTable,
   resolveDashboardUrl,
@@ -394,7 +396,10 @@ function addDevCommand(program: Command): void {
     .option("--until-success", "Retry bootstrap until it succeeds")
     .option("--run <function>", "Run a Syncore function after bootstrap succeeds")
     .option("--run-sh <command>", "Run a shell command after bootstrap succeeds")
-    .option("--open-dashboard", "Open the dashboard URL even in non-interactive mode")
+    .option(
+      "--no-open-dashboard",
+      "Do not open the dashboard automatically after the hub is ready"
+    )
     .addHelpText(
       "after",
       [
@@ -404,7 +409,7 @@ function addDevCommand(program: Command): void {
         "  npx syncorejs dev --once",
         "  npx syncorejs dev --until-success",
         "  npx syncorejs dev --run tasks/list",
-        "  npx syncorejs dev --open-dashboard",
+        "  npx syncorejs dev --no-open-dashboard",
         "  npx syncorejs dev --run-sh \"npm run dev\""
       ].join("\n")
     )
@@ -414,8 +419,7 @@ function addDevCommand(program: Command): void {
         if (options.run && options.runSh) {
           ctx.fail("`syncorejs dev` accepts either --run or --run-sh, not both.");
         }
-        const shouldOpenDashboard =
-          Boolean(options.openDashboard) || isRealInteractiveTerminal(ctx);
+        const shouldOpenDashboard = options.openDashboard ?? true;
         await ensureLocalPortConfiguration(ctx);
 
         const template = await resolveRequestedTemplate(ctx.cwd, options.template);
@@ -453,27 +457,32 @@ function addDevCommand(program: Command): void {
           targets
         });
 
-        await startManagedDevHub(ctx, template);
-        await maybeOpenDashboard(ctx, shouldOpenDashboard);
+        const hubSession = await startManagedDevHub(ctx, template);
+        await maybeOpenDashboard(ctx, shouldOpenDashboard, hubSession);
         await monitorLiveDevSession(ctx, template);
       });
     });
 }
 
-function isRealInteractiveTerminal(context: CliContext): boolean {
-  return context.interactive && Boolean(process.stdin.isTTY && process.stdout.isTTY);
-}
-
 async function maybeOpenDashboard(
   context: CliContext,
-  shouldOpenDashboard: boolean
+  shouldOpenDashboard: boolean,
+  hubSession?: DevHubSessionState
 ): Promise<void> {
   if (!shouldOpenDashboard) {
     return;
   }
-  const opened = await openTarget(resolveDashboardUrl());
+  const targetUrl =
+    hubSession?.authenticatedDashboardUrl ??
+    (await resolveActiveDashboardUrl(context.cwd));
+  const ready = await waitForDashboardReady(targetUrl);
+  if (!ready) {
+    context.warn("Dashboard did not become ready in time, so it was not opened.");
+    return;
+  }
+  const opened = await openTarget(targetUrl);
   if (opened) {
-    context.info(`Opened dashboard at ${resolveDashboardUrl()}.`);
+    context.info(`Opened dashboard at ${targetUrl}.`);
     return;
   }
   context.warn("Unable to open the dashboard automatically.");
@@ -1024,8 +1033,10 @@ function addDashboardCommand(program: Command): void {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
         const url = resolveDashboardUrl();
+        const activeUrl = await resolveActiveDashboardUrl(ctx.cwd);
         if (options.open) {
-          const opened = await openTarget(url);
+          const ready = await waitForDashboardReady(activeUrl);
+          const opened = ready ? await openTarget(activeUrl) : false;
           if (!opened) {
             ctx.warn("Unable to open the dashboard automatically.");
           }
@@ -1033,8 +1044,8 @@ function addDashboardCommand(program: Command): void {
         ctx.printResult({
           summary: "Dashboard URL resolved.",
           command: "dashboard",
-          data: { url },
-          nextSteps: [`Open ${url}`]
+          data: { url: activeUrl, baseUrl: url },
+          nextSteps: [`Open ${activeUrl}`]
         });
       });
     });
@@ -1188,10 +1199,10 @@ async function runDevBootstrapLoop(
 async function startManagedDevHub(
   context: CliContext,
   template: SyncoreTemplateName
-): Promise<void> {
+): Promise<DevHubSessionState> {
   printCompactDevPhase(context, "Hub");
   printCompactDevPhase(context, "Targets");
-  await withConsoleCapture(
+  return await withConsoleCapture(
     (method, message) => {
       if (/already running/i.test(message)) {
         context.info(message.replaceAll("127.0.0.1", "localhost"));
@@ -1222,6 +1233,38 @@ async function startManagedDevHub(
         template
       })
   );
+}
+
+async function waitForDashboardReady(
+  url: string,
+  options: { timeoutMs?: number; intervalMs?: number } = {}
+): Promise<boolean> {
+  const timeoutMs = options.timeoutMs ?? 15_000;
+  const intervalMs = options.intervalMs ?? 250;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), intervalMs);
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          redirect: "manual"
+        });
+        if (response.ok || response.status === 304) {
+          return true;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch {
+      // Keep polling until the dashboard responds or the timeout expires.
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  return false;
 }
 
 async function runDevFollowup(
