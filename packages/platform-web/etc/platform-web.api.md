@@ -5,17 +5,21 @@
 ```ts
 
 import { AnySyncoreSchema } from '@syncore/core';
+import { AttachedRuntimeBridge } from '@syncore/core';
+import { AttachRuntimeBridgeOptions } from '@syncore/core';
+import { BridgeQueryWatch } from '@syncore/core';
 import { DevtoolsCommandHandler } from '@syncore/core';
 import { DevtoolsSink } from '@syncore/core';
 import { DevtoolsSubscriptionHost } from '@syncore/core';
-import { FunctionReference } from '@syncore/core';
+import { ImpactScope } from '@syncore/core';
 import { default as initSqlJs_2 } from 'sql.js';
 import { SchedulerOptions } from '@syncore/core';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
 import * as _syncore_core0 from '@syncore/core';
+import { SyncoreBridgeClient } from '@syncore/core';
+import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
-import { SyncoreClient } from '@syncore/core';
 import { SyncoreExperimentalPlugin } from '@syncore/core';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeEvent } from '@syncore/core';
@@ -23,26 +27,15 @@ import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
-import { SyncoreWatch } from '@syncore/core';
 
 // @public (undocumented)
-export interface AttachedWebWorkerRuntime {
-    // (undocumented)
-    dispose(): Promise<void>;
-    // (undocumented)
-    ready: Promise<void>;
-}
+export type AttachedWebWorkerRuntime = AttachedRuntimeBridge;
 
 // @public
 export function attachWebWorkerRuntime(options: AttachWebWorkerRuntimeOptions): AttachedWebWorkerRuntime;
 
 // @public (undocumented)
-export interface AttachWebWorkerRuntimeOptions {
-    // (undocumented)
-    createRuntime: (() => Promise<SyncoreRuntime<WebWorkerSyncoreSchema>>) | (() => SyncoreRuntime<WebWorkerSyncoreSchema>);
-    // (undocumented)
-    endpoint: SyncoreWorkerMessageEndpoint;
-}
+export type AttachWebWorkerRuntimeOptions = AttachRuntimeBridgeOptions<WebWorkerSyncoreSchema>;
 
 // @public (undocumented)
 export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChangeSignal {
@@ -126,7 +119,7 @@ export function createBrowserSyncoreRuntime(options: CreateBrowserRuntimeOptions
 export function createBrowserWebSocketDevtoolsSink(options: BrowserWebSocketDevtoolsSinkOptions): BrowserWebSocketDevtoolsSink;
 
 // @public
-export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOptions): AttachedWebWorkerRuntime;
+export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOptions): _syncore_core0.AttachedRuntimeBridge;
 
 // @public
 export type CreateBrowserWorkerRuntimeOptions = CreateWebWorkerRuntimeOptions;
@@ -210,7 +203,7 @@ export interface CreateWebWorkerClientProviderOptions {
 }
 
 // @public
-export function createWebWorkerRuntime(options: CreateWebWorkerRuntimeOptions): AttachedWebWorkerRuntime;
+export function createWebWorkerRuntime(options: CreateWebWorkerRuntimeOptions): _syncore_core0.AttachedRuntimeBridge;
 
 // @public
 export interface CreateWebWorkerRuntimeOptions extends CreateWebRuntimeOptions {
@@ -249,6 +242,7 @@ export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier 
     applyExternalChange(event: SyncoreExternalChangeEvent): Promise<{
         databaseChanged: boolean;
         storageChanged: boolean;
+        changedScopes: ImpactScope[];
     }>;
 }
 
@@ -335,31 +329,19 @@ export interface SyncoreWebPersistence {
 }
 
 // @public (undocumented)
-export class SyncoreWebWorkerClient implements SyncoreClient {
-    constructor(endpoint: SyncoreWorkerMessageEndpoint);
+export class SyncoreWebWorkerClient extends SyncoreBridgeClient {
     // (undocumented)
-    action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    action: SyncoreBridgeClient["action"];
     // (undocumented)
-    dispose(): void;
+    mutation: SyncoreBridgeClient["mutation"];
     // (undocumented)
-    mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
-    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
-    //
+    query: SyncoreBridgeClient["query"];
     // (undocumented)
-    query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
-    // (undocumented)
-    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): WorkerQueryWatch<TResult>;
+    watchQuery: SyncoreBridgeClient["watchQuery"];
 }
 
 // @public (undocumented)
-export interface SyncoreWorkerMessageEndpoint {
-    // (undocumented)
-    addEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
-    // (undocumented)
-    postMessage(message: unknown): void;
-    // (undocumented)
-    removeEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
-}
+export type SyncoreWorkerMessageEndpoint = SyncoreBridgeMessageEndpoint;
 
 // @public (undocumented)
 export interface WebExternalChangeSupport {
@@ -379,9 +361,7 @@ export type WebSyncoreSchema = AnySyncoreSchema;
 export type WebWorkerSyncoreSchema = AnySyncoreSchema;
 
 // @public (undocumented)
-export type WorkerQueryWatch<TValue> = SyncoreWatch<TValue> & {
-    dispose(): void;
-};
+export type WorkerQueryWatch<TValue> = BridgeQueryWatch<TValue>;
 
 // (No @packageDocumentation comment for this package)
 

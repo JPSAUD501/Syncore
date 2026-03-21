@@ -20,6 +20,9 @@ import type {
   SyncoreDevtoolsUnsubscribe
 } from "@syncore/devtools-protocol";
 import {
+  SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
   createPublicRuntimeId,
   createPublicTargetId
 } from "@syncore/devtools-protocol";
@@ -1847,20 +1850,25 @@ async function createProjectTargetBackend(
     driver,
     schema,
     functions,
-    runtime,
+    admin: runtime.getAdmin(),
     sql: hubDevtoolsSqlSupport
   });
   const subscriptionHost = createDevtoolsSubscriptionHost({
     driver,
     schema,
     functions,
-    runtime,
+    admin: runtime.getAdmin(),
     sql: hubDevtoolsSqlSupport
   });
 
   return {
     hello: {
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: PROJECT_TARGET_RUNTIME_ID,
       platform: "project",
       sessionLabel: "Project Target",
@@ -2228,6 +2236,11 @@ export async function startDevHub(options: {
   >();
   const hello: SyncoreDevtoolsMessage = {
     type: "hello",
+    protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+    minSupportedProtocolVersion:
+      SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+    maxSupportedProtocolVersion:
+      SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
     runtimeId: "syncore-dev-hub",
     platform: "dev"
   };

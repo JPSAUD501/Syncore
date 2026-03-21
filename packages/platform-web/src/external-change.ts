@@ -1,4 +1,5 @@
 import type {
+  ImpactScope,
   SyncoreExternalChangeApplier,
   SyncoreExternalChangeEvent,
   SyncoreExternalChangeSignal
@@ -81,7 +82,13 @@ export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier 
     }
     return {
       databaseChanged,
-      storageChanged: event.scope === "storage" || event.scope === "all"
+      storageChanged: event.scope === "storage" || event.scope === "all",
+      changedScopes:
+        event.changedScopes ??
+        ([
+          ...(event.changedTables ?? []).map((tableName) => `table:${tableName}`),
+          ...(event.storageIds ?? []).map((storageId) => `storage:${storageId}`)
+        ] as ImpactScope[])
     };
   }
 }

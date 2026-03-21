@@ -10,6 +10,11 @@ import { createRequire as createNodeRequire } from "node:module";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import WebSocket from "ws";
+import {
+  SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+} from "@syncore/devtools-protocol";
 import type {
   SyncoreDevtoolsClientMessage,
   SyncoreDevtoolsMessage,
@@ -481,7 +486,7 @@ export function createNodeSyncoreRuntime(
         driver: runtimeOptions.driver,
         schema: options.schema,
         functions: options.functions,
-        runtime,
+        admin: runtime.getAdmin(),
         sql: nodeDevtoolsSqlSupport
       })
     );
@@ -490,7 +495,7 @@ export function createNodeSyncoreRuntime(
         driver: runtimeOptions.driver,
         schema: options.schema,
         functions: options.functions,
-        runtime,
+        admin: runtime.getAdmin(),
         sql: nodeDevtoolsSqlSupport
       })
     );
@@ -704,6 +709,11 @@ export function createNodeWebSocketDevtoolsSink(
       if (latestHello) {
         sendNow({
           type: "hello",
+          protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+          minSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+          maxSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
           runtimeId: latestHello.runtimeId,
           platform: latestHello.platform,
           ...(options.appName ? { appName: options.appName } : {}),
@@ -848,6 +858,11 @@ export function createNodeWebSocketDevtoolsSink(
         };
         send({
           type: "hello",
+          protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+          minSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+          maxSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
           runtimeId: event.runtimeId,
           platform: event.platform,
           ...(options.appName ? { appName: options.appName } : {}),
@@ -872,7 +887,7 @@ export function createNodeWebSocketDevtoolsSink(
     },
     attachRuntime(runtime) {
       getSummary = () =>
-        withRuntimeSummaryMeta(runtime.getRuntimeSummary(), options);
+        withRuntimeSummaryMeta(runtime.getAdmin().getRuntimeSummary(), options);
     },
     attachCommandHandler(handler) {
       onCommand = handler;

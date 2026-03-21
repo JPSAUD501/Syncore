@@ -23,7 +23,7 @@ function formatPrefix(
   stream: NodeJS.WriteStream,
   level: "info" | "done" | "warn" | "error" | "next" | "work" | "fail"
 ): string {
-  const plain = `[syncore] [${level}]`;
+  const plain = `[${level}]`;
   if (!supportsColor(stream)) {
     return plain;
   }
@@ -39,7 +39,7 @@ function formatPrefix(
             : level === "next"
               ? ANSI.magenta
               : ANSI.dim;
-  return `${ANSI.bold}${ANSI.yellow}[syncore]${ANSI.reset} ${levelColor}[${level}]${ANSI.reset}`;
+  return `${levelColor}[${level}]${ANSI.reset}`;
 }
 
 export interface GlobalCliOptions {

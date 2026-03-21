@@ -6,6 +6,7 @@ import {
 } from "expo-sqlite";
 import {
   type AnySyncoreSchema,
+  type ImpactScope,
   type DevtoolsSink,
   type SyncoreExternalChangeApplier,
   type SyncoreExternalChangeSignal,
@@ -211,6 +212,7 @@ export function createExpoSyncoreBootstrap(
         return;
       }
       await runtime.stop();
+      runtime = null;
       started = null;
     },
     async reset() {
@@ -340,13 +342,24 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
 class ExpoWebExternalChangeApplier implements SyncoreExternalChangeApplier {
   constructor(private readonly driver: ExpoSqliteDriver) {}
 
-  async applyExternalChange(event: { scope: "database" | "storage" | "all" }) {
+  async applyExternalChange(event: {
+    scope: "database" | "storage" | "all";
+    changedScopes?: ImpactScope[];
+    changedTables?: string[];
+    storageIds?: string[];
+  }) {
     if (event.scope === "database" || event.scope === "all") {
       await this.driver.reopen();
     }
     return {
       databaseChanged: event.scope === "database" || event.scope === "all",
-      storageChanged: event.scope === "storage" || event.scope === "all"
+      storageChanged: event.scope === "storage" || event.scope === "all",
+      changedScopes:
+        event.changedScopes ??
+        ([
+          ...(event.changedTables ?? []).map((tableName) => `table:${tableName}`),
+          ...(event.storageIds ?? []).map((storageId) => `storage:${storageId}`)
+        ] as ImpactScope[])
     };
   }
 }

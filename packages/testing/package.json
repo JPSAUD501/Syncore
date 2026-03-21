@@ -24,6 +24,8 @@
     "build": "node -e \"process.exit(0)\"",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('.declaration-artifacts',{recursive:true,force:true});require('node:fs').rmSync('playwright-report',{recursive:true,force:true});require('node:fs').rmSync('test-results',{recursive:true,force:true})\"",
     "lint": "eslint playwright.config.ts src tests --ext .ts",
+    "test:contract": "bun run build:deps && vitest run --config vitest.config.ts src/runtime-contract.test.ts src/plugin-contract.test.ts src/adapter-expo-contract.test.ts",
+    "test:surface": "bun run build:deps && bun run snapshot:declarations && vitest run --config vitest.config.ts src/declaration-docs.test.ts src/surface-exports.test.ts src/surface-types.test.ts",
     "test": "bun run build:deps && bun run snapshot:declarations && vitest run --config vitest.config.ts",
     "test:smoke:electron": "bun run --cwd ../../examples/electron build && playwright test -c playwright.electron.config.ts",
     "test:smoke:expo": "tsx src/expo-smoke.ts",

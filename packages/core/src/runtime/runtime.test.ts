@@ -17,6 +17,7 @@ import { defineSchema, defineTable, v } from "../../../schema/src/index.js";
 import { cronJobs, mutation, query } from "./functions.js";
 import {
   createFunctionReference,
+  type ImpactScope,
   type SyncoreExternalChangeApplier,
   type SyncoreExternalChangeEvent,
   type SyncoreExternalChangeSignal,
@@ -381,7 +382,13 @@ class TestExternalChangeApplier implements SyncoreExternalChangeApplier {
     this.appliedEvents.push(event);
     return {
       databaseChanged: event.scope === "database" || event.scope === "all",
-      storageChanged: event.scope === "storage" || event.scope === "all"
+      storageChanged: event.scope === "storage" || event.scope === "all",
+      changedScopes:
+        event.changedScopes ??
+        ([
+          ...(event.changedTables ?? []).map((tableName) => `table:${tableName}`),
+          ...(event.storageIds ?? []).map((storageId) => `storage:${storageId}`)
+        ] as ImpactScope[])
     };
   }
 }
@@ -872,7 +879,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
       driver: hostDriver,
       schema,
       functions,
-      runtime,
+      admin: runtime.getAdmin(),
       sql: nodeDevtoolsSqlSupport
     });
     const taskUpdates: Array<{ rows: Record<string, unknown>[] }> = [];
@@ -1011,14 +1018,14 @@ describe("SyncoreRuntime schema + scheduler", () => {
       driver: hostDriver,
       schema,
       functions,
-      runtime,
+      admin: runtime.getAdmin(),
       sql: nodeDevtoolsSqlSupport
     });
     const host = createDevtoolsSubscriptionHost({
       driver: hostDriver,
       schema,
       functions,
-      runtime,
+      admin: runtime.getAdmin(),
       sql: nodeDevtoolsSqlSupport
     });
     const schedulerSnapshots: SchedulerJob[][] = [];
@@ -1192,7 +1199,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
         driver: hostDriver,
         schema,
         functions: {},
-        runtime
+        admin: runtime.getAdmin()
       })({
         kind: "sql.read",
         query: 'SELECT _id FROM "tasks"'

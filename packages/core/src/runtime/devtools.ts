@@ -13,17 +13,19 @@ import type { TableDefinition, Validator } from "@syncore/schema";
 import type {
   AnySyncoreSchema,
   DevtoolsLiveQueryScope,
+  ImpactScope,
+  SyncoreRuntimeAdmin,
   SyncoreRuntimeOptions,
   SyncoreSqlDriver
 } from "./runtime.js";
 import { createFunctionReference } from "./runtime.js";
-import type { SyncoreRuntime } from "./runtime.js";
+import { safeReadRecurringSchedule } from "./internal/engines/shared.js";
 
 export interface DevtoolsCommandHandlerDeps {
   driver: SyncoreSqlDriver;
   schema: AnySyncoreSchema;
   functions: SyncoreRuntimeOptions<AnySyncoreSchema>["functions"];
-  runtime: SyncoreRuntime<AnySyncoreSchema>;
+  admin: SyncoreRuntimeAdmin<AnySyncoreSchema>;
   sql?: DevtoolsSqlSupport;
 }
 
@@ -82,10 +84,10 @@ interface SubscriptionRecord {
 export function createDevtoolsCommandHandler(
   deps: DevtoolsCommandHandlerDeps
 ): DevtoolsCommandHandler {
-  const { driver, runtime, sql } = deps;
+  const { driver, admin, sql } = deps;
 
   return async (payload): Promise<SyncoreDevtoolsCommandResultPayload> => {
-    await runtime.prepareForDirectAccess();
+    await admin.prepareForDirectAccess();
     switch (payload.kind) {
       case "fn.run": {
         const start = performance.now();
@@ -93,21 +95,21 @@ export function createDevtoolsCommandHandler(
           let result: unknown;
           switch (payload.functionType) {
             case "query":
-              result = await runtime.runQuery(
+              result = await admin.runQuery(
                 createFunctionReference("query", payload.functionName),
                 payload.args,
                 { origin: "dashboard" }
               );
               break;
             case "mutation":
-              result = await runtime.runMutation(
+              result = await admin.runMutation(
                 createFunctionReference("mutation", payload.functionName),
                 payload.args,
                 { origin: "dashboard" }
               );
               break;
             case "action":
-              result = await runtime.runAction(
+              result = await admin.runAction(
                 createFunctionReference("action", payload.functionName),
                 payload.args,
                 { origin: "dashboard" }
@@ -130,7 +132,7 @@ export function createDevtoolsCommandHandler(
 
       case "data.insert": {
         try {
-          const id = await runDevtoolsMutation(runtime, async (ctx) =>
+          const id = await runDevtoolsMutation(admin, async (ctx) =>
             ctx.db.insert(payload.table as never, payload.document as never)
           , { origin: "dashboard" });
           return { kind: "data.mutate.result", success: true, id };
@@ -145,7 +147,7 @@ export function createDevtoolsCommandHandler(
 
       case "data.patch": {
         try {
-          await runDevtoolsMutation(runtime, async (ctx) => {
+          await runDevtoolsMutation(admin, async (ctx) => {
             await ctx.db.patch(
               payload.table as never,
               payload.id,
@@ -169,7 +171,7 @@ export function createDevtoolsCommandHandler(
 
       case "data.delete": {
         try {
-          await runDevtoolsMutation(runtime, async (ctx) => {
+          await runDevtoolsMutation(admin, async (ctx) => {
             await ctx.db.delete(payload.table as never, payload.id);
             return null;
           }, { origin: "dashboard" });
@@ -186,7 +188,7 @@ export function createDevtoolsCommandHandler(
       case "sql.read": {
         try {
           const sqlSupport = requireDevtoolsSqlSupport(sql);
-          const databasePath = runtime.getDriverDatabasePath();
+          const databasePath = admin.getDriverDatabasePath();
           if (!databasePath) {
             throw new Error("SQL Read requires a file-backed database path.");
           }
@@ -219,9 +221,12 @@ export function createDevtoolsCommandHandler(
             );
           }
           const result = await driver.run(payload.query);
-          runtime.notifyDevtoolsScopes(analysis.observedScopes);
-          await runtime.forceRefreshDevtools(
+          admin.notifyDevtoolsScopes(analysis.observedScopes);
+          await admin.forceRefreshDevtools(
             "SQL write executed from devtools dashboard.",
+            analysis.observedScopes.flatMap((scope) =>
+              scope === "all" ? [] : ([scope] as ImpactScope[])
+            ),
             { origin: "dashboard" }
           );
           return {
@@ -241,7 +246,7 @@ export function createDevtoolsCommandHandler(
 
       case "scheduler.cancel": {
         try {
-          const cancelled = await runtime.cancelScheduledJob(payload.jobId);
+          const cancelled = await admin.cancelScheduledJob(payload.jobId);
           return {
             kind: "scheduler.cancel.result",
             success: true,
@@ -259,7 +264,7 @@ export function createDevtoolsCommandHandler(
 
       case "scheduler.update": {
         try {
-          const updated = await runtime.updateScheduledJob({
+          const updated = await admin.updateScheduledJob({
             id: payload.jobId,
             schedule: payload.schedule,
             args: payload.args,
@@ -296,7 +301,7 @@ export function createDevtoolsCommandHandler(
 export function createDevtoolsSubscriptionHost(
   deps: DevtoolsCommandHandlerDeps
 ): DevtoolsSubscriptionHost {
-  const { driver, schema, functions, runtime } = deps;
+  const { driver, schema, functions, admin } = deps;
   const subscriptions = new Map<string, SubscriptionRecord>();
 
   const emit = async (
@@ -308,7 +313,7 @@ export function createDevtoolsSubscriptionHost(
         driver,
         schema,
         functions,
-        runtime,
+        admin,
         ...(deps.sql ? { sql: deps.sql } : {})
       })
     );
@@ -334,7 +339,7 @@ export function createDevtoolsSubscriptionHost(
           });
           return;
         }
-        const client = runtime.createClient();
+        const client = admin.createClient();
         const watch = client.watchQuery(
           createFunctionReference("query", payload.functionName),
           payload.args
@@ -366,12 +371,12 @@ export function createDevtoolsSubscriptionHost(
         return;
       }
 
-      const unsubscribeRuntime = runtime.subscribeToDevtoolsInvalidations(
+      const unsubscribeRuntime = admin.subscribeToDevtoolsInvalidations(
         (scopes) => {
           void handleInvalidation(scopes);
         }
       );
-      const unsubscribeEvents = runtime.subscribeToDevtoolsEvents((event) => {
+      const unsubscribeEvents = admin.subscribeToDevtoolsEvents((event) => {
         if (event.type === "runtime.disconnected") {
           void emit(payload, listener);
         }
@@ -408,26 +413,26 @@ async function resolveSubscriptionPayload(
   payload: SyncoreDevtoolsSubscriptionPayload,
   deps: DevtoolsCommandHandlerDeps
 ): Promise<SyncoreDevtoolsSubscriptionResultPayload> {
-  const { driver, schema, functions, runtime } = deps;
-  await runtime.prepareForDirectAccess();
+  const { driver, schema, functions, admin } = deps;
+  await admin.prepareForDirectAccess();
 
   switch (payload.kind) {
     case "runtime.summary":
       return {
         kind: "runtime.summary.result",
-        summary: runtime.getRuntimeSummary()
+        summary: admin.getRuntimeSummary()
       };
     case "runtime.activeQueries":
       return {
         kind: "runtime.activeQueries.result",
-        activeQueries: runtime.getActiveQueryInfos()
+        activeQueries: admin.getActiveQueryInfos()
       };
     case "fn.watch":
       throw new Error("Function watches are pushed incrementally and have no snapshot payload.");
     case "schema.tables": {
       const tables = await getSchemaTables(driver, schema);
       console.debug("[devtools] schema.tables", {
-        runtimeId: runtime.getRuntimeId(),
+        runtimeId: admin.getRuntimeId(),
         tables: tables.map((table) => ({
           name: table.name,
           documentCount: table.documentCount
@@ -446,7 +451,7 @@ async function resolveSubscriptionPayload(
         payload.limit
       );
       console.debug("[devtools] data.table", {
-        runtimeId: runtime.getRuntimeId(),
+        runtimeId: admin.getRuntimeId(),
         table: payload.table,
         filters: payload.filters ?? [],
         limit: payload.limit,
@@ -473,7 +478,7 @@ async function resolveSubscriptionPayload(
       };
     case "sql.watch": {
       const sqlSupport = requireDevtoolsSqlSupport(deps.sql);
-      const databasePath = runtime.getDriverDatabasePath();
+      const databasePath = admin.getDriverDatabasePath();
       if (!databasePath) {
         throw new Error("SQL Live requires a file-backed database path.");
       }
@@ -620,7 +625,7 @@ async function listSchedulerJobs(
     }>(`SELECT * FROM "_scheduled_functions" ORDER BY run_at DESC LIMIT 200`);
 
     return rows.map((row) => {
-      const schedule = safeReadSchedule(row.schedule_json);
+      const schedule = safeReadRecurringSchedule(row.schedule_json);
       const scheduleLabel = schedule ? formatScheduleLabel(schedule) : undefined;
       return {
         id: row.id,
@@ -735,19 +740,6 @@ function mapJobStatus(
   }
 }
 
-function safeReadSchedule(
-  scheduleJson: string | null
-): SchedulerRecurringSchedule | undefined {
-  if (!scheduleJson) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(scheduleJson) as SchedulerRecurringSchedule;
-  } catch {
-    return undefined;
-  }
-}
-
 function formatScheduleLabel(schedule: SchedulerRecurringSchedule): string {
   switch (schedule.type) {
     case "interval": {
@@ -795,7 +787,7 @@ function capitalize(value: string): string {
 }
 
 async function runDevtoolsMutation<TResult>(
-  runtime: SyncoreRuntime<AnySyncoreSchema>,
+  admin: SyncoreRuntimeAdmin<AnySyncoreSchema>,
   callback: (ctx: {
     db: {
       insert(
@@ -812,7 +804,7 @@ async function runDevtoolsMutation<TResult>(
     }) => Promise<TResult>,
   meta?: { origin?: "dashboard" }
   ): Promise<TResult> {
-    return runtime.runDevtoolsMutation(callback as never, meta);
+    return admin.runDevtoolsMutation(callback as never, meta);
   }
 
 function scopesForSubscription(

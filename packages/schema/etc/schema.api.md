@@ -160,11 +160,19 @@ export interface SchemaMigrationPlan {
     // (undocumented)
     destructiveChanges: string[];
     // (undocumented)
+    formatVersion: 2;
+    // (undocumented)
+    fromSchemaHash: string | null;
+    // (undocumented)
     nextHash: string;
+    // (undocumented)
+    plannerVersion: 1;
     // (undocumented)
     previousHash: string | null;
     // (undocumented)
     statements: string[];
+    // (undocumented)
+    toSchemaHash: string;
     // (undocumented)
     warnings: string[];
 }
@@ -172,11 +180,15 @@ export interface SchemaMigrationPlan {
 // @public (undocumented)
 export interface SchemaSnapshot {
     // (undocumented)
+    formatVersion: 2;
+    // (undocumented)
     hash: string;
     // (undocumented)
-    tables: TableSnapshot[];
+    plannerVersion: 1;
     // (undocumented)
-    version: 1;
+    runtimeVersion?: string;
+    // (undocumented)
+    tables: TableSnapshot[];
 }
 
 // @public (undocumented)

@@ -5,17 +5,20 @@
 ```ts
 
 import { AnySyncoreSchema } from '@syncore/core';
+import { AttachedRuntimeBridge } from '@syncore/core';
+import { AttachRuntimeBridgeOptions } from '@syncore/core';
+import { BridgeQueryWatch } from '@syncore/core';
 import { DevtoolsCommandHandler } from '@syncore/core';
 import { DevtoolsSink } from '@syncore/core';
 import { DevtoolsSubscriptionHost } from '@syncore/core';
-import { FunctionReference } from '@syncore/core';
 import { SchedulerOptions } from '@syncore/core';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
 import * as _syncore_core0 from '@syncore/core';
 import { SyncoreActiveQueryInfo } from '@syncore/devtools-protocol';
+import { SyncoreBridgeClient } from '@syncore/core';
+import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
-import { SyncoreClient } from '@syncore/core';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
 import { SyncoreExperimentalPlugin } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
@@ -23,26 +26,15 @@ import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreRuntimeSummary } from '@syncore/devtools-protocol';
 import { SyncoreSqlDriver } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
-import { SyncoreWatch } from '@syncore/core';
 
 // @public (undocumented)
-export interface AttachedNodeIpcRuntime {
-    // (undocumented)
-    dispose(): Promise<void>;
-    // (undocumented)
-    ready: Promise<void>;
-}
+export type AttachedNodeIpcRuntime = AttachedRuntimeBridge;
 
 // @public (undocumented)
 export function attachNodeIpcRuntime(options: AttachNodeIpcRuntimeOptions): AttachedNodeIpcRuntime;
 
 // @public (undocumented)
-export interface AttachNodeIpcRuntimeOptions {
-    // (undocumented)
-    createRuntime: (() => Promise<SyncoreRuntime<NodeIpcSyncoreSchema>>) | (() => SyncoreRuntime<NodeIpcSyncoreSchema>);
-    // (undocumented)
-    endpoint: SyncoreIpcMessageEndpoint;
-}
+export type AttachNodeIpcRuntimeOptions = AttachRuntimeBridgeOptions<NodeIpcSyncoreSchema>;
 
 // @public
 export function bindElectronWindowToSyncoreRuntime(options: {
@@ -61,7 +53,7 @@ export function bindElectronWindowToSyncoreRuntime(options: {
 }): SyncoreElectronIpcBinding;
 
 // @public
-export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): SyncoreIpcMessageEndpoint & {
+export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): _syncore_core0.SyncoreBridgeMessageEndpoint & {
     dispose(): void;
 };
 
@@ -230,9 +222,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
 }
 
 // @public (undocumented)
-export type RendererQueryWatch<TValue> = SyncoreWatch<TValue> & {
-    dispose(): void;
-};
+export type RendererQueryWatch<TValue> = BridgeQueryWatch<TValue>;
 
 export { SyncoreActiveQueryInfo }
 
@@ -269,14 +259,7 @@ export interface SyncoreElectronIpcMain {
 }
 
 // @public (undocumented)
-export interface SyncoreIpcMessageEndpoint {
-    // (undocumented)
-    addEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
-    // (undocumented)
-    postMessage(message: unknown): void;
-    // (undocumented)
-    removeEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
-}
+export type SyncoreIpcMessageEndpoint = SyncoreBridgeMessageEndpoint;
 
 // @public (undocumented)
 export interface SyncoreMainProcessBridge {
@@ -295,20 +278,15 @@ export interface SyncoreRendererBridge {
 }
 
 // @public (undocumented)
-export class SyncoreRendererClient implements SyncoreClient {
-    constructor(endpoint: SyncoreIpcMessageEndpoint);
+export class SyncoreRendererClient extends SyncoreBridgeClient {
     // (undocumented)
-    action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    action: SyncoreBridgeClient["action"];
     // (undocumented)
-    dispose(): void;
+    mutation: SyncoreBridgeClient["mutation"];
     // (undocumented)
-    mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
-    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.mts
-    //
+    query: SyncoreBridgeClient["query"];
     // (undocumented)
-    query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
-    // (undocumented)
-    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): RendererQueryWatch<TResult>;
+    watchQuery: SyncoreBridgeClient["watchQuery"];
 }
 
 export { SyncoreRuntimeSummary }

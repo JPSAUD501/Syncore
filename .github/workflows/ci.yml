@@ -43,6 +43,12 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Surface Contracts
+        run: bun run --filter @syncore/testing test:surface
+
+      - name: Adapter Contracts
+        run: bun run --filter @syncore/testing test:contract
+
       - name: Test
         run: bun run test
 

@@ -219,6 +219,27 @@ describe("syncore CLI", () => {
     expect(await exists(path.join(cwd, ".syncore", "syncore.db"))).toBe(true);
   }, 20_000);
 
+  test("dev --once human output does not repeat the syncore label", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const result = await runCli(
+      cwd,
+      ["dev", "--once", "--template", "node"],
+      {
+        stdin: "y\n",
+        env: {
+          SYNCORE_FORCE_INTERACTIVE: "1"
+        }
+      }
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("[info] Starting Syncore local dev session...");
+    expect(result.stdout).not.toContain("[syncore] [info]");
+    expect(result.stderr).not.toContain("[syncore] [error]");
+  }, 20_000);
+
   test("migrate status/generate/apply work through the grouped subcommands", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);

@@ -11,6 +11,11 @@
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
+    "./transport": {
+      "types": "./dist/transport.d.mts",
+      "import": "./dist/transport.mjs",
+      "default": "./dist/transport.mjs"
+    },
     "./cli": {
       "types": "./dist/cli.d.mts",
       "import": "./dist/cli.mjs",

@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { renderHook } from "@testing-library/react";
-import type { SyncoreDevtoolsEvent, SyncoreRuntimeSummary } from "@syncore/devtools-protocol";
+import {
+  SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+  type SyncoreDevtoolsEvent,
+  type SyncoreDevtoolsMessage,
+  type SyncoreRuntimeSummary
+} from "@syncore/devtools-protocol";
 import {
   useActiveRuntime,
   useBestConnectedRuntime,
@@ -83,6 +90,23 @@ function buildSummary(
     connectedAt: 1,
     activeQueryCount: 0,
     recentEventCount
+  };
+}
+
+function helloMessage(
+  overrides: Partial<Extract<SyncoreDevtoolsMessage, { type: "hello" }>> & {
+    runtimeId: string;
+    platform: string;
+  }
+): Extract<SyncoreDevtoolsMessage, { type: "hello" }> {
+  return {
+    type: "hello",
+    protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+    minSupportedProtocolVersion:
+      SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+    maxSupportedProtocolVersion:
+      SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
+    ...overrides
   };
 }
 
@@ -312,6 +336,27 @@ describe("devtools store runtime selection", () => {
     expect(result.current.selectedTarget?.label).toBe("Solo Session (Chrome)");
     expect(result.current.runtimeFilter).toBe("runtime-a-12345678");
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
+  });
+
+  it("marks runtimes with incompatible devtools protocol as disconnected", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-incompatible",
+        platform: "browser-worker",
+        targetKind: "client",
+        protocolVersion: 99,
+        minSupportedProtocolVersion: 99,
+        maxSupportedProtocolVersion: 99
+      })
+    );
+
+    const runtime =
+      useDevtoolsStore.getState().runtimes["runtime-incompatible"];
+
+    expect(runtime?.connected).toBe(false);
+    expect(runtime?.lastSubscriptionError).toContain(
+      "uses devtools protocol 99"
+    );
   });
 
   it("defaults to all sessions when a second session joins the same client target", () => {

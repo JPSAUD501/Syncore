@@ -46,6 +46,7 @@
       "syncore/next": ["./packages/syncore/src/next.ts"],
       "syncore/next/config": ["./packages/syncore/src/next-config.ts"],
       "@syncore/core": ["./packages/core/src/index.ts"],
+      "@syncore/core/transport": ["./packages/core/src/transport.ts"],
       "@syncore/core/cli": ["./packages/core/src/cli.ts"],
       "@syncore/schema": ["./packages/schema/src/index.ts"],
       "@syncore/devtools-protocol": [

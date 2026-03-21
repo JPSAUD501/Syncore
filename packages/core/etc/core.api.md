@@ -14,11 +14,15 @@ export function action<TContext = unknown, TArgsShape extends ValidatorMap = Val
     args: TArgsShape;
 }): SyncoreFunctionDefinition<"action", TContext, InferArgs<TArgsShape>, TResult>;
 
-// @public
+// @public (undocumented)
 export interface ActionCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> extends QueryCtx<TSchema> {
+    // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
     runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // (undocumented)
     scheduler: SchedulerApi;
 }
 
@@ -48,11 +52,49 @@ export class ArrayValidator<TItem> implements Validator<TItem[]> {
 }
 
 // @public (undocumented)
+export interface AttachedRuntimeBridge {
+    // (undocumented)
+    dispose(): Promise<void>;
+    // (undocumented)
+    ready: Promise<void>;
+}
+
+// @public (undocumented)
+export function attachRuntimeBridge<TSchema extends AnySyncoreSchema>(options: AttachRuntimeBridgeOptions<TSchema>): AttachedRuntimeBridge;
+
+// @public (undocumented)
+export interface AttachRuntimeBridgeOptions<TSchema extends AnySyncoreSchema> {
+    // (undocumented)
+    createRuntime: (() => Promise<SyncoreRuntime<TSchema>>) | (() => SyncoreRuntime<TSchema>);
+    // (undocumented)
+    endpoint: SyncoreBridgeMessageEndpoint;
+}
+
+// @public (undocumented)
 export class BooleanValidator implements Validator<boolean> {
     // (undocumented)
     readonly kind: "boolean";
     // (undocumented)
     parse(value: unknown, path?: string): boolean;
+}
+
+// @public (undocumented)
+export type BridgeQueryWatch<TValue> = SyncoreWatch<TValue> & {
+    dispose(): void;
+};
+
+// @public (undocumented)
+export interface CapabilityDescriptor {
+    // (undocumented)
+    features?: string[];
+    // (undocumented)
+    metadata?: Record<string, unknown>;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    optional?: boolean;
+    // (undocumented)
+    version: number;
 }
 
 // @public (undocumented)
@@ -67,7 +109,7 @@ export function createDevtoolsSubscriptionHost(deps: DevtoolsCommandHandlerDeps)
 // @public (undocumented)
 export function createFunctionReference<TKind extends SyncoreFunctionKind, TArgs = Record<never, never>, TResult = unknown>(kind: TKind, name: string): FunctionReference<TKind, TArgs, TResult>;
 
-// @public
+// @public (undocumented)
 export function createFunctionReferenceFor<TDefinition extends {
     kind: SyncoreFunctionKind;
     argsValidator: Validator<unknown>;
@@ -75,7 +117,13 @@ export function createFunctionReferenceFor<TDefinition extends {
 }>(kind: FunctionKindFromDefinition<TDefinition>, name: string): FunctionReference<FunctionKindFromDefinition<TDefinition>, FunctionArgsFromDefinition<TDefinition>, FunctionResultFromDefinition<TDefinition>>;
 
 // @public (undocumented)
+export function createInvokeRequest(requestId: string, kind: "query" | "mutation" | "action", reference: FunctionReference<"query", unknown, unknown> | FunctionReference<"mutation", unknown, unknown> | FunctionReference<"action", unknown, unknown>, args: JsonObject): SyncoreBridgeRequest;
+
+// @public (undocumented)
 export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(schema: SyncoreSchema<TTables>): SchemaSnapshot;
+
+// @public (undocumented)
+export function createWatchKey(reference: FunctionReference<"query", unknown, unknown>, args: JsonObject): string;
 
 // @public (undocumented)
 export class CronJobs {
@@ -113,11 +161,11 @@ export type DevtoolsCommandHandler = (payload: SyncoreDevtoolsCommandPayload) =>
 // @public (undocumented)
 export interface DevtoolsCommandHandlerDeps {
     // (undocumented)
+    admin: SyncoreRuntimeAdmin<AnySyncoreSchema>;
+    // (undocumented)
     driver: SyncoreSqlDriver;
     // (undocumented)
     functions: SyncoreRuntimeOptions<AnySyncoreSchema>["functions"];
-    // (undocumented)
-    runtime: SyncoreRuntime<AnySyncoreSchema>;
     // (undocumented)
     schema: AnySyncoreSchema;
     // (undocumented)
@@ -125,7 +173,7 @@ export interface DevtoolsCommandHandlerDeps {
 }
 
 // @public (undocumented)
-export type DevtoolsLiveQueryScope = "all" | "runtime.summary" | "runtime.activeQueries" | "schema.tables" | "scheduler.jobs" | `table:${string}`;
+export type DevtoolsLiveQueryScope = "all" | "runtime.summary" | "runtime.activeQueries" | "schema.tables" | "scheduler.jobs" | `table:${string}` | `storage:${string}`;
 
 // @public (undocumented)
 export interface DevtoolsLiveQuerySnapshot {
@@ -225,13 +273,43 @@ export type EmptyArgs = Record<never, never>;
 export function ensureObjectValidator(value: Validator<unknown> | ValidatorMap): Validator<unknown>;
 
 // @public (undocumented)
+export interface ExecutionResult<TResult = unknown> {
+    // (undocumented)
+    changedTables: Set<string>;
+    // (undocumented)
+    devtoolsEvents: SyncoreDevtoolsEvent[];
+    // (undocumented)
+    externalChangeRequests: Array<{
+        scope: SyncoreExternalChangeScope;
+        reason: SyncoreExternalChangeReason;
+        changedScopes: ImpactScope[];
+    }>;
+    // (undocumented)
+    result: TResult;
+    // (undocumented)
+    scheduledJobs: string[];
+    // (undocumented)
+    storageChanges: Array<{
+        storageId: string;
+        reason: Extract<SyncoreExternalChangeReason, "storage-put" | "storage-delete">;
+    }>;
+}
+
+// @public (undocumented)
 export interface FilterBuilder {
+    // (undocumented)
     and(...expressions: QueryExpression[]): QueryExpression;
+    // (undocumented)
     eq(field: string, value: unknown): QueryExpression;
+    // (undocumented)
     gt(field: string, value: unknown): QueryExpression;
+    // (undocumented)
     gte(field: string, value: unknown): QueryExpression;
+    // (undocumented)
     lt(field: string, value: unknown): QueryExpression;
+    // (undocumented)
     lte(field: string, value: unknown): QueryExpression;
+    // (undocumented)
     or(...expressions: QueryExpression[]): QueryExpression;
 }
 
@@ -296,8 +374,14 @@ export class IdValidator<TTableName extends string> implements Validator<string>
 }
 
 // @public (undocumented)
+export type ImpactScope = "runtime.summary" | "runtime.activeQueries" | "schema.tables" | "scheduler.jobs" | `table:${string}` | `row:${string}:${string}` | `storage:${string}`;
+
+// @public (undocumented)
+export type ImpactSet = ReadonlySet<ImpactScope>;
+
+// @public (undocumented)
 export namespace index_d_exports {
-    export { ActionCtx, AnySyncoreSchema, ComparisonOperator, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionResult, FunctionResultFromDefinition, IndexRangeBuilder, InferArgs, InsertValueForTable, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreCapabilities, SyncoreClient, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExperimentalPlugin, SyncoreExperimentalPluginContext, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreRuntime, SyncoreRuntimeOptions, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, action, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, cronJobs, generateId, mutation, query };
+    export { ActionCtx, AnySyncoreSchema, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExperimentalPlugin, SyncoreExperimentalPluginContext, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeOptions, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, action, attachRuntimeBridge, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInvokeRequest, createWatchKey, cronJobs, generateId, mutation, normalizeOptionalArgs, query, stableStringify };
 }
 
 // @public (undocumented)
@@ -310,11 +394,17 @@ export interface IndexDefinition {
 
 // @public (undocumented)
 export interface IndexRangeBuilder {
+    // (undocumented)
     build(): QueryCondition[];
+    // (undocumented)
     eq(field: string, value: unknown): IndexRangeBuilder;
+    // (undocumented)
     gt(field: string, value: unknown): IndexRangeBuilder;
+    // (undocumented)
     gte(field: string, value: unknown): IndexRangeBuilder;
+    // (undocumented)
     lt(field: string, value: unknown): IndexRangeBuilder;
+    // (undocumented)
     lte(field: string, value: unknown): IndexRangeBuilder;
 }
 
@@ -369,14 +459,20 @@ export function mutation<TContext = unknown, TArgsShape extends ValidatorMap = V
     args: TArgsShape;
 }): SyncoreFunctionDefinition<"mutation", TContext, InferArgs<TArgsShape>, TResult>;
 
-// @public
+// @public (undocumented)
 export interface MutationCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> extends QueryCtx<TSchema> {
     // (undocumented)
     db: SyncoreDatabaseWriter<TSchema>;
+    // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // (undocumented)
     runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // (undocumented)
     scheduler: SchedulerApi;
 }
+
+// @public (undocumented)
+export function normalizeOptionalArgs<TArgs>(args: [] | [TArgs] | readonly unknown[]): TArgs;
 
 // @public (undocumented)
 export class NullValidator implements Validator<null> {
@@ -432,8 +528,11 @@ export interface PaginationOptions {
 
 // @public (undocumented)
 export interface PaginationResult<TItem> {
+    // (undocumented)
     cursor: string | null;
+    // (undocumented)
     isDone: boolean;
+    // (undocumented)
     page: TItem[];
 }
 
@@ -450,16 +549,25 @@ export function query<TContext = unknown, TArgsShape extends ValidatorMap = Vali
     args: TArgsShape;
 }): SyncoreFunctionDefinition<"query", TContext, InferArgs<TArgsShape>, TResult>;
 
-// @public
+// @public (undocumented)
 export interface QueryBuilder<TDocument> {
+    // (undocumented)
     collect(): Promise<TDocument[]>;
+    // (undocumented)
     filter(builder: (filter: FilterBuilder) => QueryExpression): this;
+    // (undocumented)
     first(): Promise<TDocument | null>;
+    // (undocumented)
     order(order: "asc" | "desc"): this;
+    // (undocumented)
     paginate(options: PaginationOptions): Promise<PaginationResult<TDocument>>;
+    // (undocumented)
     take(count: number): Promise<TDocument[]>;
+    // (undocumented)
     unique(): Promise<TDocument | null>;
+    // (undocumented)
     withIndex(indexName: string, builder?: (range: IndexRangeBuilder) => IndexRangeBuilder): this;
+    // (undocumented)
     withSearchIndex(indexName: string, builder: (search: SearchIndexBuilder) => SearchIndexBuilder): this;
 }
 
@@ -470,11 +578,17 @@ export type QueryCondition = {
     value: unknown;
 };
 
-// @public
+// @public (undocumented)
 export interface QueryCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+    // (undocumented)
     capabilities?: Readonly<SyncoreCapabilities>;
+    // (undocumented)
+    capabilityDescriptors?: ReadonlyArray<CapabilityDescriptor>;
+    // (undocumented)
     db: SyncoreDatabaseReader<TSchema>;
+    // (undocumented)
     runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // (undocumented)
     storage: SyncoreStorageApi;
 }
 
@@ -586,8 +700,11 @@ export interface RunResult {
 
 // @public (undocumented)
 export interface SchedulerApi {
+    // (undocumented)
     cancel(id: string): Promise<void>;
+    // (undocumented)
     runAfter<TArgs, TResult>(delayMs: number, functionReference: FunctionReference<"mutation" | "action", TArgs, TResult>, ...args: [...OptionalArgsTuple<TArgs>, misfirePolicy?: MisfirePolicy]): Promise<string>;
+    // (undocumented)
     runAt<TArgs, TResult>(timestamp: number | Date, functionReference: FunctionReference<"mutation" | "action", TArgs, TResult>, ...args: [...OptionalArgsTuple<TArgs>, misfirePolicy?: MisfirePolicy]): Promise<string>;
 }
 
@@ -604,11 +721,19 @@ export interface SchemaMigrationPlan {
     // (undocumented)
     destructiveChanges: string[];
     // (undocumented)
+    formatVersion: 2;
+    // (undocumented)
+    fromSchemaHash: string | null;
+    // (undocumented)
     nextHash: string;
+    // (undocumented)
+    plannerVersion: 1;
     // (undocumented)
     previousHash: string | null;
     // (undocumented)
     statements: string[];
+    // (undocumented)
+    toSchemaHash: string;
     // (undocumented)
     warnings: string[];
 }
@@ -616,17 +741,24 @@ export interface SchemaMigrationPlan {
 // @public (undocumented)
 export interface SchemaSnapshot {
     // (undocumented)
+    formatVersion: 2;
+    // (undocumented)
     hash: string;
     // (undocumented)
-    tables: TableSnapshot[];
+    plannerVersion: 1;
     // (undocumented)
-    version: 1;
+    runtimeVersion?: string;
+    // (undocumented)
+    tables: TableSnapshot[];
 }
 
 // @public (undocumented)
 export interface SearchIndexBuilder {
+    // (undocumented)
     build(): SearchQuery;
+    // (undocumented)
     eq(field: string, value: unknown): SearchIndexBuilder;
+    // (undocumented)
     search(field: string, value: string): SearchIndexBuilder;
 }
 
@@ -650,7 +782,10 @@ export type SearchQuery = {
     filters: QueryCondition[];
 };
 
-// @public
+// @public (undocumented)
+export function stableStringify(value: unknown): string;
+
+// @public (undocumented)
 export interface StorageObject {
     // (undocumented)
     contentType: string | null;
@@ -662,7 +797,7 @@ export interface StorageObject {
     size: number;
 }
 
-// @public
+// @public (undocumented)
 export interface StorageWriteInput {
     // (undocumented)
     contentType?: string;
@@ -693,31 +828,126 @@ export interface SyncoreActiveQueryInfo {
 }
 
 // @public (undocumented)
+export class SyncoreBridgeClient implements SyncoreClient {
+    constructor(endpoint: SyncoreBridgeMessageEndpoint);
+    // (undocumented)
+    action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple_2<TArgs>): Promise<TResult>;
+    // (undocumented)
+    dispose(errorMessage?: string): void;
+    // (undocumented)
+    mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple_2<TArgs>): Promise<TResult>;
+    // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple_2" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
+    query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple_2<TArgs>): Promise<TResult>;
+    // (undocumented)
+    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple_2<TArgs>): BridgeQueryWatch<TResult>;
+}
+
+// @public (undocumented)
+export interface SyncoreBridgeMessageEndpoint {
+    // (undocumented)
+    addEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
+    // (undocumented)
+    postMessage(message: unknown): void;
+    // (undocumented)
+    removeEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
+}
+
+// @public (undocumented)
+export type SyncoreBridgeRequest = {
+    type: "invoke";
+    requestId: string;
+    kind: "query";
+    reference: FunctionReference<"query", unknown, unknown>;
+    args: JsonObject;
+} | {
+    type: "invoke";
+    requestId: string;
+    kind: "mutation";
+    reference: FunctionReference<"mutation", unknown, unknown>;
+    args: JsonObject;
+} | {
+    type: "invoke";
+    requestId: string;
+    kind: "action";
+    reference: FunctionReference<"action", unknown, unknown>;
+    args: JsonObject;
+} | {
+    type: "watch.subscribe";
+    subscriptionId: string;
+    reference: FunctionReference<"query", unknown, unknown>;
+    args: JsonObject;
+} | {
+    type: "watch.unsubscribe";
+    subscriptionId: string;
+};
+
+// @public (undocumented)
+export type SyncoreBridgeResponse = {
+    type: "runtime.ready";
+} | {
+    type: "runtime.error";
+    error: string;
+} | {
+    type: "invoke.result";
+    requestId: string;
+    success: true;
+    value: unknown;
+} | {
+    type: "invoke.result";
+    requestId: string;
+    success: false;
+    error: string;
+} | {
+    type: "watch.update";
+    subscriptionId: string;
+    success: true;
+    value: unknown;
+} | {
+    type: "watch.update";
+    subscriptionId: string;
+    success: false;
+    error: string;
+};
+
+// @public (undocumented)
 export interface SyncoreCapabilities {
     // (undocumented)
     [name: string]: unknown;
 }
 
-// @public
+// @public (undocumented)
 export interface SyncoreClient {
+    // (undocumented)
     action<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // (undocumented)
     mutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // (undocumented)
     query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
+    // (undocumented)
     watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): SyncoreWatch<TResult>;
 }
 
 // @public (undocumented)
 export interface SyncoreDatabaseReader<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+    // (undocumented)
     get<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<DocumentForTable<TSchema, TTableName> | null>;
+    // (undocumented)
     query<TTableName extends TableNames<TSchema>>(table: TTableName): QueryBuilder<DocumentForTable<TSchema, TTableName>>;
+    // (undocumented)
     raw<TValue = unknown>(sql: string, params?: unknown[]): Promise<TValue[]>;
 }
 
 // @public (undocumented)
 export interface SyncoreDatabaseWriter<TSchema extends AnySyncoreSchema = AnySyncoreSchema> extends SyncoreDatabaseReader<TSchema> {
+    // (undocumented)
     delete<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<void>;
+    // (undocumented)
     insert<TTableName extends TableNames<TSchema>>(table: TTableName, value: InsertValueForTable<TSchema, TTableName>): Promise<string>;
+    // (undocumented)
     patch<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: Partial<InsertValueForTable<TSchema, TTableName>>): Promise<void>;
+    // (undocumented)
     replace<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: InsertValueForTable<TSchema, TTableName>): Promise<void>;
 }
 
@@ -769,6 +999,8 @@ export interface SyncoreExperimentalPlugin<TSchema extends AnySyncoreSchema> {
     // (undocumented)
     capabilities?: SyncoreCapabilities | ((context: SyncoreExperimentalPluginContext<TSchema>) => SyncoreCapabilities | void);
     // (undocumented)
+    capabilityDescriptors?: CapabilityDescriptor[] | ((context: SyncoreExperimentalPluginContext<TSchema>) => CapabilityDescriptor[] | void);
+    // (undocumented)
     name: string;
     // (undocumented)
     onStart?(context: SyncoreExperimentalPluginContext<TSchema>): Promise<void> | void;
@@ -778,6 +1010,8 @@ export interface SyncoreExperimentalPlugin<TSchema extends AnySyncoreSchema> {
 
 // @public (undocumented)
 export interface SyncoreExperimentalPluginContext<TSchema extends AnySyncoreSchema> {
+    // (undocumented)
+    capabilityDescriptors: CapabilityDescriptor[];
     // (undocumented)
     devtools?: DevtoolsSink;
     // (undocumented)
@@ -802,11 +1036,14 @@ export interface SyncoreExternalChangeApplier {
     applyExternalChange(event: SyncoreExternalChangeEvent): Promise<{
         databaseChanged: boolean;
         storageChanged: boolean;
+        changedScopes: ImpactScope[];
     }>;
 }
 
 // @public (undocumented)
 export interface SyncoreExternalChangeEvent {
+    // (undocumented)
+    changedScopes?: ImpactScope[];
     // (undocumented)
     changedTables?: string[];
     // (undocumented)
@@ -860,18 +1097,41 @@ export interface SyncoreFunctionRegistry {
     readonly [name: string]: RegisteredSyncoreFunction | undefined;
 }
 
-// @public
+// @public (undocumented)
 export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
     // (undocumented)
-    cancelScheduledJob(id: string): Promise<boolean>;
     createClient(): SyncoreClient;
     // (undocumented)
-    forceRefreshDevtools(reason: string, meta?: DevtoolsEventMeta): Promise<void>;
+    getAdmin(): SyncoreRuntimeAdmin<TSchema>;
+    // (undocumented)
+    prepareForDirectAccess(): Promise<void>;
+    // (undocumented)
+    runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
+    // (undocumented)
+    runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
+    // Warning: (ae-forgotten-export) The symbol "DevtoolsEventMeta" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
+    runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
+    // (undocumented)
+    start(): Promise<void>;
+    // (undocumented)
+    stop(): Promise<void>;
+    // (undocumented)
+    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): SyncoreWatch<TResult>;
+}
+
+// @public (undocumented)
+export interface SyncoreRuntimeAdmin<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+    // (undocumented)
+    cancelScheduledJob(id: string): Promise<boolean>;
+    // (undocumented)
+    createClient(): SyncoreClient;
+    // (undocumented)
+    forceRefreshDevtools(reason: string, scopes?: Iterable<ImpactScope>, meta?: DevtoolsEventMeta): Promise<void>;
     // (undocumented)
     getActiveQueryInfos(): SyncoreActiveQueryInfo[];
-    // (undocumented)
-    getDevtoolsLiveQuerySnapshot(): Promise<DevtoolsLiveQuerySnapshot>;
     // (undocumented)
     getDriverDatabasePath(): string | undefined;
     // (undocumented)
@@ -884,8 +1144,6 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     prepareForDirectAccess(): Promise<void>;
     // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
-    // Warning: (ae-forgotten-export) The symbol "DevtoolsEventMeta" needs to be exported by the entry point index.d.mts
-    //
     // (undocumented)
     runDevtoolsMutation<TResult>(callback: (ctx: {
         db: SyncoreDatabaseWriter<TSchema>;
@@ -894,22 +1152,20 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
     runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     // (undocumented)
     runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
-    start(): Promise<void>;
-    stop(): Promise<void>;
     // (undocumented)
     subscribeToDevtoolsEvents(listener: (event: SyncoreDevtoolsEvent) => void): () => void;
     // (undocumented)
     subscribeToDevtoolsInvalidations(listener: (scopes: Set<DevtoolsLiveQueryScope>) => void): () => void;
     // (undocumented)
     updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean>;
-    // (undocumented)
-    watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject): SyncoreWatch<TResult>;
 }
 
 // @public (undocumented)
 export interface SyncoreRuntimeOptions<TSchema extends AnySyncoreSchema> {
     // (undocumented)
     capabilities?: SyncoreCapabilities;
+    // (undocumented)
+    capabilityDescriptors?: CapabilityDescriptor[];
     // (undocumented)
     devtools?: DevtoolsSink;
     // (undocumented)
@@ -1009,19 +1265,27 @@ export interface SyncoreStorageAdapter {
     read(id: string): Promise<Uint8Array | null>;
 }
 
-// @public
+// @public (undocumented)
 export interface SyncoreStorageApi {
+    // (undocumented)
     delete(id: string): Promise<void>;
+    // (undocumented)
     get(id: string): Promise<StorageObject | null>;
+    // (undocumented)
     put(input: StorageWriteInput): Promise<string>;
+    // (undocumented)
     read(id: string): Promise<Uint8Array | null>;
 }
 
 // @public (undocumented)
 export interface SyncoreWatch<TValue> {
+    // (undocumented)
     dispose?(): void;
+    // (undocumented)
     localQueryError(): Error | undefined;
+    // (undocumented)
     localQueryResult(): TValue | undefined;
+    // (undocumented)
     onUpdate(callback: () => void): () => void;
 }
 

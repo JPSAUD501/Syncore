@@ -11,8 +11,11 @@ import type {
   SyncoreDevtoolsCommandResultPayload
 } from "@syncore/devtools-protocol";
 import {
+  isCompatibleVersionHandshake,
   createPublicRuntimeId as createSharedPublicRuntimeId,
-  createPublicTargetId as createSharedPublicTargetId
+  createPublicTargetId as createSharedPublicTargetId,
+  SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION
 } from "@syncore/devtools-protocol";
 import {
   readDashboardActivityPreference,
@@ -827,39 +830,56 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
         if (msg.runtimeId === HUB_RUNTIME_ID) {
           break;
         }
-        flushSubscriptions(msg.runtimeId);
-        set((state) => {
-          const nextRuntime = ensureRuntime(state.runtimes, {
-            runtimeId: msg.runtimeId,
-            platform: msg.platform,
-            ...(msg.targetKind ? { targetKind: msg.targetKind } : {}),
-            ...(msg.appName ? { appName: msg.appName } : {}),
-            ...(msg.origin ? { origin: msg.origin } : {}),
-            ...(msg.sessionLabel ? { sessionLabel: msg.sessionLabel } : {}),
-            ...(msg.storageProtocol
-              ? { storageProtocol: msg.storageProtocol }
-              : {}),
-            ...(msg.databaseLabel ? { databaseLabel: msg.databaseLabel } : {}),
-            ...(msg.storageIdentity
-              ? { storageIdentity: msg.storageIdentity }
-              : {})
-          });
-          const runtimes = {
-            ...state.runtimes,
-            [msg.runtimeId]: nextRuntime
-          };
-          return {
-            runtimes,
-            ...resolveSelectionState(
+        {
+          const compatibilityError = getHelloCompatibilityError(msg);
+          if (compatibilityError) {
+            console.warn(compatibilityError, {
+              runtimeId: msg.runtimeId,
+              runtimeVersion: msg.runtimeVersion
+            });
+          }
+          flushSubscriptions(msg.runtimeId);
+          set((state) => {
+            const nextRuntime = {
+              ...ensureRuntime(state.runtimes, {
+                runtimeId: msg.runtimeId,
+                platform: msg.platform,
+                ...(msg.targetKind ? { targetKind: msg.targetKind } : {}),
+                ...(msg.appName ? { appName: msg.appName } : {}),
+                ...(msg.origin ? { origin: msg.origin } : {}),
+                ...(msg.sessionLabel ? { sessionLabel: msg.sessionLabel } : {}),
+                ...(msg.storageProtocol
+                  ? { storageProtocol: msg.storageProtocol }
+                  : {}),
+                ...(msg.databaseLabel
+                  ? { databaseLabel: msg.databaseLabel }
+                  : {}),
+                ...(msg.storageIdentity
+                  ? { storageIdentity: msg.storageIdentity }
+                  : {})
+              }),
+              connected: compatibilityError ? false : true,
+              lastSubscriptionError: compatibilityError
+            };
+            const runtimes = {
+              ...state.runtimes,
+              [msg.runtimeId]: nextRuntime
+            };
+            return {
               runtimes,
-              state.selectedTargetId,
-              state.selectedRuntimeFilter,
-              state.selectedRuntimeSelectionMode,
-              msg.targetKind === "project" ? undefined : msg.runtimeId
-            )
-          };
-        });
-        break;
+              ...resolveSelectionState(
+                runtimes,
+                state.selectedTargetId,
+                state.selectedRuntimeFilter,
+                state.selectedRuntimeSelectionMode,
+                compatibilityError || msg.targetKind === "project"
+                  ? undefined
+                  : msg.runtimeId
+              )
+            };
+          });
+          break;
+        }
 
       case "event":
         if (msg.event.runtimeId === HUB_RUNTIME_ID) {
@@ -1496,5 +1516,30 @@ export function destroyDevtoolsConnection() {
     ws.close();
     ws = null;
   }
+}
+
+function getHelloCompatibilityError(
+  msg: Extract<SyncoreDevtoolsMessage, { type: "hello" }>
+): string | null {
+  const protocolVersion =
+    msg.protocolVersion ?? SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION;
+  const minSupportedProtocolVersion =
+    msg.minSupportedProtocolVersion ??
+    SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION;
+  const maxSupportedProtocolVersion =
+    msg.maxSupportedProtocolVersion ??
+    SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION;
+
+  if (
+    isCompatibleVersionHandshake({
+      protocolVersion,
+      minSupportedProtocolVersion,
+      maxSupportedProtocolVersion
+    })
+  ) {
+    return null;
+  }
+
+  return `Runtime ${msg.runtimeId} uses devtools protocol ${protocolVersion} (supports ${minSupportedProtocolVersion}-${maxSupportedProtocolVersion}), but the dashboard supports ${SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION}-${SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION}.`;
 }
 

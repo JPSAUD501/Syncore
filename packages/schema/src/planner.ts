@@ -23,14 +23,20 @@ export interface TableSnapshot {
 }
 
 export interface SchemaSnapshot {
-  version: 1;
+  formatVersion: 2;
+  plannerVersion: 1;
+  runtimeVersion?: string;
   tables: TableSnapshot[];
   hash: string;
 }
 
 export interface SchemaMigrationPlan {
+  formatVersion: 2;
+  plannerVersion: 1;
   previousHash: string | null;
   nextHash: string;
+  fromSchemaHash: string | null;
+  toSchemaHash: string;
   statements: string[];
   warnings: string[];
   destructiveChanges: string[];
@@ -64,7 +70,8 @@ export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(
     });
 
   const base = {
-    version: 1 as const,
+    formatVersion: 2 as const,
+    plannerVersion: 1 as const,
     tables
   };
 
@@ -170,8 +177,12 @@ export function diffSchemaSnapshots(
   }
 
   return {
+    formatVersion: 2,
+    plannerVersion: 1,
     previousHash: previousSnapshot?.hash ?? null,
     nextHash: nextSnapshot.hash,
+    fromSchemaHash: previousSnapshot?.hash ?? null,
+    toSchemaHash: nextSnapshot.hash,
     statements,
     warnings,
     destructiveChanges
@@ -185,6 +196,8 @@ export function renderMigrationSql(
   const lines: string[] = [];
 
   lines.push(`-- ${options?.title ?? "Syncore migration"}`);
+  lines.push(`-- format-version: ${plan.formatVersion}`);
+  lines.push(`-- planner-version: ${plan.plannerVersion}`);
   lines.push(`-- previous: ${plan.previousHash ?? "none"}`);
   lines.push(`-- next: ${plan.nextHash}`);
 
@@ -212,11 +225,37 @@ export function renderMigrationSql(
 }
 
 export function parseSchemaSnapshot(source: string): SchemaSnapshot {
-  const parsed = JSON.parse(source) as SchemaSnapshot;
-  if (parsed.version !== 1 || !Array.isArray(parsed.tables) || typeof parsed.hash !== "string") {
+  const parsed = JSON.parse(source) as
+    | SchemaSnapshot
+    | {
+        version: 1;
+        tables: TableSnapshot[];
+        hash: string;
+      };
+  if ("formatVersion" in parsed) {
+    if (
+      parsed.formatVersion !== 2 ||
+      parsed.plannerVersion !== 1 ||
+      !Array.isArray(parsed.tables) ||
+      typeof parsed.hash !== "string"
+    ) {
+      throw new Error("Invalid schema snapshot file.");
+    }
+    return parsed;
+  }
+  if (
+    parsed.version !== 1 ||
+    !Array.isArray(parsed.tables) ||
+    typeof parsed.hash !== "string"
+  ) {
     throw new Error("Invalid schema snapshot file.");
   }
-  return parsed;
+  return {
+    formatVersion: 2,
+    plannerVersion: 1,
+    tables: parsed.tables,
+    hash: parsed.hash
+  };
 }
 
 export function renderCreateTableStatement(tableName: string): string {
@@ -254,7 +293,11 @@ export function searchIndexTableName(tableName: string, indexName: string): stri
   return `fts_${tableName}_${indexName}`;
 }
 
-function createSchemaHash(value: Omit<SchemaSnapshot, "hash">): string {
+function createSchemaHash(
+  value: Omit<SchemaSnapshot, "hash" | "runtimeVersion"> & {
+    runtimeVersion?: string;
+  }
+): string {
   return stableStringify(value);
 }
 

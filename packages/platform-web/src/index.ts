@@ -16,6 +16,9 @@ import {
   type StorageWriteInput
 } from "@syncore/core";
 import {
+  SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
   type SyncoreDevtoolsClientMessage,
   type SyncoreDevtoolsMessage,
   type SyncoreRuntimeSummary
@@ -241,7 +244,7 @@ export async function createWebSyncoreRuntime(
         driver,
         schema: options.schema,
         functions: options.functions,
-        runtime
+        admin: runtime.getAdmin()
       })
     );
     autoDevtools.attachSubscriptionHost(
@@ -249,7 +252,7 @@ export async function createWebSyncoreRuntime(
         driver,
         schema: options.schema,
         functions: options.functions,
-        runtime
+        admin: runtime.getAdmin()
       })
     );
   }
@@ -405,6 +408,11 @@ export function createBrowserWebSocketDevtoolsSink(
       if (latestHello) {
         sendNow({
           type: "hello",
+          protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+          minSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+          maxSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
           runtimeId: latestHello.runtimeId,
           platform: latestHello.platform,
           ...(options.appName ? { appName: options.appName } : {}),
@@ -536,6 +544,11 @@ export function createBrowserWebSocketDevtoolsSink(
         };
         send({
           type: "hello",
+          protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+          minSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+          maxSupportedProtocolVersion:
+            SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
           runtimeId: event.runtimeId,
           platform: event.platform,
           ...(options.appName ? { appName: options.appName } : {}),
@@ -557,7 +570,7 @@ export function createBrowserWebSocketDevtoolsSink(
     },
     attachRuntime(runtime) {
       getSummary = () =>
-        withRuntimeSummaryMeta(runtime.getRuntimeSummary(), options);
+        withRuntimeSummaryMeta(runtime.getAdmin().getRuntimeSummary(), options);
     },
     attachCommandHandler(handler) {
       onCommand = handler;

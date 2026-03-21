@@ -39,6 +39,9 @@ export interface FunctionDefinition {
 }
 
 // @public (undocumented)
+export function isCompatibleVersionHandshake(handshake: Pick<VersionHandshake, "protocolVersion" | "minSupportedProtocolVersion" | "maxSupportedProtocolVersion">): boolean;
+
+// @public (undocumented)
 export interface SchedulerJob {
     // (undocumented)
     args: Record<string, unknown>;
@@ -129,6 +132,15 @@ export interface SchedulerRecurringWeeklySchedule {
     // (undocumented)
     type: "weekly";
 }
+
+// @public (undocumented)
+export const SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION = 1;
+
+// @public (undocumented)
+export const SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION = 1;
+
+// @public (undocumented)
+export const SYNCORE_DEVTOOLS_PROTOCOL_VERSION = 1;
 
 // @public (undocumented)
 export interface SyncoreActiveQueryInfo {
@@ -282,6 +294,10 @@ export type SyncoreDevtoolsEventOrigin = "runtime" | "dashboard";
 // @public (undocumented)
 export type SyncoreDevtoolsMessage = {
     type: "hello";
+    protocolVersion?: number;
+    minSupportedProtocolVersion?: number;
+    maxSupportedProtocolVersion?: number;
+    runtimeVersion?: string;
     runtimeId: string;
     platform: string;
     appName?: string;
@@ -458,6 +474,18 @@ export interface TableSchema {
     indexes: TableIndex[];
     // (undocumented)
     name: string;
+}
+
+// @public (undocumented)
+export interface VersionHandshake {
+    // (undocumented)
+    maxSupportedProtocolVersion: number;
+    // (undocumented)
+    minSupportedProtocolVersion: number;
+    // (undocumented)
+    protocolVersion: number;
+    // (undocumented)
+    runtimeVersion?: string;
 }
 
 // (No @packageDocumentation comment for this package)

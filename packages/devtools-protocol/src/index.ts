@@ -1,5 +1,32 @@
 export type SyncoreDevtoolsEventOrigin = "runtime" | "dashboard";
 
+export const SYNCORE_DEVTOOLS_PROTOCOL_VERSION = 1;
+export const SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION = 1;
+export const SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION = 1;
+
+export interface VersionHandshake {
+  protocolVersion: number;
+  minSupportedProtocolVersion: number;
+  maxSupportedProtocolVersion: number;
+  runtimeVersion?: string;
+}
+
+export function isCompatibleVersionHandshake(
+  handshake: Pick<
+    VersionHandshake,
+    "protocolVersion" | "minSupportedProtocolVersion" | "maxSupportedProtocolVersion"
+  >
+): boolean {
+  return (
+    handshake.maxSupportedProtocolVersion >=
+      SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION &&
+    handshake.minSupportedProtocolVersion <=
+      SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION &&
+    handshake.protocolVersion >= handshake.minSupportedProtocolVersion &&
+    handshake.protocolVersion <= handshake.maxSupportedProtocolVersion
+  );
+}
+
 type SyncoreDevtoolsEventBase = {
   runtimeId: string;
   timestamp: number;
@@ -156,6 +183,10 @@ function stableHash(input: string, salt: number): number {
 export type SyncoreDevtoolsMessage =
   | {
       type: "hello";
+      protocolVersion?: number;
+      minSupportedProtocolVersion?: number;
+      maxSupportedProtocolVersion?: number;
+      runtimeVersion?: string;
       runtimeId: string;
       platform: string;
       appName?: string;

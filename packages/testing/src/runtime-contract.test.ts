@@ -142,6 +142,11 @@ type WebFactory = RuntimeFactory & {
   persistenceDatabaseName: string;
 };
 
+const contractTargets = [
+  { label: "node", supportsExternalChanges: false },
+  { label: "web", supportsExternalChanges: true }
+] as const;
+
 describe("adapter runtime contracts", () => {
   const factories: RuntimeFactory[] = [];
 
@@ -160,7 +165,7 @@ describe("adapter runtime contracts", () => {
     }
   });
 
-  for (const label of ["node", "web"] as const) {
+  for (const { label, supportsExternalChanges } of contractTargets) {
     describe(label, () => {
       const getFactory = () => {
         const factory = factories.find((entry) => entry.label === label);
@@ -272,6 +277,38 @@ describe("adapter runtime contracts", () => {
         );
         await destructiveRuntime.stop().catch(() => undefined);
       });
+
+      if (supportsExternalChanges) {
+        it("propagates external changes between runtimes when supported", async () => {
+          const factory = getFactory();
+          const firstRuntime = await factory.createRuntime();
+          await firstRuntime.start();
+
+          const watch = firstRuntime.createClient().watchQuery(listTodos);
+          const unsubscribe = watch.onUpdate(() => undefined);
+          await waitFor(() => Array.isArray(watch.localQueryResult()));
+
+          const secondRuntime = await factory.createRuntime();
+          await secondRuntime.start();
+
+          try {
+            await secondRuntime.createClient().mutation(createTodo, {
+              title: `${label}-external-change`
+            });
+
+            await waitFor(() =>
+              (watch.localQueryResult() ?? []).some(
+                (todo) => todo.title === `${label}-external-change`
+              )
+            );
+          } finally {
+            unsubscribe();
+            watch.dispose?.();
+            await secondRuntime.stop();
+            await firstRuntime.stop();
+          }
+        });
+      }
     });
   }
 });
