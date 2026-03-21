@@ -19,3 +19,4 @@ packages/*/*.tgz
 .tmp-electron-debug/
 !references/
 nul
+output/next-pwa-dev.log

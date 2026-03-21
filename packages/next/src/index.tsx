@@ -4,7 +4,7 @@ import {
   type ManagedWebWorkerClient
 } from "@syncore/platform-web";
 import { SyncoreProvider } from "@syncore/react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getSyncoreWorkerUrl } from "./config.js";
 
 export { getSyncoreWorkerUrl } from "./config.js";
@@ -146,12 +146,19 @@ export function SyncoreNextProvider({
 }) {
   const [managedClient, setManagedClient] =
     useState<ManagedWebWorkerClient | null>(null);
+  const createWorkerRef = useRef(createWorker);
+  createWorkerRef.current = createWorker;
   const resolvedWorkerUrl =
     typeof workerUrl === "string" ? workerUrl : workerUrl?.toString();
 
   useEffect(() => {
+    const workerFactory = createWorkerRef.current;
     const nextClient = createNextSyncoreClient({
-      ...(createWorker ? { createWorker } : {}),
+      ...(workerFactory
+        ? {
+            createWorker: () => workerFactory()
+          }
+        : {}),
       ...(resolvedWorkerUrl
         ? {
             workerUrl:
@@ -168,7 +175,7 @@ export function SyncoreNextProvider({
       nextClient.dispose();
       setManagedClient(null);
     };
-  }, [createWorker, resolvedWorkerUrl, workerAssetUrl]);
+  }, [resolvedWorkerUrl, workerAssetUrl]);
 
   if (!managedClient) {
     return null;

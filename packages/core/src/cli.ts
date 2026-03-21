@@ -86,6 +86,12 @@ export type SyncoreTemplateName =
   | "electron"
   | "next";
 
+export function templateUsesConnectedClients(
+  template: SyncoreTemplateName
+): boolean {
+  return template === "react-web" || template === "expo" || template === "next";
+}
+
 interface SyncoreTemplateFile {
   path: string;
   content: string;
@@ -2795,6 +2801,13 @@ export async function runDevProjectBootstrap(
 
     for (const warning of plan.warnings) {
       console.warn(`Syncore dev warning: ${warning}`);
+    }
+
+    if (templateUsesConnectedClients(template)) {
+      console.log(
+        "Syncore dev is ready. Codegen refreshed; waiting for a connected client runtime to apply schema locally."
+      );
+      return;
     }
 
     const appliedCount = await applyProjectMigrations(cwd);

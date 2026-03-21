@@ -3,6 +3,7 @@ import type {
   ClientTargetDescriptor,
   SyncoreTargetDescriptor
 } from "./project.js";
+import { templateUsesConnectedClients } from "./messages.js";
 
 export type JsonLikeFormat = "pretty" | "json" | "jsonl";
 
@@ -240,7 +241,7 @@ export function printDevReadySummary(
   process.stdout.write("\nReady:\n");
   process.stdout.write(`  template: ${options.template}\n`);
   process.stdout.write(
-    `  projectTarget: ${options.projectTargetConfigured ? "configured" : "not configured"}\n`
+    `  projectTarget: ${describeProjectTargetState(options.template, options.projectTargetConfigured)}\n`
   );
   process.stdout.write(`  dashboard: ${options.dashboardUrl}\n`);
   process.stdout.write(`  devtools: ${options.devtoolsUrl}\n`);
@@ -253,6 +254,18 @@ export function printDevReadySummary(
   }
 
   context.nextStep("Run `npx syncorejs targets` for detailed target inspection.");
+}
+
+function describeProjectTargetState(
+  template: string,
+  projectTargetConfigured: boolean
+): string {
+  if (projectTargetConfigured) {
+    return "configured";
+  }
+  return templateUsesConnectedClients(template)
+    ? "client-managed"
+    : "not configured";
 }
 
 function isPersistedLogEntry(value: unknown): value is PersistedLogEntry {

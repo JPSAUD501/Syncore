@@ -1,0 +1,58 @@
+{
+  "formatVersion": 2,
+  "plannerVersion": 1,
+  "tables": [
+    {
+      "name": "notes",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "title": {
+            "kind": "string"
+          },
+          "body": {
+            "kind": "string"
+          },
+          "color": {
+            "kind": "string"
+          },
+          "pinned": {
+            "kind": "boolean"
+          },
+          "createdAt": {
+            "kind": "number"
+          },
+          "updatedAt": {
+            "kind": "number"
+          }
+        }
+      },
+      "indexes": [
+        {
+          "name": "by_color",
+          "fields": [
+            "color",
+            "createdAt"
+          ]
+        },
+        {
+          "name": "by_pinned_created",
+          "fields": [
+            "pinned",
+            "createdAt"
+          ]
+        }
+      ],
+      "searchIndexes": [
+        {
+          "name": "search_body",
+          "searchField": "body",
+          "filterFields": [
+            "pinned"
+          ]
+        }
+      ]
+    }
+  ],
+  "hash": "{\"formatVersion\":2,\"plannerVersion\":1,\"tables\":[{\"indexes\":[{\"fields\":[\"color\",\"createdAt\"],\"name\":\"by_color\"},{\"fields\":[\"pinned\",\"createdAt\"],\"name\":\"by_pinned_created\"}],\"name\":\"notes\",\"searchIndexes\":[{\"filterFields\":[\"pinned\"],\"name\":\"search_body\",\"searchField\":\"body\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"body\":{\"kind\":\"string\"},\"color\":{\"kind\":\"string\"},\"createdAt\":{\"kind\":\"number\"},\"pinned\":{\"kind\":\"boolean\"},\"title\":{\"kind\":\"string\"},\"updatedAt\":{\"kind\":\"number\"}}}}]}"
+}

@@ -303,9 +303,7 @@ function addDoctorCommand(program: Command): void {
 
         ctx.info(`Detected template: ${report.template}`);
         ctx.info(`Project status: ${report.status}`);
-        ctx.info(
-          `Project target: ${report.projectTarget ? report.projectTarget.databasePath : "not configured"}`
-        );
+        ctx.info(`Project target: ${describeProjectTarget(report.template, report.projectTarget)}`);
         ctx.info(`Devtools hub: ${report.hub.running ? report.hub.url : "not running"}`);
         printDoctorReport(report, {
           verbose: ctx.verbose
@@ -462,6 +460,18 @@ function addDevCommand(program: Command): void {
         await monitorLiveDevSession(ctx, template);
       });
     });
+}
+
+function describeProjectTarget(
+  template: string,
+  projectTarget: { databasePath: string } | null
+): string {
+  if (projectTarget) {
+    return projectTarget.databasePath;
+  }
+  return templateUsesConnectedClients(template)
+    ? "client-managed"
+    : "not configured";
 }
 
 async function maybeOpenDashboard(

@@ -1,4 +1,7 @@
-import type { SyncoreTemplateName } from "@syncore/core/cli";
+import {
+  type SyncoreTemplateName,
+  templateUsesConnectedClients as coreTemplateUsesConnectedClients
+} from "@syncore/core/cli";
 
 export function buildInitNextSteps(template: SyncoreTemplateName): string[] {
   if (templateUsesConnectedClients(template)) {
@@ -53,5 +56,5 @@ export function buildNoTargetsNextSteps(): string[] {
 }
 
 export function templateUsesConnectedClients(template: string): boolean {
-  return template === "react-web" || template === "expo" || template === "next";
+  return coreTemplateUsesConnectedClients(template as SyncoreTemplateName);
 }

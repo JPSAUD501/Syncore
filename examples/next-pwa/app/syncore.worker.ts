@@ -7,7 +7,8 @@ void createBrowserWorkerRuntime({
   databaseName: "syncore-planner",
   persistenceDatabaseName: "syncore-planner",
   storageNamespace: "syncore-planner-artifacts",
-  persistenceMode: "auto",
+  // IndexedDB is more stable than OPFS during Next dev/HMR churn.
+  persistenceMode: "indexeddb",
   schema,
   functions,
   locateFile: () => "/sql-wasm.wasm",
