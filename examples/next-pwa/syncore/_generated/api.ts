@@ -9,6 +9,8 @@
 
 import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
+export { components } from "./components";
+
 import type { createRecord as artifacts__createRecord } from "../functions/artifacts";
 import type { generate as artifacts__generate } from "../functions/artifacts";
 import type { getContent as artifacts__getContent } from "../functions/artifacts";

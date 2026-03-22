@@ -250,6 +250,10 @@ export class TableDefinition<TValidator extends Validator<unknown>> {
 // @public (undocumented)
 export interface TableDefinitionOptions {
     // (undocumented)
+    componentName?: string;
+    // (undocumented)
+    componentPath?: string;
+    // (undocumented)
     tableName?: string;
 }
 
@@ -263,6 +267,12 @@ export interface TableDocumentSystemFields {
 
 // @public (undocumented)
 export interface TableSnapshot {
+    // (undocumented)
+    componentName?: string;
+    // (undocumented)
+    componentPath?: string;
+    // (undocumented)
+    displayName?: string;
     // (undocumented)
     indexes: Array<{
         name: string;

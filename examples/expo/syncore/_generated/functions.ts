@@ -8,7 +8,7 @@
  */
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
-
+import { composeProjectFunctionRegistry } from "syncorejs";
 import { create as notes__create } from "../functions/notes";
 import { get as notes__get } from "../functions/notes";
 import { list as notes__list } from "../functions/notes";
@@ -18,10 +18,12 @@ import { search as notes__search } from "../functions/notes";
 import { togglePin as notes__togglePin } from "../functions/notes";
 import { update as notes__update } from "../functions/notes";
 
+const componentsManifest = {} as const;
+
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
-export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
+export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
   /**
    * Runtime definition for the public Syncore mutation `notes/create`.
    */
@@ -61,7 +63,7 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
  *
  * Most application code should import from `./api` instead of using this map directly.
  */
-export const functions: SyncoreFunctionsRegistry = {
+const rootFunctions: SyncoreRootFunctionsRegistry = {
   "notes/list": notes__list,
   "notes/get": notes__get,
   "notes/search": notes__search,
@@ -71,3 +73,5 @@ export const functions: SyncoreFunctionsRegistry = {
   "notes/remove": notes__remove,
   "notes/scheduleAutoSave": notes__scheduleAutoSave,
 } as const;
+
+export const functions: SyncoreFunctionRegistry = composeProjectFunctionRegistry(rootFunctions, componentsManifest);

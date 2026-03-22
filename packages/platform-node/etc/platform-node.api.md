@@ -20,7 +20,6 @@ import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
-import { SyncoreExperimentalPlugin } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreRuntimeSummary } from '@syncore/devtools-protocol';
@@ -82,13 +81,13 @@ export interface CreateNodeRuntimeOptions {
     // (undocumented)
     capabilities?: SyncoreCapabilities;
     // (undocumented)
+    components?: SyncoreRuntimeOptions<NodeSyncoreSchema>["components"];
+    // (undocumented)
     databasePath: string;
     // (undocumented)
     devtools?: DevtoolsSink | false;
     // (undocumented)
     devtoolsUrl?: string;
-    // (undocumented)
-    experimentalPlugins?: Array<SyncoreExperimentalPlugin<NodeSyncoreSchema>>;
     // (undocumented)
     functions: SyncoreRuntimeOptions<NodeSyncoreSchema>["functions"];
     // (undocumented)

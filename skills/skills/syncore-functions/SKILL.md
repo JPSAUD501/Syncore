@@ -1,6 +1,6 @@
 ---
 name: syncore-functions
-description: Writing Syncore queries, mutations, and actions with typed validators, richer query builders, function references, scheduler calls, and inference-friendly patterns. Use when editing `syncore/functions/**/*.ts`, reviewing function typing, or validating generated API behavior against source definitions.
+description: Writing Syncore queries, mutations, and actions with typed validators, query builders, function references, scheduler calls, and inference-friendly patterns. Use when editing `syncore/functions/**/*.ts`, building a local backend, reviewing function typing, or validating generated API behavior against source definitions.
 ---
 
 # Syncore Functions
@@ -11,18 +11,15 @@ references and client APIs.
 
 ## Documentation Sources
 
-Read these repo-local references first:
+Read these first from the current app or component package:
 
-- `packages/core/src/runtime/functions.ts`
-- `packages/core/src/runtime/runtime.ts`
-- `packages/schema/src/validators.ts`
-- `packages/core/AGENTS.md`
-- `README.md`
-- `docs/architecture.md`
-- `examples/electron/syncore/functions/entries.ts`
-- `examples/expo/syncore/functions/notes.ts`
-- `examples/next-pwa/syncore/functions/bookmarks.ts`
-- `examples/sveltekit/syncore/functions/habits.ts`
+- `syncore/schema.ts`
+- `syncore/components.ts`
+- `syncore/functions/**/*.ts`
+- `syncore/_generated/server.ts`
+- `syncore/_generated/api.ts`
+- `syncore/_generated/functions.ts`
+- installed `syncorejs` docs or type declarations
 
 ## Instructions
 
@@ -42,9 +39,6 @@ Inside `syncore/functions/*.ts`, import from `../_generated/server`:
 import { mutation, query, v } from "../_generated/server";
 ```
 
-This keeps app code aligned with current codegen output and shared validator
-types.
-
 ### Prefer Strong Validators
 
 Use the most specific validators you can. For document ids, prefer table-aware
@@ -56,8 +50,6 @@ args: {
   done: v.boolean()
 }
 ```
-
-That keeps intent clear and improves downstream typing.
 
 ### Queries
 
@@ -80,19 +72,8 @@ export const list = query({
 });
 ```
 
-The current query builder surface includes:
-
-- `withIndex(...)`
-- `withSearchIndex(...)`
-- `filter(...)`
-- `collect()`
-- `take(count)`
-- `first()`
-- `unique()`
-- `paginate({ cursor, numItems })`
-
-Use indexes and search indexes from schema before depending on those query paths
-in functions.
+Define indexes in schema before depending on `withIndex(...)` or
+`withSearchIndex(...)`.
 
 ### Mutations
 
@@ -113,9 +94,6 @@ export const toggleDone = mutation({
   }
 });
 ```
-
-Mutations have `ctx.db`, `ctx.storage`, `ctx.scheduler`, `ctx.runQuery`,
-`ctx.runMutation`, and `ctx.runAction`.
 
 ### Actions
 
@@ -140,17 +118,9 @@ export const exportTasks = action({
 });
 ```
 
-Actions also have access to `ctx.storage` and `ctx.scheduler`.
-
 ### Typed References
 
-There are two main reference flows:
-
-- generated client references via `syncore/_generated/api`
-- direct references via `createFunctionReference` or `createFunctionReferenceFor`
-
-Generated references are preferred in app code. Direct references are useful
-for scheduler jobs, browser-ESM samples, and low-level runtime tests.
+Generated references are preferred in app code:
 
 ```ts
 import { createFunctionReference, mutation, v } from "../_generated/server";
@@ -167,77 +137,21 @@ export const scheduleCreate = mutation({
 });
 ```
 
+### Components And Public APIs
+
+If the app installs components, app code usually consumes:
+
+- `api.*` for root functions
+- `components.<alias>.*` for installed component public functions
+
 ### Empty Args Ergonomics Matter
 
-Syncore intentionally supports optional call signatures for empty-object args.
-Preserve these patterns:
+Preserve empty-args patterns:
 
 ```ts
 export const list = query({
   args: {},
   handler: async (ctx) => ctx.db.query("tasks").collect()
-});
-```
-
-That enables client usage like:
-
-```tsx
-const tasks = useQuery(api.tasks.list) ?? [];
-```
-
-Do not introduce type changes that force useless `{}` arguments at every
-callsite unless the public API is intentionally changing.
-
-## Examples
-
-### Complete Function File
-
-```ts
-import {
-  createFunctionReference,
-  mutation,
-  query,
-  v
-} from "../_generated/server";
-
-export const listPinned = query({
-  args: {},
-  handler: async (ctx) =>
-    ctx.db.query("notes").withIndex("by_pinned").order("asc").collect()
-});
-
-export const searchNotes = query({
-  args: { term: v.string() },
-  handler: async (ctx, args) =>
-    ctx.db
-      .query("notes")
-      .withSearchIndex("search_body", (search) =>
-        search.search("body", args.term).eq("pinned", false)
-      )
-      .take(20)
-});
-
-export const create = mutation({
-  args: { body: v.string() },
-  handler: async (ctx, args) =>
-    ctx.db.insert("notes", { body: args.body, pinned: false })
-});
-
-export const createFromScheduler = mutation({
-  args: { body: v.string(), pinned: v.boolean() },
-  handler: async (ctx, args) =>
-    ctx.db.insert("notes", { body: args.body, pinned: args.pinned })
-});
-
-export const scheduleCreateSkip = mutation({
-  args: { body: v.string(), delayMs: v.number() },
-  handler: async (ctx, args) =>
-    ctx.scheduler.runAfter(
-      args.delayMs,
-      createFunctionReference("mutation", "notes/createFromScheduler"),
-      { body: args.body, pinned: false },
-      { type: "skip" }
-    )
 });
 ```
 
@@ -248,23 +162,21 @@ export const scheduleCreateSkip = mutation({
 - Prefer `v.id("table")` over plain `v.string()` for document ids
 - Add `returns` validators where explicit shape matters to callers
 - Preserve optional args ergonomics for empty-object validators
-- Prefer generated references in app code and explicit references in low-level runtime flows
-- Keep type changes aligned across core, codegen, React, and adapters
+- Prefer generated references in app code
+- Keep function changes aligned with schema and generated API output
 
 ## Common Pitfalls
 
 1. Using `action` for ordinary database writes that belong in mutations
-2. Breaking `useQuery(api.foo.bar)` inference by widening reference types
+2. Breaking `useQuery(api.foo.bar)` inference by widening types unnecessarily
 3. Editing generated API references instead of source function definitions
-4. Forgetting that scheduler APIs accept typed function references and optional misfire policies
+4. Forgetting that scheduled jobs should use typed function references
 5. Reaching for plain strings where `v.id("table")` better expresses intent
 
 ## References
 
-- `packages/core/src/runtime/functions.ts`
-- `packages/core/src/runtime/runtime.ts`
-- `packages/schema/src/validators.ts`
-- `packages/core/AGENTS.md`
-- `examples/electron/syncore/functions/entries.ts`
-- `examples/expo/syncore/functions/notes.ts`
-- `examples/next-pwa/syncore/functions/bookmarks.ts`
+- `syncore/schema.ts`
+- `syncore/functions/**/*.ts`
+- `syncore/_generated/server.ts`
+- `syncore/_generated/api.ts`
+- `syncore/_generated/functions.ts`

@@ -81,9 +81,10 @@ export class SchedulerEngine {
     runAt: number,
     reference: FunctionReference<"mutation" | "action", unknown, unknown>,
     args: JsonObject,
-    misfirePolicy: MisfirePolicy
+    misfirePolicy: MisfirePolicy,
+    namespacePrefix?: string
   ): Promise<string> {
-    const id = generateId();
+    const id = `${namespacePrefix ?? ""}${generateId()}`;
     const now = Date.now();
     await this.deps.driver.run(
       `INSERT INTO "_scheduled_functions"

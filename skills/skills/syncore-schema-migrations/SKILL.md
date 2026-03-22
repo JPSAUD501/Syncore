@@ -1,6 +1,6 @@
 ---
 name: syncore-schema-migrations
-description: Schema design and migration workflow for Syncore, including validators, indexes, search indexes, drift detection, stored snapshots, and SQL migration files. Use when changing `syncore/schema.ts`, indexes, or files under `syncore/migrations`.
+description: Schema design and migration workflow for Syncore, including validators, indexes, search indexes, drift detection, stored snapshots, and SQL migration files. Use when changing `syncore/schema.ts`, tables, indexes, search indexes, component-composed schema, or files under `syncore/migrations`.
 ---
 
 # Syncore Schema And Migrations
@@ -10,17 +10,14 @@ migration files under `syncore/migrations`.
 
 ## Documentation Sources
 
-Read these first:
+Read these first from the current app:
 
-- `packages/schema/AGENTS.md`
-- `packages/cli/AGENTS.md`
-- `packages/core/src/cli.ts`
-- `README.md`
-- `docs/architecture.md`
-- `examples/electron/syncore/schema.ts`
-- `examples/expo/syncore/schema.ts`
-- `examples/next-pwa/syncore/schema.ts`
-- `examples/sveltekit/syncore/schema.ts`
+- `syncore/schema.ts`
+- `syncore/components.ts`
+- `syncore/migrations/*.sql`
+- `syncore/migrations/_schema_snapshot.json`
+- `syncore/_generated/schema.ts`
+- installed `syncorejs` docs or type declarations
 
 ## Instructions
 
@@ -42,36 +39,22 @@ export default defineSchema({
 });
 ```
 
+When the app installs components, the effective runtime schema is the composed
+result of root schema plus installed component schemas.
+
 ### Migration Flow
 
-Syncore's migration workflow is local and CLI-driven:
-
 1. Change `syncore/schema.ts`
-2. Run `npx syncorejs migrate:status`
-3. If the diff is safe, run `npx syncorejs migrate:generate [name]`
-4. Review the generated SQL in `syncore/migrations/*.sql`
-5. Apply it with `npx syncorejs migrate:apply`
-6. Regenerate typed files with `npx syncorejs codegen` or let `npx syncorejs dev` keep them fresh
-
-The CLI stores a schema snapshot in
-`syncore/migrations/_schema_snapshot.json` and compares the current schema
-against that saved snapshot. Destructive drift is intentionally surfaced early.
+2. Update `syncore/components.ts` if component installs affect the composed schema
+3. Run `npx syncorejs migrate:status`
+4. If the diff is safe, run `npx syncorejs migrate:generate [name]`
+5. Review the generated SQL in `syncore/migrations/*.sql`
+6. Apply it with `npx syncorejs migrate:apply`
+7. Regenerate typed files with `npx syncorejs codegen` or let `npx syncorejs dev` keep them fresh
 
 ### Drift Safety
 
 Expect the CLI to block or warn on changes that can destroy data silently.
-
-Good workflow:
-
-- additive columns or tables
-- adding indexes before querying through them
-- reviewing generated SQL before applying
-
-Risky workflow:
-
-- deleting or renaming fields without a plan
-- assuming generated SQL is always safe without review
-- changing data shape without updating functions and examples
 
 ### Indexes And Search Indexes
 
@@ -88,73 +71,14 @@ export default defineSchema({
 });
 ```
 
-Define indexes before relying on `withIndex(...)` or `withSearchIndex(...)` in
-functions.
-
-### Keep Consumers In Sync
-
-Schema changes usually require updating:
-
-- function args or return validators
-- React or other UI code using generated references
-- examples used as integration fixtures
-- tests covering inference or runtime behavior
-
-`npx syncorejs dev` helps during the inner loop, but explicit migration review
-is still required when the schema changes intentionally.
-
-## Examples
-
-### Safe Additive Change
-
-```ts
-import { defineSchema, defineTable, v } from "syncorejs";
-
-export default defineSchema({
-  todos: defineTable({
-    title: v.string(),
-    complete: v.boolean(),
-    category: v.optional(v.string())
-  })
-    .index("by_complete", ["complete"])
-    .searchIndex("search_title", { searchField: "title" })
-});
-```
-
-Then run:
-
-```bash
-npx syncorejs migrate:status
-npx syncorejs migrate:generate add_todo_category
-npx syncorejs migrate:apply
-npx syncorejs codegen
-```
-
-### Search Index Workflow
-
-```ts
-export default defineSchema({
-  messages: defineTable({
-    body: v.string(),
-    done: v.boolean()
-  })
-    .index("by_done", ["done"])
-    .searchIndex("search_body", { searchField: "body" })
-});
-```
-
-Add the index in schema before expecting search-related queries or migration SQL
-to work.
-
 ## Best Practices
 
-- Treat `syncore/schema.ts` as the canonical data model
+- Treat `syncore/schema.ts` as the canonical root data model
 - Add indexes and search indexes explicitly in schema definitions
 - Run `migrate:status` before generating or applying migrations
 - Review generated SQL instead of blindly applying it
-- Remember that `migrate:generate` can use the default `auto` name when you do not pass one
-- Regenerate code after schema changes so generated APIs stay aligned
-- Update examples and tests when a public data shape changes
+- Regenerate code after schema or component-install changes
+- Remember that installed components can change the composed schema
 
 ## Common Pitfalls
 
@@ -162,10 +86,12 @@ to work.
 2. Removing fields without checking migration warnings or destructive changes
 3. Updating schema but forgetting the functions and UI that consume it
 4. Assuming search indexes exist just because a query needs them
+5. Forgetting that `syncore/components.ts` can affect the effective schema
 
 ## References
 
-- `packages/schema/AGENTS.md`
-- `packages/cli/AGENTS.md`
-- `packages/core/src/cli.ts`
-- `docs/architecture.md`
+- `syncore/schema.ts`
+- `syncore/components.ts`
+- `syncore/migrations/*.sql`
+- `syncore/migrations/_schema_snapshot.json`
+- `syncore/_generated/schema.ts`

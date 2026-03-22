@@ -1,5 +1,6 @@
 import { createExpoSyncoreBootstrap } from "syncorejs/expo";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 export const syncore = createExpoSyncoreBootstrap({
@@ -7,5 +8,6 @@ export const syncore = createExpoSyncoreBootstrap({
   storageDirectoryName: "syncore-expo-notes-storage",
   schema,
   functions,
+  components: resolvedComponents,
   scheduler: { pollIntervalMs: 500 }
 });

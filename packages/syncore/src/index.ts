@@ -46,11 +46,10 @@ export {
   type SyncoreClient,
   type SyncoreDatabaseReader,
   type SyncoreDatabaseWriter,
-  type SyncoreExperimentalPlugin,
-  type SyncoreExperimentalPluginContext,
   type SyncoreFunctionDefinition,
   type SyncoreFunctionKind,
   type SyncoreFunctionRegistry,
+  type SyncoreResolvedComponents,
   SyncoreRuntime,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
@@ -66,3 +65,4 @@ export {
   mutation,
   query
 } from "@syncore/core";
+export * from "./components.js";

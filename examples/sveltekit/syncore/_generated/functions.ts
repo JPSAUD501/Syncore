@@ -8,7 +8,7 @@
  */
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
-
+import { composeProjectFunctionRegistry } from "syncorejs";
 import { archiveHabit as habits__archiveHabit } from "../functions/habits";
 import { completionsForDate as habits__completionsForDate } from "../functions/habits";
 import { createHabit as habits__createHabit } from "../functions/habits";
@@ -17,10 +17,12 @@ import { listHabits as habits__listHabits } from "../functions/habits";
 import { removeHabit as habits__removeHabit } from "../functions/habits";
 import { toggleCompletion as habits__toggleCompletion } from "../functions/habits";
 
+const componentsManifest = {} as const;
+
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
-export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
+export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
   /**
    * Runtime definition for the public Syncore mutation `habits/archiveHabit`.
    */
@@ -56,7 +58,7 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
  *
  * Most application code should import from `./api` instead of using this map directly.
  */
-export const functions: SyncoreFunctionsRegistry = {
+const rootFunctions: SyncoreRootFunctionsRegistry = {
   "habits/listHabits": habits__listHabits,
   "habits/listCompletions": habits__listCompletions,
   "habits/completionsForDate": habits__completionsForDate,
@@ -65,3 +67,5 @@ export const functions: SyncoreFunctionsRegistry = {
   "habits/archiveHabit": habits__archiveHabit,
   "habits/removeHabit": habits__removeHabit,
 } as const;
+
+export const functions: SyncoreFunctionRegistry = composeProjectFunctionRegistry(rootFunctions, componentsManifest);

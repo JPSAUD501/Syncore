@@ -10,6 +10,9 @@ import {
 
 export interface TableSnapshot {
   name: string;
+  displayName?: string;
+  componentPath?: string;
+  componentName?: string;
   validator: ValidatorDescription;
   indexes: Array<{
     name: string;
@@ -52,6 +55,13 @@ export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(
       const table = schema.getTable(tableName);
       return {
         name: tableName,
+        ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
+        ...(table.options.componentPath
+          ? { componentPath: table.options.componentPath }
+          : {}),
+        ...(table.options.componentName
+          ? { componentName: table.options.componentName }
+          : {}),
         validator: describeValidator(table.validator),
         indexes: table.indexes
           .map((index) => ({

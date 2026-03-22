@@ -13,7 +13,6 @@ import {
   type MutationCtx,
   type QueryCtx,
   type SyncoreCapabilities,
-  type SyncoreExperimentalPlugin,
   type SyncoreRuntime
 } from "@syncore/core";
 
@@ -87,14 +86,12 @@ const functions = {
   "runtime/readCapabilities": query({
     args: {},
     returns: v.object({
-      platformProvided: v.string(),
-      pluginOnly: v.string()
+      platformProvided: v.string()
     }),
     handler: async (ctx: QueryCtx<typeof schema>) => {
       const capabilities = ctx.capabilities as Record<string, string>;
       return {
-        platformProvided: capabilities.platformProvided,
-        pluginOnly: capabilities.pluginOnly
+        platformProvided: capabilities.platformProvided
       };
     }
   })
@@ -133,7 +130,7 @@ const getFile = createFunctionReference<
 const readCapabilities = createFunctionReference<
   "query",
   Record<never, never>,
-  { platformProvided: string; pluginOnly: string }
+  { platformProvided: string }
 >("query", "runtime/readCapabilities");
 
 type ExpoFactory = {
@@ -143,7 +140,6 @@ type ExpoFactory = {
   storageDirectoryName: string;
   createRuntime(options?: {
     capabilities?: SyncoreCapabilities;
-    experimentalPlugins?: Array<SyncoreExperimentalPlugin<ContractSchema>>;
   }): Promise<SyncoreRuntime<ContractSchema>>;
   createDestructiveRuntime(
     destructiveSchema: AnySyncoreSchema
@@ -235,39 +231,21 @@ describe("expo adapter contracts", () => {
     await secondRuntime.stop();
   });
 
-  it("merges capabilities and runs plugin lifecycle hooks", async () => {
+  it("exposes runtime capabilities inside function contexts", async () => {
     const factory = await createExpoFactory();
     factories.push(factory);
-
-    const lifecycleEvents: string[] = [];
-    const plugin: SyncoreExperimentalPlugin<ContractSchema> = {
-      name: "expo-plugin",
-      capabilities: {
-        pluginOnly: "expo-plugin"
-      },
-      onStart() {
-        lifecycleEvents.push("start");
-      },
-      onStop() {
-        lifecycleEvents.push("stop");
-      }
-    };
 
     const runtime = await factory.createRuntime({
       capabilities: {
         platformProvided: "expo-platform"
-      },
-      experimentalPlugins: [plugin]
+      }
     });
 
     await runtime.start();
     await expect(runtime.createClient().query(readCapabilities)).resolves.toEqual({
-      platformProvided: "expo-platform",
-      pluginOnly: "expo-plugin"
+      platformProvided: "expo-platform"
     });
     await runtime.stop();
-
-    expect(lifecycleEvents).toEqual(["start", "stop"]);
   });
 
   it("supports lazy bootstrap start and reset", async () => {
@@ -330,10 +308,7 @@ async function createExpoFactory(): Promise<ExpoFactory> {
         scheduler: {
           pollIntervalMs: 10
         },
-        ...(options?.capabilities ? { capabilities: options.capabilities } : {}),
-        ...(options?.experimentalPlugins
-          ? { experimentalPlugins: options.experimentalPlugins }
-          : {})
+        ...(options?.capabilities ? { capabilities: options.capabilities } : {})
       });
       activeRuntimes.add(runtime as SyncoreRuntime<AnySyncoreSchema>);
       return runtime;

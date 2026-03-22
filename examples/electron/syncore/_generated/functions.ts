@@ -8,17 +8,19 @@
  */
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
-
+import { composeProjectFunctionRegistry } from "syncorejs";
 import { getByDate as entries__getByDate } from "../functions/entries.js";
 import { list as entries__list } from "../functions/entries.js";
 import { remove as entries__remove } from "../functions/entries.js";
 import { search as entries__search } from "../functions/entries.js";
 import { upsert as entries__upsert } from "../functions/entries.js";
 
+const componentsManifest = {} as const;
+
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
-export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
+export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
   /**
    * Runtime definition for the public Syncore query `entries/getByDate`.
    */
@@ -46,10 +48,12 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
  *
  * Most application code should import from `./api` instead of using this map directly.
  */
-export const functions: SyncoreFunctionsRegistry = {
+const rootFunctions: SyncoreRootFunctionsRegistry = {
   "entries/list": entries__list,
   "entries/getByDate": entries__getByDate,
   "entries/search": entries__search,
   "entries/upsert": entries__upsert,
   "entries/remove": entries__remove,
 } as const;
+
+export const functions: SyncoreFunctionRegistry = composeProjectFunctionRegistry(rootFunctions, componentsManifest);

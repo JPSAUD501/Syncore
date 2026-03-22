@@ -3,9 +3,9 @@ import type {
   CapabilityDescriptor,
   DevtoolsLiveQueryScope,
   QueryCtx,
+  SyncoreResolvedComponents,
   SyncoreCapabilities,
   SyncoreClient,
-  SyncoreExperimentalPluginContext,
   SyncoreRuntime,
   SyncoreRuntimeAdmin,
   SyncoreRuntimeOptions,
@@ -25,7 +25,6 @@ import { SchedulerEngine } from "./engines/schedulerEngine.js";
 import { SchemaEngine } from "./engines/schemaEngine.js";
 import { StorageEngine } from "./engines/storageEngine.js";
 import { inferDriverDatabasePath } from "./engines/shared.js";
-import { PluginHost } from "./pluginHost.js";
 import { TransactionCoordinator } from "./transactionCoordinator.js";
 import { ensureSupportedSystemFormats } from "./systemMeta.js";
 
@@ -38,7 +37,6 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
   readonly platform: string;
   readonly externalChangeSourceId = generateId();
   readonly driverDatabasePath: string | undefined;
-  readonly pluginHost: PluginHost<TSchema>;
   readonly capabilities: Readonly<SyncoreCapabilities>;
   readonly capabilityDescriptors: ReadonlyArray<CapabilityDescriptor>;
   readonly devtoolsEngine: DevtoolsEngine;
@@ -57,18 +55,12 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
     runtime: SyncoreRuntime<AnySyncoreSchema>
   ) {
     this.platform = options.platform ?? "node";
-    this.pluginHost = new PluginHost(
-      options.experimentalPlugins ?? [],
-      () => this.createPluginContext()
-    );
-    this.capabilityDescriptors = Object.freeze(
-      this.pluginHost.buildCapabilityDescriptors(
-        options.capabilityDescriptors ?? []
-      )
-    );
-    this.capabilities = Object.freeze(
-      this.pluginHost.buildCapabilities(options.capabilities ?? {})
-    );
+    this.capabilityDescriptors = Object.freeze([
+      ...(options.capabilityDescriptors ?? [])
+    ]);
+    this.capabilities = Object.freeze({
+      ...(options.capabilities ?? {})
+    });
     this.driverDatabasePath = inferDriverDatabasePath(
       options.driver as { filename?: string; databasePath?: string }
     );
@@ -190,7 +182,7 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
     }
     await this.prepareForDirectAccess();
     try {
-      await this.pluginHost.runHook("onStart");
+      await this.runComponentHooks("onStart");
       this.reactivityEngine.start();
       this.schedulerEngine.startPolling();
       this.started = true;
@@ -228,7 +220,7 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
     let stopError: unknown;
     if (this.started) {
       try {
-        await this.pluginHost.runHook("onStop");
+        await this.runComponentHooks("onStop");
       } catch (error) {
         stopError = error;
       }
@@ -259,19 +251,35 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
     return this.executionEngine.watchQuery(reference, args);
   }
 
-  private createPluginContext(): SyncoreExperimentalPluginContext<TSchema> {
-    return {
-      runtimeId: this.runtimeId,
-      platform: this.platform,
-      schema: this.options.schema,
-      driver: this.options.driver,
-      storage: this.options.storage,
-      ...(this.options.scheduler ? { scheduler: this.options.scheduler } : {}),
-      ...(this.options.devtools ? { devtools: this.options.devtools } : {}),
-      capabilityDescriptors: [...this.capabilityDescriptors],
-      emitDevtools: (event: SyncoreDevtoolsEvent) => {
-        this.devtoolsEngine.emit(event);
-      }
-    };
+  private async runComponentHooks(
+    hook: "onStart" | "onStop"
+  ): Promise<void> {
+    for (const component of this.options.components ?? []) {
+      await this.runComponentHookTree(component, hook);
+    }
+  }
+
+  private async runComponentHookTree(
+    component: SyncoreResolvedComponents[number],
+    hook: "onStart" | "onStop"
+  ): Promise<void> {
+    const handler = component[hook];
+    if (handler) {
+      await handler({
+        runtimeId: this.runtimeId,
+        platform: this.platform,
+        componentPath: component.path,
+        componentName: component.name,
+        version: component.version,
+        config: component.config,
+        capabilities: component.grantedCapabilities,
+        emitDevtools: (event: SyncoreDevtoolsEvent) => {
+          this.devtoolsEngine.emit(event);
+        }
+      });
+    }
+    for (const child of component.children) {
+      await this.runComponentHookTree(child, hook);
+    }
   }
 }

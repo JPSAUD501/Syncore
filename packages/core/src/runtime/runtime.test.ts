@@ -22,7 +22,6 @@ import {
   type SyncoreExternalChangeEvent,
   type SyncoreExternalChangeSignal,
   type QueryCtx,
-  type SyncoreExperimentalPlugin,
   type MutationCtx,
   type StorageObject,
   type StorageWriteInput,
@@ -560,10 +559,9 @@ describe("SyncoreRuntime schema + scheduler", () => {
     await runtime.stop();
   });
 
-  it("injects runtime capabilities and experimental plugin capabilities into function contexts", async () => {
+  it("injects runtime capabilities into function contexts", async () => {
     const databasePath = path.join(rootDirectory, "capabilities.db");
     const storagePath = path.join(rootDirectory, "storage");
-    const lifecycleEvents: string[] = [];
     const schema = defineSchema({
       tasks: defineTable({
         text: v.string(),
@@ -571,27 +569,13 @@ describe("SyncoreRuntime schema + scheduler", () => {
       })
     });
 
-    const plugin: SyncoreExperimentalPlugin<typeof schema> = {
-      name: "test-plugin",
-      capabilities: {
-        pluginOnly: "enabled"
-      },
-      onStart() {
-        lifecycleEvents.push("start");
-      },
-      onStop() {
-        lifecycleEvents.push("stop");
-      }
-    };
-
     const runtime = new SyncoreRuntime({
       schema,
       functions: {
         "tasks/readCapabilities": query({
           args: {},
           returns: v.object({
-            platformProvided: v.string(),
-            pluginOnly: v.string()
+            platformProvided: v.string()
           }),
           handler: async (ctx) => {
             const capabilities = (ctx as QueryCtx).capabilities as Record<
@@ -599,8 +583,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
               string
             >;
             return {
-              platformProvided: capabilities.platformProvided,
-              pluginOnly: capabilities.pluginOnly
+              platformProvided: capabilities.platformProvided
             };
           }
         })
@@ -609,8 +592,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
       storage: new TestStorageAdapter(storagePath),
       capabilities: {
         platformProvided: "node"
-      },
-      experimentalPlugins: [plugin]
+      }
     });
 
     await runtime.start();
@@ -621,19 +603,15 @@ describe("SyncoreRuntime schema + scheduler", () => {
         Record<never, never>,
         {
           platformProvided: string;
-          pluginOnly: string;
         }
       >("query", "tasks/readCapabilities")
     );
 
     expect(result).toEqual({
-      platformProvided: "node",
-      pluginOnly: "enabled"
+      platformProvided: "node"
     });
 
     await runtime.stop();
-
-    expect(lifecycleEvents).toEqual(["start", "stop"]);
   });
 
   it("publishes external change events for database and storage writes", async () => {

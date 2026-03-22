@@ -265,6 +265,14 @@ export class SchemaEngine<TSchema extends AnySyncoreSchema> {
 
       tables.push({
         name,
+        ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
+        owner: table.options.componentPath ? "component" : "root",
+        ...(table.options.componentPath
+          ? { componentPath: table.options.componentPath }
+          : {}),
+        ...(table.options.componentName
+          ? { componentName: table.options.componentName }
+          : {}),
         fields,
         indexes: table.indexes.map((index) => ({
           name: index.name,

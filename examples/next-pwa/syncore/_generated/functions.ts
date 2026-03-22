@@ -8,7 +8,7 @@
  */
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
-
+import { composeProjectFunctionRegistry } from "syncorejs";
 import { createRecord as artifacts__createRecord } from "../functions/artifacts";
 import { generate as artifacts__generate } from "../functions/artifacts";
 import { getContent as artifacts__getContent } from "../functions/artifacts";
@@ -31,10 +31,12 @@ import { triggerReminder as tasks__triggerReminder } from "../functions/tasks";
 import { update as tasks__update } from "../functions/tasks";
 import { workspace as tasks__workspace } from "../functions/tasks";
 
+const componentsManifest = {} as const;
+
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
-export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
+export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
   /**
    * Runtime definition for the public Syncore mutation `artifacts/createRecord`.
    */
@@ -126,7 +128,7 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
  *
  * Most application code should import from `./api` instead of using this map directly.
  */
-export const functions: SyncoreFunctionsRegistry = {
+const rootFunctions: SyncoreRootFunctionsRegistry = {
   "artifacts/listByTask": artifacts__listByTask,
   "artifacts/getContent": artifacts__getContent,
   "artifacts/createRecord": artifacts__createRecord,
@@ -149,3 +151,5 @@ export const functions: SyncoreFunctionsRegistry = {
   "tasks/remove": tasks__remove,
   "tasks/seedDemo": tasks__seedDemo,
 } as const;
+
+export const functions: SyncoreFunctionRegistry = composeProjectFunctionRegistry(rootFunctions, componentsManifest);

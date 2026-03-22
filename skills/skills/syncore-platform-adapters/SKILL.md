@@ -1,39 +1,25 @@
 ---
 name: syncore-platform-adapters
-description: Integration patterns for Syncore across Node scripts, Electron, browser workers, Expo, Next PWA, browser ESM, and Svelte while preserving typed client references and local runtime behavior. Use when wiring Syncore into a concrete runtime or debugging adapter-specific DX and transport behavior.
+description: Integration patterns for Syncore across Node scripts, Electron, browser workers, web apps, Expo, Next PWA, browser ESM, and Svelte while preserving typed client references and local runtime behavior. Use when wiring Syncore into a concrete runtime, worker, provider, or client transport, or debugging adapter-specific behavior.
 ---
 
 # Syncore Platform Adapters
 
 Use this skill when wiring Syncore into a concrete runtime environment or
-debugging adapter-specific DX and transport behavior.
+debugging adapter-specific behavior.
 
 ## Documentation Sources
 
-Read these first:
+Read these first from the current app:
 
-- `docs/quickstarts/node-script.md`
-- `docs/quickstarts/electron.md`
-- `docs/quickstarts/react-web.md`
-- `docs/quickstarts/expo.md`
-- `docs/quickstarts/next-pwa.md`
-- `docs/guides/syncore-vs-convex.md`
-- `packages/platform-node/AGENTS.md`
-- `packages/platform-web/AGENTS.md`
-- `packages/platform-expo/src/index.ts`
-- `packages/platform-expo/src/react.tsx`
-- `packages/platform-node/src/index.ts`
-- `packages/platform-node/src/ipc-react.tsx`
-- `packages/platform-web/src/react.tsx`
-- `packages/platform-web/src/worker.ts`
-- `packages/next/src/index.tsx`
-- `packages/next/src/config.ts`
-- `packages/svelte/src/index.ts`
-- `examples/browser-esm/main.ts`
-- `examples/electron/src/renderer/App.tsx`
-- `examples/expo/lib/syncore.ts`
-- `examples/next-pwa/app/page.tsx`
-- `examples/sveltekit/package.json`
+- `package.json`
+- `syncore.config.ts`
+- `syncore/schema.ts`
+- `syncore/components.ts`
+- `syncore/_generated/functions.ts`
+- `syncore/_generated/components.ts`
+- app bootstrap files such as `main.ts`, `syncore.worker.ts`, `lib/syncore.ts`, or provider wrappers
+- installed `syncorejs` docs or type declarations
 
 ## Instructions
 
@@ -46,9 +32,7 @@ The Syncore runtime stays local. Adapters only provide environment-specific IO:
 - transport to UI layers
 - timers and lifecycle hooks
 
-Keep user functions portable and adapter setup specific.
-
-### Prefer Public Entry Points In App Docs
+### Prefer Public Entry Points
 
 For app-facing setup, prefer the public `syncorejs/*` surface:
 
@@ -63,32 +47,23 @@ For app-facing setup, prefer the public `syncorejs/*` surface:
 - `syncorejs/next/config`
 - `syncorejs/svelte`
 
-Use `@syncore/*` packages mainly when editing the monorepo internals
-themselves.
-
-### Monorepo Caveat
-
-Some workspace fixtures import built paths directly, such as the Next example
-config, to keep workspace builds deterministic. Document public app usage with
-`syncorejs/*` unless the task is specifically about monorepo internals.
-
 ### Node Script
-
-For local scripts without a UI shell, use `withNodeSyncoreClient`:
 
 ```ts
 import path from "node:path";
 import { withNodeSyncoreClient } from "syncorejs/node";
-import { api } from "./syncore/_generated/api.ts";
-import schema from "./syncore/schema.ts";
-import { functions } from "./syncore/_generated/functions.ts";
+import { api } from "./syncore/_generated/api";
+import schema from "./syncore/schema";
+import { functions } from "./syncore/_generated/functions";
+import { resolvedComponents } from "./syncore/_generated/components";
 
 await withNodeSyncoreClient(
   {
     databasePath: path.join(process.cwd(), ".syncore", "syncore.db"),
     storageDirectory: path.join(process.cwd(), ".syncore", "storage"),
     schema,
-    functions
+    functions,
+    components: resolvedComponents
   },
   async (client) => {
     console.log(await client.query(api.tasks.list));
@@ -98,34 +73,27 @@ await withNodeSyncoreClient(
 
 ### Electron
 
-Run Syncore in the main process and expose a narrow bridge to the renderer.
+Run Syncore in the main process, not the renderer:
 
 ```ts
 import path from "node:path";
 import { app } from "electron";
 import { createNodeSyncoreRuntime } from "syncorejs/node";
-import schema from "../syncore/schema.js";
-import { functions } from "../syncore/_generated/functions.js";
+import schema from "../syncore/schema";
+import { functions } from "../syncore/_generated/functions";
+import { resolvedComponents } from "../syncore/_generated/components";
 
 const runtime = createNodeSyncoreRuntime({
   databasePath: path.join(app.getPath("userData"), "syncore.db"),
   storageDirectory: path.join(app.getPath("userData"), "storage"),
   schema,
   functions,
+  components: resolvedComponents,
   platform: "electron-main"
 });
 ```
 
-In the renderer, use `SyncoreElectronProvider` from
-`syncorejs/node/ipc/react`. Keep the preload bridge narrow with
-`installSyncoreWindowBridge()`.
-
-Do not put SQLite in the renderer process.
-
 ### Web Worker
-
-For the web target, host Syncore inside a dedicated worker and talk to it
-through the managed client.
 
 ```ts
 /// <reference lib="webworker" />
@@ -133,49 +101,36 @@ through the managed client.
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
+import { resolvedComponents } from "../syncore/_generated/components";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "my-syncore-app",
   persistenceMode: "opfs"
 });
 ```
 
-```tsx
-import { SyncoreBrowserProvider } from "syncorejs/browser/react";
-
-<SyncoreBrowserProvider
-  workerUrl={new URL("./syncore.worker.ts", import.meta.url)}
->
-  {children}
-</SyncoreBrowserProvider>;
-```
-
 ### Expo
-
-Use the bootstrap helper and mount `SyncoreExpoProvider` with a fallback while
-the local runtime starts.
 
 ```ts
 import { createExpoSyncoreBootstrap } from "syncorejs/expo";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
+import { resolvedComponents } from "../syncore/_generated/components";
 
 export const syncore = createExpoSyncoreBootstrap({
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "syncore.db",
   storageDirectoryName: "syncore-storage"
 });
 ```
 
 ### Next PWA
-
-Use the Next helpers to integrate the worker and serve the SQL.js wasm asset.
-
-Configure `next.config.ts` with `withSyncoreNext`:
 
 ```ts
 import { withSyncoreNext } from "syncorejs/next/config";
@@ -185,78 +140,28 @@ export default withSyncoreNext({
 });
 ```
 
-Then wire the provider:
-
-```tsx
-"use client";
-
-import { SyncoreNextProvider } from "syncorejs/next";
-
-const createWorker = () =>
-  new Worker(new URL("./syncore.worker", import.meta.url), {
-    type: "module"
-  });
-
-export function AppSyncoreProvider({
-  children
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <SyncoreNextProvider createWorker={createWorker}>
-      {children}
-    </SyncoreNextProvider>
-  );
-}
-```
-
-Remember the current Next flow also expects `sql-wasm.wasm` in `public/`, plus
-service worker wiring when you want installable offline behavior.
-
-### Browser ESM And Svelte
-
-The repo also demonstrates lower-level browser ESM usage through
-`createBrowserWorkerClient(...)` and Svelte bindings via `syncorejs/svelte`.
-
-Reach for those patterns when React is not the UI layer.
-
-## Examples
-
-### Pick The Right Adapter
-
-- Node script -> `syncorejs/node` with `withNodeSyncoreClient`
-- Electron desktop app -> `syncorejs/node` plus IPC bridge and `syncorejs/node/ipc/react`
-- Browser app with worker isolation -> `syncorejs/browser` plus `syncorejs/browser/react`
-- Expo app with local SQLite -> `syncorejs/expo` plus `syncorejs/expo/react`
-- Next installable offline app -> `syncorejs/next` plus `syncorejs/next/config`
-- Svelte or SvelteKit app -> `syncorejs/browser` plus `syncorejs/svelte`
-- Browser ESM sample -> `syncorejs/browser` plus explicit function references
-
 ## Best Practices
 
 - Keep the runtime in the environment best suited for local storage and lifecycle control
 - Preserve typed references across transports and clients
-- Use the official quickstarts and examples for target-specific wiring
 - Keep adapter code thin and user functions portable
-- Prefer wrapper providers in UI shells instead of hand-rolling provider setup each time
-- Validate both runtime behavior and declaration output when touching adapter types
+- Pass `resolvedComponents` when the app installs components
+- Use the current app bootstrap files as the source of truth for target-specific wiring
 
 ## Common Pitfalls
 
 1. Running Electron storage or SQLite directly in the renderer
-2. Breaking worker or IPC type boundaries by overconstraining transport types
-3. Forgetting environment-specific assets such as `sql-wasm.wasm`, Next config wiring, or service worker setup
-4. Solving adapter typing issues with app-level casts instead of shared fixes
-5. Documenting internal `@syncore/*` imports where public `syncorejs/*` entrypoints are the intended app API
+2. Forgetting to pass generated `resolvedComponents` when components are installed
+3. Missing environment-specific assets such as SQL.js wasm files or worker config
+4. Solving adapter typing issues with app-level casts instead of checking the installed package surface
+5. Mixing app runtime concerns into shared business logic
 
 ## References
 
-- `docs/quickstarts/node-script.md`
-- `docs/quickstarts/electron.md`
-- `docs/quickstarts/react-web.md`
-- `docs/quickstarts/expo.md`
-- `docs/quickstarts/next-pwa.md`
-- `packages/platform-node/AGENTS.md`
-- `packages/platform-web/AGENTS.md`
-- `packages/next/src/config.ts`
-- `packages/svelte/src/index.ts`
+- `package.json`
+- `syncore.config.ts`
+- `syncore/schema.ts`
+- `syncore/components.ts`
+- `syncore/_generated/functions.ts`
+- `syncore/_generated/components.ts`
+- app bootstrap files

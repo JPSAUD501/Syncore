@@ -51,7 +51,20 @@ export async function buildDoctorReport(cwd: string): Promise<DoctorReport> {
   const checks = [
     { category: "project" as const, path: "syncore.config.ts" },
     { category: "schema" as const, path: path.join("syncore", "schema.ts") },
+    {
+      category: "project" as const,
+      path: path.join("syncore", "components.ts"),
+      optional: true
+    },
     { category: "project" as const, path: path.join("syncore", "functions") },
+    {
+      category: "generated" as const,
+      path: path.join("syncore", "_generated", "components.ts")
+    },
+    {
+      category: "generated" as const,
+      path: path.join("syncore", "_generated", "schema.ts")
+    },
     {
       category: "generated" as const,
       path: path.join("syncore", "_generated", "functions.ts")
@@ -62,7 +75,8 @@ export async function buildDoctorReport(cwd: string): Promise<DoctorReport> {
     checks.map(async (entry) => ({
       category: entry.category,
       path: entry.path.replaceAll("\\", "/"),
-      ok: await fileExists(path.join(cwd, entry.path))
+      ok:
+        (await fileExists(path.join(cwd, entry.path))) || entry.optional === true
     }))
   );
   const projectTarget = await resolveProjectTargetDescriptor(cwd);

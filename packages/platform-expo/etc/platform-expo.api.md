@@ -12,7 +12,6 @@ import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
 import * as _syncore_core0 from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
-import { SyncoreExperimentalPlugin } from '@syncore/core';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
@@ -23,11 +22,11 @@ import { SyncoreStorageAdapter } from '@syncore/core';
 // @public
 export interface CreateExpoRuntimeOptions {
     capabilities?: SyncoreCapabilities;
+    components?: SyncoreRuntimeOptions<ExpoSyncoreSchema>["components"];
     databaseDirectory?: string;
     databaseName?: string;
     devtools?: DevtoolsSink;
     driver?: SyncoreSqlDriver;
-    experimentalPlugins?: Array<SyncoreExperimentalPlugin<ExpoSyncoreSchema>>;
     externalChangeApplier?: SyncoreExternalChangeApplier;
     externalChangeSignal?: SyncoreExternalChangeSignal;
     functions: SyncoreRuntimeOptions<ExpoSyncoreSchema>["functions"];

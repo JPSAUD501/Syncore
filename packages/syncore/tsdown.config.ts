@@ -5,6 +5,7 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/components.ts",
     "src/cli.ts",
     "src/browser.ts",
     "src/browser-react.tsx",

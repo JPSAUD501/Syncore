@@ -1,0 +1,3 @@
+interface:
+  display_name: "Syncore Component Authoring"
+  short_description: "Create reusable Syncore components and plugin packages"

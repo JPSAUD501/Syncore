@@ -9,6 +9,8 @@
 
 import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
+export { components } from "./components";
+
 import type { archiveHabit as habits__archiveHabit } from "../functions/habits";
 import type { completionsForDate as habits__completionsForDate } from "../functions/habits";
 import type { createHabit as habits__createHabit } from "../functions/habits";

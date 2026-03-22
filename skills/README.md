@@ -1,10 +1,11 @@
 # Syncore Skills
 
-Agent skills for building local-first, reactive backends with Syncore.
+Agent skills for building local-first, reactive applications and reusable
+components with Syncore.
 
 ## Overview
 
-This directory adapts the skill pattern to Syncore's actual architecture:
+This directory adapts the skill pattern to Syncore's public architecture:
 
 - fully local runtimes backed by SQLite
 - typed `query`, `mutation`, and `action` functions
@@ -12,23 +13,23 @@ This directory adapts the skill pattern to Syncore's actual architecture:
 - platform adapters for browser workers, Node or Electron, Expo, Next, and Svelte
 - local schema drift detection, SQL migrations, scheduler jobs, and file storage
 
-The goal is straightforward: skills should point agents back to the source of
-truth in this repo and generate code that matches Syncore's current public API.
+The goal is straightforward: skills should help agents work in any app that
+depends on `syncorejs`, without requiring access to Syncore internal source code.
 
 ## Source Of Truth
 
-Prefer repo-local references over assumptions:
+Prefer app-local sources and installed package surfaces over assumptions:
 
-- `README.md`
-- `docs/architecture.md`
-- `docs/development.md`
-- `docs/guides/syncore-vs-convex.md`
-- `docs/quickstarts/*.md`
-- `packages/*/AGENTS.md`
-- `examples/*`
-
-Use `references/convex-backend` only as behavioral background when the Syncore
-repo does not already answer the question.
+- `package.json`
+- `tsconfig.json`
+- `syncore.config.ts`
+- `syncore/schema.ts`
+- `syncore/components.ts`
+- `syncore/functions/**/*.ts`
+- `syncore/migrations/*`
+- `syncore/_generated/*`
+- app bootstrap files
+- installed `syncorejs` docs and type declarations
 
 ## Available Skills
 
@@ -42,6 +43,9 @@ repo does not already answer the question.
 | [syncore-cli-codegen](skills/syncore-cli-codegen/SKILL.md)             | `syncorejs init`, `codegen`, `doctor`, migrations, `seed`, and `dev`    |
 | [syncore-platform-adapters](skills/syncore-platform-adapters/SKILL.md) | Node, Electron, browser worker, Expo, Next, browser ESM, and Svelte     |
 | [syncore-scheduler-storage](skills/syncore-scheduler-storage/SKILL.md) | Durable local scheduling, misfire policies, recurring jobs, and storage |
+| [syncore-components](skills/syncore-components/SKILL.md)               | Umbrella index for Syncore components and plugin-style workflows         |
+| [syncore-component-authoring](skills/syncore-component-authoring/SKILL.md) | Authoring reusable Syncore components and package contracts          |
+| [syncore-component-integration](skills/syncore-component-integration/SKILL.md) | Installing, binding, and consuming Syncore components in apps      |
 
 ## Repository Structure
 
@@ -54,6 +58,9 @@ skills/
 `- skills/
    |- syncore/
    |- syncore-best-practices/
+   |- syncore-components/
+   |- syncore-component-authoring/
+   |- syncore-component-integration/
    |- syncore-functions/
    |- syncore-schema-migrations/
    |- syncore-react-realtime/
@@ -77,6 +84,6 @@ Optional UI metadata lives in `agents/openai.yaml`.
 
 ## Notes
 
-- These skills are intentionally repo-local and documentation-first.
+- These skills are intentionally standalone and app-oriented.
 - They should not encourage editing generated files under `syncore/_generated`.
-- They should prefer current Syncore APIs over Convex analogies whenever the products differ.
+- They should prefer public `syncorejs` APIs over internal implementation details.

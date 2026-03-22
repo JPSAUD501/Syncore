@@ -19,6 +19,9 @@ export interface PersistedLogEntry {
   platform?: string;
   eventType: string;
   category: "query" | "mutation" | "action" | "system";
+  owner?: "root" | "component";
+  componentPath?: string;
+  componentName?: string;
   message: string;
   event: Record<string, unknown>;
 }
@@ -285,7 +288,11 @@ function formatLogEntry(entry: PersistedLogEntry): string {
     entry.origin === "dashboard"
       ? "dashboard"
       : entry.publicRuntimeId && entry.runtimeLabel
-        ? `${entry.publicRuntimeId} ${entry.runtimeLabel}`
-        : entry.publicRuntimeId ?? entry.runtimeLabel ?? "runtime";
-  return `${timestamp}  ${target}  ${runtime}  ${entry.category}  ${entry.message}`;
+      ? `${entry.publicRuntimeId} ${entry.runtimeLabel}`
+      : entry.publicRuntimeId ?? entry.runtimeLabel ?? "runtime";
+  const component =
+    entry.owner === "component" && entry.componentPath
+      ? `  component:${entry.componentPath}`
+      : "";
+  return `${timestamp}  ${target}  ${runtime}${component}  ${entry.category}  ${entry.message}`;
 }

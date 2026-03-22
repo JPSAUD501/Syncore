@@ -92,9 +92,26 @@ export class StorageEngine {
   }
 
   createStorageApi(state: RuntimeExecutionState): SyncoreStorageApi {
+    const componentMetadata = state.componentMetadata;
+    const namespacePrefix = componentMetadata
+      ? `component:${componentMetadata.componentPath}:`
+      : "";
+    const ensureStorageCapability = () => {
+      if (
+        componentMetadata &&
+        !componentMetadata.grantedCapabilities.includes("storage")
+      ) {
+        throw new Error(
+          `Component ${JSON.stringify(componentMetadata.componentPath)} is not allowed to use storage.`
+        );
+      }
+    };
+    const scopedId = (id: string) => `${namespacePrefix}${id}`;
+
     return {
       put: async (input: StorageWriteInput) => {
-        const id = generateId();
+        ensureStorageCapability();
+        const id = scopedId(generateId());
         const createdAt = Date.now();
         await this.deps.driver.run(
           `INSERT OR REPLACE INTO "_storage_pending" (_id, _creationTime, file_name, content_type) VALUES (?, ?, ?, ?)`,
@@ -122,6 +139,9 @@ export class StorageEngine {
           type: "storage.updated",
           runtimeId: this.deps.runtimeId,
           storageId: id,
+          ...(componentMetadata
+            ? { componentPath: componentMetadata.componentPath }
+            : {}),
           operation: "put",
           timestamp: Date.now()
         });
@@ -132,6 +152,7 @@ export class StorageEngine {
         return id;
       },
       get: async (id: string): Promise<StorageObject | null> => {
+        ensureStorageCapability();
         state.dependencyCollector?.add(`storage:${id}`);
         const row = await this.deps.driver.get<StorageMetadataRow>(
           `SELECT _id, _creationTime, file_name, content_type, size, path FROM "_storage" WHERE _id = ?`,
@@ -148,6 +169,7 @@ export class StorageEngine {
         };
       },
       read: async (id: string) => {
+        ensureStorageCapability();
         state.dependencyCollector?.add(`storage:${id}`);
         const row = await this.deps.driver.get<Pick<StorageMetadataRow, "_id">>(
           `SELECT _id FROM "_storage" WHERE _id = ?`,
@@ -159,6 +181,7 @@ export class StorageEngine {
         return this.deps.storage.read(id);
       },
       delete: async (id: string) => {
+        ensureStorageCapability();
         await this.deps.storage.delete(id);
         await this.deps.driver.withTransaction(async () => {
           await this.deps.driver.run(
@@ -174,6 +197,9 @@ export class StorageEngine {
           type: "storage.updated",
           runtimeId: this.deps.runtimeId,
           storageId: id,
+          ...(componentMetadata
+            ? { componentPath: componentMetadata.componentPath }
+            : {}),
           operation: "delete",
           timestamp: Date.now()
         });

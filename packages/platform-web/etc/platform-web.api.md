@@ -20,7 +20,6 @@ import * as _syncore_core0 from '@syncore/core';
 import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
-import { SyncoreExperimentalPlugin } from '@syncore/core';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeEvent } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
@@ -168,10 +167,10 @@ export interface CreateWebPersistenceOptions {
 // @public
 export interface CreateWebRuntimeOptions {
     capabilities?: SyncoreCapabilities;
+    components?: SyncoreRuntimeOptions<WebSyncoreSchema>["components"];
     databaseName?: string;
     devtools?: DevtoolsSink | false;
     driver?: SyncoreRuntimeOptions<WebSyncoreSchema>["driver"];
-    experimentalPlugins?: Array<SyncoreExperimentalPlugin<WebSyncoreSchema>>;
     functions: SyncoreRuntimeOptions<WebSyncoreSchema>["functions"];
     locateFile?: (fileName: string) => string;
     opfsRootDirectoryName?: string;

@@ -19,7 +19,11 @@ import type {
   SyncoreSqlDriver
 } from "./runtime.js";
 import { createFunctionReference } from "./runtime.js";
-import { safeReadRecurringSchedule } from "./internal/engines/shared.js";
+import {
+  parseCanonicalComponentFunctionName,
+  parseComponentScopedIdentifier,
+  safeReadRecurringSchedule
+} from "./internal/engines/shared.js";
 
 export interface DevtoolsCommandHandlerDeps {
   driver: SyncoreSqlDriver;
@@ -592,6 +596,14 @@ async function getSchemaTables(
 
       return {
         name,
+        ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
+        owner: table.options.componentPath ? ("component" as const) : ("root" as const),
+        ...(table.options.componentPath
+          ? { componentPath: table.options.componentPath }
+          : {}),
+        ...(table.options.componentName
+          ? { componentName: table.options.componentName }
+          : {}),
         fields,
         indexes: table.indexes.map((index) => ({
           name: index.name,
@@ -627,9 +639,24 @@ async function listSchedulerJobs(
     return rows.map((row) => {
       const schedule = safeReadRecurringSchedule(row.schedule_json);
       const scheduleLabel = schedule ? formatScheduleLabel(schedule) : undefined;
+      const functionComponent = parseCanonicalComponentFunctionName(
+        row.function_name
+      );
+      const idComponent = parseComponentScopedIdentifier(row.id);
       return {
         id: row.id,
         functionName: row.function_name,
+        owner:
+          functionComponent || idComponent ? ("component" as const) : ("root" as const),
+        ...(functionComponent
+          ? {
+              componentPath: functionComponent.componentPath
+            }
+          : idComponent
+            ? {
+                componentPath: idComponent.componentPath
+              }
+            : {}),
         args: JSON.parse(row.args_json) as Record<string, unknown>,
         scheduledAt: row.created_at,
         runAt: row.run_at,
@@ -660,15 +687,28 @@ function listFunctions(
         entry[1] !== undefined
     )
     .map(([name, fn]) => {
+      const componentFunction = parseCanonicalComponentFunctionName(name);
       const descriptor: {
         name: string;
         type: "query" | "mutation" | "action";
         file: string;
+        owner?: "root" | "component";
+        componentPath?: string;
+        visibility?: "public" | "internal";
+        localName?: string;
         args?: Record<string, unknown>;
       } = {
         name,
         type: fn.kind,
-        file: inferFileFromFunctionName(name)
+        file: inferFileFromFunctionName(name),
+        owner: componentFunction ? "component" : "root",
+        ...(componentFunction
+          ? {
+              componentPath: componentFunction.componentPath,
+              visibility: componentFunction.visibility,
+              localName: componentFunction.localName
+            }
+          : {})
       };
       const argsDesc = describeValidator(fn.argsValidator);
       if (argsDesc.kind === "object") {
@@ -679,6 +719,10 @@ function listFunctions(
 }
 
 function inferFileFromFunctionName(name: string): string {
+  const componentFunction = parseCanonicalComponentFunctionName(name);
+  if (componentFunction) {
+    return `components/${componentFunction.componentPath}`;
+  }
   const parts = name.split(":");
   if (parts.length > 1) {
     return `${parts[0]}.ts`;

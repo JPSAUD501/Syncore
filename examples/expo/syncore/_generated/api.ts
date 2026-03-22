@@ -9,6 +9,8 @@
 
 import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
+export { components } from "./components";
+
 import type { create as notes__create } from "../functions/notes";
 import type { get as notes__get } from "../functions/notes";
 import type { list as notes__list } from "../functions/notes";

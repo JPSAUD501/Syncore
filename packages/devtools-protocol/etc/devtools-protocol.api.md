@@ -30,12 +30,22 @@ export interface DataFilter {
 export interface FunctionDefinition {
     args?: Record<string, unknown>;
     // (undocumented)
+    componentName?: string;
+    // (undocumented)
+    componentPath?: string;
+    // (undocumented)
     file: string;
     // (undocumented)
+    localName?: string;
+    // (undocumented)
     name: string;
+    // (undocumented)
+    owner?: "root" | "component";
     returns?: Record<string, unknown>;
     // (undocumented)
     type: "query" | "mutation" | "action";
+    // (undocumented)
+    visibility?: "public" | "internal";
 }
 
 // @public (undocumented)
@@ -47,6 +57,10 @@ export interface SchedulerJob {
     args: Record<string, unknown>;
     // (undocumented)
     completedAt?: number;
+    // (undocumented)
+    componentName?: string;
+    // (undocumented)
+    componentPath?: string;
     cronSchedule?: string;
     // (undocumented)
     durationMs?: number;
@@ -60,6 +74,8 @@ export interface SchedulerJob {
     lastRunAt?: number;
     // (undocumented)
     misfirePolicy?: SchedulerMisfirePolicy;
+    // (undocumented)
+    owner?: "root" | "component";
     // (undocumented)
     recurringName?: string;
     // (undocumented)
@@ -145,6 +161,10 @@ export const SYNCORE_DEVTOOLS_PROTOCOL_VERSION = 1;
 // @public (undocumented)
 export interface SyncoreActiveQueryInfo {
     // (undocumented)
+    componentName?: string;
+    // (undocumented)
+    componentPath?: string;
+    // (undocumented)
     dependencyKeys: string[];
     // (undocumented)
     functionName: string;
@@ -152,6 +172,8 @@ export interface SyncoreActiveQueryInfo {
     id: string;
     // (undocumented)
     lastRunAt: number;
+    // (undocumented)
+    owner?: "root" | "component";
 }
 
 // @public (undocumented)
@@ -257,22 +279,30 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     type: "query.executed";
     queryId: string;
     functionName: string;
+    componentPath?: string;
+    componentName?: string;
     dependencies: string[];
     durationMs: number;
 }) | (SyncoreDevtoolsEventBase & {
     type: "query.invalidated";
     queryId: string;
+    componentPath?: string;
+    componentName?: string;
     reason: string;
 }) | (SyncoreDevtoolsEventBase & {
     type: "mutation.committed";
     mutationId: string;
     functionName: string;
+    componentPath?: string;
+    componentName?: string;
     changedTables: string[];
     durationMs: number;
 }) | (SyncoreDevtoolsEventBase & {
     type: "action.completed";
     actionId: string;
     functionName: string;
+    componentPath?: string;
+    componentName?: string;
     durationMs: number;
     error?: string;
 }) | (SyncoreDevtoolsEventBase & {
@@ -281,6 +311,7 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
 }) | (SyncoreDevtoolsEventBase & {
     type: "storage.updated";
     storageId: string;
+    componentPath?: string;
     operation: "put" | "delete";
 }) | (SyncoreDevtoolsEventBase & {
     type: "log";
@@ -467,6 +498,12 @@ export interface TableIndex {
 // @public (undocumented)
 export interface TableSchema {
     // (undocumented)
+    componentName?: string;
+    // (undocumented)
+    componentPath?: string;
+    // (undocumented)
+    displayName?: string;
+    // (undocumented)
     documentCount: number;
     // (undocumented)
     fields: TableField[];
@@ -474,6 +511,8 @@ export interface TableSchema {
     indexes: TableIndex[];
     // (undocumented)
     name: string;
+    // (undocumented)
+    owner?: "root" | "component";
 }
 
 // @public (undocumented)

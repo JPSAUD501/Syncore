@@ -38,6 +38,11 @@
       "types": "./dist/cli.d.ts",
       "import": "./dist/cli.js"
     },
+    "./components": {
+      "default": "./dist/components.js",
+      "types": "./dist/components.d.ts",
+      "import": "./dist/components.js"
+    },
     "./browser": {
       "default": "./dist/browser.js",
       "types": "./dist/browser.d.ts",

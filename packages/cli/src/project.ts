@@ -30,6 +30,7 @@ import {
   isLocalPortInUse,
   loadProjectConfig,
   loadProjectFunctions,
+  loadProjectResolvedComponents,
   loadProjectSchema,
   resolveProjectTargetConfig,
   runCodegen,
@@ -48,6 +49,10 @@ export interface ProjectPaths {
 
 export interface TableSummary {
   name: string;
+  displayName?: string;
+  owner: "root" | "component";
+  componentPath?: string;
+  componentName?: string;
   documentCount: number;
 }
 
@@ -227,10 +232,11 @@ export async function resolveProjectTargetDescriptor(
 }
 
 export async function createManagedProjectClient(cwd: string) {
-  const [paths, schema, functions] = await Promise.all([
+  const [paths, schema, functions, components] = await Promise.all([
     requireProjectPaths(cwd),
     loadProjectSchema(cwd),
-    loadRuntimeProjectFunctions(cwd)
+    loadRuntimeProjectFunctions(cwd),
+    loadProjectResolvedComponents(cwd)
   ]);
 
   return await createManagedNodeSyncoreClient({
@@ -238,6 +244,7 @@ export async function createManagedProjectClient(cwd: string) {
     storageDirectory: paths.storageDirectory,
     schema,
     functions,
+    components,
     devtools: false,
     platform: "cli"
   });
@@ -343,7 +350,18 @@ export function normalizeFunctionName(
     }
   }
 
-  return trimmed.replace(/^api\./, "").replaceAll(".", "/").replaceAll(":", "/");
+  const normalized = trimmed
+    .replace(/^api\./, "")
+    .replaceAll(".", "/")
+    .replaceAll(":", "/");
+  const componentMatch = [...Object.keys(functions)]
+    .filter((name) => isComponentPublicFunctionMatch(name, normalized))
+    .sort((left, right) => left.localeCompare(right));
+  if (componentMatch.length === 1) {
+    return componentMatch[0]!;
+  }
+
+  return normalized;
 }
 
 export async function listProjectTables(cwd: string): Promise<TableSummary[]> {
@@ -357,11 +375,20 @@ export async function listProjectTables(cwd: string): Promise<TableSummary[]> {
   try {
     const results: TableSummary[] = [];
     for (const tableName of schema.tableNames()) {
+      const table = schema.getTable(tableName);
       const row = await driver.get<{ count: number }>(
         `SELECT COUNT(*) AS count FROM ${quoteIdentifier(tableName)}`
       );
       results.push({
         name: tableName,
+        ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
+        owner: table.options.componentPath ? "component" : "root",
+        ...(table.options.componentPath
+          ? { componentPath: table.options.componentPath }
+          : {}),
+        ...(table.options.componentName
+          ? { componentName: table.options.componentName }
+          : {}),
         documentCount: Number(row?.count ?? 0)
       });
     }
@@ -788,6 +815,22 @@ async function loadRuntimeProjectFunctions(
     await runCodegen(cwd);
     return await loadProjectFunctions(cwd);
   }
+}
+
+function isComponentPublicFunctionMatch(
+  functionName: string,
+  requestedName: string
+): boolean {
+  const match = /^components\/(.+)\/public\/(.+)$/.exec(functionName);
+  if (!match) {
+    return false;
+  }
+  const componentPath = match[1] ?? "";
+  const localName = match[2] ?? "";
+  return (
+    requestedName === `components/${componentPath}/${localName}` ||
+    requestedName === `${componentPath}/${localName}`
+  );
 }
 
 function quoteIdentifier(value: string): string {

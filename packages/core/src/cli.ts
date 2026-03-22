@@ -54,6 +54,7 @@ import {
   type StorageWriteInput,
   type SyncoreSchema,
   type SyncoreFunctionRegistry,
+  type SyncoreResolvedComponents,
   type SyncoreSqlDriver,
   type SyncoreStorageAdapter,
   type TableDefinition,
@@ -95,6 +96,12 @@ export function templateUsesConnectedClients(
 interface SyncoreTemplateFile {
   path: string;
   content: string;
+}
+
+interface ScannedFunctionEntry {
+  pathParts: string[];
+  exportName: string;
+  kind: "query" | "mutation" | "action";
 }
 
 export interface ScaffoldProjectOptions {
@@ -335,15 +342,13 @@ if (isCliEntryPoint()) {
 export async function runCodegen(cwd: string): Promise<void> {
   const functionsDir = path.join(cwd, "syncore", "functions");
   const generatedDir = path.join(cwd, "syncore", "_generated");
+  const componentsManifestPath = path.join(cwd, "syncore", "components.ts");
   await mkdir(generatedDir, { recursive: true });
   const functionImportExtension = await resolveFunctionImportExtension(cwd);
+  const hasComponentsManifest = await fileExists(componentsManifestPath);
 
   const files = await listTypeScriptFiles(functionsDir);
-  const functionEntries: Array<{
-    pathParts: string[];
-    exportName: string;
-    kind: "query" | "mutation" | "action";
-  }> = [];
+  const functionEntries: ScannedFunctionEntry[] = [];
 
   for (const file of files) {
     const content = await readFile(file, "utf8");
@@ -374,6 +379,8 @@ export async function runCodegen(cwd: string): Promise<void> {
     ``,
     `import { createFunctionReferenceFor } from "syncorejs";`,
     `import type { FunctionReferenceFor } from "syncorejs";`,
+    `export { components } from "./components${functionImportExtension}";`,
+    ``,
     ...renderFunctionTypeImports(functionEntries, functionImportExtension),
     ``,
     ...renderGeneratedApiInterfaces(functionEntries),
@@ -401,8 +408,14 @@ export async function runCodegen(cwd: string): Promise<void> {
     ` */`,
     ``,
     `import type { SyncoreFunctionRegistry } from "syncorejs";`,
-    ``,
+    `import { composeProjectFunctionRegistry } from "syncorejs";`,
+    ...renderGeneratedManifestImportLines(
+      hasComponentsManifest,
+      functionImportExtension
+    ),
     ...renderFunctionImports(functionEntries, functionImportExtension),
+    ``,
+    ...renderGeneratedManifestDeclarationLines(hasComponentsManifest),
     ``,
     ...renderGeneratedFunctionsInterface(functionEntries),
     ``,
@@ -411,12 +424,66 @@ export async function runCodegen(cwd: string): Promise<void> {
     ` *`,
     ` * Most application code should import from \`./api\` instead of using this map directly.`,
     ` */`,
-    `export const functions: SyncoreFunctionsRegistry = {`,
+    `const rootFunctions: SyncoreRootFunctionsRegistry = {`,
     ...functionEntries.map(
       (entry) =>
         `  ${JSON.stringify(`${entry.pathParts.join("/")}/${entry.exportName}`)}: ${renderFunctionImportName(entry)},`
     ),
     `} as const;`,
+    ``,
+    `export const functions: SyncoreFunctionRegistry = composeProjectFunctionRegistry(rootFunctions, componentsManifest);`,
+    ``
+  ].join("\n");
+
+  const schemaSource = [
+    `/**`,
+    ` * Generated composed Syncore schema including installed components.`,
+    ` *`,
+    ` * THIS CODE IS AUTOMATICALLY GENERATED.`,
+    ` *`,
+    ` * To regenerate, run \`npx syncorejs dev\` or \`npx syncorejs codegen\`.`,
+    ` * @module`,
+    ` */`,
+    ``,
+    `import type { AnyTableDefinition, SyncoreSchema } from "syncorejs";`,
+    `import { composeProjectSchema } from "syncorejs";`,
+    `import rootSchema from "../schema${functionImportExtension}";`,
+    ...renderGeneratedManifestImportLines(
+      hasComponentsManifest,
+      functionImportExtension
+    ),
+    ``,
+    ...renderGeneratedManifestDeclarationLines(hasComponentsManifest),
+    ``,
+    `const schema: SyncoreSchema<Record<string, AnyTableDefinition>> = composeProjectSchema(rootSchema as never, componentsManifest);`,
+    ``,
+    `export default schema;`,
+    ``
+  ].join("\n");
+
+  const componentsSource = [
+    `/**`,
+    ` * Generated installed-component helpers for this Syncore app.`,
+    ` *`,
+    ` * THIS CODE IS AUTOMATICALLY GENERATED.`,
+    ` *`,
+    ` * To regenerate, run \`npx syncorejs dev\` or \`npx syncorejs codegen\`.`,
+    ` * @module`,
+    ` */`,
+    ``,
+    `import { createInstalledComponentsApi, resolveComponentsManifest } from "syncorejs";`,
+    ...renderGeneratedManifestImportLines(
+      hasComponentsManifest,
+      functionImportExtension
+    ),
+    ``,
+    ...renderGeneratedManifestDeclarationLines(hasComponentsManifest),
+    ``,
+    `export const components = createInstalledComponentsApi(componentsManifest);`,
+    ``,
+    `export const resolvedComponents = resolveComponentsManifest(componentsManifest);`,
+    ``,
+    `export default resolvedComponents;`,
     ``
   ].join("\n");
 
@@ -541,7 +608,9 @@ export async function runCodegen(cwd: string): Promise<void> {
   ].join("\n");
 
   await writeFile(path.join(generatedDir, "api.ts"), apiSource);
+  await writeFile(path.join(generatedDir, "components.ts"), componentsSource);
   await writeFile(path.join(generatedDir, "functions.ts"), functionsSource);
+  await writeFile(path.join(generatedDir, "schema.ts"), schemaSource);
   await writeFile(path.join(generatedDir, "server.ts"), serverSource);
 }
 
@@ -607,6 +676,13 @@ export default defineSchema({
 `
     },
     {
+      path: path.join("syncore", "components.ts"),
+      content: `import { defineComponents } from "syncorejs";
+
+export default defineComponents({});
+`
+    },
+    {
       path: path.join("syncore", "functions", "tasks.ts"),
       content: `import { mutation, query, v } from "../_generated/server";
 
@@ -633,13 +709,15 @@ export const create = mutation({
           content: `/// <reference lib="webworker" />
 
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "syncore-app",
   persistenceMode: "opfs"
 });
@@ -665,12 +743,14 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
       files.push({
         path: path.join("lib", "syncore.ts"),
         content: `import { createExpoSyncoreBootstrap } from "syncorejs/expo";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 export const syncore = createExpoSyncoreBootstrap({
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "syncore-app.db",
   storageDirectoryName: "syncore-app-storage"
 });
@@ -684,13 +764,15 @@ export const syncore = createExpoSyncoreBootstrap({
           content: `/* eslint-disable */
 
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "syncore-app",
   persistenceDatabaseName: "syncore-app",
   locateFile: () => "/sql-wasm.wasm",
@@ -727,7 +809,8 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
         content: `import path from "node:path";
 import { withNodeSyncoreClient } from "syncorejs/node";
 import { api } from "./syncore/_generated/api.ts";
-import schema from "./syncore/schema.ts";
+import schema from "./syncore/_generated/schema.ts";
+import { resolvedComponents } from "./syncore/_generated/components.ts";
 import { functions } from "./syncore/_generated/functions.ts";
 
 await withNodeSyncoreClient(
@@ -735,7 +818,8 @@ await withNodeSyncoreClient(
     databasePath: path.join(process.cwd(), ".syncore", "syncore.db"),
     storageDirectory: path.join(process.cwd(), ".syncore", "storage"),
     schema,
-    functions
+    functions,
+    components: resolvedComponents
   },
   async (client) => {
     await client.mutation(api.tasks.create, { text: "Run locally" });
@@ -751,7 +835,8 @@ await withNodeSyncoreClient(
         content: `import path from "node:path";
 import { app } from "electron";
 import { createNodeSyncoreRuntime } from "syncorejs/node";
-import schema from "../syncore/schema.js";
+import schema from "../syncore/_generated/schema.js";
+import { resolvedComponents } from "../syncore/_generated/components.js";
 import { functions } from "../syncore/_generated/functions.js";
 
 export function createAppSyncoreRuntime() {
@@ -761,6 +846,7 @@ export function createAppSyncoreRuntime() {
     storageDirectory: path.join(userDataDirectory, "storage"),
     schema,
     functions,
+    components: resolvedComponents,
     platform: "electron-main"
   });
 }
@@ -1328,17 +1414,13 @@ function buildApiModuleTree(
 }
 
 function renderGeneratedFunctionsInterface(
-  functionEntries: Array<{
-    pathParts: string[];
-    exportName: string;
-    kind: "query" | "mutation" | "action";
-  }>
+  functionEntries: ScannedFunctionEntry[]
 ): string[] {
   const lines = [
     `/**`,
     ` * Type-safe runtime definitions for every function exported from \`syncore/functions\`.`,
     ` */`,
-    `export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {`
+    `export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {`
   ];
 
   for (const entry of functionEntries
@@ -1358,6 +1440,24 @@ function renderGeneratedFunctionsInterface(
 
   lines.push(`}`);
   return [lines.join("\n")];
+}
+
+function renderGeneratedManifestImportLines(
+  hasComponentsManifest: boolean,
+  extension: "" | ".js"
+): string[] {
+  if (!hasComponentsManifest) {
+    return [];
+  }
+  return [
+    `import componentsManifest from "../components${extension}";`
+  ];
+}
+
+function renderGeneratedManifestDeclarationLines(
+  hasComponentsManifest: boolean
+): string[] {
+  return hasComponentsManifest ? [] : [`const componentsManifest = {} as const;`];
 }
 
 function renderApiInterfaceName(node: ApiModuleNode): string {
@@ -1498,7 +1598,7 @@ function requireProjectTargetConfig(
   return projectTarget;
 }
 
-export async function loadProjectSchema(
+export async function loadProjectRootSchema(
   cwd: string
 ): Promise<SyncoreSchema<Record<string, AnyTableDefinition>>> {
   const filePath = path.join(cwd, "syncore", "schema.ts");
@@ -1512,6 +1612,46 @@ export async function loadProjectSchema(
     typeof schema.tableNames !== "function"
   ) {
     throw new Error("syncore/schema.ts must default export defineSchema(...).");
+  }
+  return schema;
+}
+
+export async function loadProjectComponentsManifest(
+  cwd: string
+): Promise<Record<string, unknown>> {
+  const filePath = path.join(cwd, "syncore", "components.ts");
+  if (!(await fileExists(filePath))) {
+    return {};
+  }
+
+  const manifest = await loadDefaultExport<Record<string, unknown>>(filePath);
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    throw new Error(
+      "syncore/components.ts must default export defineComponents({...})."
+    );
+  }
+  return manifest;
+}
+
+export async function loadProjectSchema(
+  cwd: string
+): Promise<SyncoreSchema<Record<string, AnyTableDefinition>>> {
+  const filePath = path.join(cwd, "syncore", "_generated", "schema.ts");
+  if (!(await fileExists(filePath))) {
+    await runCodegen(cwd);
+  }
+  const schema =
+    await loadDefaultExport<SyncoreSchema<Record<string, AnyTableDefinition>>>(
+      filePath
+    );
+  if (
+    !schema ||
+    typeof schema !== "object" ||
+    typeof schema.tableNames !== "function"
+  ) {
+    throw new Error(
+      "syncore/_generated/schema.ts must default export a composed Syncore schema."
+    );
   }
   return schema;
 }
@@ -1573,6 +1713,9 @@ export async function loadProjectFunctions(
   cwd: string
 ): Promise<SyncoreFunctionRegistry> {
   const filePath = path.join(cwd, "syncore", "_generated", "functions.ts");
+  if (!(await fileExists(filePath))) {
+    await runCodegen(cwd);
+  }
   const functions = await loadNamedExport<SyncoreFunctionRegistry>(
     filePath,
     "functions"
@@ -1583,6 +1726,25 @@ export async function loadProjectFunctions(
     );
   }
   return functions;
+}
+
+export async function loadProjectResolvedComponents(
+  cwd: string
+): Promise<SyncoreResolvedComponents> {
+  const filePath = path.join(cwd, "syncore", "_generated", "components.ts");
+  if (!(await fileExists(filePath))) {
+    await runCodegen(cwd);
+  }
+  const components = await loadNamedExport<SyncoreResolvedComponents>(
+    filePath,
+    "resolvedComponents"
+  );
+  if (!Array.isArray(components)) {
+    throw new Error(
+      "syncore/_generated/components.ts must export resolvedComponents."
+    );
+  }
+  return components;
 }
 
 interface ProjectTargetBackend {
@@ -1835,8 +1997,11 @@ async function createProjectTargetBackend(
     return null;
   }
 
-  const schema = await loadProjectSchema(cwd);
-  const functions = await loadProjectFunctions(cwd);
+  const [schema, functions, components] = await Promise.all([
+    loadProjectSchema(cwd),
+    loadProjectFunctions(cwd),
+    loadProjectResolvedComponents(cwd)
+  ]);
   const databasePath = path.resolve(cwd, projectTarget.databasePath);
   const storageDirectory = path.resolve(cwd, projectTarget.storageDirectory);
   await mkdir(path.dirname(databasePath), { recursive: true });
@@ -1846,6 +2011,7 @@ async function createProjectTargetBackend(
   const runtime = new SyncoreRuntime({
     schema,
     functions,
+    components,
     driver,
     storage: new HubFileStorageAdapter(storageDirectory),
     platform: "project"

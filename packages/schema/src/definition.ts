@@ -19,6 +19,8 @@ export interface SearchIndexDefinition {
 
 export interface TableDefinitionOptions {
   tableName?: string;
+  componentPath?: string;
+  componentName?: string;
 }
 
 export interface TableDocumentSystemFields {

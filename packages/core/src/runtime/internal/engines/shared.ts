@@ -9,6 +9,7 @@ import type {
   RecurringSchedule,
   SyncoreFunctionKind
 } from "../../functions.js";
+import type { SyncoreComponentFunctionMetadata } from "../../components.js";
 import type {
   AnySyncoreSchema,
   DevtoolsLiveQueryScope,
@@ -102,6 +103,7 @@ export type RuntimeExecutionState = {
     >;
   }>;
   dependencyCollector?: Set<DependencyKey>;
+  componentMetadata?: SyncoreComponentFunctionMetadata | undefined;
 };
 
 export function fieldExpression(tableAlias: string, field: string): string {
@@ -245,6 +247,37 @@ export function inferDriverDatabasePath(driver: {
   databasePath?: string;
 }): string | undefined {
   return driver.databasePath ?? driver.filename;
+}
+
+export function parseCanonicalComponentFunctionName(functionName: string):
+  | {
+      componentPath: string;
+      visibility: "public" | "internal";
+      localName: string;
+    }
+  | undefined {
+  const match = /^components\/(.+)\/(public|internal)\/(.+)$/.exec(functionName);
+  if (!match) {
+    return undefined;
+  }
+  return {
+    componentPath: match[1] ?? "",
+    visibility: (match[2] as "public" | "internal") ?? "public",
+    localName: match[3] ?? ""
+  };
+}
+
+export function parseComponentScopedIdentifier(
+  value: string
+): { componentPath: string; localId: string } | undefined {
+  const match = /^component:([^:]+):(.+)$/.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  return {
+    componentPath: match[1] ?? "",
+    localId: match[2] ?? ""
+  };
 }
 
 export function devtoolsScopesForEvent(

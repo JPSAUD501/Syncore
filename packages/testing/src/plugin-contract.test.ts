@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  type CapabilityDescriptor,
   createFunctionReference,
   defineSchema,
   defineTable,
@@ -13,8 +12,6 @@ import {
   v,
   type QueryCtx,
   type SyncoreCapabilities,
-  type SyncoreExperimentalPlugin,
-  type SyncoreRuntimeOptions
 } from "@syncore/core";
 import {
   createNodeSyncoreRuntime,
@@ -38,14 +35,12 @@ const functions = {
   "tasks/readCapabilities": query({
     args: {},
     returns: v.object({
-      platformProvided: v.string(),
-      pluginOnly: v.string()
+      platformProvided: v.string()
     }),
     handler: async (ctx: QueryCtx<typeof schema>) => {
       const capabilities = ctx.capabilities as Record<string, string>;
       return {
-        platformProvided: capabilities.platformProvided,
-        pluginOnly: capabilities.pluginOnly
+        platformProvided: capabilities.platformProvided
       };
     }
   })
@@ -56,7 +51,6 @@ const readCapabilitiesReference = createFunctionReference<
   Record<never, never>,
   {
     platformProvided: string;
-    pluginOnly: string;
   }
 >("query", "tasks/readCapabilities");
 
@@ -65,7 +59,6 @@ type RuntimeFactory = {
   label: "node" | "web";
   createRuntime(options?: {
     capabilities?: SyncoreCapabilities;
-    experimentalPlugins?: Array<SyncoreExperimentalPlugin<PluginTestSchema>>;
   }): Promise<SyncoreRuntime<PluginTestSchema>>;
   dispose(): Promise<void>;
 };
@@ -94,19 +87,11 @@ describe("plugin contracts", () => {
         return factory;
       };
 
-      it("merges runtime and plugin capabilities into function contexts", async () => {
-        const plugin: SyncoreExperimentalPlugin<PluginTestSchema> = {
-          name: `${label}-capabilities`,
-          capabilities: {
-            pluginOnly: `${label}-plugin`
-          }
-        };
-
+      it("exposes runtime capabilities inside function contexts", async () => {
         const runtime = await getFactory().createRuntime({
           capabilities: {
             platformProvided: `${label}-platform`
-          },
-          experimentalPlugins: [plugin]
+          }
         });
 
         await runtime.start();
@@ -114,126 +99,14 @@ describe("plugin contracts", () => {
           await expect(
             runtime.createClient().query(readCapabilitiesReference)
           ).resolves.toEqual({
-            platformProvided: `${label}-platform`,
-            pluginOnly: `${label}-plugin`
+            platformProvided: `${label}-platform`
           });
         } finally {
           await runtime.stop();
         }
       });
-
-      it("runs plugin lifecycle hooks on start and stop", async () => {
-        const lifecycleEvents: string[] = [];
-        const plugin: SyncoreExperimentalPlugin<PluginTestSchema> = {
-          name: `${label}-lifecycle`,
-          onStart() {
-            lifecycleEvents.push("start");
-          },
-          onStop() {
-            lifecycleEvents.push("stop");
-          }
-        };
-
-        const runtime = await getFactory().createRuntime({
-          experimentalPlugins: [plugin]
-        });
-
-        await runtime.start();
-        await runtime.stop();
-
-        expect(lifecycleEvents).toEqual(["start", "stop"]);
-      });
-
-      it("fails fast when a plugin throws during startup", async () => {
-        const runtime = await getFactory().createRuntime({
-          experimentalPlugins: [
-            {
-              name: `${label}-start-failure`,
-              onStart() {
-                throw new Error(`${label} plugin start failed`);
-              }
-            }
-          ]
-        });
-
-        await expect(runtime.start()).rejects.toThrow(
-          `${label} plugin start failed`
-        );
-        await runtime.stop().catch(() => undefined);
-      });
-
-      it("fails explicitly when a plugin throws during shutdown", async () => {
-        const runtime = await getFactory().createRuntime({
-          experimentalPlugins: [
-            {
-              name: `${label}-stop-failure`,
-              onStop() {
-                throw new Error(`${label} plugin stop failed`);
-              }
-            }
-          ]
-        });
-
-        await runtime.start();
-        await expect(runtime.stop()).rejects.toThrow(
-          `${label} plugin stop failed`
-        );
-        await runtime.stop().catch(() => undefined);
-      });
     });
   }
-
-  it("deduplicates and sorts capability descriptors before exposing them to plugins", async () => {
-    const rootDirectory = await mkdtemp(
-      path.join(os.tmpdir(), "syncore-plugin-descriptors-")
-    );
-    const databasePath = path.join(rootDirectory, "syncore.db");
-    const storageDirectory = path.join(rootDirectory, "storage");
-    const observedDescriptors: CapabilityDescriptor[][] = [];
-
-    const duplicateDescriptor = {
-      name: "syncore.descriptor.duplicate",
-      version: 1
-    } satisfies CapabilityDescriptor;
-    const alphaDescriptor = {
-      name: "syncore.descriptor.alpha",
-      version: 1
-    } satisfies CapabilityDescriptor;
-    const zetaDescriptor = {
-      name: "syncore.descriptor.zeta",
-      version: 2
-    } satisfies CapabilityDescriptor;
-
-    const runtime = new SyncoreRuntime<PluginTestSchema>({
-      schema,
-      functions,
-      driver: new NodeSqliteDriver(databasePath),
-      storage: new NodeFileStorageAdapter(storageDirectory),
-      capabilityDescriptors: [duplicateDescriptor, zetaDescriptor],
-      experimentalPlugins: [
-        {
-          name: "capture-descriptors",
-          capabilityDescriptors: [duplicateDescriptor, alphaDescriptor],
-          onStart(context) {
-            observedDescriptors.push([...context.capabilityDescriptors]);
-          }
-        }
-      ]
-    } satisfies SyncoreRuntimeOptions<PluginTestSchema>);
-
-    try {
-      await runtime.start();
-      expect(observedDescriptors).toHaveLength(1);
-      expect(observedDescriptors[0]).toEqual([
-        alphaDescriptor,
-        duplicateDescriptor,
-        zetaDescriptor
-      ]);
-    } finally {
-      await runtime.stop().catch(() => undefined);
-      await rm(rootDirectory, { recursive: true, force: true });
-    }
-  });
 });
 
 async function createNodeFactory(): Promise<RuntimeFactory> {
@@ -252,10 +125,7 @@ async function createNodeFactory(): Promise<RuntimeFactory> {
         schema,
         functions,
         platform: "plugin-contract-node",
-        ...(options?.capabilities ? { capabilities: options.capabilities } : {}),
-        ...(options?.experimentalPlugins
-          ? { experimentalPlugins: options.experimentalPlugins }
-          : {})
+        ...(options?.capabilities ? { capabilities: options.capabilities } : {})
       });
     },
     async dispose() {
@@ -280,10 +150,7 @@ function createWebFactory(): RuntimeFactory {
         persistenceMode: "indexeddb",
         locateFile: () => wasmFilePath,
         platform: "plugin-contract-web",
-        ...(options?.capabilities ? { capabilities: options.capabilities } : {}),
-        ...(options?.experimentalPlugins
-          ? { experimentalPlugins: options.experimentalPlugins }
-          : {})
+        ...(options?.capabilities ? { capabilities: options.capabilities } : {})
       });
     },
     async dispose() {

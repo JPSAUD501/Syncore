@@ -1,23 +1,27 @@
 # Syncore Skills
 
-Agent skills for building production-ready local-first applications with Syncore, following the Agent Skills open format.
+Agent skills for building production-ready local-first applications and reusable
+components with Syncore, following the Agent Skills open format.
 
 ## Syncore Documentation Index
 
-IMPORTANT: Prefer retrieval-led reasoning over pretraining-led reasoning for Syncore tasks.
+IMPORTANT: Prefer retrieval-led reasoning over pretraining-led reasoning for
+Syncore tasks.
 
-For Syncore work, read the repository docs and package guides before relying on assumptions.
+For Syncore work, read the current app and installed package surface before
+relying on assumptions.
 
 ```text
-[Syncore Docs]|repo-local
-|overview:{README.md,docs/architecture.md,docs/development.md,docs/guides/syncore-vs-convex.md}
-|quickstarts:{docs/quickstarts/react-web.md,docs/quickstarts/expo.md,docs/quickstarts/electron.md,docs/quickstarts/next-pwa.md,docs/quickstarts/node-script.md}
-|packages:{packages/core/AGENTS.md,packages/schema/AGENTS.md,packages/cli/AGENTS.md,packages/react/AGENTS.md,packages/platform-node/AGENTS.md,packages/platform-web/AGENTS.md,packages/testing/AGENTS.md}
-|examples:{examples/README.md,examples/browser-esm,examples/electron,examples/expo,examples/next-pwa,examples/sveltekit}
-|reference:{references/convex-backend}
+[Syncore App Context]|project-local
+|config:{package.json,tsconfig.json,syncore.config.ts}
+|source:{syncore/schema.ts,syncore/components.ts,syncore/functions/**/*.ts}
+|generated:{syncore/_generated/api.ts,syncore/_generated/functions.ts,syncore/_generated/server.ts,syncore/_generated/schema.ts,syncore/_generated/components.ts}
+|runtime:{app bootstrap files,providers,workers,main process entrypoints}
+|dependency:{installed syncorejs docs and type declarations}
 ```
 
-When working on Syncore code, treat the repo as the source of truth for architecture, public API shape, and DX goals.
+When working on Syncore code, treat the app and installed `syncorejs` version
+as the source of truth for public API shape and DX expectations.
 
 ## Overview
 
@@ -38,6 +42,9 @@ This directory provides two complementary layers for AI coding agents:
 | [syncore-cli-codegen](skills/syncore-cli-codegen/SKILL.md)             | CLI commands, scaffolding, generated files, and the dev loop          |
 | [syncore-platform-adapters](skills/syncore-platform-adapters/SKILL.md) | Node, Electron, web, Expo, Next, and Svelte integration               |
 | [syncore-scheduler-storage](skills/syncore-scheduler-storage/SKILL.md) | Scheduler jobs, recurring work, misfire policies, and file storage    |
+| [syncore-components](skills/syncore-components/SKILL.md)               | Umbrella index for Syncore components and plugin-style workflows      |
+| [syncore-component-authoring](skills/syncore-component-authoring/SKILL.md) | Authoring reusable Syncore components and package contracts       |
+| [syncore-component-integration](skills/syncore-component-integration/SKILL.md) | Installing, binding, and consuming Syncore components in apps   |
 
 ## Skill Format
 
@@ -76,19 +83,19 @@ description: What the skill does and when to use it
 
 Syncore keeps the product runtime inside the app:
 
-- core owns typed references, validation, reactivity, scheduler state, storage metadata, and devtools events
+- the app defines schema, functions, optional components, and bootstrap wiring
 - platform adapters provide environment-specific IO such as SQLite, files, workers, IPC, and lifecycle hooks
-- React and Svelte bindings stay thin over `SyncoreClient`
+- React and Svelte bindings stay thin over the generated API and client surface
 - codegen flows types from source function definitions into `syncore/_generated/api`
 
 ### Current Developer Loop
 
 Inside an app project:
 
-- user code lives in `syncore/schema.ts` and `syncore/functions/**/*.ts`
+- user code lives in `syncore/schema.ts`, `syncore/components.ts`, and `syncore/functions/**/*.ts`
 - `npx syncorejs dev` is the main happy path and auto-scaffolds a missing Syncore project
 - `npx syncorejs init --template <minimal|node|react-web|expo|electron|next>` is available for explicit scaffolding
-- `npx syncorejs codegen` generates `_generated/api`, `_generated/functions`, and `_generated/server`
+- `npx syncorejs codegen` generates `_generated/api`, `_generated/functions`, `_generated/server`, `_generated/schema`, and `_generated/components`
 - `npx syncorejs migrate:status`, `migrate:generate [name]`, and `migrate:apply` manage schema drift, `_schema_snapshot.json`, and SQL
 - `npx syncorejs import --table <table> <file>` and `npx syncorejs seed --table <table>` load local sample data
 
@@ -99,8 +106,8 @@ Syncore currently does not auto-load a special `syncore/crons.ts` file.
 
 - Do not edit files in `syncore/_generated/`
 - Do not assume Convex docs describe Syncore APIs exactly
-- Do not rely on built `dist` output for example codegen flows in this monorepo
-- Do not add DX workarounds in examples when the real bug belongs in core, codegen, React, or adapters
+- Do not rely on undocumented internal implementation details when public `syncorejs` APIs exist
+- Do not add app-level workarounds before checking the installed package surface and generated outputs
 
 ## Quick Reference
 
@@ -142,10 +149,9 @@ function Tasks() {
 
 ## References
 
-- `README.md`
-- `docs/architecture.md`
-- `docs/development.md`
-- `docs/guides/syncore-vs-convex.md`
-- `packages/core/AGENTS.md`
-- `packages/cli/AGENTS.md`
-- `packages/react/AGENTS.md`
+- `package.json`
+- `syncore.config.ts`
+- `syncore/schema.ts`
+- `syncore/components.ts`
+- `syncore/functions/**/*.ts`
+- `syncore/_generated/*`

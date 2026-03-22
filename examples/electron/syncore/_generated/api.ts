@@ -9,6 +9,8 @@
 
 import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
+export { components } from "./components.js";
+
 import type { getByDate as entries__getByDate } from "../functions/entries.js";
 import type { list as entries__list } from "../functions/entries.js";
 import type { remove as entries__remove } from "../functions/entries.js";

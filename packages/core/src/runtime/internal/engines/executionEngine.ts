@@ -4,9 +4,12 @@ import type {
   FunctionReference,
   FunctionResultFromDefinition,
   MisfirePolicy,
-  SyncoreFunctionDefinition,
   SyncoreFunctionKind
 } from "../../functions.js";
+import {
+  toCanonicalComponentFunctionName,
+  type SyncoreComponentFunctionMetadata
+} from "../../components.js";
 import type {
   ActionCtx,
   AnySyncoreSchema,
@@ -25,6 +28,7 @@ import type {
   QueryBuilder,
   QueryCtx,
   QueryExpression,
+  RegisteredSyncoreFunction,
   SchedulerApi,
   SearchIndexBuilder,
   SearchQuery,
@@ -320,7 +324,8 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
       mutationDepth: 0,
       changedTables: new Set<string>(),
       storageChanges: [],
-      dependencyCollector
+      dependencyCollector,
+      componentMetadata: definition.__syncoreComponent
     });
 
     this.deps.devtools.emit({
@@ -328,6 +333,12 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
       runtimeId: this.deps.runtimeId,
       queryId: reference.name,
       functionName: reference.name,
+      ...(definition.__syncoreComponent
+        ? {
+            componentPath: definition.__syncoreComponent.componentPath,
+            componentName: definition.__syncoreComponent.componentName
+          }
+        : {}),
       dependencies: [...dependencyCollector],
       durationMs: Date.now() - startedAt,
       timestamp: Date.now(),
@@ -350,7 +361,8 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
         this.invokeFunction<TResult>(definition, args, {
           mutationDepth: 1,
           changedTables: transactionState.changedTables,
-          storageChanges: transactionState.storageChanges
+          storageChanges: transactionState.storageChanges,
+          componentMetadata: definition.__syncoreComponent
         })
     );
 
@@ -365,6 +377,12 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
       runtimeId: this.deps.runtimeId,
       mutationId,
       functionName: reference.name,
+      ...(definition.__syncoreComponent
+        ? {
+            componentPath: definition.__syncoreComponent.componentPath,
+            componentName: definition.__syncoreComponent.componentName
+          }
+        : {}),
       changedTables: [...execution.changedTables],
       durationMs: Date.now() - startedAt,
       timestamp: Date.now(),
@@ -388,7 +406,8 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
       const result = await this.invokeFunction<TResult>(definition, args, {
         mutationDepth: 0,
         changedTables: state.changedTables,
-        storageChanges: state.storageChanges
+        storageChanges: state.storageChanges,
+        componentMetadata: definition.__syncoreComponent
       });
       await this.finalizeStatefulExecution(
         actionId,
@@ -400,6 +419,12 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
         runtimeId: this.deps.runtimeId,
         actionId,
         functionName: reference.name,
+        ...(definition.__syncoreComponent
+          ? {
+              componentPath: definition.__syncoreComponent.componentPath,
+              componentName: definition.__syncoreComponent.componentName
+            }
+          : {}),
         durationMs: Date.now() - startedAt,
         timestamp: Date.now(),
         ...(meta.origin ? { origin: meta.origin } : {})
@@ -411,6 +436,12 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
         runtimeId: this.deps.runtimeId,
         actionId,
         functionName: reference.name,
+        ...(definition.__syncoreComponent
+          ? {
+              componentPath: definition.__syncoreComponent.componentPath,
+              componentName: definition.__syncoreComponent.componentName
+            }
+          : {}),
         durationMs: Date.now() - startedAt,
         timestamp: Date.now(),
         ...(meta.origin ? { origin: meta.origin } : {}),
@@ -497,7 +528,8 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
       mutationDepth: 0,
       changedTables: new Set<string>(),
       storageChanges: [],
-      dependencyCollector
+      dependencyCollector,
+      componentMetadata: definition.__syncoreComponent
     });
     return dependencyCollector;
   }
@@ -596,17 +628,16 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
   }
 
   private async invokeFunction<TResult>(
-    definition: SyncoreFunctionDefinition<
-      SyncoreFunctionKind,
-      unknown,
-      unknown,
-      unknown
-    >,
+    definition: RegisteredSyncoreFunction,
     rawArgs: JsonObject,
     state: RuntimeExecutionState
   ): Promise<TResult> {
     const args = definition.argsValidator.parse(rawArgs) as JsonObject;
-    const ctx = this.createContext(definition.kind, state);
+    const ctx = this.createContext(definition.kind, {
+      ...state,
+      componentMetadata:
+        definition.__syncoreComponent ?? state.componentMetadata
+    });
     const result = (await definition.handler(ctx, args)) as TResult;
     if (definition.returnsValidator) {
       return definition.returnsValidator.parse(result) as TResult;
@@ -623,44 +654,73 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
         ? this.createDatabaseWriter(state)
         : this.createDatabaseReader(state);
     const storage = this.deps.storage.createStorageApi(state);
-    const scheduler = this.createSchedulerApi();
+    const scheduler = this.createSchedulerApi(state.componentMetadata);
+    const callerMetadata = state.componentMetadata;
 
     return {
       db,
       storage,
       capabilities: this.deps.capabilities,
       capabilityDescriptors: this.deps.capabilityDescriptors,
+      ...(callerMetadata
+        ? {
+            component: {
+              path: callerMetadata.componentPath,
+              name: callerMetadata.componentName,
+              version: callerMetadata.version,
+              capabilities: callerMetadata.grantedCapabilities
+            }
+          }
+        : {}),
       scheduler,
       runQuery: <TArgs, TResult>(
         reference: FunctionReference<"query", TArgs, TResult>,
         ...args: OptionalArgsTuple<TArgs>
-      ) => this.runQuery(reference, normalizeOptionalArgs(args) as JsonObject),
+      ) =>
+        this.runQuery(
+          this.resolveReferenceForCaller(reference, "query", callerMetadata),
+          normalizeOptionalArgs(args) as JsonObject
+        ),
       runMutation: <TArgs, TResult>(
         reference: FunctionReference<"mutation", TArgs, TResult>,
         ...args: OptionalArgsTuple<TArgs>
       ) => {
+        const resolvedReference = this.resolveReferenceForCaller(
+          reference,
+          "mutation",
+          callerMetadata
+        );
         const normalizedArgs = normalizeOptionalArgs(args);
         if (kind === "mutation") {
           return this.deps.driver.withSavepoint(
             `sp_${generateId().replace(/-/g, "_")}`,
             () =>
               this.invokeFunction<TResult>(
-                this.resolveFunction(reference, "mutation"),
+                this.resolveFunction(
+                  resolvedReference,
+                  "mutation",
+                  callerMetadata
+                ),
                 normalizedArgs as JsonObject,
                 {
                   mutationDepth: state.mutationDepth + 1,
                   changedTables: state.changedTables,
-                  storageChanges: state.storageChanges
+                  storageChanges: state.storageChanges,
+                  componentMetadata: callerMetadata
                 }
               )
           );
         }
-        return this.runMutation(reference, normalizedArgs as JsonObject);
+        return this.runMutation(resolvedReference, normalizedArgs as JsonObject);
       },
       runAction: <TArgs, TResult>(
         reference: FunctionReference<"action", TArgs, TResult>,
         ...args: OptionalArgsTuple<TArgs>
-      ) => this.runAction(reference, normalizeOptionalArgs(args) as JsonObject)
+      ) =>
+        this.runAction(
+          this.resolveReferenceForCaller(reference, "action", callerMetadata),
+          normalizeOptionalArgs(args) as JsonObject
+        )
     } as QueryCtx<TSchema> | MutationCtx<TSchema> | ActionCtx<TSchema>;
   }
 
@@ -672,25 +732,35 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
         tableName: TTableName,
         id: string
       ) => {
-        state.dependencyCollector?.add(`table:${tableName}`);
-        state.dependencyCollector?.add(`row:${tableName}:${id}`);
+        const scopedTableName = this.resolveTableName(
+          tableName,
+          state.componentMetadata
+        );
+        state.dependencyCollector?.add(`table:${scopedTableName}`);
+        state.dependencyCollector?.add(`row:${scopedTableName}:${id}`);
         const row = await this.deps.driver.get<DatabaseRow>(
-          `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(tableName)} WHERE _id = ?`,
+          `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(scopedTableName)} WHERE _id = ?`,
           [id]
         );
         return row
           ? this.deps.schema.deserializeDocument<
               DocumentForTable<TSchema, TTableName>
-            >(tableName, row)
+            >(scopedTableName, row)
           : null;
       },
       query: <TTableName extends TableNames<TSchema>>(tableName: TTableName) =>
         new RuntimeQueryBuilder<DocumentForTable<TSchema, TTableName>>(
           (options) =>
             this.executeQueryBuilder<DocumentForTable<TSchema, TTableName>>(
-              options
+              {
+                ...options,
+                tableName: this.resolveTableName(
+                  tableName,
+                  state.componentMetadata
+                )
+              }
             ),
-          tableName,
+          this.resolveTableName(tableName, state.componentMetadata),
           state.dependencyCollector
         ),
       raw: <TValue>(sql: string, params?: unknown[]) =>
@@ -709,23 +779,27 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
         tableName: TTableName,
         value: InsertValueForTable<TSchema, TTableName>
       ) => {
-        const validated = this.deps.schema.validateDocument(
+        const scopedTableName = this.resolveTableName(
           tableName,
+          state.componentMetadata
+        );
+        const validated = this.deps.schema.validateDocument(
+          scopedTableName,
           value as JsonObject
         );
         const id = generateId();
         const creationTime = Date.now();
         const json = stableStringify(validated);
         await this.deps.driver.run(
-          `INSERT INTO ${quoteIdentifier(tableName)} (_id, _creationTime, _json) VALUES (?, ?, ?)`,
+          `INSERT INTO ${quoteIdentifier(scopedTableName)} (_id, _creationTime, _json) VALUES (?, ?, ?)`,
           [id, creationTime, json]
         );
-        await this.deps.schema.syncSearchIndexes(tableName, {
+        await this.deps.schema.syncSearchIndexes(scopedTableName, {
           _id: id,
           _creationTime: creationTime,
           _json: json
         });
-        state.changedTables.add(tableName);
+        state.changedTables.add(scopedTableName);
         return id;
       },
       patch: async <TTableName extends TableNames<TSchema>>(
@@ -733,9 +807,13 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
         id: string,
         value: Partial<InsertValueForTable<TSchema, TTableName>>
       ) => {
+        const scopedTableName = this.resolveTableName(
+          tableName,
+          state.componentMetadata
+        );
         const current = await reader.get(tableName, id);
         if (!current) {
-          throw new Error(`Document "${id}" does not exist in "${tableName}".`);
+          throw new Error(`Document "${id}" does not exist in "${scopedTableName}".`);
         }
         const merged: JsonObject = { ...omitSystemFields(current), ...value };
         for (const key of Object.keys(merged)) {
@@ -743,81 +821,126 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
             delete merged[key];
           }
         }
-        const validated = this.deps.schema.validateDocument(tableName, merged);
+        const validated = this.deps.schema.validateDocument(
+          scopedTableName,
+          merged
+        );
         await this.deps.driver.run(
-          `UPDATE ${quoteIdentifier(tableName)} SET _json = ? WHERE _id = ?`,
+          `UPDATE ${quoteIdentifier(scopedTableName)} SET _json = ? WHERE _id = ?`,
           [stableStringify(validated), id]
         );
         const row = await this.deps.driver.get<DatabaseRow>(
-          `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(tableName)} WHERE _id = ?`,
+          `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(scopedTableName)} WHERE _id = ?`,
           [id]
         );
         if (row) {
-          await this.deps.schema.syncSearchIndexes(tableName, row);
+          await this.deps.schema.syncSearchIndexes(scopedTableName, row);
         }
-        state.changedTables.add(tableName);
+        state.changedTables.add(scopedTableName);
       },
       replace: async <TTableName extends TableNames<TSchema>>(
         tableName: TTableName,
         id: string,
         value: InsertValueForTable<TSchema, TTableName>
       ) => {
-        const validated = this.deps.schema.validateDocument(
+        const scopedTableName = this.resolveTableName(
           tableName,
+          state.componentMetadata
+        );
+        const validated = this.deps.schema.validateDocument(
+          scopedTableName,
           value as JsonObject
         );
         await this.deps.driver.run(
-          `UPDATE ${quoteIdentifier(tableName)} SET _json = ? WHERE _id = ?`,
+          `UPDATE ${quoteIdentifier(scopedTableName)} SET _json = ? WHERE _id = ?`,
           [stableStringify(validated), id]
         );
         const row = await this.deps.driver.get<DatabaseRow>(
-          `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(tableName)} WHERE _id = ?`,
+          `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(scopedTableName)} WHERE _id = ?`,
           [id]
         );
         if (!row) {
-          throw new Error(`Document "${id}" does not exist in "${tableName}".`);
+          throw new Error(`Document "${id}" does not exist in "${scopedTableName}".`);
         }
-        await this.deps.schema.syncSearchIndexes(tableName, row);
-        state.changedTables.add(tableName);
+        await this.deps.schema.syncSearchIndexes(scopedTableName, row);
+        state.changedTables.add(scopedTableName);
       },
       delete: async <TTableName extends TableNames<TSchema>>(
         tableName: TTableName,
         id: string
       ) => {
+        const scopedTableName = this.resolveTableName(
+          tableName,
+          state.componentMetadata
+        );
         await this.deps.driver.run(
-          `DELETE FROM ${quoteIdentifier(tableName)} WHERE _id = ?`,
+          `DELETE FROM ${quoteIdentifier(scopedTableName)} WHERE _id = ?`,
           [id]
         );
-        await this.deps.schema.removeSearchIndexes(tableName, id);
-        state.changedTables.add(tableName);
+        await this.deps.schema.removeSearchIndexes(scopedTableName, id);
+        state.changedTables.add(scopedTableName);
       }
     };
   }
 
-  private createSchedulerApi(): SchedulerApi {
+  private createSchedulerApi(
+    componentMetadata?: SyncoreComponentFunctionMetadata
+  ): SchedulerApi {
     return {
       runAfter: async (delayMs, reference, ...args) => {
+        if (
+          componentMetadata &&
+          !componentMetadata.grantedCapabilities.includes("scheduler")
+        ) {
+          throw new Error(
+            `Component ${JSON.stringify(componentMetadata.componentPath)} does not have scheduler capability.`
+          );
+        }
         const schedulerArgs = splitSchedulerArgs(args);
         const functionArgs = schedulerArgs[0];
         const misfirePolicy = schedulerArgs[1] ?? DEFAULT_MISFIRE_POLICY;
+        const resolvedReference = this.resolveReferenceForCaller(
+          reference,
+          reference.kind,
+          componentMetadata
+        );
         return this.deps.scheduler.scheduleJob(
           Date.now() + delayMs,
-          reference,
+          resolvedReference,
           functionArgs,
-          misfirePolicy
+          misfirePolicy,
+          componentMetadata
+            ? `component:${componentMetadata.componentPath}:`
+            : undefined
         );
       },
       runAt: async (timestamp, reference, ...args) => {
+        if (
+          componentMetadata &&
+          !componentMetadata.grantedCapabilities.includes("scheduler")
+        ) {
+          throw new Error(
+            `Component ${JSON.stringify(componentMetadata.componentPath)} does not have scheduler capability.`
+          );
+        }
         const schedulerArgs = splitSchedulerArgs(args);
         const functionArgs = schedulerArgs[0];
         const misfirePolicy = schedulerArgs[1] ?? DEFAULT_MISFIRE_POLICY;
         const value =
           timestamp instanceof Date ? timestamp.getTime() : timestamp;
+        const resolvedReference = this.resolveReferenceForCaller(
+          reference,
+          reference.kind,
+          componentMetadata
+        );
         return this.deps.scheduler.scheduleJob(
           value,
-          reference,
+          resolvedReference,
           functionArgs,
-          misfirePolicy
+          misfirePolicy,
+          componentMetadata
+            ? `component:${componentMetadata.componentPath}:`
+            : undefined
         );
       },
       cancel: async (id) => {
@@ -828,23 +951,41 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
 
   private resolveFunction<TKind extends SyncoreFunctionKind>(
     reference: FunctionReference<TKind, unknown, unknown>,
-    expectedKind: TKind
-  ): SyncoreFunctionDefinition<TKind, unknown, unknown, unknown> {
-    const definition = this.deps.functions[reference.name];
+    expectedKind: TKind,
+    callerMetadata?: SyncoreComponentFunctionMetadata
+  ): RegisteredSyncoreFunction & {
+    kind: TKind;
+  } {
+    const resolvedReference = this.resolveReferenceForCaller(
+      reference,
+      expectedKind,
+      callerMetadata
+    );
+    const definition = this.deps.functions[resolvedReference.name];
     if (!definition) {
-      throw new Error(`Unknown function "${reference.name}".`);
+      throw new Error(`Unknown function "${resolvedReference.name}".`);
     }
     if (definition.kind !== expectedKind) {
       throw new Error(
-        `Function "${reference.name}" is a ${definition.kind}, expected ${expectedKind}.`
+        `Function "${resolvedReference.name}" is a ${definition.kind}, expected ${expectedKind}.`
       );
     }
-    return definition as SyncoreFunctionDefinition<
-      TKind,
-      unknown,
-      unknown,
-      unknown
-    >;
+    const metadata = definition.__syncoreComponent;
+    if (metadata?.visibility === "internal") {
+      if (!callerMetadata) {
+        throw new Error(
+          `Function "${resolvedReference.name}" is internal to component "${metadata.componentPath}".`
+        );
+      }
+      if (callerMetadata.componentPath !== metadata.componentPath) {
+        throw new Error(
+          `Function "${resolvedReference.name}" is internal to component "${metadata.componentPath}" and cannot be called from "${callerMetadata.componentPath}".`
+        );
+      }
+    }
+    return definition as RegisteredSyncoreFunction & {
+      kind: TKind;
+    };
   }
 
   private renderExpression(
@@ -872,6 +1013,85 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
   ): string {
     params.push(condition.value);
     return `${fieldExpression(tableAlias, condition.field)} ${condition.operator} ?`;
+  }
+
+  private resolveReferenceForCaller<TKind extends SyncoreFunctionKind>(
+    reference: FunctionReference<TKind, unknown, unknown>,
+    expectedKind: TKind,
+    callerMetadata?: SyncoreComponentFunctionMetadata
+  ): FunctionReference<TKind, unknown, unknown> {
+    if (!callerMetadata) {
+      return reference;
+    }
+
+    if (reference.name.startsWith("components/")) {
+      return reference;
+    }
+
+    const bindingMatch = /^binding:([^/]+)\/(.+)$/.exec(reference.name);
+    if (bindingMatch) {
+      const bindingName = bindingMatch[1]!;
+      const localName = bindingMatch[2]!;
+      const targetComponentPath = callerMetadata.bindings[bindingName];
+      if (!targetComponentPath) {
+        throw new Error(
+          `Component ${JSON.stringify(callerMetadata.componentPath)} does not define binding ${JSON.stringify(bindingName)}.`
+        );
+      }
+      const canonicalName = toCanonicalComponentFunctionName(
+        targetComponentPath,
+        "public",
+        localName
+      );
+      return {
+        kind: expectedKind,
+        name: canonicalName
+      };
+    }
+
+    const internalName = toCanonicalComponentFunctionName(
+      callerMetadata.componentPath,
+      "internal",
+      reference.name
+    );
+    if (this.deps.functions[internalName]) {
+      return {
+        kind: expectedKind,
+        name: internalName
+      };
+    }
+
+    const publicName = toCanonicalComponentFunctionName(
+      callerMetadata.componentPath,
+      "public",
+      reference.name
+    );
+    if (this.deps.functions[publicName]) {
+      return {
+        kind: expectedKind,
+        name: publicName
+      };
+    }
+
+    return reference;
+  }
+
+  private resolveTableName<TTableName extends string>(
+    tableName: TTableName,
+    componentMetadata?: SyncoreComponentFunctionMetadata
+  ): TTableName {
+    if (!componentMetadata) {
+      return tableName;
+    }
+
+    const scopedTableName = componentMetadata.localTables[tableName];
+    if (!scopedTableName) {
+      throw new Error(
+        `Table ${JSON.stringify(tableName)} is not available inside component ${JSON.stringify(componentMetadata.componentPath)}.`
+      );
+    }
+
+    return scopedTableName as TTableName;
   }
 }
 

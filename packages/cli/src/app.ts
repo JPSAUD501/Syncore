@@ -818,8 +818,25 @@ function addDataCommand(program: Command): void {
           });
           if (!ctx.json) {
             for (const entry of tables) {
+              const tableEntry = entry as {
+                name: string;
+                documentCount: number;
+                displayName?: string;
+                owner?: "root" | "component";
+                componentPath?: string;
+              };
+              const label =
+                typeof tableEntry.displayName === "string" &&
+                tableEntry.displayName.length > 0 &&
+                tableEntry.displayName !== tableEntry.name
+                  ? `${tableEntry.displayName} -> ${tableEntry.name}`
+                  : tableEntry.name;
+              const owner =
+                tableEntry.owner === "component"
+                  ? `  component:${String(tableEntry.componentPath ?? "unknown")}`
+                  : "";
               process.stdout.write(
-                `  ${entry.name} (${entry.documentCount} document(s))\n`
+                `  ${label} (${tableEntry.documentCount} document(s))${owner}\n`
               );
             }
           }
@@ -1608,6 +1625,25 @@ function normalizeRuntimeEvent(
 ): PersistedLogEntry | null {
   const functionName =
     typeof event.functionName === "string" ? event.functionName : "unknown";
+  const functionComponent = resolveComponentInfoFromFunctionName(functionName);
+  const queryComponent =
+    typeof event.queryId === "string"
+      ? resolveComponentInfoFromFunctionName(formatInvalidatedQueryId(event.queryId))
+      : undefined;
+  const storageComponent =
+    typeof event.storageId === "string"
+      ? resolveComponentInfoFromScopedValue(event.storageId)
+      : undefined;
+  const componentInfo =
+    typeof event.componentPath === "string"
+      ? {
+          owner: "component" as const,
+          componentPath: event.componentPath,
+          ...(typeof event.componentName === "string"
+            ? { componentName: event.componentName }
+            : {})
+        }
+      : functionComponent ?? queryComponent ?? storageComponent;
   const logMessage =
     typeof event.message === "string" ? event.message : "Syncore log";
   const resolvedTargetId =
@@ -1652,6 +1688,7 @@ function normalizeRuntimeEvent(
       ...entryBase,
       eventType: event.type,
       category: "system",
+      ...(componentInfo ?? {}),
       message: logMessage,
       event
     })
@@ -1665,6 +1702,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "query",
+        ...(componentInfo ?? {}),
         message: `${functionName} executed`,
         event
       };
@@ -1673,6 +1711,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "system",
+        ...(componentInfo ?? {}),
         message: `${formatInvalidatedQueryId(event.queryId)} invalidated${typeof event.reason === "string" ? ` (${event.reason})` : ""}`,
         event
       };
@@ -1681,6 +1720,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "mutation",
+        ...(componentInfo ?? {}),
         message:
           Array.isArray(event.changedTables) && event.changedTables.length > 0
             ? `${functionName} committed (${event.changedTables.join(", ")})`
@@ -1692,6 +1732,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "action",
+        ...(componentInfo ?? {}),
         message:
           typeof event.error === "string" && event.error.length > 0
             ? `${functionName} failed: ${event.error}`
@@ -1719,6 +1760,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "system",
+        ...(componentInfo ?? {}),
         message: `${typeof event.operation === "string" ? event.operation : "update"} ${typeof event.storageId === "string" ? event.storageId : "storage"}`,
         event
       };
@@ -1727,6 +1769,7 @@ function normalizeRuntimeEvent(
         ...entryBase,
         eventType: event.type,
         category: "system",
+        ...(componentInfo ?? {}),
         message: event.type === "log" ? logMessage : humanizeRuntimeEvent(event),
         event
       };
@@ -1767,6 +1810,38 @@ function formatInvalidatedQueryId(queryId: unknown): string {
     return queryId;
   }
   return queryId.slice(0, separatorIndex);
+}
+
+function resolveComponentInfoFromFunctionName(functionName: string):
+  | {
+      owner: "component";
+      componentPath: string;
+    }
+  | undefined {
+  const match = /^components\/(.+)\/(public|internal)\/(.+)$/.exec(functionName);
+  if (!match) {
+    return undefined;
+  }
+  return {
+    owner: "component",
+    componentPath: match[1] ?? ""
+  };
+}
+
+function resolveComponentInfoFromScopedValue(value: string):
+  | {
+      owner: "component";
+      componentPath: string;
+    }
+  | undefined {
+  const match = /^component:([^:]+):(.+)$/.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  return {
+    owner: "component",
+    componentPath: match[1] ?? ""
+  };
 }
 
 function humanizeRuntimeEvent(

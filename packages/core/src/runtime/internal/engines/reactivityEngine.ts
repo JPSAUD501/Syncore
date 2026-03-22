@@ -16,6 +16,7 @@ import type {
   ActiveQueryRecord,
   DependencyKey
 } from "./shared.js";
+import { parseCanonicalComponentFunctionName } from "./shared.js";
 
 type ReactivityEngineDeps = {
   runtimeId: string;
@@ -58,12 +59,25 @@ export class ReactivityEngine {
   }
 
   getActiveQueryInfos(): SyncoreActiveQueryInfo[] {
-    return [...this.activeQueries.values()].map((query) => ({
-      id: query.id,
-      functionName: query.functionName,
-      dependencyKeys: [...query.dependencyKeys],
-      lastRunAt: query.lastRunAt
-    }));
+    return [...this.activeQueries.values()].map((query) => {
+      const componentFunction = parseCanonicalComponentFunctionName(
+        query.functionName
+      );
+      return {
+        id: query.id,
+        functionName: query.functionName,
+        ...(componentFunction
+          ? {
+              owner: "component" as const,
+              componentPath: componentFunction.componentPath
+            }
+          : {
+              owner: "root" as const
+            }),
+        dependencyKeys: [...query.dependencyKeys],
+        lastRunAt: query.lastRunAt
+      };
+    });
   }
 
   watchQuery<TArgs, TResult>(
@@ -155,6 +169,12 @@ export class ReactivityEngine {
         type: "query.invalidated",
         runtimeId: this.deps.runtimeId,
         queryId: query.id,
+        ...(parseCanonicalComponentFunctionName(query.functionName)
+          ? {
+              componentPath: parseCanonicalComponentFunctionName(query.functionName)!
+                .componentPath
+            }
+          : {}),
         reason,
         timestamp: Date.now()
       });

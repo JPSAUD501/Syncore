@@ -35,7 +35,6 @@ import {
   type StorageObject,
   type StorageWriteInput,
   type SyncoreCapabilities,
-  type SyncoreExperimentalPlugin,
   SyncoreRuntime,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
@@ -369,8 +368,8 @@ export interface CreateNodeRuntimeOptions {
   storageDirectory: string;
   schema: NodeSyncoreSchema;
   functions: SyncoreRuntimeOptions<NodeSyncoreSchema>["functions"];
+  components?: SyncoreRuntimeOptions<NodeSyncoreSchema>["components"];
   capabilities?: SyncoreCapabilities;
-  experimentalPlugins?: Array<SyncoreExperimentalPlugin<NodeSyncoreSchema>>;
   appName?: string;
   origin?: string;
   sessionLabel?: string;
@@ -458,15 +457,13 @@ export function createNodeSyncoreRuntime(
   const runtimeOptions: SyncoreRuntimeOptions<NodeSyncoreSchema> = {
     schema: options.schema,
     functions: options.functions,
+    ...(options.components ? { components: options.components } : {}),
     driver: new NodeSqliteDriver(options.databasePath),
     storage: new NodeFileStorageAdapter(options.storageDirectory),
     platform: options.platform ?? "node"
   };
   if (options.capabilities) {
     runtimeOptions.capabilities = options.capabilities;
-  }
-  if (options.experimentalPlugins) {
-    runtimeOptions.experimentalPlugins = options.experimentalPlugins;
   }
   const resolvedDevtools =
     options.devtools === false

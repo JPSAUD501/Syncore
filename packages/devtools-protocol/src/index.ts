@@ -45,18 +45,24 @@ export type SyncoreDevtoolsEvent =
       type: "query.executed";
       queryId: string;
       functionName: string;
+      componentPath?: string;
+      componentName?: string;
       dependencies: string[];
       durationMs: number;
     })
   | (SyncoreDevtoolsEventBase & {
       type: "query.invalidated";
       queryId: string;
+      componentPath?: string;
+      componentName?: string;
       reason: string;
     })
   | (SyncoreDevtoolsEventBase & {
       type: "mutation.committed";
       mutationId: string;
       functionName: string;
+      componentPath?: string;
+      componentName?: string;
       changedTables: string[];
       durationMs: number;
     })
@@ -64,6 +70,8 @@ export type SyncoreDevtoolsEvent =
       type: "action.completed";
       actionId: string;
       functionName: string;
+      componentPath?: string;
+      componentName?: string;
       durationMs: number;
       error?: string;
     })
@@ -74,6 +82,7 @@ export type SyncoreDevtoolsEvent =
   | (SyncoreDevtoolsEventBase & {
       type: "storage.updated";
       storageId: string;
+      componentPath?: string;
       operation: "put" | "delete";
     })
   | (SyncoreDevtoolsEventBase & {
@@ -85,6 +94,9 @@ export type SyncoreDevtoolsEvent =
 export interface SyncoreActiveQueryInfo {
   id: string;
   functionName: string;
+  owner?: "root" | "component";
+  componentPath?: string;
+  componentName?: string;
   dependencyKeys: string[];
   lastRunAt: number;
 }
@@ -398,6 +410,11 @@ export interface FunctionDefinition {
   name: string;
   type: "query" | "mutation" | "action";
   file: string;
+  owner?: "root" | "component";
+  componentPath?: string;
+  componentName?: string;
+  visibility?: "public" | "internal";
+  localName?: string;
   /** Argument validator schema (JSON Schema-like), if available */
   args?: Record<string, unknown>;
   /** Return validator schema, if available */
@@ -406,6 +423,10 @@ export interface FunctionDefinition {
 
 export interface TableSchema {
   name: string;
+  displayName?: string;
+  owner?: "root" | "component";
+  componentPath?: string;
+  componentName?: string;
   fields: TableField[];
   indexes: TableIndex[];
   documentCount: number;
@@ -426,6 +447,9 @@ export interface TableIndex {
 export interface SchedulerJob {
   id: string;
   functionName: string;
+  owner?: "root" | "component";
+  componentPath?: string;
+  componentName?: string;
   args: Record<string, unknown>;
   scheduledAt: number;
   runAt: number;

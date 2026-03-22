@@ -58,7 +58,19 @@ describe("syncore CLI", () => {
     expect(initResult.exitCode).toBe(0);
 
     const generatedApiPath = path.join(cwd, "syncore", "_generated", "api.ts");
+    const generatedComponentsPath = path.join(
+      cwd,
+      "syncore",
+      "_generated",
+      "components.ts"
+    );
     const generatedFunctionsPath = path.join(cwd, "syncore", "_generated", "functions.ts");
+    const generatedSchemaPath = path.join(
+      cwd,
+      "syncore",
+      "_generated",
+      "schema.ts"
+    );
     const generatedServerPath = path.join(cwd, "syncore", "_generated", "server.ts");
     const configPath = path.join(cwd, "syncore.config.ts");
     const firstGeneratedApi = await readFile(generatedApiPath, "utf8");
@@ -67,7 +79,9 @@ describe("syncore CLI", () => {
     const configSource = await readFile(configPath, "utf8");
 
     expect(firstGeneratedApi).toContain("readonly tasks: SyncoreApi__tasks;");
+    expect(await exists(generatedComponentsPath)).toBe(true);
     expect(firstGeneratedFunctions).toContain('"tasks/create"');
+    expect(await exists(generatedSchemaPath)).toBe(true);
     expect(firstGeneratedServer).toContain("export function query<");
     expect(configSource).toContain("projectTarget");
     expect(configSource).toContain('databasePath: ".syncore/syncore.db"');

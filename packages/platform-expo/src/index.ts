@@ -13,7 +13,6 @@ import {
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,
-  type SyncoreExperimentalPlugin,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
   type SyncoreStorageAdapter,
@@ -40,14 +39,14 @@ export interface CreateExpoRuntimeOptions {
   /** The generated function registry for the local Syncore app. */
   functions: SyncoreRuntimeOptions<ExpoSyncoreSchema>["functions"];
 
+  /** Optional resolved installed components for the local Syncore app. */
+  components?: SyncoreRuntimeOptions<ExpoSyncoreSchema>["components"];
+
   /** Optional platform capabilities exposed to function handlers. */
   capabilities?: SyncoreCapabilities;
 
   /** Optional custom SQL driver. Defaults to `expo-sqlite`. */
   driver?: SyncoreSqlDriver;
-
-  /** Optional experimental plugins for runtime hooks. */
-  experimentalPlugins?: Array<SyncoreExperimentalPlugin<ExpoSyncoreSchema>>;
 
   /** Optional custom file/blob storage adapter. */
   storage?: SyncoreStorageAdapter;
@@ -145,6 +144,7 @@ export function createExpoSyncoreRuntime(
   return new SyncoreRuntime({
     schema: options.schema,
     functions: options.functions,
+    ...(options.components ? { components: options.components } : {}),
     driver,
     storage,
     ...(isWebEnvironment && options.externalChangeSignal
@@ -160,9 +160,6 @@ export function createExpoSyncoreRuntime(
     platform: options.platform ?? "expo",
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
     ...(options.devtools ? { devtools: options.devtools } : {}),
-    ...(options.experimentalPlugins
-      ? { experimentalPlugins: options.experimentalPlugins }
-      : {}),
     ...(options.scheduler ? { scheduler: options.scheduler } : {})
   });
 }

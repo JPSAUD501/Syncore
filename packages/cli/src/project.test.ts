@@ -8,9 +8,11 @@ import {
   connectToProjectHub,
   listConnectedClientTargets,
   loadImportDocumentBatches,
+  normalizeFunctionName,
   resolveActiveDashboardUrl,
   resolveDevtoolsUrl
 } from "./project.js";
+import type { SyncoreFunctionRegistry } from "@syncore/core";
 
 describe("project hub discovery", () => {
   const servers: Server[] = [];
@@ -90,6 +92,30 @@ describe("project hub discovery", () => {
     await expect(connectToProjectHub(`ws://127.0.0.1:${address.port}`)).resolves.toBeNull();
   });
 
+});
+
+describe("component-aware function lookup", () => {
+  it("normalizes public component shorthand names", () => {
+    const functions: SyncoreFunctionRegistry = {
+      "tasks/list": {
+        kind: "query",
+        argsValidator: { kind: "object", shape: {}, parse: (value: unknown) => value } as never,
+        handler: async () => []
+      },
+      "components/cache/public/get": {
+        kind: "query",
+        argsValidator: { kind: "object", shape: {}, parse: (value: unknown) => value } as never,
+        handler: async () => null
+      }
+    };
+
+    expect(normalizeFunctionName("components.cache.get", functions)).toBe(
+      "components/cache/public/get"
+    );
+    expect(normalizeFunctionName("cache/get", functions)).toBe(
+      "components/cache/public/get"
+    );
+  });
 });
 
 async function listen(server: Server): Promise<void> {

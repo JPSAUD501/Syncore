@@ -9,7 +9,6 @@ import {
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,
-  type SyncoreExperimentalPlugin,
   type SyncoreRuntimeOptions,
   type SyncoreStorageAdapter,
   type StorageObject,
@@ -62,6 +61,9 @@ export interface CreateWebRuntimeOptions {
   /** The generated function registry for the local Syncore app. */
   functions: SyncoreRuntimeOptions<WebSyncoreSchema>["functions"];
 
+  /** Optional resolved installed components for the local Syncore app. */
+  components?: SyncoreRuntimeOptions<WebSyncoreSchema>["components"];
+
   /** Optional platform capabilities exposed to function handlers. */
   capabilities?: SyncoreCapabilities;
 
@@ -70,9 +72,6 @@ export interface CreateWebRuntimeOptions {
 
   /** Optional custom file/blob storage adapter. */
   storage?: SyncoreStorageAdapter;
-
-  /** Optional experimental plugins for runtime hooks. */
-  experimentalPlugins?: Array<SyncoreExperimentalPlugin<WebSyncoreSchema>>;
 
   /** Optional explicit persistence implementation. */
   persistence?: SyncoreWebPersistence;
@@ -222,6 +221,7 @@ export async function createWebSyncoreRuntime(
   const runtime = new SyncoreRuntime({
     schema: options.schema,
     functions: options.functions,
+    ...(options.components ? { components: options.components } : {}),
     driver,
     storage,
     externalChangeSignal: externalChangeSupport.signal,
@@ -231,9 +231,6 @@ export async function createWebSyncoreRuntime(
     platform: options.platform ?? "browser",
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
     ...(resolvedDevtools ? { devtools: resolvedDevtools } : {}),
-    ...(options.experimentalPlugins
-      ? { experimentalPlugins: options.experimentalPlugins }
-      : {}),
     ...(options.scheduler ? { scheduler: options.scheduler } : {})
   });
 

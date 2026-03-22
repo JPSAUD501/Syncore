@@ -1,0 +1,3 @@
+interface:
+  display_name: "Syncore Component Integration"
+  short_description: "Install, configure, and consume Syncore components in apps"

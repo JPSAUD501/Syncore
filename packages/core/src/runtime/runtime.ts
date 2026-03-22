@@ -11,6 +11,10 @@ import type {
   Validator
 } from "@syncore/schema";
 import type {
+  ResolvedSyncoreComponent,
+  SyncoreComponentFunctionMetadata
+} from "./components.js";
+import type {
   FunctionArgsFromDefinition,
   FunctionKindFromDefinition,
   FunctionReference,
@@ -27,6 +31,7 @@ export interface RegisteredSyncoreFunction {
   argsValidator: Validator<unknown>;
   returnsValidator?: Validator<unknown>;
   handler: RegisteredSyncoreHandler;
+  __syncoreComponent?: SyncoreComponentFunctionMetadata;
 }
 
 export interface SyncoreFunctionRegistry {
@@ -178,6 +183,10 @@ export interface DevtoolsLiveQuerySnapshot {
   activeQueries: SyncoreActiveQueryInfo[];
   schemaTables: Array<{
     name: string;
+    displayName?: string;
+    owner: "root" | "component";
+    componentPath?: string;
+    componentName?: string;
     fields: Array<{
       name: string;
       type: string;
@@ -206,6 +215,8 @@ export interface SchedulerOptions {
   recurringJobs?: RecurringJobDefinition[];
 }
 
+export type SyncoreResolvedComponents = readonly ResolvedSyncoreComponent[];
+
 export interface UpdateScheduledJobOptions {
   id: string;
   schedule: RecurringSchedule;
@@ -218,50 +229,16 @@ export interface SyncoreCapabilities {
   [name: string]: unknown;
 }
 
-export interface SyncoreExperimentalPluginContext<
-  TSchema extends AnySyncoreSchema
-> {
-  runtimeId: string;
-  platform: string;
-  schema: TSchema;
-  driver: SyncoreSqlDriver;
-  storage: SyncoreStorageAdapter;
-  scheduler?: SchedulerOptions;
-  devtools?: DevtoolsSink;
-  capabilityDescriptors: CapabilityDescriptor[];
-  emitDevtools(event: SyncoreDevtoolsEvent): void;
-}
-
-export interface SyncoreExperimentalPlugin<TSchema extends AnySyncoreSchema> {
-  name: string;
-  capabilities?:
-    | SyncoreCapabilities
-    | ((
-        context: SyncoreExperimentalPluginContext<TSchema>
-      ) => SyncoreCapabilities | void);
-  capabilityDescriptors?:
-    | CapabilityDescriptor[]
-    | ((
-        context: SyncoreExperimentalPluginContext<TSchema>
-      ) => CapabilityDescriptor[] | void);
-  onStart?(
-    context: SyncoreExperimentalPluginContext<TSchema>
-  ): Promise<void> | void;
-  onStop?(
-    context: SyncoreExperimentalPluginContext<TSchema>
-  ): Promise<void> | void;
-}
-
 export interface SyncoreRuntimeOptions<TSchema extends AnySyncoreSchema> {
   schema: TSchema;
   functions: SyncoreFunctionRegistry;
+  components?: SyncoreResolvedComponents;
   driver: SyncoreSqlDriver;
   storage: SyncoreStorageAdapter;
   externalChangeSignal?: SyncoreExternalChangeSignal;
   externalChangeApplier?: SyncoreExternalChangeApplier;
   capabilities?: SyncoreCapabilities;
   capabilityDescriptors?: CapabilityDescriptor[];
-  experimentalPlugins?: Array<SyncoreExperimentalPlugin<TSchema>>;
   platform?: string;
   devtools?: DevtoolsSink;
   scheduler?: SchedulerOptions;
@@ -399,6 +376,12 @@ export interface QueryCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
   storage: SyncoreStorageApi;
   capabilities?: Readonly<SyncoreCapabilities>;
   capabilityDescriptors?: ReadonlyArray<CapabilityDescriptor>;
+  component?: {
+    path: string;
+    name: string;
+    version: string;
+    capabilities: readonly string[];
+  };
   runQuery<TArgs, TResult>(
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>

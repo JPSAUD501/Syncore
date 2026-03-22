@@ -16,7 +16,6 @@ import {
   type MutationCtx as GeneratedMutationCtx,
   type QueryCtx as GeneratedQueryCtx
 } from "../../../examples/next-pwa/syncore/_generated/server";
-import { functions } from "../../../examples/next-pwa/syncore/_generated/functions";
 import type { create as tasksCreate } from "../../../examples/next-pwa/syncore/functions/tasks";
 import type { workspace as tasksWorkspace } from "../../../examples/next-pwa/syncore/functions/tasks";
 
@@ -28,11 +27,6 @@ describe("syncorejs public type surface", () => {
     expectTypeOf(api.tasks.create).toEqualTypeOf<
       FunctionReferenceFor<typeof tasksCreate>
     >();
-
-    expectTypeOf(functions["tasks/workspace"]).toEqualTypeOf<
-      typeof tasksWorkspace
-    >();
-    expectTypeOf(functions["tasks/create"]).toEqualTypeOf<typeof tasksCreate>();
   });
 
   it("keeps generated server contexts aligned with the app schema", () => {

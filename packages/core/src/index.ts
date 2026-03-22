@@ -10,6 +10,7 @@ export type {
   SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 export * from "@syncore/schema";
+export * from "./runtime/components.js";
 export * from "./runtime/devtools.js";
 export * from "./runtime/functions.js";
 export * from "./runtime/id.js";

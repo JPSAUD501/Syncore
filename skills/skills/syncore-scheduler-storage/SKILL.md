@@ -1,6 +1,6 @@
 ---
 name: syncore-scheduler-storage
-description: Local scheduling and file storage patterns for Syncore, including recurring jobs, runAfter, runAt, misfire policies, and storage metadata consistency. Use when building features that depend on durable local jobs, missed-run reconciliation, or device-local file storage.
+description: Local scheduling, queues, background jobs, reminders, and file storage patterns for Syncore, including recurring jobs, `runAfter`, `runAt`, misfire policies, and storage metadata consistency. Use when building features that depend on durable local jobs, missed-run reconciliation, or device-local file storage.
 ---
 
 # Syncore Scheduler And Storage
@@ -10,14 +10,12 @@ missed-run reconciliation, or device-local file storage.
 
 ## Documentation Sources
 
-Read these first:
+Read these first from the current app or package:
 
-- `docs/architecture.md`
-- `packages/core/src/runtime/functions.ts`
-- `packages/core/src/runtime/runtime.ts`
-- `packages/testing/src/runtime-contract.test.ts`
-- `examples/expo/lib/syncore.ts`
-- `examples/expo/syncore/functions/notes.ts`
+- `syncore/functions/**/*.ts`
+- `syncore/_generated/server.ts`
+- bootstrap files that configure scheduler or runtime storage
+- installed `syncorejs` docs or type declarations
 
 ## Instructions
 
@@ -29,20 +27,14 @@ Mutations and actions can schedule future work through `ctx.scheduler`:
 - `runAt(timestamp, reference, args?, misfirePolicy?)`
 - `cancel(id)`
 
-The scheduler persists jobs locally and reconciles missed executions on
-restart.
-
 ### Misfire Policies
 
-Current misfire policies are:
+Common misfire policies include:
 
 - `{ type: "catch_up" }`
 - `{ type: "skip" }`
 - `{ type: "run_once_if_missed" }`
 - `{ type: "windowed", windowMs: number }`
-
-Pick the policy based on user expectations after the app has been paused or
-closed.
 
 ### Scheduling Example
 
@@ -63,22 +55,11 @@ export const scheduleCreateCatchUp = mutation({
 
 ### Recurring Jobs
 
-Use `cronJobs()` to build a recurring job registry, then pass its `jobs` array
-into runtime or bootstrap `scheduler.recurringJobs`.
-
-Available helpers are:
-
-- `crons.interval(...)`
-- `crons.daily(...)`
-- `crons.weekly(...)`
-
-Syncore currently does not auto-load a special `syncore/crons.ts` file.
+When the installed Syncore surface supports recurring jobs, define them through
+the scheduler configuration used by the runtime or bootstrap layer.
 
 ```ts
-import { createExpoSyncoreBootstrap } from "syncorejs/expo";
 import { cronJobs, createFunctionReference } from "syncorejs";
-import schema from "../syncore/schema";
-import { functions } from "../syncore/_generated/functions";
 
 const crons = cronJobs();
 
@@ -89,15 +70,6 @@ crons.interval(
   { body: "Remember to sync your notes", pinned: false },
   { type: "catch_up" }
 );
-
-export const syncore = createExpoSyncoreBootstrap({
-  schema,
-  functions,
-  scheduler: {
-    recurringJobs: crons.jobs,
-    pollIntervalMs: 25
-  }
-});
 ```
 
 ### Storage APIs
@@ -108,8 +80,6 @@ Queries, mutations, and actions can use `ctx.storage`:
 - `get(id)`
 - `read(id)`
 - `delete(id)`
-
-`put(...)` returns the generated storage id.
 
 ```ts
 import { mutation, query, v } from "../_generated/server";
@@ -137,44 +107,31 @@ export const getFile = query({
 });
 ```
 
-### Local Consistency Model
+### Components And Capabilities
 
-Syncore's storage and scheduler are designed for local durability:
-
-- scheduled jobs are persisted in SQLite
-- missed jobs are reconciled on restart according to the policy
-- storage metadata is tracked in system tables
-- orphan cleanup depends on adapter capabilities; adapters that implement `storage.list()` allow fuller reconciliation
-
-## Examples
-
-### Which Misfire Policy To Use
-
-- reminder that must always happen -> `catch_up`
-- stale notification that should be dropped -> `skip`
-- at-most-once recovery flow -> `run_once_if_missed`
-- deadline-sensitive job with tolerance -> `windowed`
+If scheduler or storage is used inside a reusable Syncore component, the
+component should request and receive the corresponding capability from the host
+app.
 
 ## Best Practices
 
-- Choose misfire policies deliberately instead of accepting defaults blindly
+- Choose misfire policies deliberately
 - Use typed function references for scheduled jobs
 - Keep scheduled handlers idempotent where possible
-- Pass recurring jobs through runtime or bootstrap scheduler options instead of assuming a magic file loader
-- Use storage metadata APIs rather than writing unmanaged files beside Syncore's storage directory
+- Configure recurring jobs through explicit runtime or bootstrap setup
+- Use the storage API rather than unmanaged side files for app data
 - Test restart and offline behavior for features that depend on scheduling or files
 
 ## Common Pitfalls
 
-1. Forgetting that jobs may run after restart and need sensible misfire behavior
+1. Forgetting that jobs may run after restart
 2. Scheduling non-idempotent follow-up work without considering retries or restarts
 3. Treating file bytes and storage metadata as separate systems instead of one API
-4. Assuming recurring jobs are discovered from `syncore/crons.ts` automatically
-5. Testing only the happy path and missing restart recovery behavior
+4. Assuming recurring jobs are discovered from a magic file automatically
+5. Using scheduler or storage inside components without the required capabilities
 
 ## References
 
-- `docs/architecture.md`
-- `packages/core/src/runtime/functions.ts`
-- `packages/core/src/runtime/runtime.ts`
-- `packages/testing/src/runtime-contract.test.ts`
+- `syncore/functions/**/*.ts`
+- `syncore/_generated/server.ts`
+- runtime or bootstrap files that configure scheduler or storage
