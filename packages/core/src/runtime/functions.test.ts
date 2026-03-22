@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { v } from "../../../schema/src/index.js";
+import { s } from "../../../schema/src/index.js";
 import {
   action,
   type FunctionArgs,
@@ -12,8 +12,8 @@ import {
 describe("function definition typing", () => {
   it("preserves object args and result types on generated references", () => {
     const definition = query({
-      args: { title: v.string() },
-      returns: v.object({ length: v.number() }),
+      args: { title: s.string() },
+      returns: s.object({ length: s.number() }),
       handler: async (_ctx, args) => ({ length: args.title.length })
     });
 
@@ -28,8 +28,8 @@ describe("function definition typing", () => {
 
   it("preserves scalar validator overloads for args and return values", () => {
     const definition = mutation({
-      args: v.string(),
-      returns: v.number(),
+      args: s.string(),
+      returns: s.number(),
       handler: async (_ctx, value) => value.length
     });
 
@@ -43,7 +43,7 @@ describe("function definition typing", () => {
   it("keeps action result inference when args are optional object shapes", () => {
     const definition = action({
       args: {},
-      returns: v.object({ ok: v.boolean() }),
+      returns: s.object({ ok: s.boolean() }),
       handler: async () => ({ ok: true })
     });
 
@@ -53,3 +53,4 @@ describe("function definition typing", () => {
     expectTypeOf<FunctionResult<Reference>>().toEqualTypeOf<{ ok: boolean }>();
   });
 });
+

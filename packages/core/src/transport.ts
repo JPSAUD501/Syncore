@@ -1,11 +1,11 @@
 import {
-  type AnySyncoreSchema,
   type SyncoreClient,
   type SyncoreRuntime,
   type JsonObject,
   type SyncoreRuntimeStatus,
   type SyncoreWatch
 } from "./runtime/runtime.js";
+import type { SyncoreSchema } from "@syncore/schema";
 import { generateId } from "./runtime/id.js";
 import type { FunctionReference } from "./runtime/functions.js";
 import { RuntimeStatusController } from "./runtime/internal/runtimeStatus.js";
@@ -483,7 +483,9 @@ export function createDeferredSyncoreClient(options: {
   };
 }
 
-export interface AttachRuntimeBridgeOptions<TSchema extends AnySyncoreSchema> {
+export interface AttachRuntimeBridgeOptions<
+  TSchema extends SyncoreSchema<any>
+> {
   endpoint: SyncoreBridgeMessageEndpoint;
   createRuntime:
     | (() => Promise<SyncoreRuntime<TSchema>>)
@@ -495,7 +497,9 @@ export interface AttachedRuntimeBridge {
   dispose(): Promise<void>;
 }
 
-export function attachRuntimeBridge<TSchema extends AnySyncoreSchema>(
+export function attachRuntimeBridge<
+  TSchema extends SyncoreSchema<any>
+>(
   options: AttachRuntimeBridgeOptions<TSchema>
 ): AttachedRuntimeBridge {
   const subscriptions = new Map<

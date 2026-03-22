@@ -1,13 +1,13 @@
-import { defineSchema, defineTable, v } from "syncorejs";
+import { defineSchema, defineTable, s } from "syncorejs";
 
 export default defineSchema({
   notes: defineTable({
-    title: v.string(),
-    body: v.string(),
-    color: v.string(),
-    pinned: v.boolean(),
-    createdAt: v.number(),
-    updatedAt: v.number()
+    title: s.string(),
+    body: s.string(),
+    color: s.string(),
+    pinned: s.boolean(),
+    createdAt: s.number(),
+    updatedAt: s.number()
   })
     .index("by_pinned_created", ["pinned", "createdAt"])
     .index("by_color", ["color", "createdAt"])

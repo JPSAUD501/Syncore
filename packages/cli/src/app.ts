@@ -1628,19 +1628,11 @@ async function runTypeScriptCompiler(
   return await new Promise((resolve, reject) => {
     const isWindowsCmd =
       process.platform === "win32" && /\.(cmd|bat)$/i.test(compilerPath);
-    const child = isWindowsCmd
-      ? spawn(
-          process.env.ComSpec ?? "cmd.exe",
-          ["/d", "/s", "/c", `"${compilerPath}" --noEmit -p "${tsconfigPath}"`],
-          {
-            cwd,
-            stdio: ["ignore", "pipe", "pipe"]
-          }
-        )
-      : spawn(compilerPath, ["--noEmit", "-p", tsconfigPath], {
-          cwd,
-          stdio: ["ignore", "pipe", "pipe"]
-        });
+    const child = spawn(compilerPath, ["--noEmit", "-p", tsconfigPath], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...(isWindowsCmd ? { shell: true } : {})
+    });
     let output = "";
     child.stdout.on("data", (chunk: Buffer | string) => {
       output += chunk.toString();

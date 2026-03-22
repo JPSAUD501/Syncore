@@ -4,12 +4,12 @@
 
 ```ts
 
-import { AnySyncoreSchema } from '@syncore/core';
 import { AttachedRuntimeBridge } from '@syncore/core';
 import { AttachRuntimeBridgeOptions } from '@syncore/core';
 import { BridgeQueryWatch } from '@syncore/core';
 import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
+import { SyncoreSchema } from '@syncore/core';
 
 // @public (undocumented)
 export type AttachedNodeIpcRuntime = AttachedRuntimeBridge;
@@ -40,7 +40,7 @@ export function installSyncoreWindowBridge(options?: {
 }): string;
 
 // @public (undocumented)
-export type NodeIpcSyncoreSchema = AnySyncoreSchema;
+export type NodeIpcSyncoreSchema = SyncoreSchema<any>;
 
 // @public (undocumented)
 export type RendererQueryWatch<TValue> = BridgeQueryWatch<TValue>;

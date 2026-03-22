@@ -3,7 +3,11 @@ import type {
   SyncoreDevtoolsEvent,
   SyncoreDevtoolsEventOrigin
 } from "@syncore/devtools-protocol";
-import { searchIndexTableName, type TableDefinition, type Validator } from "@syncore/schema";
+import {
+  searchIndexTableName,
+  type TableDefinition,
+  type Validator
+} from "@syncore/schema";
 import type {
   MisfirePolicy,
   RecurringSchedule,
@@ -11,12 +15,12 @@ import type {
 } from "../../functions.js";
 import type { SyncoreComponentFunctionMetadata } from "../../components.js";
 import type {
-  AnySyncoreSchema,
   DevtoolsLiveQueryScope,
   JsonObject,
   QueryCondition,
   QueryExpression,
   SearchQuery,
+  SyncoreDataModel,
   SyncoreExternalChangeReason
 } from "../../runtime.js";
 
@@ -293,7 +297,7 @@ export function devtoolsScopesForEvent(
     case "mutation.committed":
       return new Set([
         "runtime.summary",
-        ...event.changedTables.map((table) => `table:${table}` as const)
+        ...event.changedTables.map((table: string) => `table:${table}` as const)
       ]);
     case "scheduler.tick":
       return new Set(["scheduler.jobs", "runtime.summary"]);
@@ -302,15 +306,21 @@ export function devtoolsScopesForEvent(
     case "action.completed":
     case "log":
       return new Set(["runtime.summary"]);
+    default:
+      return new Set(["runtime.summary"]);
   }
 }
 
-export function getTableDefinition<TSchema extends AnySyncoreSchema>(
+export function getTableDefinition<
+  TSchema extends SyncoreDataModel
+>(
   schema: TSchema,
   tableName: string
-): TableDefinition<Validator<unknown>> {
+): TableDefinition<
+  Validator<Record<string, unknown>, Record<string, unknown>, string>
+> {
   return schema.getTable(tableName as never) as TableDefinition<
-    Validator<unknown>
+    Validator<Record<string, unknown>, Record<string, unknown>, string>
   >;
 }
 

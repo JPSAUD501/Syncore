@@ -23,10 +23,10 @@ or missed execution windows.
 ## Scheduling Example
 
 ```ts
-import { createFunctionReference, mutation, v } from "../_generated/server";
+import { createFunctionReference, mutation, s } from "../_generated/server";
 
 export const scheduleCreateCatchUp = mutation({
-  args: { body: v.string(), delayMs: v.number() },
+  args: { body: s.string(), delayMs: s.number() },
   handler: async (ctx, args) =>
     ctx.scheduler.runAfter(
       args.delayMs,
@@ -68,10 +68,10 @@ Queries, mutations, and actions can use `ctx.storage`:
 - `delete(id)`
 
 ```ts
-import { mutation, query, v } from "../_generated/server";
+import { mutation, query, s } from "../_generated/server";
 
 export const putFile = mutation({
-  args: { name: v.string(), body: v.string() },
+  args: { name: s.string(), body: s.string() },
   handler: async (ctx, args) =>
     ctx.storage.put({
       fileName: args.name,
@@ -81,7 +81,7 @@ export const putFile = mutation({
 });
 
 export const getFile = query({
-  args: { id: v.string() },
+  args: { id: s.string() },
   handler: async (ctx, args) => {
     const file = await ctx.storage.get(args.id);
     const bytes = await ctx.storage.read(args.id);

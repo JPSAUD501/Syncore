@@ -74,7 +74,11 @@ type PaginatedQueryInternalState = {
   }>;
 };
 
-export type SyncoreQueryStoreState<TResult> = SyncoreQueryState<TResult>;
+/**
+ * The reactive query state shape exposed by Syncore's Svelte stores.
+ */
+export interface SyncoreQueryStoreState<TResult>
+  extends SyncoreQueryState<TResult> {}
 
 export const skip = "skip" as const;
 type Skip = typeof skip;
@@ -86,11 +90,17 @@ const defaultRuntimeStatus: SyncoreRuntimeStatus = {
 
 const SYNCORE_CLIENT_CONTEXT = Symbol("syncore.client");
 
+/**
+ * Stores a Syncore client in Svelte component context and returns it.
+ */
 export function setSyncoreClient(client: SyncoreClient): SyncoreClient {
   setContext(SYNCORE_CLIENT_CONTEXT, client);
   return client;
 }
 
+/**
+ * Reads the Syncore client previously stored in Svelte component context.
+ */
 export function getSyncoreClient(): SyncoreClient {
   const client = getContext<SyncoreClient | undefined>(SYNCORE_CLIENT_CONTEXT);
   if (!client) {
@@ -114,6 +124,9 @@ export function createClientSyncoreStatusStore(
   );
 }
 
+/**
+ * Creates a reactive store for a Syncore query result using the contextual client.
+ */
 export function createQueryValueStore<
   TReference extends FunctionReference<"query">
 >(
@@ -123,6 +136,9 @@ export function createQueryValueStore<
   return createClientQueryValueStore(getSyncoreClient(), reference, ...args);
 }
 
+/**
+ * Creates a reactive store for a Syncore query result using an explicit client.
+ */
 export function createClientQueryValueStore<
   TReference extends FunctionReference<"query">
 >(
@@ -138,6 +154,9 @@ export function createClientQueryValueStore<
   );
 }
 
+/**
+ * Creates a reactive store with the full Syncore query state.
+ */
 export function createQueryStore<TReference extends FunctionReference<"query">>(
   reference: TReference,
   ...args: OptionalArgsTuple<FunctionArgs<TReference>> | [Skip]
@@ -145,6 +164,9 @@ export function createQueryStore<TReference extends FunctionReference<"query">>(
   return createClientQueryStore(getSyncoreClient(), reference, ...args);
 }
 
+/**
+ * Creates a reactive store with the full Syncore query state for an explicit client.
+ */
 export function createClientQueryStore<
   TReference extends FunctionReference<"query">
 >(
@@ -455,6 +477,9 @@ export function createClientPaginatedQueryStore<
   );
 }
 
+/**
+ * Creates a callable wrapper for a Syncore mutation using the contextual client.
+ */
 export function createMutation<
   TReference extends FunctionReference<"mutation">
 >(
@@ -469,6 +494,9 @@ export function createMutation<
     >;
 }
 
+/**
+ * Creates a callable wrapper for a Syncore action using the contextual client.
+ */
 export function createAction<TReference extends FunctionReference<"action">>(
   reference: TReference
 ): (

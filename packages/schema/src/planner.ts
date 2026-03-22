@@ -8,12 +8,21 @@ import {
   type ValidatorDescription
 } from "./validators.js";
 
+export interface TableFieldSnapshot {
+  name: string;
+  validator: ValidatorDescription;
+  storage: ValidatorDescription;
+  optional: boolean;
+}
+
 export interface TableSnapshot {
   name: string;
   displayName?: string;
   componentPath?: string;
   componentName?: string;
   validator: ValidatorDescription;
+  fieldPaths: string[];
+  fields: TableFieldSnapshot[];
   indexes: Array<{
     name: string;
     fields: string[];
@@ -26,16 +35,16 @@ export interface TableSnapshot {
 }
 
 export interface SchemaSnapshot {
-  formatVersion: 2;
-  plannerVersion: 1;
+  formatVersion: 3;
+  plannerVersion: 2;
   runtimeVersion?: string;
   tables: TableSnapshot[];
   hash: string;
 }
 
 export interface SchemaMigrationPlan {
-  formatVersion: 2;
-  plannerVersion: 1;
+  formatVersion: 3;
+  plannerVersion: 2;
   previousHash: string | null;
   nextHash: string;
   fromSchemaHash: string | null;
@@ -53,6 +62,7 @@ export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(
     .sort((left, right) => left.localeCompare(right))
     .map((tableName) => {
       const table = schema.getTable(tableName);
+      const validator = describeValidator(table.validator);
       return {
         name: tableName,
         ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
@@ -62,7 +72,9 @@ export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(
         ...(table.options.componentName
           ? { componentName: table.options.componentName }
           : {}),
-        validator: describeValidator(table.validator),
+        validator,
+        fieldPaths: extractFieldPaths(validator),
+        fields: extractTopLevelFields(validator),
         indexes: table.indexes
           .map((index) => ({
             name: index.name,
@@ -80,8 +92,8 @@ export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(
     });
 
   const base = {
-    formatVersion: 2 as const,
-    plannerVersion: 1 as const,
+    formatVersion: 3 as const,
+    plannerVersion: 2 as const,
     tables
   };
 
@@ -187,8 +199,8 @@ export function diffSchemaSnapshots(
   }
 
   return {
-    formatVersion: 2,
-    plannerVersion: 1,
+    formatVersion: 3,
+    plannerVersion: 2,
     previousHash: previousSnapshot?.hash ?? null,
     nextHash: nextSnapshot.hash,
     fromSchemaHash: previousSnapshot?.hash ?? null,
@@ -238,14 +250,33 @@ export function parseSchemaSnapshot(source: string): SchemaSnapshot {
   const parsed = JSON.parse(source) as
     | SchemaSnapshot
     | {
+        formatVersion: 2;
+        plannerVersion: 1;
+        runtimeVersion?: string;
+        tables: Array<{
+          name: string;
+          displayName?: string;
+          componentPath?: string;
+          componentName?: string;
+          validator: ValidatorDescription;
+          indexes: Array<{ name: string; fields: string[] }>;
+          searchIndexes: Array<{
+            name: string;
+            searchField: string;
+            filterFields: string[];
+          }>;
+        }>;
+        hash: string;
+      }
+    | {
         version: 1;
         tables: TableSnapshot[];
         hash: string;
       };
-  if ("formatVersion" in parsed) {
+
+  if ("formatVersion" in parsed && parsed.formatVersion === 3) {
     if (
-      parsed.formatVersion !== 2 ||
-      parsed.plannerVersion !== 1 ||
+      parsed.plannerVersion !== 2 ||
       !Array.isArray(parsed.tables) ||
       typeof parsed.hash !== "string"
     ) {
@@ -253,6 +284,21 @@ export function parseSchemaSnapshot(source: string): SchemaSnapshot {
     }
     return parsed;
   }
+
+  if ("formatVersion" in parsed && parsed.formatVersion === 2) {
+    return {
+      formatVersion: 3,
+      plannerVersion: 2,
+      ...(parsed.runtimeVersion ? { runtimeVersion: parsed.runtimeVersion } : {}),
+      tables: parsed.tables.map((table) => ({
+        ...table,
+        fieldPaths: extractFieldPaths(table.validator),
+        fields: extractTopLevelFields(table.validator)
+      })),
+      hash: parsed.hash
+    };
+  }
+
   if (
     parsed.version !== 1 ||
     !Array.isArray(parsed.tables) ||
@@ -261,9 +307,13 @@ export function parseSchemaSnapshot(source: string): SchemaSnapshot {
     throw new Error("Invalid schema snapshot file.");
   }
   return {
-    formatVersion: 2,
-    plannerVersion: 1,
-    tables: parsed.tables,
+    formatVersion: 3,
+    plannerVersion: 2,
+    tables: parsed.tables.map((table) => ({
+      ...table,
+      fieldPaths: table.fieldPaths ?? extractFieldPaths(table.validator),
+      fields: table.fields ?? extractTopLevelFields(table.validator)
+    })),
     hash: parsed.hash
   };
 }
@@ -331,4 +381,78 @@ function sortValue(value: unknown): unknown {
     );
   }
   return value;
+}
+
+function extractFieldPaths(
+  description: ValidatorDescription,
+  prefix = ""
+): string[] {
+  switch (description.kind) {
+    case "object":
+      return Object.entries(description.shape).flatMap(([key, entry]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        const normalizedEntry = normalizeObjectFieldEntry(entry);
+        const nested = extractFieldPaths(normalizedEntry.validator, path);
+        return nested.length > 0 ? [path, ...nested] : [path];
+      });
+    case "optional":
+      return extractFieldPaths(description.inner, prefix);
+    case "codec":
+      return extractFieldPaths(description.value, prefix);
+    case "union":
+      return [...new Set(description.members.flatMap((member) => extractFieldPaths(member, prefix)))];
+    default:
+      return [];
+  }
+}
+
+function extractTopLevelFields(
+  description: ValidatorDescription
+): TableFieldSnapshot[] {
+  if (description.kind !== "object") {
+    return [];
+  }
+  return Object.entries(description.shape)
+    .map(([name, entry]) => {
+      const normalizedEntry = normalizeObjectFieldEntry(entry);
+      return {
+        name,
+        validator: normalizedEntry.validator,
+        storage:
+          normalizedEntry.validator.kind === "codec"
+            ? normalizedEntry.validator.storage
+            : normalizedEntry.validator,
+        optional: normalizedEntry.optional
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function normalizeObjectFieldEntry(
+  entry:
+    | ValidatorDescription
+    | {
+        validator: ValidatorDescription;
+        optional?: boolean;
+      }
+): {
+  validator: ValidatorDescription;
+  optional: boolean;
+} {
+  if ("validator" in entry) {
+    return {
+      validator: entry.validator,
+      optional: entry.optional ?? false
+    };
+  }
+  if (entry.kind === "optional") {
+    return {
+      validator: entry.inner,
+      optional: true
+    };
+  }
+  return {
+    validator: entry,
+    optional: false
+  };
 }

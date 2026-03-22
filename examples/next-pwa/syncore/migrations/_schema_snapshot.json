@@ -1,6 +1,6 @@
 {
-  "formatVersion": 2,
-  "plannerVersion": 1,
+  "formatVersion": 3,
+  "plannerVersion": 2,
   "tables": [
     {
       "name": "artifacts",
@@ -8,29 +8,133 @@
         "kind": "object",
         "shape": {
           "taskId": {
-            "kind": "id",
-            "tableName": "tasks"
+            "validator": {
+              "kind": "id",
+              "tableName": "tasks"
+            },
+            "optional": false
           },
           "kind": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "title": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "storageId": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "contentType": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "size": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           },
           "createdAt": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           }
         }
       },
+      "fieldPaths": [
+        "taskId",
+        "kind",
+        "title",
+        "storageId",
+        "contentType",
+        "size",
+        "createdAt"
+      ],
+      "fields": [
+        {
+          "name": "contentType",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "kind",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "size",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "storageId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "taskId",
+          "validator": {
+            "kind": "id",
+            "tableName": "tasks"
+          },
+          "storage": {
+            "kind": "id",
+            "tableName": "tasks"
+          },
+          "optional": false
+        },
+        {
+          "name": "title",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        }
+      ],
       "indexes": [
         {
           "name": "by_task_created",
@@ -48,28 +152,113 @@
         "kind": "object",
         "shape": {
           "name": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "slug": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "color": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "sortOrder": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           },
           "createdAt": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           },
           "archivedAt": {
-            "kind": "optional",
-            "inner": {
+            "validator": {
               "kind": "number"
-            }
+            },
+            "optional": true
           }
         }
       },
+      "fieldPaths": [
+        "name",
+        "slug",
+        "color",
+        "sortOrder",
+        "createdAt",
+        "archivedAt"
+      ],
+      "fields": [
+        {
+          "name": "archivedAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": true
+        },
+        {
+          "name": "color",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "name",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "slug",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "sortOrder",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        }
+      ],
       "indexes": [
         {
           "name": "by_sort",
@@ -86,59 +275,218 @@
         "kind": "object",
         "shape": {
           "title": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "details": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "status": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "priority": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "projectId": {
-            "kind": "optional",
-            "inner": {
+            "validator": {
               "kind": "id",
               "tableName": "projects"
-            }
+            },
+            "optional": true
           },
           "dueAt": {
-            "kind": "optional",
-            "inner": {
+            "validator": {
               "kind": "number"
-            }
+            },
+            "optional": true
           },
           "reminderAt": {
-            "kind": "optional",
-            "inner": {
+            "validator": {
               "kind": "number"
-            }
+            },
+            "optional": true
           },
           "reminderJobId": {
-            "kind": "optional",
-            "inner": {
+            "validator": {
               "kind": "string"
-            }
+            },
+            "optional": true
           },
           "completedAt": {
-            "kind": "optional",
-            "inner": {
+            "validator": {
               "kind": "number"
-            }
+            },
+            "optional": true
           },
           "createdAt": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           },
           "updatedAt": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           },
           "searchText": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           }
         }
       },
+      "fieldPaths": [
+        "title",
+        "details",
+        "status",
+        "priority",
+        "projectId",
+        "dueAt",
+        "reminderAt",
+        "reminderJobId",
+        "completedAt",
+        "createdAt",
+        "updatedAt",
+        "searchText"
+      ],
+      "fields": [
+        {
+          "name": "completedAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": true
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "details",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "dueAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": true
+        },
+        {
+          "name": "priority",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "validator": {
+            "kind": "id",
+            "tableName": "projects"
+          },
+          "storage": {
+            "kind": "id",
+            "tableName": "projects"
+          },
+          "optional": true
+        },
+        {
+          "name": "reminderAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": true
+        },
+        {
+          "name": "reminderJobId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": true
+        },
+        {
+          "name": "searchText",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "status",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "title",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "updatedAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        }
+      ],
       "indexes": [
         {
           "name": "by_dueAt",
@@ -183,5 +531,5 @@
       ]
     }
   ],
-  "hash": "{\"formatVersion\":2,\"plannerVersion\":1,\"tables\":[{\"indexes\":[{\"fields\":[\"taskId\",\"createdAt\"],\"name\":\"by_task_created\"}],\"name\":\"artifacts\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"contentType\":{\"kind\":\"string\"},\"createdAt\":{\"kind\":\"number\"},\"kind\":{\"kind\":\"string\"},\"size\":{\"kind\":\"number\"},\"storageId\":{\"kind\":\"string\"},\"taskId\":{\"kind\":\"id\",\"tableName\":\"tasks\"},\"title\":{\"kind\":\"string\"}}}},{\"indexes\":[{\"fields\":[\"sortOrder\"],\"name\":\"by_sort\"}],\"name\":\"projects\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"archivedAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"color\":{\"kind\":\"string\"},\"createdAt\":{\"kind\":\"number\"},\"name\":{\"kind\":\"string\"},\"slug\":{\"kind\":\"string\"},\"sortOrder\":{\"kind\":\"number\"}}}},{\"indexes\":[{\"fields\":[\"dueAt\",\"status\"],\"name\":\"by_dueAt\"},{\"fields\":[\"projectId\",\"status\",\"updatedAt\"],\"name\":\"by_project_status\"},{\"fields\":[\"reminderAt\",\"status\"],\"name\":\"by_reminderAt\"},{\"fields\":[\"status\",\"updatedAt\"],\"name\":\"by_status_updated\"}],\"name\":\"tasks\",\"searchIndexes\":[{\"filterFields\":[\"status\",\"priority\",\"projectId\"],\"name\":\"search_tasks\",\"searchField\":\"searchText\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"completedAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"createdAt\":{\"kind\":\"number\"},\"details\":{\"kind\":\"string\"},\"dueAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"priority\":{\"kind\":\"string\"},\"projectId\":{\"inner\":{\"kind\":\"id\",\"tableName\":\"projects\"},\"kind\":\"optional\"},\"reminderAt\":{\"inner\":{\"kind\":\"number\"},\"kind\":\"optional\"},\"reminderJobId\":{\"inner\":{\"kind\":\"string\"},\"kind\":\"optional\"},\"searchText\":{\"kind\":\"string\"},\"status\":{\"kind\":\"string\"},\"title\":{\"kind\":\"string\"},\"updatedAt\":{\"kind\":\"number\"}}}}]}"
+  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"taskId\",\"kind\",\"title\",\"storageId\",\"contentType\",\"size\",\"createdAt\"],\"fields\":[{\"name\":\"contentType\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"kind\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"size\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"storageId\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"taskId\",\"optional\":false,\"storage\":{\"kind\":\"id\",\"tableName\":\"tasks\"},\"validator\":{\"kind\":\"id\",\"tableName\":\"tasks\"}},{\"name\":\"title\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"taskId\",\"createdAt\"],\"name\":\"by_task_created\"}],\"name\":\"artifacts\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"contentType\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"kind\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"size\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"storageId\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"taskId\":{\"optional\":false,\"validator\":{\"kind\":\"id\",\"tableName\":\"tasks\"}},\"title\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}},{\"fieldPaths\":[\"name\",\"slug\",\"color\",\"sortOrder\",\"createdAt\",\"archivedAt\"],\"fields\":[{\"name\":\"archivedAt\",\"optional\":true,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"color\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"name\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"slug\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"sortOrder\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}}],\"indexes\":[{\"fields\":[\"sortOrder\"],\"name\":\"by_sort\"}],\"name\":\"projects\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"archivedAt\":{\"optional\":true,\"validator\":{\"kind\":\"number\"}},\"color\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"name\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"slug\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"sortOrder\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}}}}},{\"fieldPaths\":[\"title\",\"details\",\"status\",\"priority\",\"projectId\",\"dueAt\",\"reminderAt\",\"reminderJobId\",\"completedAt\",\"createdAt\",\"updatedAt\",\"searchText\"],\"fields\":[{\"name\":\"completedAt\",\"optional\":true,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"details\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"dueAt\",\"optional\":true,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"priority\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"projectId\",\"optional\":true,\"storage\":{\"kind\":\"id\",\"tableName\":\"projects\"},\"validator\":{\"kind\":\"id\",\"tableName\":\"projects\"}},{\"name\":\"reminderAt\",\"optional\":true,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"reminderJobId\",\"optional\":true,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"searchText\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"status\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"title\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"updatedAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}}],\"indexes\":[{\"fields\":[\"dueAt\",\"status\"],\"name\":\"by_dueAt\"},{\"fields\":[\"projectId\",\"status\",\"updatedAt\"],\"name\":\"by_project_status\"},{\"fields\":[\"reminderAt\",\"status\"],\"name\":\"by_reminderAt\"},{\"fields\":[\"status\",\"updatedAt\"],\"name\":\"by_status_updated\"}],\"name\":\"tasks\",\"searchIndexes\":[{\"filterFields\":[\"status\",\"priority\",\"projectId\"],\"name\":\"search_tasks\",\"searchField\":\"searchText\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"completedAt\":{\"optional\":true,\"validator\":{\"kind\":\"number\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"details\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"dueAt\":{\"optional\":true,\"validator\":{\"kind\":\"number\"}},\"priority\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"projectId\":{\"optional\":true,\"validator\":{\"kind\":\"id\",\"tableName\":\"projects\"}},\"reminderAt\":{\"optional\":true,\"validator\":{\"kind\":\"number\"}},\"reminderJobId\":{\"optional\":true,\"validator\":{\"kind\":\"string\"}},\"searchText\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"status\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"title\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"updatedAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}}}}}]}"
 }

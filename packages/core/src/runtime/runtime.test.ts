@@ -13,7 +13,7 @@ import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SchedulerJob } from "@syncore/devtools-protocol";
-import { defineSchema, defineTable, v } from "../../../schema/src/index.js";
+import { defineSchema, defineTable, s } from "../../../schema/src/index.js";
 import { cronJobs, mutation, query } from "./functions.js";
 import {
   createFunctionReference,
@@ -418,7 +418,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const functions = {
       "tasks/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("tasks").collect()
       })
     };
@@ -426,8 +426,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const firstRuntime = new SyncoreRuntime({
       schema: defineSchema({
         tasks: defineTable({
-          text: v.string(),
-          done: v.boolean()
+          text: s.string(),
+          done: s.boolean()
         }).index("by_done", ["done"])
       }),
       functions,
@@ -441,8 +441,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const secondRuntime = new SyncoreRuntime({
       schema: defineSchema({
         tasks: defineTable({
-          text: v.string(),
-          done: v.boolean()
+          text: s.string(),
+          done: s.boolean()
         })
       }),
       functions,
@@ -461,20 +461,20 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const storagePath = path.join(rootDirectory, "storage");
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
 
     const functions = {
       "tasks/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("tasks").collect()
       }),
       "tasks/create": mutation({
-        args: { text: v.string() },
-        returns: v.string(),
+        args: { text: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("tasks", {
             text: (args as { text: string }).text,
@@ -482,8 +482,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
           })
       }),
       "tasks/scheduleCreate": mutation({
-        args: { text: v.string(), delayMs: v.number() },
-        returns: v.null(),
+        args: { text: s.string(), delayMs: s.number() },
+        returns: s.null(),
         handler: async (ctx, args) => {
           const typedCtx = ctx as MutationCtx;
           const typedArgs = args as { text: string; delayMs: number };
@@ -564,8 +564,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const storagePath = path.join(rootDirectory, "storage");
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
 
@@ -574,8 +574,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
       functions: {
         "tasks/readCapabilities": query({
           args: {},
-          returns: v.object({
-            platformProvided: v.string()
+          returns: s.object({
+            platformProvided: s.string()
           }),
           handler: async (ctx) => {
             const capabilities = (ctx as QueryCtx).capabilities as Record<
@@ -620,18 +620,18 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const signal = new TestExternalChangeSignal();
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       }),
       files: defineTable({
-        label: v.string()
+        label: s.string()
       })
     });
 
     const functions = {
       "tasks/create": mutation({
-        args: { text: v.string() },
-        returns: v.string(),
+        args: { text: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("tasks", {
             text: (args as { text: string }).text,
@@ -640,10 +640,10 @@ describe("SyncoreRuntime schema + scheduler", () => {
       }),
       "files/write": mutation({
         args: {
-          label: v.string(),
-          body: v.string()
+          label: s.string(),
+          body: s.string()
         },
-        returns: v.string(),
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).storage.put({
             fileName: `${(args as { label: string }).label}.txt`,
@@ -652,8 +652,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
           })
       }),
       "files/remove": mutation({
-        args: { id: v.string() },
-        returns: v.null(),
+        args: { id: s.string() },
+        returns: s.null(),
         handler: async (ctx, args) => {
           await (ctx as MutationCtx).storage.delete(
             (args as { id: string }).id
@@ -729,20 +729,20 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const applier = new TestExternalChangeApplier();
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
 
     const functions = {
       "tasks/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("tasks").collect()
       }),
       "tasks/create": mutation({
-        args: { text: v.string() },
-        returns: v.string(),
+        args: { text: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("tasks", {
             text: (args as { text: string }).text,
@@ -816,18 +816,18 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const storagePath = path.join(rootDirectory, "storage");
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       }),
       notes: defineTable({
-        body: v.string()
+        body: s.string()
       })
     });
 
     const functions = {
       "tasks/create": mutation({
-        args: { text: v.string() },
-        returns: v.string(),
+        args: { text: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("tasks", {
             text: (args as { text: string }).text,
@@ -835,8 +835,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
           })
       }),
       "notes/create": mutation({
-        args: { body: v.string() },
-        returns: v.string(),
+        args: { body: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("notes", {
             body: (args as { body: string }).body
@@ -935,15 +935,15 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const storagePath = path.join(rootDirectory, "storage");
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
 
     const functions = {
       "tasks/create": mutation({
-        args: { text: v.string() },
-        returns: v.string(),
+        args: { text: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("tasks", {
             text: (args as { text: string }).text,
@@ -1152,8 +1152,8 @@ describe("SyncoreRuntime schema + scheduler", () => {
   it("reports SQL devtools unavailable without node SQL support", async () => {
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
     const runtime = new SyncoreRuntime({
@@ -1198,17 +1198,17 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const storagePath = path.join(rootDirectory, "storage");
     const schema = defineSchema({
       files: defineTable({
-        label: v.string()
+        label: s.string()
       })
     });
 
     const functions = {
       "files/write": mutation({
         args: {
-          label: v.string(),
-          body: v.string()
+          label: s.string(),
+          body: s.string()
         },
-        returns: v.string(),
+        returns: s.string(),
         handler: async (ctx, args) => {
           const typedCtx = ctx as MutationCtx;
           return typedCtx.storage.put({
@@ -1272,17 +1272,17 @@ describe("SyncoreRuntime schema + scheduler", () => {
     const storagePath = path.join(rootDirectory, "storage");
     const schema = defineSchema({
       files: defineTable({
-        label: v.string()
+        label: s.string()
       })
     });
 
     const functions = {
       "files/write": mutation({
         args: {
-          label: v.string(),
-          body: v.string()
+          label: s.string(),
+          body: s.string()
         },
-        returns: v.string(),
+        returns: s.string(),
         handler: async (ctx, args) => {
           const typedCtx = ctx as MutationCtx;
           return typedCtx.storage.put({
@@ -1294,9 +1294,9 @@ describe("SyncoreRuntime schema + scheduler", () => {
       }),
       "files/read": query({
         args: {
-          id: v.string()
+          id: s.string()
         },
-        returns: v.any(),
+        returns: s.any(),
         handler: async (ctx, args) => {
           return (ctx as QueryCtx).storage.get((args as { id: string }).id);
         }
@@ -1366,3 +1366,4 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+

@@ -445,7 +445,6 @@ export async function runCodegen(cwd: string): Promise<void> {
     ` * @module`,
     ` */`,
     ``,
-    `import type { AnyTableDefinition, SyncoreSchema } from "syncorejs";`,
     `import { composeProjectSchema } from "syncorejs";`,
     `import rootSchema from "../schema${functionImportExtension}";`,
     ...renderGeneratedManifestImportLines(
@@ -455,7 +454,7 @@ export async function runCodegen(cwd: string): Promise<void> {
     ``,
     ...renderGeneratedManifestDeclarationLines(hasComponentsManifest),
     ``,
-    `const schema: SyncoreSchema<Record<string, AnyTableDefinition>> = composeProjectSchema(rootSchema as never, componentsManifest);`,
+    `const schema = composeProjectSchema(rootSchema, componentsManifest);`,
     ``,
     `export default schema;`,
     ``
@@ -511,7 +510,7 @@ export async function runCodegen(cwd: string): Promise<void> {
     `  ValidatorMap`,
     `} from "syncorejs";`,
     ``,
-    `export { createFunctionReference, createFunctionReferenceFor, v } from "syncorejs";`,
+    `export { createFunctionReference, createFunctionReferenceFor, s } from "syncorejs";`,
     ``,
     `/**`,
     ` * The context object available inside Syncore query handlers in this app.`,
@@ -538,22 +537,14 @@ export async function runCodegen(cwd: string): Promise<void> {
     ` * @param config - The query definition, including args and a handler.`,
     ` * @returns The wrapped query. Export it from \`syncore/functions\` to add it to the generated API.`,
     ` */`,
-    `export function query<TValidator extends Validator<unknown>, TResult>(`,
-    `  config: FunctionConfig<QueryCtx, Infer<TValidator>, TResult> & { args: TValidator }`,
-    `): SyncoreFunctionDefinition<"query", QueryCtx, Infer<TValidator>, TResult>;`,
-    `export function query<TArgsShape extends ValidatorMap, TResult>(`,
-    `  config: FunctionConfig<QueryCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
-    `): SyncoreFunctionDefinition<"query", QueryCtx, InferArgs<TArgsShape>, TResult>;`,
-    `export function query<TArgsShape extends Validator<unknown> | ValidatorMap, TResult>(`,
-    `  config: FunctionConfig<QueryCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
-    `) {`,
-    `  return baseQuery(config as never) as SyncoreFunctionDefinition<`,
-    `    "query",`,
-    `    QueryCtx,`,
-    `    InferArgs<TArgsShape>,`,
-    `    TResult`,
-    `  >;`,
-    `}`,
+    `export const query = baseQuery as {`,
+    `  <TValidator extends Validator<unknown, unknown, string>, TResult>(`,
+    `    config: FunctionConfig<QueryCtx, Infer<TValidator>, TResult> & { args: TValidator }`,
+    `  ): SyncoreFunctionDefinition<"query", QueryCtx, Infer<TValidator>, TResult>;`,
+    `  <TArgsShape extends ValidatorMap, TResult>(`,
+    `    config: FunctionConfig<QueryCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
+    `  ): SyncoreFunctionDefinition<"query", QueryCtx, InferArgs<TArgsShape>, TResult>;`,
+    `};`,
     ``,
     `/**`,
     ` * Define a mutation in this Syncore app's public API.`,
@@ -563,22 +554,14 @@ export async function runCodegen(cwd: string): Promise<void> {
     ` * @param config - The mutation definition, including args and a handler.`,
     ` * @returns The wrapped mutation. Export it from \`syncore/functions\` to add it to the generated API.`,
     ` */`,
-    `export function mutation<TValidator extends Validator<unknown>, TResult>(`,
-    `  config: FunctionConfig<MutationCtx, Infer<TValidator>, TResult> & { args: TValidator }`,
-    `): SyncoreFunctionDefinition<"mutation", MutationCtx, Infer<TValidator>, TResult>;`,
-    `export function mutation<TArgsShape extends ValidatorMap, TResult>(`,
-    `  config: FunctionConfig<MutationCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
-    `): SyncoreFunctionDefinition<"mutation", MutationCtx, InferArgs<TArgsShape>, TResult>;`,
-    `export function mutation<TArgsShape extends Validator<unknown> | ValidatorMap, TResult>(`,
-    `  config: FunctionConfig<MutationCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
-    `) {`,
-    `  return baseMutation(config as never) as SyncoreFunctionDefinition<`,
-    `    "mutation",`,
-    `    MutationCtx,`,
-    `    InferArgs<TArgsShape>,`,
-    `    TResult`,
-    `  >;`,
-    `}`,
+    `export const mutation = baseMutation as {`,
+    `  <TValidator extends Validator<unknown, unknown, string>, TResult>(`,
+    `    config: FunctionConfig<MutationCtx, Infer<TValidator>, TResult> & { args: TValidator }`,
+    `  ): SyncoreFunctionDefinition<"mutation", MutationCtx, Infer<TValidator>, TResult>;`,
+    `  <TArgsShape extends ValidatorMap, TResult>(`,
+    `    config: FunctionConfig<MutationCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
+    `  ): SyncoreFunctionDefinition<"mutation", MutationCtx, InferArgs<TArgsShape>, TResult>;`,
+    `};`,
     ``,
     `/**`,
     ` * Define an action in this Syncore app's public API.`,
@@ -588,22 +571,14 @@ export async function runCodegen(cwd: string): Promise<void> {
     ` * @param config - The action definition, including args and a handler.`,
     ` * @returns The wrapped action. Export it from \`syncore/functions\` to add it to the generated API.`,
     ` */`,
-    `export function action<TValidator extends Validator<unknown>, TResult>(`,
-    `  config: FunctionConfig<ActionCtx, Infer<TValidator>, TResult> & { args: TValidator }`,
-    `): SyncoreFunctionDefinition<"action", ActionCtx, Infer<TValidator>, TResult>;`,
-    `export function action<TArgsShape extends ValidatorMap, TResult>(`,
-    `  config: FunctionConfig<ActionCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
-    `): SyncoreFunctionDefinition<"action", ActionCtx, InferArgs<TArgsShape>, TResult>;`,
-    `export function action<TArgsShape extends Validator<unknown> | ValidatorMap, TResult>(`,
-    `  config: FunctionConfig<ActionCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
-    `) {`,
-    `  return baseAction(config as never) as SyncoreFunctionDefinition<`,
-    `    "action",`,
-    `    ActionCtx,`,
-    `    InferArgs<TArgsShape>,`,
-    `    TResult`,
-    `  >;`,
-    `}`,
+    `export const action = baseAction as {`,
+    `  <TValidator extends Validator<unknown, unknown, string>, TResult>(`,
+    `    config: FunctionConfig<ActionCtx, Infer<TValidator>, TResult> & { args: TValidator }`,
+    `  ): SyncoreFunctionDefinition<"action", ActionCtx, Infer<TValidator>, TResult>;`,
+    `  <TArgsShape extends ValidatorMap, TResult>(`,
+    `    config: FunctionConfig<ActionCtx, InferArgs<TArgsShape>, TResult> & { args: TArgsShape }`,
+    `  ): SyncoreFunctionDefinition<"action", ActionCtx, InferArgs<TArgsShape>, TResult>;`,
+    `};`,
     ``
   ].join("\n");
 
@@ -665,12 +640,12 @@ function buildTemplateFiles(
     },
     {
       path: path.join("syncore", "schema.ts"),
-      content: `import { defineSchema, defineTable, v } from "syncorejs";
+      content: `import { defineSchema, defineTable, s } from "syncorejs";
 
 export default defineSchema({
   tasks: defineTable({
-    text: v.string(),
-    done: v.boolean()
+    text: s.string(),
+    done: s.boolean()
   }).index("by_done", ["done"])
 });
 `
@@ -684,7 +659,7 @@ export default defineComponents({});
     },
     {
       path: path.join("syncore", "functions", "tasks.ts"),
-      content: `import { mutation, query, v } from "../_generated/server";
+      content: `import { mutation, query, s } from "../_generated/server";
 
 export const list = query({
   args: {},
@@ -693,7 +668,7 @@ export const list = query({
 });
 
 export const create = mutation({
-  args: { text: v.string() },
+  args: { text: s.string() },
   handler: async (ctx, args) =>
     ctx.db.insert("tasks", { text: args.text, done: false })
 });
@@ -1122,7 +1097,7 @@ export async function importJsonlIntoProject(
 ): Promise<number> {
   const schema = await loadProjectSchema(cwd);
   const table = schema.getTable(tableName) as TableDefinition<
-    Validator<unknown>
+    Validator<Record<string, unknown>, Record<string, unknown>, string>
   >;
   const config = await loadProjectConfig(cwd);
   const projectTarget = requireProjectTargetConfig(config);
@@ -1207,7 +1182,7 @@ function ensureDatabaseReadyForImport(
 ): void {
   for (const tableName of schema.tableNames()) {
     const table = schema.getTable(tableName) as TableDefinition<
-      Validator<unknown>
+      Validator<Record<string, unknown>, Record<string, unknown>, string>
     >;
     database.exec(renderCreateTableStatement(tableName));
     for (const index of table.indexes) {
@@ -1235,7 +1210,9 @@ function ensureDatabaseReadyForImport(
 function syncSearchIndexesForImport(
   database: DatabaseSync,
   tableName: string,
-  table: TableDefinition<Validator<unknown>>,
+  table: TableDefinition<
+    Validator<Record<string, unknown>, Record<string, unknown>, string>
+  >,
   row: { _id: string; _creationTime: number; _json: string }
 ): void {
   if (table.searchIndexes.length === 0) {

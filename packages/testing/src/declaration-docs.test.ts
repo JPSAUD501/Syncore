@@ -43,7 +43,7 @@ describe("published declaration docs", () => {
     expectPublicDeclarationsToBeDocumented(declarations, [
       { symbol: "Validator", kind: "interface" },
       { symbol: "ValidatorBuilderApi", kind: "interface" },
-      { symbol: "v", kind: "const" }
+      { symbol: "s", kind: "const" }
     ]);
   });
 
@@ -201,3 +201,4 @@ describe("published declaration docs", () => {
     ]);
   });
 });
+

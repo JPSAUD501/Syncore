@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defineSchema, defineTable, v } from "../../../schema/src/index.js";
+import { defineSchema, defineTable, s } from "../../../schema/src/index.js";
 import { mutation, query } from "./functions.js";
 import {
   composeProjectFunctionRegistry,
@@ -17,21 +17,21 @@ describe("components composition", () => {
       version: "1.0.0",
       schema: defineSchema({
         notes: defineTable({
-          body: v.string()
+          body: s.string()
         })
-      }) as never,
+      }),
       public: {
         list: query({
           args: {},
           handler: async () => []
         })
-      } as never,
+      },
       internal: {
         touch: mutation({
           args: {},
           handler: async () => null
         })
-      } as never
+      }
     });
 
     const searchComponent = defineComponent({
@@ -42,7 +42,7 @@ describe("components composition", () => {
           args: {},
           handler: async () => null
         })
-      } as never
+      }
     });
 
     const manifest = defineComponents({
@@ -68,11 +68,11 @@ describe("components composition", () => {
 
     const rootSchema = defineSchema({
       tasks: defineTable({
-        text: v.string()
+        text: s.string()
       })
     });
 
-    const schema = composeProjectSchema(rootSchema as never, manifest);
+    const schema = composeProjectSchema(rootSchema, manifest);
     expect(schema.tableNames()).toEqual([
       "tasks",
       "__syncore_component__alpha__notes",
@@ -116,3 +116,4 @@ describe("components composition", () => {
     });
   });
 });
+

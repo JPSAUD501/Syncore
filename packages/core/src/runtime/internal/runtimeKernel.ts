@@ -1,8 +1,8 @@
 import type {
-  AnySyncoreSchema,
   CapabilityDescriptor,
   DevtoolsLiveQueryScope,
   QueryCtx,
+  SyncoreDataModel,
   SyncoreResolvedComponents,
   SyncoreCapabilities,
   SyncoreClient,
@@ -33,7 +33,9 @@ type DevtoolsEventMeta = {
   origin?: SyncoreDevtoolsEventOrigin;
 };
 
-export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
+export class RuntimeKernel<
+  TSchema extends SyncoreDataModel
+> {
   readonly runtimeId = generateId();
   readonly platform: string;
   readonly externalChangeSourceId = generateId();
@@ -54,7 +56,7 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
 
   constructor(
     private readonly options: SyncoreRuntimeOptions<TSchema>,
-    runtime: SyncoreRuntime<AnySyncoreSchema>
+    runtime: SyncoreRuntime<TSchema>
   ) {
     this.platform = options.platform ?? "node";
     this.capabilityDescriptors = Object.freeze([

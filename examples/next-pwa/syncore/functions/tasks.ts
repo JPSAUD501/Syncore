@@ -4,7 +4,7 @@ import {
   query,
   type MutationCtx,
   type QueryCtx,
-  v
+  s
 } from "../_generated/server";
 import { buildTaskSearchText, DEMO_PROJECTS } from "../planner";
 
@@ -22,12 +22,12 @@ interface TaskSummary {
   details: string;
   status: string;
   priority: string;
-  projectId: string | undefined;
-  projectName: string | undefined;
-  projectColor: string | undefined;
-  dueAt: number | undefined;
-  reminderAt: number | undefined;
-  completedAt: number | undefined;
+  projectId?: string;
+  projectName?: string;
+  projectColor?: string;
+  dueAt?: number;
+  reminderAt?: number;
+  completedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -38,12 +38,22 @@ interface TaskRecordShape {
   details: string;
   status: string;
   priority: string;
-  projectId: string | undefined;
-  dueAt: number | undefined;
-  reminderAt: number | undefined;
-  completedAt: number | undefined;
+  projectId?: string;
+  dueAt?: number;
+  reminderAt?: number;
+  completedAt?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+function optionalProp<TKey extends string, TValue>(
+  key: TKey,
+  value: TValue | undefined
+): { [K in TKey]?: TValue } {
+  if (value === undefined) {
+    return {};
+  }
+  return { [key]: value } as { [K in TKey]: TValue };
 }
 
 interface WorkspacePayload {
@@ -85,8 +95,8 @@ function normalizePriority(priority: string): TaskPriority {
 
 function sortOpenTasks<
   TTask extends {
-    dueAt: number | undefined;
-    reminderAt: number | undefined;
+    dueAt?: number;
+    reminderAt?: number;
     updatedAt: number;
     createdAt: number;
   }
@@ -106,7 +116,7 @@ function sortOpenTasks<
 
 async function projectMapForTasks(
   ctx: QueryCtx,
-  tasks: Array<{ projectId: string | undefined }>
+  tasks: Array<{ projectId?: string }>
 ) {
   const projectIds = [
     ...new Set(
@@ -136,14 +146,14 @@ function decorateTask(
     details: task.details,
     status: task.status,
     priority: task.priority,
-    projectId: task.projectId,
-    projectName: project?.name,
-    projectColor: project?.color,
-    dueAt: task.dueAt,
-    reminderAt: task.reminderAt,
-    completedAt: task.completedAt,
     createdAt: task.createdAt,
-    updatedAt: task.updatedAt
+    updatedAt: task.updatedAt,
+    ...optionalProp("projectId", task.projectId),
+    ...optionalProp("projectName", project?.name),
+    ...optionalProp("projectColor", project?.color),
+    ...optionalProp("dueAt", task.dueAt),
+    ...optionalProp("reminderAt", task.reminderAt),
+    ...optionalProp("completedAt", task.completedAt)
   };
 }
 
@@ -151,10 +161,10 @@ async function replaceReminderSchedule(
   ctx: MutationCtx,
   task: {
     _id: string;
-    reminderAt: number | undefined;
-    reminderJobId: string | undefined;
+    reminderAt?: number;
+    reminderJobId?: string;
   },
-  reminderAt: number | undefined
+  reminderAt?: number
 ) {
   if (task.reminderJobId) {
     await ctx.scheduler.cancel(task.reminderJobId).catch(() => undefined);
@@ -199,7 +209,7 @@ async function buildSearchText(
 
 export const workspace = query({
   args: {
-    projectId: v.optional(v.id("projects"))
+    projectId: s.optional(s.id("projects"))
   },
   handler: async (ctx, args): Promise<WorkspacePayload> => {
     const statuses = ["inbox", "today", "upcoming", "done"] as const;
@@ -250,7 +260,7 @@ export const workspace = query({
 });
 
 export const get = query({
-  args: { id: v.id("tasks") },
+  args: { id: s.id("tasks") },
   handler: async (ctx, args): Promise<TaskSummary | null> => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -264,8 +274,8 @@ export const get = query({
 
 export const search = query({
   args: {
-    query: v.string(),
-    projectId: v.optional(v.id("projects"))
+    query: s.string(),
+    projectId: s.optional(s.id("projects"))
   },
   handler: async (ctx, args): Promise<TaskSummary[]> => {
     const trimmed = args.query.trim();
@@ -293,15 +303,15 @@ export const search = query({
 
 export const create = mutation({
   args: {
-    title: v.string(),
-    details: v.optional(v.string()),
-    status: v.optional(v.string()),
-    priority: v.optional(v.string()),
-    projectId: v.optional(v.id("projects")),
-    dueAt: v.optional(v.number()),
-    reminderAt: v.optional(v.number())
+    title: s.string(),
+    details: s.optional(s.string()),
+    status: s.optional(s.string()),
+    priority: s.optional(s.string()),
+    projectId: s.optional(s.id("projects")),
+    dueAt: s.optional(s.number()),
+    reminderAt: s.optional(s.number())
   },
-  returns: v.string(),
+  returns: s.string(),
   handler: async (ctx, args) => {
     const now = Date.now();
     const status = normalizeStatus(args.status ?? "inbox");
@@ -319,20 +329,18 @@ export const create = mutation({
       details: args.details?.trim() ?? "",
       status,
       priority,
-      projectId: args.projectId ?? undefined,
-      dueAt: args.dueAt ?? undefined,
-      reminderAt: args.reminderAt ?? undefined,
-      reminderJobId: undefined,
-      completedAt: undefined,
       createdAt: now,
       updatedAt: now,
-      searchText
+      searchText,
+      ...optionalProp("projectId", args.projectId),
+      ...optionalProp("dueAt", args.dueAt),
+      ...optionalProp("reminderAt", args.reminderAt)
     });
 
     const reminderJobId = await replaceReminderSchedule(
       ctx,
-      { _id: id, reminderAt: undefined, reminderJobId: undefined },
-      args.reminderAt ?? undefined
+      { _id: id },
+      args.reminderAt
     );
 
     if (reminderJobId) {
@@ -345,14 +353,14 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    id: v.id("tasks"),
-    title: v.string(),
-    details: v.string(),
-    priority: v.string(),
-    projectId: v.optional(v.id("projects")),
-    dueAt: v.optional(v.number())
+    id: s.id("tasks"),
+    title: s.string(),
+    details: s.string(),
+    priority: s.string(),
+    projectId: s.optional(s.id("projects")),
+    dueAt: s.optional(s.number())
   },
-  returns: v.null(),
+  returns: s.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -383,10 +391,10 @@ export const update = mutation({
 
 export const move = mutation({
   args: {
-    id: v.id("tasks"),
-    status: v.string()
+    id: s.id("tasks"),
+    status: s.string()
   },
-  returns: v.null(),
+  returns: s.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -413,8 +421,8 @@ export const move = mutation({
 });
 
 export const complete = mutation({
-  args: { id: v.id("tasks") },
-  returns: v.null(),
+  args: { id: s.id("tasks") },
+  returns: s.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -444,10 +452,10 @@ export const complete = mutation({
 
 export const reopen = mutation({
   args: {
-    id: v.id("tasks"),
-    status: v.optional(v.string())
+    id: s.id("tasks"),
+    status: s.optional(s.string())
   },
-  returns: v.null(),
+  returns: s.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -475,10 +483,10 @@ export const reopen = mutation({
 
 export const scheduleReminder = mutation({
   args: {
-    id: v.id("tasks"),
-    reminderAt: v.optional(v.number())
+    id: s.id("tasks"),
+    reminderAt: s.optional(s.number())
   },
-  returns: v.null(),
+  returns: s.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -501,10 +509,10 @@ export const scheduleReminder = mutation({
 
 export const triggerReminder = mutation({
   args: {
-    id: v.id("tasks"),
-    scheduledFor: v.number()
+    id: s.id("tasks"),
+    scheduledFor: s.number()
   },
-  returns: v.null(),
+  returns: s.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -538,8 +546,8 @@ export const triggerReminder = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.id("tasks") },
-  returns: v.null(),
+  args: { id: s.id("tasks") },
+  returns: s.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get("tasks", args.id);
     if (!task) {
@@ -567,7 +575,7 @@ export const remove = mutation({
 
 export const seedDemo = mutation({
   args: {},
-  returns: v.null(),
+  returns: s.null(),
   handler: async (ctx) => {
     const existingTasks = await ctx.db.query("tasks").collect();
     if (existingTasks.length > 0) {
@@ -583,8 +591,7 @@ export const seedDemo = mutation({
         slug: project.name.toLowerCase().replace(/\s+/g, "-"),
         color: project.color,
         sortOrder: index,
-        createdAt: now - index * 1_000,
-        archivedAt: undefined
+        createdAt: now - index * 1_000
       });
       projectIds.push(id);
     }
@@ -659,18 +666,20 @@ export const seedDemo = mutation({
         details: seededTask.details,
         status: seededTask.status,
         priority: seededTask.priority,
-        projectId: seededTask.projectId,
-        dueAt: seededTask.dueAt,
-        reminderAt: seededTask.reminderAt,
-        reminderJobId: undefined,
-        completedAt: seededTask.status === "done" ? createdAt : undefined,
         createdAt,
         updatedAt: createdAt,
-        searchText
+        searchText,
+        ...optionalProp("projectId", seededTask.projectId),
+        ...optionalProp("dueAt", seededTask.dueAt),
+        ...optionalProp("reminderAt", seededTask.reminderAt),
+        ...optionalProp(
+          "completedAt",
+          seededTask.status === "done" ? createdAt : undefined
+        )
       });
       const reminderJobId = await replaceReminderSchedule(
         ctx,
-        { _id: id, reminderAt: undefined, reminderJobId: undefined },
+        { _id: id },
         seededTask.reminderAt
       );
       if (reminderJobId) {

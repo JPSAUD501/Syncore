@@ -1,14 +1,16 @@
 import {
-  type AnySyncoreSchema,
   attachRuntimeBridge,
   type AttachRuntimeBridgeOptions,
   type AttachedRuntimeBridge,
   type BridgeQueryWatch,
   SyncoreBridgeClient,
-  type SyncoreBridgeMessageEndpoint
+  type SyncoreDataModel,
+  type SyncoreBridgeMessageEndpoint,
 } from "@syncore/core";
 
-export type WebWorkerSyncoreSchema = AnySyncoreSchema;
+export type WebWorkerSyncoreSchema<
+  TSchema extends SyncoreDataModel = SyncoreDataModel
+> = TSchema;
 export type SyncoreWorkerMessageEndpoint = SyncoreBridgeMessageEndpoint;
 export type WorkerQueryWatch<TValue> = BridgeQueryWatch<TValue>;
 
@@ -19,8 +21,9 @@ export class SyncoreWebWorkerClient extends SyncoreBridgeClient {
   declare watchQuery: SyncoreBridgeClient["watchQuery"];
 }
 
-export type AttachWebWorkerRuntimeOptions =
-  AttachRuntimeBridgeOptions<WebWorkerSyncoreSchema>;
+export type AttachWebWorkerRuntimeOptions<
+  TSchema extends WebWorkerSyncoreSchema = WebWorkerSyncoreSchema
+> = AttachRuntimeBridgeOptions<TSchema>;
 export type AttachedWebWorkerRuntime = AttachedRuntimeBridge;
 
 /**

@@ -3,7 +3,6 @@ import {
   TableDefinition,
   defineSchema,
   type AnyTableDefinition,
-  type SyncoreSchemaDefinition,
   type Validator
 } from "@syncore/schema";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
@@ -16,6 +15,7 @@ import {
 import type {
   JsonObject,
   RegisteredSyncoreFunction,
+  SyncoreDataModel,
   SyncoreFunctionRegistry
 } from "./runtime.js";
 
@@ -43,8 +43,8 @@ export type SyncoreRequestedCapability =
 
 export type AnySyncoreFunctionDefinition = SyncoreFunctionDefinition<
   SyncoreFunctionKind,
-  unknown,
-  unknown,
+  any,
+  any,
   unknown
 >;
 
@@ -68,8 +68,8 @@ export interface SyncoreComponentHookContext {
 
 export interface SyncoreComponent<
   TConfig = unknown,
-  TSchema extends SyncoreSchema<SyncoreSchemaDefinition> | undefined =
-    | SyncoreSchema<SyncoreSchemaDefinition>
+  TSchema extends SyncoreDataModel | undefined =
+    | SyncoreDataModel
     | undefined,
   TPublic extends SyncoreFunctionTree | undefined =
     | SyncoreFunctionTree
@@ -129,7 +129,7 @@ export interface ResolvedSyncoreComponent {
   grantedCapabilities: readonly SyncoreRequestedCapability[];
   requestedCapabilities: readonly SyncoreRequestedCapability[];
   bindings: Record<string, string>;
-  schema: SyncoreSchema<SyncoreSchemaDefinition> | undefined;
+  schema: SyncoreDataModel | undefined;
   public: SyncoreFunctionTree | undefined;
   internal: SyncoreFunctionTree | undefined;
   publicEntries: Array<{
@@ -178,10 +178,12 @@ export type InstalledComponentsApi<
   [TAlias in keyof TManifest]: InstalledComponentApi<TManifest[TAlias]>;
 }>;
 
+type TablesOfSchema<TSchema extends SyncoreDataModel> = TSchema["tables"];
+
 export function defineComponent<
   TConfig = unknown,
-  TSchema extends SyncoreSchema<SyncoreSchemaDefinition> | undefined =
-    | SyncoreSchema<SyncoreSchemaDefinition>
+  TSchema extends SyncoreDataModel | undefined =
+    | SyncoreDataModel
     | undefined,
   TPublic extends SyncoreFunctionTree | undefined =
     | SyncoreFunctionTree
@@ -242,11 +244,11 @@ export function createBindingFunctionReference<
 }
 
 export function composeProjectSchema<
-  TRootSchema extends SyncoreSchema<SyncoreSchemaDefinition>
+  TRootSchema extends SyncoreDataModel
 >(
   rootSchema: TRootSchema,
   manifest?: SyncoreComponentsManifest
-): SyncoreSchema<Record<string, AnyTableDefinition>> {
+): SyncoreSchema<TablesOfSchema<TRootSchema> & Record<string, AnyTableDefinition>> {
   const tables: Record<string, AnyTableDefinition> = {
     ...rootSchema.tables
   };
@@ -264,7 +266,9 @@ export function composeProjectSchema<
     }
   }
 
-  return defineSchema(tables);
+  return defineSchema(tables) as unknown as SyncoreSchema<
+    TablesOfSchema<TRootSchema> & Record<string, AnyTableDefinition>
+  >;
 }
 
 export function composeProjectFunctionRegistry(
@@ -418,7 +422,7 @@ function resolveInstalledComponent(
 
 function createLocalTableMap(
   componentPath: string,
-  schema?: SyncoreSchema<SyncoreSchemaDefinition>
+  schema?: SyncoreDataModel
 ): Record<string, string> {
   if (!schema) {
     return {};
@@ -445,7 +449,9 @@ function composeComponentTables(
         componentName: component.name
       });
       for (const index of original.indexes) {
-        cloned.index(index.name, [...index.fields]);
+        if (index.fields.length > 0) {
+          cloned.index(index.name, [...index.fields] as [string, ...string[]]);
+        }
       }
       for (const index of original.searchIndexes) {
         cloned.searchIndex(index.name, {

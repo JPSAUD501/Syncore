@@ -82,7 +82,7 @@ describe("syncore CLI", () => {
     expect(await exists(generatedComponentsPath)).toBe(true);
     expect(firstGeneratedFunctions).toContain('"tasks/create"');
     expect(await exists(generatedSchemaPath)).toBe(true);
-    expect(firstGeneratedServer).toContain("export function query<");
+    expect(firstGeneratedServer).toContain("export const query = baseQuery as {");
     expect(configSource).toContain("projectTarget");
     expect(configSource).toContain('databasePath: ".syncore/syncore.db"');
 
@@ -241,7 +241,10 @@ describe("syncore CLI", () => {
     const originalSchema = await readFile(schemaPath, "utf8");
     await writeFile(
       schemaPath,
-      originalSchema.replace("text: v.string()", "text: v.string(),\n    done: v.optional(v.boolean())")
+      originalSchema.replace(
+        "text: s.string()",
+        "text: s.string(),\n    done: s.optional(s.boolean())"
+      )
     );
 
     const result = await runCli(cwd, ["doctor", "--json"]);

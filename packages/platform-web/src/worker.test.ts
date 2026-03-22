@@ -8,7 +8,7 @@ import {
   type MutationCtx,
   type QueryCtx
 } from "@syncore/core";
-import { defineSchema, defineTable, v } from "@syncore/schema";
+import { defineSchema, defineTable, s } from "@syncore/schema";
 import { createWebSyncoreRuntime } from "./index.js";
 import {
   attachWebWorkerRuntime,
@@ -32,20 +32,20 @@ describe("platform-web worker bridge", () => {
   it("proxies reactivity through the worker endpoint", async () => {
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        done: v.boolean()
+        title: s.string(),
+        done: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       }),
       "todos/create": mutation({
-        args: { title: v.string() },
-        returns: v.string(),
+        args: { title: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("todos", {
             title: (args as { title: string }).title,
@@ -104,8 +104,8 @@ describe("platform-web worker bridge", () => {
   it("propagates query failures across the worker boundary", async () => {
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        done: v.boolean()
+        title: s.string(),
+        done: s.boolean()
       })
     });
 
@@ -214,3 +214,4 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+

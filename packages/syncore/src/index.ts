@@ -1,7 +1,6 @@
 export * from "@syncore/schema";
 export {
   type ActionCtx,
-  type AnySyncoreSchema,
   type ComparisonOperator,
   type CronJobs,
   type DevtoolsSink,

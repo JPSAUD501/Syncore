@@ -1,4 +1,4 @@
-import { mutation, query, v } from "../_generated/server";
+import { mutation, query, s } from "../_generated/server";
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
@@ -23,7 +23,7 @@ export const listCompletions = query({
 
 /** Completions for a specific date. */
 export const completionsForDate = query({
-  args: { date: v.string() },
+  args: { date: s.string() },
   handler: async (ctx, args) =>
     ctx.db
       .query("completions")
@@ -34,9 +34,9 @@ export const completionsForDate = query({
 /** Create a new habit. */
 export const createHabit = mutation({
   args: {
-    name: v.string(),
-    icon: v.string(),
-    color: v.string()
+    name: s.string(),
+    icon: s.string(),
+    color: s.string()
   },
   handler: async (ctx, args) =>
     ctx.db.insert("habits", {
@@ -50,8 +50,8 @@ export const createHabit = mutation({
 
 /** Toggle a habit completion for a given date. */
 export const toggleCompletion = mutation({
-  args: { habitId: v.string(), date: v.string() },
-  returns: v.null(),
+  args: { habitId: s.string(), date: s.string() },
+  returns: s.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("completions")
@@ -74,8 +74,8 @@ export const toggleCompletion = mutation({
 
 /** Archive (soft-delete) a habit. */
 export const archiveHabit = mutation({
-  args: { id: v.string() },
-  returns: v.null(),
+  args: { id: s.string() },
+  returns: s.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch("habits", args.id, { archived: true });
     return null;
@@ -84,8 +84,8 @@ export const archiveHabit = mutation({
 
 /** Permanently remove a habit and its completions. */
 export const removeHabit = mutation({
-  args: { id: v.string() },
-  returns: v.null(),
+  args: { id: s.string() },
+  returns: s.null(),
   handler: async (ctx, args) => {
     const completions = await ctx.db
       .query("completions")

@@ -13,7 +13,7 @@
 Inside `syncore/functions/*.ts`, import from `../_generated/server`:
 
 ```ts
-import { mutation, query, v } from "../_generated/server";
+import { mutation, query, s } from "../_generated/server";
 ```
 
 ## Prefer Strong Validators
@@ -22,23 +22,23 @@ Prefer table-aware ids over plain strings:
 
 ```ts
 args: {
-  id: v.id("tasks"),
-  done: v.boolean()
+  id: s.id("tasks"),
+  done: s.boolean()
 }
 ```
 
 ## Queries
 
 ```ts
-import { query, v } from "../_generated/server";
+import { query, s } from "../_generated/server";
 
 export const list = query({
   args: {},
-  returns: v.array(
-    v.object({
-      _id: v.string(),
-      text: v.string(),
-      done: v.boolean()
+  returns: s.array(
+    s.object({
+      _id: s.string(),
+      text: s.string(),
+      done: s.boolean()
     })
   ),
   handler: async (ctx) =>
@@ -52,14 +52,14 @@ Define indexes in schema before depending on `withIndex(...)` or
 ## Mutations
 
 ```ts
-import { mutation, v } from "../_generated/server";
+import { mutation, s } from "../_generated/server";
 
 export const toggleDone = mutation({
   args: {
-    id: v.id("tasks"),
-    done: v.boolean()
+    id: s.id("tasks"),
+    done: s.boolean()
   },
-  returns: v.null(),
+  returns: s.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch("tasks", args.id, { done: args.done });
     return null;
@@ -70,12 +70,12 @@ export const toggleDone = mutation({
 ## Actions
 
 ```ts
-import { action, v } from "../_generated/server";
+import { action, s } from "../_generated/server";
 import { api } from "../_generated/api";
 
 export const exportTasks = action({
   args: {},
-  returns: v.number(),
+  returns: s.number(),
   handler: async (ctx) => {
     const tasks = await ctx.runQuery(api.tasks.list);
     await fetch("https://example.invalid/export", {
@@ -91,10 +91,10 @@ export const exportTasks = action({
 ## Typed References
 
 ```ts
-import { createFunctionReference, mutation, v } from "../_generated/server";
+import { createFunctionReference, mutation, s } from "../_generated/server";
 
 export const scheduleCreate = mutation({
-  args: { body: v.string(), delayMs: v.number() },
+  args: { body: s.string(), delayMs: s.number() },
   handler: async (ctx, args) =>
     ctx.scheduler.runAfter(
       args.delayMs,
@@ -134,4 +134,4 @@ export const list = query({
 2. widening types and breaking `useQuery(api.foo.bar)` inference
 3. editing generated API refs instead of source definitions
 4. forgetting that scheduled jobs should use typed refs
-5. using plain strings where `v.id("table")` better expresses intent
+5. using plain strings where `s.id("table")` better expresses intent

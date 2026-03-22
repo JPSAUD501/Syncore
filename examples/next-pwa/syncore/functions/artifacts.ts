@@ -2,7 +2,7 @@ import {
   action,
   mutation,
   query,
-  v
+  s
 } from "../_generated/server";
 import { api } from "../_generated/api";
 import { formatPlannerDate } from "../planner";
@@ -22,7 +22,7 @@ function titleFor(kind: string, baseTitle: string) {
 }
 
 export const listByTask = query({
-  args: { taskId: v.id("tasks") },
+  args: { taskId: s.id("tasks") },
   handler: async (ctx, args) => {
     const artifacts = await ctx.db
       .query("artifacts")
@@ -35,7 +35,7 @@ export const listByTask = query({
 });
 
 export const getContent = query({
-  args: { id: v.id("artifacts") },
+  args: { id: s.id("artifacts") },
   handler: async (ctx, args) => {
     const artifact = await ctx.db.get("artifacts", args.id);
     if (!artifact) {
@@ -56,14 +56,14 @@ export const getContent = query({
 
 export const createRecord = mutation({
   args: {
-    taskId: v.id("tasks"),
-    kind: v.string(),
-    title: v.string(),
-    storageId: v.string(),
-    contentType: v.string(),
-    size: v.number()
+    taskId: s.id("tasks"),
+    kind: s.string(),
+    title: s.string(),
+    storageId: s.string(),
+    contentType: s.string(),
+    size: s.number()
   },
-  returns: v.string(),
+  returns: s.string(),
   handler: async (ctx, args) =>
     ctx.db.insert("artifacts", {
       taskId: args.taskId,
@@ -77,8 +77,8 @@ export const createRecord = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.id("artifacts") },
-  returns: v.null(),
+  args: { id: s.id("artifacts") },
+  returns: s.null(),
   handler: async (ctx, args) => {
     const artifact = await ctx.db.get("artifacts", args.id);
     if (!artifact) {
@@ -93,14 +93,14 @@ export const remove = mutation({
 
 export const generate = action({
   args: {
-    taskId: v.id("tasks"),
-    kind: v.string()
+    taskId: s.id("tasks"),
+    kind: s.string()
   },
-  returns: v.object({
-    artifactId: v.string(),
-    title: v.string(),
-    contentType: v.string(),
-    preview: v.string()
+  returns: s.object({
+    artifactId: s.string(),
+    title: s.string(),
+    contentType: s.string(),
+    preview: s.string()
   }),
   handler: async (ctx, args) => {
     const task = await ctx.runQuery(api.tasks.get, { id: args.taskId });
@@ -110,7 +110,7 @@ export const generate = action({
 
     const title = titleFor(args.kind, task.title);
     const workspace = await ctx.runQuery(api.tasks.workspace, {
-      projectId: undefined
+      projectId: task.projectId ?? undefined
     });
     const createdAt = Date.now();
     const content =

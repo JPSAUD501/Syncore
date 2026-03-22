@@ -10,7 +10,7 @@ import {
   defineTable,
   mutation,
   query,
-  v,
+  s,
   type MutationCtx,
   type QueryCtx
 } from "../../core/src/index.ts";
@@ -34,8 +34,8 @@ describe("Node Syncore runtime", () => {
   it("runs mutations and reactive queries", async () => {
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
         .index("by_done", ["done"])
         .searchIndex("search_text", { searchField: "text" })
@@ -48,7 +48,7 @@ describe("Node Syncore runtime", () => {
           ctx.db.query("tasks").order("desc").collect()
       }),
       "tasks/create": mutation({
-        args: { text: v.string() },
+        args: { text: s.string() },
         handler: async (
           ctx: MutationCtx<typeof schema>,
           args: { text: string }
@@ -59,7 +59,7 @@ describe("Node Syncore runtime", () => {
           })
       }),
       "tasks/markDone": mutation({
-        args: { id: v.string() },
+        args: { id: s.string() },
         handler: async (
           ctx: MutationCtx<typeof schema>,
           args: { id: string }
@@ -136,8 +136,8 @@ describe("Node Syncore runtime", () => {
 
     const runtimeSchema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
 
@@ -186,8 +186,8 @@ describe("Node Syncore runtime", () => {
   it("binds an electron-style window with one helper", async () => {
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
     const runtime = createNodeSyncoreRuntime({
@@ -230,8 +230,8 @@ describe("Node Syncore runtime", () => {
   it("ignores messages from other renderers when using ipcMain", async () => {
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
     const runtime = createNodeSyncoreRuntime({
@@ -293,8 +293,8 @@ describe("Node Syncore runtime", () => {
   it("creates a managed node client for scripts", async () => {
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
     const managed = await createManagedNodeSyncoreClient({
@@ -321,3 +321,4 @@ describe("Node Syncore runtime", () => {
     await managed.dispose();
   });
 });
+

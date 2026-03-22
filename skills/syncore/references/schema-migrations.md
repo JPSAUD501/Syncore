@@ -3,15 +3,15 @@
 ## Schema Is the Source of Truth
 
 Define tables in `syncore/schema.ts` with `defineSchema`, `defineTable`, and
-validators from `v`:
+builders from `s`:
 
 ```ts
-import { defineSchema, defineTable, v } from "syncorejs";
+import { defineSchema, defineTable, s } from "syncorejs";
 
 export default defineSchema({
   tasks: defineTable({
-    text: v.string(),
-    done: v.boolean()
+    text: s.string(),
+    done: s.boolean()
   })
     .index("by_done", ["done"])
     .searchIndex("search_text", { searchField: "text" })
@@ -42,8 +42,8 @@ Model them in schema first, then query through the exposed API:
 ```ts
 export default defineSchema({
   notes: defineTable({
-    body: v.string(),
-    pinned: v.boolean()
+    body: s.string(),
+    pinned: s.boolean()
   })
     .index("by_pinned", ["pinned"])
     .searchIndex("search_body", { searchField: "body" })

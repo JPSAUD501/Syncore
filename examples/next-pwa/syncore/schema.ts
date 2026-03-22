@@ -1,27 +1,27 @@
-import { defineSchema, defineTable, v } from "syncorejs";
+import { defineSchema, defineTable, s } from "syncorejs";
 
 export default defineSchema({
   projects: defineTable({
-    name: v.string(),
-    slug: v.string(),
-    color: v.string(),
-    sortOrder: v.number(),
-    createdAt: v.number(),
-    archivedAt: v.optional(v.number())
+    name: s.string(),
+    slug: s.string(),
+    color: s.string(),
+    sortOrder: s.number(),
+    createdAt: s.number(),
+    archivedAt: s.optional(s.number())
   }).index("by_sort", ["sortOrder"]),
   tasks: defineTable({
-    title: v.string(),
-    details: v.string(),
-    status: v.string(),
-    priority: v.string(),
-    projectId: v.optional(v.id("projects")),
-    dueAt: v.optional(v.number()),
-    reminderAt: v.optional(v.number()),
-    reminderJobId: v.optional(v.string()),
-    completedAt: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    searchText: v.string()
+    title: s.string(),
+    details: s.string(),
+    status: s.string(),
+    priority: s.string(),
+    projectId: s.optional(s.id("projects")),
+    dueAt: s.optional(s.number()),
+    reminderAt: s.optional(s.number()),
+    reminderJobId: s.optional(s.string()),
+    completedAt: s.optional(s.number()),
+    createdAt: s.number(),
+    updatedAt: s.number(),
+    searchText: s.string()
   })
     .index("by_status_updated", ["status", "updatedAt"])
     .index("by_project_status", ["projectId", "status", "updatedAt"])
@@ -32,12 +32,12 @@ export default defineSchema({
       filterFields: ["status", "priority", "projectId"]
     }),
   artifacts: defineTable({
-    taskId: v.id("tasks"),
-    kind: v.string(),
-    title: v.string(),
-    storageId: v.string(),
-    contentType: v.string(),
-    size: v.number(),
-    createdAt: v.number()
+    taskId: s.id("tasks"),
+    kind: s.string(),
+    title: s.string(),
+    storageId: s.string(),
+    contentType: s.string(),
+    size: s.number(),
+    createdAt: s.number()
   }).index("by_task_created", ["taskId", "createdAt"])
 });

@@ -7,7 +7,7 @@ import {
   type MutationCtx,
   type QueryCtx
 } from "@syncore/core";
-import { defineSchema, defineTable, v } from "@syncore/schema";
+import { defineSchema, defineTable, s } from "@syncore/schema";
 import { createWebPersistence } from "./persistence.js";
 import { createWebSyncoreRuntime } from "./index.js";
 
@@ -32,20 +32,20 @@ describe("platform-web OPFS persistence", () => {
   it("persists sqlite state into OPFS between runtime instances", async () => {
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       }),
       "todos/create": mutation({
-        args: { title: v.string() },
-        returns: v.string(),
+        args: { title: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("todos", {
             title: (args as { title: string }).title,
@@ -303,3 +303,4 @@ function sliceToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
     bytes.byteOffset + bytes.byteLength
   ) as ArrayBuffer;
 }
+

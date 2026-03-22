@@ -5,9 +5,14 @@ import type {
   SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 import type {
+  AnyTableDefinition,
   InferDocument,
   InferTableInput,
-  SyncoreSchema,
+  SyncoreSchemaDefinition,
+  TableIndexFields,
+  TableIndexNames,
+  TableSearchIndexConfig,
+  TableSearchIndexNames,
   Validator
 } from "@syncore/schema";
 import type {
@@ -29,8 +34,8 @@ import { RuntimeKernel } from "./internal/runtimeKernel.js";
 
 export interface RegisteredSyncoreFunction {
   kind: SyncoreFunctionKind;
-  argsValidator: Validator<unknown>;
-  returnsValidator?: Validator<unknown>;
+  argsValidator: Validator<unknown, unknown, string>;
+  returnsValidator?: Validator<unknown, unknown, string>;
   handler: RegisteredSyncoreHandler;
   __syncoreComponent?: SyncoreComponentFunctionMetadata;
 }
@@ -176,7 +181,7 @@ export interface SyncoreStorageAdapter {
 
 export interface DevtoolsSink {
   emit(event: SyncoreDevtoolsEvent): void;
-  attachRuntime?(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+  attachRuntime?(runtime: SyncoreRuntime<SyncoreDataModel>): void;
 }
 
 export interface DevtoolsLiveQuerySnapshot {
@@ -230,7 +235,19 @@ export interface SyncoreCapabilities {
   [name: string]: unknown;
 }
 
-export interface SyncoreRuntimeOptions<TSchema extends AnySyncoreSchema> {
+export interface SyncoreDataModel<
+  TTables extends SyncoreSchemaDefinition = SyncoreSchemaDefinition
+> {
+  readonly tables: TTables;
+  getTable(
+    tableName: Extract<keyof TTables, string>
+  ): TTables[Extract<keyof TTables, string>];
+  tableNames(): Array<Extract<keyof TTables, string>>;
+}
+
+export interface SyncoreRuntimeOptions<
+  TSchema extends SyncoreDataModel
+> {
   schema: TSchema;
   functions: SyncoreFunctionRegistry;
   components?: SyncoreResolvedComponents;
@@ -347,44 +364,73 @@ export interface FilterBuilder {
   or(...expressions: QueryExpression[]): QueryExpression;
 }
 
-export interface IndexRangeBuilder {
-  eq(field: string, value: unknown): IndexRangeBuilder;
-  gt(field: string, value: unknown): IndexRangeBuilder;
-  gte(field: string, value: unknown): IndexRangeBuilder;
-  lt(field: string, value: unknown): IndexRangeBuilder;
-  lte(field: string, value: unknown): IndexRangeBuilder;
+export interface IndexRangeBuilder<TFieldName extends string = string> {
+  eq(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
+  gt(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
+  gte(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
+  lt(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
+  lte(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
   build(): QueryCondition[];
 }
 
-export interface SearchIndexBuilder {
-  search(field: string, value: string): SearchIndexBuilder;
-  eq(field: string, value: unknown): SearchIndexBuilder;
+export interface SearchIndexBuilder<
+  TSearchField extends string = string,
+  TFilterField extends string = string
+> {
+  search(
+    field: TSearchField,
+    value: string
+  ): SearchIndexBuilder<TSearchField, TFilterField>;
+  eq(
+    field: TFilterField,
+    value: unknown
+  ): SearchIndexBuilder<TSearchField, TFilterField>;
   build(): SearchQuery;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnySyncoreSchema = SyncoreSchema<any>;
-
-export type TableNames<TSchema extends AnySyncoreSchema> = Extract<
+export type TableNames<
+  TSchema extends SyncoreDataModel
+> = Extract<
   keyof TSchema["tables"],
   string
 >;
 
 export type DocumentForTable<
-  TSchema extends AnySyncoreSchema,
+  TSchema extends SyncoreDataModel,
   TTableName extends TableNames<TSchema>
 > = InferDocument<TSchema["tables"][TTableName]>;
 
 export type InsertValueForTable<
-  TSchema extends AnySyncoreSchema,
+  TSchema extends SyncoreDataModel,
   TTableName extends TableNames<TSchema>
 > = InferTableInput<TSchema["tables"][TTableName]>;
+
+type OptionalPropertyNames<TValue> = TValue extends object
+  ? {
+      [TKey in keyof TValue]-?: Omit<TValue, TKey> extends TValue
+        ? TKey
+        : never;
+    }[keyof TValue]
+  : never;
+
+type PatchValue<TValue> = TValue extends object
+  ? {
+      [TKey in keyof TValue]?: TKey extends OptionalPropertyNames<TValue>
+        ? TValue[TKey] | undefined
+        : TValue[TKey];
+    }
+  : never;
+
+export type PatchValueForTable<
+  TSchema extends SyncoreDataModel,
+  TTableName extends TableNames<TSchema>
+> = PatchValue<InsertValueForTable<TSchema, TTableName>>;
 
 type OptionalArgsTuple<TArgs> =
   Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
 export interface SyncoreDatabaseReader<
-  TSchema extends AnySyncoreSchema = AnySyncoreSchema
+  TSchema extends SyncoreDataModel = SyncoreDataModel
 > {
   get<TTableName extends TableNames<TSchema>>(
     table: TTableName,
@@ -392,12 +438,15 @@ export interface SyncoreDatabaseReader<
   ): Promise<DocumentForTable<TSchema, TTableName> | null>;
   query<TTableName extends TableNames<TSchema>>(
     table: TTableName
-  ): QueryBuilder<DocumentForTable<TSchema, TTableName>>;
+  ): QueryBuilder<
+    TSchema["tables"][TTableName],
+    DocumentForTable<TSchema, TTableName>
+  >;
   raw<TValue = unknown>(sql: string, params?: unknown[]): Promise<TValue[]>;
 }
 
 export interface SyncoreDatabaseWriter<
-  TSchema extends AnySyncoreSchema = AnySyncoreSchema
+  TSchema extends SyncoreDataModel = SyncoreDataModel
 > extends SyncoreDatabaseReader<TSchema> {
   insert<TTableName extends TableNames<TSchema>>(
     table: TTableName,
@@ -406,7 +455,7 @@ export interface SyncoreDatabaseWriter<
   patch<TTableName extends TableNames<TSchema>>(
     table: TTableName,
     id: string,
-    value: Partial<InsertValueForTable<TSchema, TTableName>>
+    value: PatchValueForTable<TSchema, TTableName>
   ): Promise<void>;
   replace<TTableName extends TableNames<TSchema>>(
     table: TTableName,
@@ -446,7 +495,9 @@ export interface SchedulerApi {
 /**
  * Context available inside Syncore query handlers.
  */
-export interface QueryCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+export interface QueryCtx<
+  TSchema extends SyncoreDataModel = SyncoreDataModel
+> {
   db: SyncoreDatabaseReader<TSchema>;
   storage: SyncoreStorageApi;
   capabilities?: Readonly<SyncoreCapabilities>;
@@ -467,7 +518,7 @@ export interface QueryCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
  * Context available inside Syncore mutation handlers.
  */
 export interface MutationCtx<
-  TSchema extends AnySyncoreSchema = AnySyncoreSchema
+  TSchema extends SyncoreDataModel = SyncoreDataModel
 > extends QueryCtx<TSchema> {
   db: SyncoreDatabaseWriter<TSchema>;
   scheduler: SchedulerApi;
@@ -485,7 +536,7 @@ export interface MutationCtx<
  * Context available inside Syncore action handlers.
  */
 export interface ActionCtx<
-  TSchema extends AnySyncoreSchema = AnySyncoreSchema
+  TSchema extends SyncoreDataModel = SyncoreDataModel
 > extends QueryCtx<TSchema> {
   scheduler: SchedulerApi;
   runMutation<TArgs, TResult>(
@@ -522,7 +573,7 @@ export interface SyncoreClient {
 }
 
 export interface SyncoreRuntimeAdmin<
-  TSchema extends AnySyncoreSchema = AnySyncoreSchema
+  TSchema extends SyncoreDataModel = SyncoreDataModel
 > {
   prepareForDirectAccess(): Promise<void>;
   createClient(): SyncoreClient;
@@ -572,14 +623,27 @@ type DevtoolsEventMeta = {
 /**
  * Chainable query builder returned by `ctx.db.query(...)`.
  */
-export interface QueryBuilder<TDocument> {
-  withIndex(
-    indexName: string,
-    builder?: (range: IndexRangeBuilder) => IndexRangeBuilder
+export interface QueryBuilder<
+  TTable extends AnyTableDefinition,
+  TDocument = InferDocument<TTable>
+> {
+  withIndex<TIndexName extends TableIndexNames<TTable>>(
+    indexName: TIndexName,
+    builder?: (
+      range: IndexRangeBuilder<TableIndexFields<TTable, TIndexName>[number]>
+    ) => IndexRangeBuilder<TableIndexFields<TTable, TIndexName>[number]>
   ): this;
-  withSearchIndex(
-    indexName: string,
-    builder: (search: SearchIndexBuilder) => SearchIndexBuilder
+  withSearchIndex<TIndexName extends TableSearchIndexNames<TTable>>(
+    indexName: TIndexName,
+    builder: (
+      search: SearchIndexBuilder<
+        TableSearchIndexConfig<TTable, TIndexName>["searchField"],
+        TableSearchIndexConfig<TTable, TIndexName>["filterFields"]
+      >
+    ) => SearchIndexBuilder<
+      TableSearchIndexConfig<TTable, TIndexName>["searchField"],
+      TableSearchIndexConfig<TTable, TIndexName>["filterFields"]
+    >
   ): this;
   order(order: "asc" | "desc"): this;
   filter(builder: (filter: FilterBuilder) => QueryExpression): this;
@@ -593,14 +657,13 @@ export interface QueryBuilder<TDocument> {
 /**
  * Local-first Syncore runtime that hosts your schema, functions, and storage.
  */
-export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
+export class SyncoreRuntime<
+  TSchema extends SyncoreDataModel
+> {
   private readonly kernel: RuntimeKernel<TSchema>;
 
   constructor(private readonly options: SyncoreRuntimeOptions<TSchema>) {
-    this.kernel = new RuntimeKernel(
-      options,
-      this as unknown as SyncoreRuntime<AnySyncoreSchema>
-    );
+    this.kernel = new RuntimeKernel(options, this);
   }
 
   async start(): Promise<void> {
@@ -670,8 +733,8 @@ export function createFunctionReference<
 export function createFunctionReferenceFor<
   TDefinition extends {
     kind: SyncoreFunctionKind;
-    argsValidator: Validator<unknown>;
-    returnsValidator?: Validator<unknown>;
+    argsValidator: Validator<unknown, unknown, string>;
+    returnsValidator?: Validator<unknown, unknown, string>;
   }
 >(
   kind: FunctionKindFromDefinition<TDefinition>,

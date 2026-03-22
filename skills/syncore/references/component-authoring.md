@@ -18,7 +18,7 @@ package.
 Prefer public entrypoints:
 
 - import component helpers from `syncorejs/components`
-- import `query`, `mutation`, `action`, `defineSchema`, `defineTable`, and `v` from `syncorejs`
+- import `query`, `mutation`, `action`, `defineSchema`, `defineTable`, and `s` from `syncorejs`
 
 The authoring flow should center around:
 
@@ -66,7 +66,7 @@ import {
   createBindingFunctionReference,
   defineComponent
 } from "syncorejs/components";
-import { action, mutation, query, v, defineSchema, defineTable } from "syncorejs";
+import { action, mutation, query, s, defineSchema, defineTable } from "syncorejs";
 
 export default defineComponent({
   name: "cache",
@@ -75,14 +75,14 @@ export default defineComponent({
   dependencies: ["clock"],
   schema: defineSchema({
     entries: defineTable({
-      key: v.string(),
-      value: v.any(),
-      updatedAt: v.number()
+      key: s.string(),
+      value: s.any(),
+      updatedAt: s.number()
     }).index("by_key", ["key"])
   }),
   public: {
     get: query({
-      args: { key: v.string() },
+      args: { key: s.string() },
       handler: async (ctx, args) =>
         ctx.db
           .query("entries")
@@ -92,7 +92,7 @@ export default defineComponent({
   },
   internal: {
     revalidate: action({
-      args: { key: v.string() },
+      args: { key: s.string() },
       handler: async (ctx, args) => {
         await ctx.runQuery(
           createBindingFunctionReference("query", "clock", "now"),

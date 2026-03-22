@@ -3,26 +3,26 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  type AnySyncoreSchema,
   createFunctionReference,
   defineSchema,
   defineTable,
   mutation,
   query,
-  v,
+  s,
   type MutationCtx,
   type QueryCtx,
   type SyncoreCapabilities,
   type SyncoreRuntime
 } from "@syncore/core";
+import type { SyncoreSchema } from "@syncore/core";
 
 const schema = defineSchema({
   todos: defineTable({
-    title: v.string(),
-    complete: v.boolean()
+    title: s.string(),
+    complete: s.boolean()
   }),
   runtime_state: defineTable({
-    label: v.string()
+    label: s.string()
   })
 });
 
@@ -33,7 +33,7 @@ const functions = {
       ctx.db.query("todos").order("desc").collect()
   }),
   "todos/create": mutation({
-    args: { title: v.string() },
+    args: { title: s.string() },
     handler: async (ctx: MutationCtx<typeof schema>, args: { title: string }) =>
       ctx.db.insert("todos", {
         title: args.title,
@@ -41,7 +41,7 @@ const functions = {
       })
   }),
   "todos/scheduleCreate": mutation({
-    args: { title: v.string(), delayMs: v.number() },
+    args: { title: s.string(), delayMs: s.number() },
     handler: async (
       ctx: MutationCtx<typeof schema>,
       args: { title: string; delayMs: number }
@@ -59,8 +59,8 @@ const functions = {
   }),
   "files/put": mutation({
     args: {
-      name: v.string(),
-      body: v.string()
+      name: s.string(),
+      body: s.string()
     },
     handler: async (
       ctx: MutationCtx<typeof schema>,
@@ -73,7 +73,7 @@ const functions = {
       })
   }),
   "files/get": query({
-    args: { id: v.string() },
+    args: { id: s.string() },
     handler: async (ctx: QueryCtx<typeof schema>, args: { id: string }) => {
       const file = await ctx.storage.get(args.id);
       const bytes = await ctx.storage.read(args.id);
@@ -85,8 +85,8 @@ const functions = {
   }),
   "runtime/readCapabilities": query({
     args: {},
-    returns: v.object({
-      platformProvided: v.string()
+    returns: s.object({
+      platformProvided: s.string()
     }),
     handler: async (ctx: QueryCtx<typeof schema>) => {
       const capabilities = ctx.capabilities as Record<string, string>;
@@ -142,8 +142,8 @@ type ExpoFactory = {
     capabilities?: SyncoreCapabilities;
   }): Promise<SyncoreRuntime<ContractSchema>>;
   createDestructiveRuntime(
-    destructiveSchema: AnySyncoreSchema
-  ): Promise<SyncoreRuntime<AnySyncoreSchema>>;
+    destructiveSchema: SyncoreSchema<any>
+  ): Promise<SyncoreRuntime<SyncoreSchema<any>>>;
   dispose(): Promise<void>;
 };
 
@@ -289,7 +289,9 @@ async function createExpoFactory(): Promise<ExpoFactory> {
   const databaseDirectory = path.join(rootDirectory, "databases");
   const databaseName = "syncore.db";
   const storageDirectoryName = "storage";
-  const activeRuntimes = new Set<SyncoreRuntime<AnySyncoreSchema>>();
+  const activeRuntimes = new Set<
+    SyncoreRuntime<SyncoreSchema<any>>
+  >();
 
   return {
     label: "expo",
@@ -310,7 +312,9 @@ async function createExpoFactory(): Promise<ExpoFactory> {
         },
         ...(options?.capabilities ? { capabilities: options.capabilities } : {})
       });
-      activeRuntimes.add(runtime as SyncoreRuntime<AnySyncoreSchema>);
+    activeRuntimes.add(
+      runtime as SyncoreRuntime<SyncoreSchema<any>>
+    );
       return runtime;
     },
     async createDestructiveRuntime(destructiveSchema) {
@@ -356,3 +360,4 @@ async function waitFor(
 function wait(durationMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
+

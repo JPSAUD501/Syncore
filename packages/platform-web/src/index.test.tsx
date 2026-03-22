@@ -9,7 +9,7 @@ import {
   type QueryCtx,
   SyncoreRuntime
 } from "@syncore/core";
-import { defineSchema, defineTable, v } from "@syncore/schema";
+import { defineSchema, defineTable, s } from "@syncore/schema";
 import {
   createWebSyncoreRuntime,
   createWebWorkerRuntime,
@@ -25,14 +25,14 @@ import { SyncoreIndexedDbPersistence } from "./indexeddb.js";
 
 const storageSchema = defineSchema({
   files: defineTable({
-    label: v.string()
+    label: s.string()
   })
 });
 
 const storageFunctions = {
   "files/write": mutation({
-    args: { label: v.string(), body: v.string() },
-    returns: v.string(),
+    args: { label: s.string(), body: s.string() },
+    returns: s.string(),
     handler: async (ctx, args) =>
       (ctx as MutationCtx).storage.put({
         fileName: `${(args as { label: string }).label}.txt`,
@@ -41,8 +41,8 @@ const storageFunctions = {
       })
   }),
   "files/get": query({
-    args: { id: v.string() },
-    returns: v.any(),
+    args: { id: s.string() },
+    returns: s.any(),
     handler: async (ctx, args) =>
       (ctx as QueryCtx).storage.get((args as { id: string }).id)
   })
@@ -64,20 +64,20 @@ describe("platform-web sql.js runtime", () => {
   it("persists sqlite state into IndexedDB between runtime instances", async () => {
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       }),
       "todos/create": mutation({
-        args: { title: v.string() },
-        returns: v.string(),
+        args: { title: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("todos", {
             title: (args as { title: string }).title,
@@ -146,14 +146,14 @@ describe("platform-web sql.js runtime", () => {
 
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       })
     };
@@ -202,15 +202,15 @@ describe("platform-web sql.js runtime", () => {
 
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       })
     };
@@ -272,15 +272,15 @@ describe("platform-web sql.js runtime", () => {
 
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       })
     };
@@ -360,15 +360,15 @@ describe("platform-web sql.js runtime", () => {
 
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       })
     };
@@ -429,15 +429,15 @@ describe("platform-web sql.js runtime", () => {
 
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       })
     };
@@ -492,20 +492,20 @@ describe("platform-web sql.js runtime", () => {
 
     const schema = defineSchema({
       todos: defineTable({
-        title: v.string(),
-        complete: v.boolean()
+        title: s.string(),
+        complete: s.boolean()
       })
     });
 
     const functions = {
       "todos/list": query({
         args: {},
-        returns: v.array(v.any()),
+        returns: s.array(s.any()),
         handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
       }),
       "todos/create": mutation({
-        args: { title: v.string() },
-        returns: v.string(),
+        args: { title: s.string() },
+        returns: s.string(),
         handler: async (ctx, args) =>
           (ctx as MutationCtx).db.insert("todos", {
             title: (args as { title: string }).title,
@@ -698,3 +698,4 @@ function createMockWebPersistence(): SyncoreWebPersistence {
     }
   };
 }
+

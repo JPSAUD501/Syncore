@@ -1,10 +1,10 @@
 import {
-  type AnySyncoreSchema,
   createDevtoolsCommandHandler,
   createDevtoolsSubscriptionHost,
   type DevtoolsCommandHandler,
   type DevtoolsSink,
   type DevtoolsSubscriptionHost,
+  type SyncoreDataModel,
   generateId,
   SyncoreRuntime,
   type SchedulerOptions,
@@ -43,8 +43,12 @@ export * from "./indexeddb.js";
 export * from "./opfs.js";
 export * from "./external-change.js";
 
-export type WebSyncoreSchema = AnySyncoreSchema;
-export type BrowserSyncoreSchema = WebSyncoreSchema;
+export type WebSyncoreSchema<
+  TSchema extends SyncoreDataModel = SyncoreDataModel
+> = TSchema;
+export type BrowserSyncoreSchema<
+  TSchema extends SyncoreDataModel = SyncoreDataModel
+> = WebSyncoreSchema<TSchema>;
 
 const DEVTOOLS_META_NAMESPACE = "__syncore_devtools_meta__";
 const STORAGE_SCOPE_ID_PREFIX = "storage-scope";
@@ -54,21 +58,23 @@ const STORAGE_SCOPE_ID_PREFIX = "storage-scope";
  *
  * Use this when you want to host the full runtime in a browser tab or worker.
  */
-export interface CreateWebRuntimeOptions {
+export interface CreateWebRuntimeOptions<
+  TSchema extends WebSyncoreSchema = WebSyncoreSchema
+> {
   /** The schema for the local Syncore app. */
-  schema: WebSyncoreSchema;
+  schema: TSchema;
 
   /** The generated function registry for the local Syncore app. */
-  functions: SyncoreRuntimeOptions<WebSyncoreSchema>["functions"];
+  functions: SyncoreRuntimeOptions<TSchema>["functions"];
 
   /** Optional resolved installed components for the local Syncore app. */
-  components?: SyncoreRuntimeOptions<WebSyncoreSchema>["components"];
+  components?: SyncoreRuntimeOptions<TSchema>["components"];
 
   /** Optional platform capabilities exposed to function handlers. */
   capabilities?: SyncoreCapabilities;
 
   /** Optional custom SQL driver. Defaults to SQL.js with local persistence. */
-  driver?: SyncoreRuntimeOptions<WebSyncoreSchema>["driver"];
+  driver?: SyncoreRuntimeOptions<TSchema>["driver"];
 
   /** Optional custom file/blob storage adapter. */
   storage?: SyncoreStorageAdapter;
@@ -110,7 +116,9 @@ export interface CreateWebRuntimeOptions {
 /**
  * Options for hosting a Syncore runtime inside a browser Worker.
  */
-export interface CreateWebWorkerRuntimeOptions extends CreateWebRuntimeOptions {
+export interface CreateWebWorkerRuntimeOptions<
+  TSchema extends WebSyncoreSchema = WebSyncoreSchema
+> extends CreateWebRuntimeOptions<TSchema> {
   /** The message endpoint exposed by the current worker global. */
   endpoint: SyncoreWorkerMessageEndpoint;
 }
@@ -118,12 +126,16 @@ export interface CreateWebWorkerRuntimeOptions extends CreateWebRuntimeOptions {
 /**
  * Options for constructing a browser Syncore runtime.
  */
-export type CreateBrowserRuntimeOptions = CreateWebRuntimeOptions;
+export type CreateBrowserRuntimeOptions<
+  TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema
+> = CreateWebRuntimeOptions<TSchema>;
 
 /**
  * Options for hosting a Syncore runtime inside a browser Worker.
  */
-export type CreateBrowserWorkerRuntimeOptions = CreateWebWorkerRuntimeOptions;
+export type CreateBrowserWorkerRuntimeOptions<
+  TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema
+> = CreateWebWorkerRuntimeOptions<TSchema>;
 
 export interface WebExternalChangeSupport {
   signal: BroadcastChannelExternalChangeSignal;
@@ -136,9 +148,11 @@ export interface WebExternalChangeSupport {
  * Most React apps should use a worker runtime instead so queries and SQLite work
  * stay off the main thread.
  */
-export async function createWebSyncoreRuntime(
-  options: CreateWebRuntimeOptions
-): Promise<SyncoreRuntime<WebSyncoreSchema>> {
+export async function createWebSyncoreRuntime<
+  TSchema extends WebSyncoreSchema
+>(
+  options: CreateWebRuntimeOptions<TSchema>
+): Promise<SyncoreRuntime<TSchema>> {
   const persistence =
     options.persistence ??
     (await createWebPersistence({
@@ -260,7 +274,7 @@ export async function createWebSyncoreRuntime(
 export function createWebExternalChangeSupport(options: {
   databaseName: string;
   persistence: SyncoreWebPersistence;
-  driver: CreateWebRuntimeOptions["driver"] | undefined;
+  driver: CreateWebRuntimeOptions<SyncoreDataModel>["driver"] | undefined;
 }): WebExternalChangeSupport {
   const signal = new BroadcastChannelExternalChangeSignal({
     channelName: createDefaultSyncChannelName(options.databaseName)
@@ -317,7 +331,9 @@ export async function createExpoWebExternalChangeSupport(options: {
 /**
  * Attach a Syncore runtime to a browser Worker endpoint.
  */
-export function createWebWorkerRuntime(options: CreateWebWorkerRuntimeOptions) {
+export function createWebWorkerRuntime<
+  TSchema extends WebSyncoreSchema
+>(options: CreateWebWorkerRuntimeOptions<TSchema>) {
   return attachWebWorkerRuntime({
     endpoint: options.endpoint,
     createRuntime: () => createWebSyncoreRuntime(options)
@@ -336,27 +352,27 @@ export function createBrowserWorkerRuntime(
 /**
  * Create a client directly from a browser Syncore runtime.
  */
-export function createWebSyncoreClient(
-  runtime: SyncoreRuntime<WebSyncoreSchema>
-) {
+export function createWebSyncoreClient<
+  TSchema extends WebSyncoreSchema
+>(runtime: SyncoreRuntime<TSchema>) {
   return runtime.createClient();
 }
 
 /**
  * Create a full Syncore runtime directly in the browser.
  */
-export function createBrowserSyncoreRuntime(
-  options: CreateBrowserRuntimeOptions
-) {
+export function createBrowserSyncoreRuntime<
+  TSchema extends BrowserSyncoreSchema
+>(options: CreateBrowserRuntimeOptions<TSchema>) {
   return createWebSyncoreRuntime(options);
 }
 
 /**
  * Create a client directly from a browser Syncore runtime.
  */
-export function createBrowserSyncoreClient(
-  runtime: SyncoreRuntime<BrowserSyncoreSchema>
-) {
+export function createBrowserSyncoreClient<
+  TSchema extends BrowserSyncoreSchema
+>(runtime: SyncoreRuntime<TSchema>) {
   return createWebSyncoreClient(runtime);
 }
 
@@ -373,7 +389,7 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
 }
 
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
-  attachRuntime(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+  attachRuntime(runtime: SyncoreRuntime<WebSyncoreSchema>): void;
   attachCommandHandler(handler: DevtoolsCommandHandler): void;
   attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
   dispose(): void;

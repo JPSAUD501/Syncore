@@ -12,7 +12,6 @@ import {
 } from "../../components.js";
 import type {
   ActionCtx,
-  AnySyncoreSchema,
   CapabilityDescriptor,
   DevtoolsLiveQueryScope,
   DocumentForTable,
@@ -23,6 +22,7 @@ import type {
   InsertValueForTable,
   JsonObject,
   MutationCtx,
+  PatchValueForTable,
   PaginationOptions,
   PaginationResult,
   QueryBuilder,
@@ -34,6 +34,7 @@ import type {
   SearchQuery,
   SyncoreCapabilities,
   SyncoreClient,
+  SyncoreDataModel,
   SyncoreDatabaseReader,
   SyncoreDatabaseWriter,
   SyncoreFunctionRegistry,
@@ -41,6 +42,13 @@ import type {
   SyncoreWatch,
   TableNames
 } from "../../runtime.js";
+import type {
+  AnyTableDefinition as SchemaAnyTableDefinition,
+  TableIndexFields,
+  TableIndexNames,
+  TableSearchIndexConfig,
+  TableSearchIndexNames
+} from "@syncore/schema";
 import { DevtoolsEngine } from "./devtoolsEngine.js";
 import { SchemaEngine } from "./schemaEngine.js";
 import { StorageEngine } from "./storageEngine.js";
@@ -74,7 +82,7 @@ const DEFAULT_MISFIRE_POLICY: MisfirePolicy = { type: "catch_up" };
 type OptionalArgsTuple<TArgs> =
   Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
-type ExecutionEngineDeps<TSchema extends AnySyncoreSchema> = {
+type ExecutionEngineDeps<TSchema extends SyncoreDataModel> = {
   runtimeId: string;
   functions: SyncoreFunctionRegistry;
   driver: SyncoreSqlDriver;
@@ -119,34 +127,36 @@ class RuntimeFilterBuilder implements FilterBuilder {
   }
 }
 
-class RuntimeIndexRangeBuilder implements IndexRangeBuilder {
+class RuntimeIndexRangeBuilder<
+  TFieldName extends string = string
+> implements IndexRangeBuilder<TFieldName> {
   private readonly conditions: Array<{
     field: string;
     operator: "=" | ">" | ">=" | "<" | "<=";
     value: unknown;
   }> = [];
 
-  eq(field: string, value: unknown): IndexRangeBuilder {
+  eq(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName> {
     this.conditions.push({ field, operator: "=", value });
     return this;
   }
 
-  gt(field: string, value: unknown): IndexRangeBuilder {
+  gt(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName> {
     this.conditions.push({ field, operator: ">", value });
     return this;
   }
 
-  gte(field: string, value: unknown): IndexRangeBuilder {
+  gte(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName> {
     this.conditions.push({ field, operator: ">=", value });
     return this;
   }
 
-  lt(field: string, value: unknown): IndexRangeBuilder {
+  lt(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName> {
     this.conditions.push({ field, operator: "<", value });
     return this;
   }
 
-  lte(field: string, value: unknown): IndexRangeBuilder {
+  lte(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName> {
     this.conditions.push({ field, operator: "<=", value });
     return this;
   }
@@ -156,7 +166,10 @@ class RuntimeIndexRangeBuilder implements IndexRangeBuilder {
   }
 }
 
-class RuntimeSearchIndexBuilder implements SearchIndexBuilder {
+class RuntimeSearchIndexBuilder<
+  TSearchField extends string = string,
+  TFilterField extends string = string
+> implements SearchIndexBuilder<TSearchField, TFilterField> {
   private searchField: string | undefined;
   private searchText: string | undefined;
   private readonly filters: Array<{
@@ -165,13 +178,19 @@ class RuntimeSearchIndexBuilder implements SearchIndexBuilder {
     value: unknown;
   }> = [];
 
-  search(field: string, value: string): SearchIndexBuilder {
+  search(
+    field: TSearchField,
+    value: string
+  ): SearchIndexBuilder<TSearchField, TFilterField> {
     this.searchField = field;
     this.searchText = value;
     return this;
   }
 
-  eq(field: string, value: unknown): SearchIndexBuilder {
+  eq(
+    field: TFilterField,
+    value: unknown
+  ): SearchIndexBuilder<TSearchField, TFilterField> {
     this.filters.push({ field, operator: "=", value });
     return this;
   }
@@ -188,7 +207,10 @@ class RuntimeSearchIndexBuilder implements SearchIndexBuilder {
   }
 }
 
-class RuntimeQueryBuilder<TDocument> implements QueryBuilder<TDocument> {
+class RuntimeQueryBuilder<
+  TTable extends SchemaAnyTableDefinition,
+  TDocument
+> implements QueryBuilder<TTable, TDocument> {
   private orderDirection: "asc" | "desc" = "asc";
   private source: QuerySource = { type: "table" };
   private filterExpression: QueryExpression | undefined;
@@ -201,18 +223,28 @@ class RuntimeQueryBuilder<TDocument> implements QueryBuilder<TDocument> {
     private readonly dependencyCollector?: Set<DependencyKey>
   ) {}
 
-  withIndex(
-    indexName: string,
-    builder?: (range: IndexRangeBuilder) => IndexRangeBuilder
+  withIndex<TIndexName extends TableIndexNames<TTable>>(
+    indexName: TIndexName,
+    builder?: (
+      range: IndexRangeBuilder<TableIndexFields<TTable, TIndexName>[number]>
+    ) => IndexRangeBuilder<TableIndexFields<TTable, TIndexName>[number]>
   ): this {
     const indexRange = builder?.(new RuntimeIndexRangeBuilder()).build() ?? [];
     this.source = { type: "index", name: indexName, range: indexRange };
     return this;
   }
 
-  withSearchIndex(
-    indexName: string,
-    builder: (search: SearchIndexBuilder) => SearchIndexBuilder
+  withSearchIndex<TIndexName extends TableSearchIndexNames<TTable>>(
+    indexName: TIndexName,
+    builder: (
+      search: SearchIndexBuilder<
+        TableSearchIndexConfig<TTable, TIndexName>["searchField"],
+        TableSearchIndexConfig<TTable, TIndexName>["filterFields"]
+      >
+    ) => SearchIndexBuilder<
+      TableSearchIndexConfig<TTable, TIndexName>["searchField"],
+      TableSearchIndexConfig<TTable, TIndexName>["filterFields"]
+    >
   ): this {
     this.source = {
       type: "search",
@@ -291,7 +323,9 @@ class RuntimeQueryBuilder<TDocument> implements QueryBuilder<TDocument> {
   }
 }
 
-export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
+export class ExecutionEngine<
+  TSchema extends SyncoreDataModel
+> {
   constructor(private readonly deps: ExecutionEngineDeps<TSchema>) {}
 
   createClient(): SyncoreClient {
@@ -752,7 +786,10 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
           : null;
       },
       query: <TTableName extends TableNames<TSchema>>(tableName: TTableName) =>
-        new RuntimeQueryBuilder<DocumentForTable<TSchema, TTableName>>(
+        new RuntimeQueryBuilder<
+          TSchema["tables"][TTableName],
+          DocumentForTable<TSchema, TTableName>
+        >(
           (options) =>
             this.executeQueryBuilder<DocumentForTable<TSchema, TTableName>>(
               {
@@ -808,7 +845,7 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
       patch: async <TTableName extends TableNames<TSchema>>(
         tableName: TTableName,
         id: string,
-        value: Partial<InsertValueForTable<TSchema, TTableName>>
+        value: PatchValueForTable<TSchema, TTableName>
       ) => {
         const scopedTableName = this.resolveTableName(
           tableName,

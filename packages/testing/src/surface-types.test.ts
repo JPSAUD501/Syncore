@@ -1,10 +1,13 @@
 import { describe, expectTypeOf, it } from "vitest";
 import {
+  defineSchema,
+  defineTable,
   type FunctionArgsFromDefinition,
   type FunctionReferenceFor,
   type FunctionResultFromDefinition,
   type MutationCtx as BaseMutationCtx,
-  type QueryCtx as BaseQueryCtx
+  type QueryCtx as BaseQueryCtx,
+  s
 } from "syncorejs";
 import { createNextSyncoreClient } from "syncorejs/next";
 import { withSyncoreNext } from "syncorejs/next/config";
@@ -85,6 +88,18 @@ describe("syncorejs public type surface", () => {
     expectTypeOf<ExpoReactModule["SyncoreExpoProvider"]>().toBeFunction();
     expectTypeOf<SvelteModule["createQueryStore"]>().toBeFunction();
   });
+
+  it("derives typed index and search-index builders from the schema", () => {
+    type CollectedTask = Awaited<ReturnType<typeof collectTasksByStatus>>[number];
+    type SearchedTask = Awaited<ReturnType<typeof searchTasksByTitle>>[number];
+
+    expectTypeOf<CollectedTask["title"]>().toEqualTypeOf<string>();
+    expectTypeOf<CollectedTask["status"]>().toEqualTypeOf<"todo" | "done">();
+    expectTypeOf<CollectedTask["projectId"]>().toEqualTypeOf<string | null>();
+    expectTypeOf<SearchedTask["title"]>().toEqualTypeOf<string>();
+    expectTypeOf<SearchedTask["status"]>().toEqualTypeOf<"todo" | "done">();
+    expectTypeOf<SearchedTask["projectId"]>().toEqualTypeOf<string | null>();
+  });
 });
 
 function useWorkspaceQueryInference() {
@@ -94,3 +109,47 @@ function useWorkspaceQueryInference() {
 function useCreateTaskMutationInference() {
   return useMutation(api.tasks.create);
 }
+
+const localSchema = defineSchema({
+  tasks: defineTable({
+    title: s.string(),
+    status: s.enum(["todo", "done"] as const),
+    projectId: s.nullable(s.id("projects"))
+  })
+    .index("by_status", ["status"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["status", "projectId"]
+    })
+});
+
+function collectTasksByStatus(ctx: BaseQueryCtx<typeof localSchema>) {
+  return ctx.db
+    .query("tasks")
+    .withIndex("by_status", (range) => range.eq("status", "todo"))
+    .collect();
+}
+
+function searchTasksByTitle(ctx: BaseQueryCtx<typeof localSchema>) {
+  return ctx.db
+    .query("tasks")
+    .withSearchIndex("search_title", (search) =>
+      search.search("title", "syncore").eq("status", "todo").eq("projectId", null)
+    )
+    .collect();
+}
+
+function assertQueryBuilderTypeErrors(ctx: BaseQueryCtx<typeof localSchema>) {
+  // @ts-expect-error field not included in the index
+  ctx.db.query("tasks").withIndex("by_status", (range) => range.eq("title", "syncore"));
+  ctx.db.query("tasks").withSearchIndex("search_title", (search) =>
+    // @ts-expect-error wrong search field
+    search.search("status", "todo")
+  );
+  ctx.db.query("tasks").withSearchIndex("search_title", (search) =>
+    // @ts-expect-error title is not a filter field on this search index
+    search.search("title", "syncore").eq("title", "syncore")
+  );
+}
+
+void assertQueryBuilderTypeErrors;

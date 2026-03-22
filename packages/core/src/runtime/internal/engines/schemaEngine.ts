@@ -7,11 +7,13 @@ import {
   renderMigrationSql,
   type Validator
 } from "@syncore/schema";
-import type { TableDefinition } from "@syncore/schema";
 import type {
-  AnySyncoreSchema,
+  TableDefinition
+} from "@syncore/schema";
+import type {
   DevtoolsLiveQuerySnapshot,
   JsonObject,
+  SyncoreDataModel,
   SyncoreSqlDriver
 } from "../../runtime.js";
 import {
@@ -25,14 +27,20 @@ import {
 } from "./shared.js";
 import { type DevtoolsEngine } from "./devtoolsEngine.js";
 
-type SchemaEngineDeps<TSchema extends AnySyncoreSchema> = {
+type RecordDocument = Record<string, unknown>;
+type StructuredValidator = Validator<RecordDocument, RecordDocument, string>;
+type StructuredTableDefinition = TableDefinition<StructuredValidator>;
+
+type SchemaEngineDeps<TSchema extends SyncoreDataModel> = {
   schema: TSchema;
   driver: SyncoreSqlDriver;
   runtimeId: string;
   devtools: DevtoolsEngine;
 };
 
-export class SchemaEngine<TSchema extends AnySyncoreSchema> {
+export class SchemaEngine<
+  TSchema extends SyncoreDataModel
+> {
   private readonly disabledSearchIndexes = new Set<string>();
 
   constructor(private readonly deps: SchemaEngineDeps<TSchema>) {}
@@ -159,7 +167,9 @@ export class SchemaEngine<TSchema extends AnySyncoreSchema> {
     }
   }
 
-  getTableDefinition(tableName: string): TableDefinition<Validator<unknown>> {
+  getTableDefinition(
+    tableName: string
+  ): StructuredTableDefinition {
     return getTableDefinition(this.deps.schema, tableName);
   }
 
@@ -168,17 +178,21 @@ export class SchemaEngine<TSchema extends AnySyncoreSchema> {
   }
 
   validateDocument(tableName: string, value: JsonObject): JsonObject {
-    return this.getTableDefinition(tableName).validator.parse(value) as JsonObject;
+    const table = this.getTableDefinition(tableName);
+    return table.parseAndSerialize(value) as JsonObject;
   }
 
   deserializeDocument<TDocument>(tableName: string, row: DatabaseRow): TDocument {
-    const payload = JSON.parse(row._json) as JsonObject;
-    const document = {
-      ...payload,
+    const table = this.getTableDefinition(tableName);
+    const payload = this.parseStoredDocument(row._json);
+    const document: RecordDocument & {
+      _id: string;
+      _creationTime: number;
+    } = {
+      ...table.deserialize(payload),
       _id: row._id,
       _creationTime: row._creationTime
     };
-    this.getTableDefinition(tableName).validator.parse(payload);
     return document as TDocument;
   }
 
@@ -190,7 +204,7 @@ export class SchemaEngine<TSchema extends AnySyncoreSchema> {
     if (table.searchIndexes.length === 0) {
       return;
     }
-    const payload = JSON.parse(row._json) as JsonObject;
+    const payload = this.parseStoredDocument(row._json);
     for (const searchIndex of table.searchIndexes) {
       if (this.isSearchIndexDisabled(tableName, searchIndex.name)) {
         continue;
@@ -205,6 +219,14 @@ export class SchemaEngine<TSchema extends AnySyncoreSchema> {
         [row._id, toSearchValue(payload[searchIndex.searchField])]
       );
     }
+  }
+
+  private parseStoredDocument(json: string): RecordDocument {
+    const value = JSON.parse(json) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("Stored Syncore document payload must be a JSON object.");
+    }
+    return value as RecordDocument;
   }
 
   async removeSearchIndexes(tableName: string, id: string): Promise<void> {
@@ -234,15 +256,14 @@ export class SchemaEngine<TSchema extends AnySyncoreSchema> {
         validatorDesc.kind === "object"
           ? Object.entries(validatorDesc.shape).map(
               ([fieldName, fieldDesc]) => {
-                const desc = fieldDesc as {
-                  kind: string;
-                  inner?: { kind: string };
+                const field = fieldDesc as {
+                  validator: { kind: string };
+                  optional: boolean;
                 };
-                const optional = desc.kind === "optional";
                 return {
                   name: fieldName,
-                  type: optional ? (desc.inner?.kind ?? "any") : desc.kind,
-                  optional
+                  type: field.validator.kind,
+                  optional: field.optional
                 };
               }
             )

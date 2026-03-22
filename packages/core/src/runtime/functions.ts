@@ -1,5 +1,6 @@
 import {
   ensureObjectValidator,
+  isValidator,
   type Infer,
   type Validator,
   type ValidatorMap
@@ -31,8 +32,8 @@ export interface SyncoreFunctionDefinition<
   TResult
 > {
   kind: TKind;
-  argsValidator: Validator<TArgs>;
-  returnsValidator?: Validator<TResult>;
+  argsValidator: Validator<TArgs, TArgs, string>;
+  returnsValidator?: Validator<TResult, TResult, string>;
   handler: (ctx: TContext, args: TArgs) => Promise<TResult> | TResult;
 }
 
@@ -61,13 +62,13 @@ export type FunctionKindFromDefinition<TDefinition> = TDefinition extends {
   : never;
 
 export type FunctionArgsFromDefinition<TDefinition> = TDefinition extends {
-  argsValidator: Validator<infer TArgs>;
+  argsValidator: Validator<infer TArgs, unknown, string>;
 }
   ? TArgs
   : never;
 
 export type FunctionResultFromDefinition<TDefinition> = TDefinition extends {
-  returnsValidator?: Validator<infer TResult>;
+  returnsValidator?: Validator<infer TResult, unknown, string>;
 }
   ? TResult
   : never;
@@ -82,13 +83,14 @@ export type FunctionReferenceFor<TDefinition> =
       >;
 
 export interface FunctionConfig<TContext, TArgs, TResult> {
-  args: Validator<TArgs> | ValidatorMap;
-  returns?: Validator<TResult>;
+  args: Validator<TArgs, TArgs, string> | ValidatorMap;
+  returns?: Validator<TResult, TResult, string>;
   handler: (ctx: TContext, args: TArgs) => Promise<TResult> | TResult;
 }
 
-export type InferArgs<TArgs extends Validator<unknown> | ValidatorMap> =
-  TArgs extends Validator<unknown>
+export type InferArgs<
+  TArgs extends Validator<unknown, unknown, string> | ValidatorMap
+> = TArgs extends Validator<unknown, unknown, string>
     ? Infer<TArgs>
     : TArgs extends ValidatorMap
       ? {
@@ -99,7 +101,7 @@ export type InferArgs<TArgs extends Validator<unknown> | ValidatorMap> =
 function createFunctionDefinition<
   TKind extends SyncoreFunctionKind,
   TContext,
-  TArgsShape extends Validator<unknown> | ValidatorMap,
+  TArgsShape extends Validator<unknown, unknown, string> | ValidatorMap,
   TResult
 >(
   kind: TKind,
@@ -107,11 +109,21 @@ function createFunctionDefinition<
     args: TArgsShape;
   }
 ): SyncoreFunctionDefinition<TKind, TContext, InferArgs<TArgsShape>, TResult> {
+  const argsValidator = isValidator(config.args)
+    ? (config.args as Validator<
+        InferArgs<TArgsShape>,
+        InferArgs<TArgsShape>,
+        string
+      >)
+    : (ensureObjectValidator(config.args as ValidatorMap) as unknown as Validator<
+        InferArgs<TArgsShape>,
+        InferArgs<TArgsShape>,
+        string
+      >);
+
   return {
     kind,
-    argsValidator: ensureObjectValidator(config.args) as Validator<
-      InferArgs<TArgsShape>
-    >,
+    argsValidator,
     ...(config.returns ? { returnsValidator: config.returns } : {}),
     handler: config.handler
   };
@@ -124,7 +136,11 @@ function createFunctionDefinition<
  */
 export function query<
   TContext = unknown,
-  TValidator extends Validator<unknown> = Validator<unknown>,
+  TValidator extends Validator<unknown, unknown, string> = Validator<
+    unknown,
+    unknown,
+    string
+  >,
   TResult = unknown
 >(
   config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
@@ -142,7 +158,8 @@ export function query<
 ): SyncoreFunctionDefinition<"query", TContext, InferArgs<TArgsShape>, TResult>;
 export function query<
   TContext = unknown,
-  TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap,
+  TArgsShape extends Validator<unknown, unknown, string> | ValidatorMap =
+    ValidatorMap,
   TResult = unknown
 >(
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
@@ -164,7 +181,11 @@ export function query<
  */
 export function mutation<
   TContext = unknown,
-  TValidator extends Validator<unknown> = Validator<unknown>,
+  TValidator extends Validator<unknown, unknown, string> = Validator<
+    unknown,
+    unknown,
+    string
+  >,
   TResult = unknown
 >(
   config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
@@ -187,7 +208,8 @@ export function mutation<
 >;
 export function mutation<
   TContext = unknown,
-  TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap,
+  TArgsShape extends Validator<unknown, unknown, string> | ValidatorMap =
+    ValidatorMap,
   TResult = unknown
 >(
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {
@@ -209,7 +231,11 @@ export function mutation<
  */
 export function action<
   TContext = unknown,
-  TValidator extends Validator<unknown> = Validator<unknown>,
+  TValidator extends Validator<unknown, unknown, string> = Validator<
+    unknown,
+    unknown,
+    string
+  >,
   TResult = unknown
 >(
   config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
@@ -232,7 +258,8 @@ export function action<
 >;
 export function action<
   TContext = unknown,
-  TArgsShape extends Validator<unknown> | ValidatorMap = ValidatorMap,
+  TArgsShape extends Validator<unknown, unknown, string> | ValidatorMap =
+    ValidatorMap,
   TResult = unknown
 >(
   config: FunctionConfig<TContext, InferArgs<TArgsShape>, TResult> & {

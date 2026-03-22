@@ -9,11 +9,14 @@ import type {
   TableSchema
 } from "@syncore/devtools-protocol";
 import { describeValidator } from "@syncore/schema";
-import type { TableDefinition, Validator } from "@syncore/schema";
 import type {
-  AnySyncoreSchema,
+  TableDefinition,
+  Validator
+} from "@syncore/schema";
+import type {
   DevtoolsLiveQueryScope,
   ImpactScope,
+  SyncoreDataModel,
   SyncoreRuntimeAdmin,
   SyncoreRuntimeOptions,
   SyncoreSqlDriver
@@ -27,9 +30,9 @@ import {
 
 export interface DevtoolsCommandHandlerDeps {
   driver: SyncoreSqlDriver;
-  schema: AnySyncoreSchema;
-  functions: SyncoreRuntimeOptions<AnySyncoreSchema>["functions"];
-  admin: SyncoreRuntimeAdmin<AnySyncoreSchema>;
+  schema: SyncoreDataModel;
+  functions: SyncoreRuntimeOptions<SyncoreDataModel>["functions"];
+  admin: SyncoreRuntimeAdmin<SyncoreDataModel>;
   sql?: DevtoolsSqlSupport;
 }
 
@@ -553,27 +556,26 @@ async function queryTable(
 
 async function getSchemaTables(
   driver: SyncoreSqlDriver,
-  schema: AnySyncoreSchema
+  schema: SyncoreDataModel
 ): Promise<TableSchema[]> {
   return Promise.all(
     schema.tableNames().map(async (name) => {
       const table = schema.getTable(name) as TableDefinition<
-        Validator<unknown>
+        Validator<Record<string, unknown>, Record<string, unknown>, string>
       >;
       const validatorDesc = describeValidator(table.validator);
       const fields =
         validatorDesc.kind === "object"
           ? Object.entries(validatorDesc.shape).map(
               ([fieldName, fieldDesc]) => {
-                const desc = fieldDesc as {
-                  kind: string;
-                  inner?: { kind: string };
+                const field = fieldDesc as {
+                  validator: { kind: string };
+                  optional: boolean;
                 };
-                const optional = desc.kind === "optional";
                 return {
                   name: fieldName,
-                  type: optional ? (desc.inner?.kind ?? "any") : desc.kind,
-                  optional
+                  type: field.validator.kind,
+                  optional: field.optional
                 };
               }
             )
@@ -679,7 +681,7 @@ async function listSchedulerJobs(
 }
 
 function listFunctions(
-  functions: SyncoreRuntimeOptions<AnySyncoreSchema>["functions"]
+  functions: SyncoreRuntimeOptions<SyncoreDataModel>["functions"]
 ) {
   return Object.entries(functions)
     .filter(
@@ -803,6 +805,8 @@ function formatScheduleLabel(schedule: SchedulerRecurringSchedule): string {
       return `Daily ${padNumber(schedule.hour)}:${padNumber(schedule.minute)}${schedule.timezone ? ` ${schedule.timezone}` : ""}`;
     case "weekly":
       return `Weekly ${capitalize(schedule.dayOfWeek)} ${padNumber(schedule.hour)}:${padNumber(schedule.minute)}${schedule.timezone ? ` ${schedule.timezone}` : ""}`;
+    default:
+      return "Recurring";
   }
 }
 
@@ -831,7 +835,7 @@ function capitalize(value: string): string {
 }
 
 async function runDevtoolsMutation<TResult>(
-  admin: SyncoreRuntimeAdmin<AnySyncoreSchema>,
+  admin: SyncoreRuntimeAdmin<SyncoreDataModel>,
   callback: (ctx: {
     db: {
       insert(
@@ -880,6 +884,8 @@ function scopesForSubscription(
         return new Set<DevtoolsInvalidationScope>(["all"]);
       }
     }
+    default:
+      return new Set<DevtoolsInvalidationScope>(["all"]);
   }
 }
 

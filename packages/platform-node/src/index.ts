@@ -21,7 +21,6 @@ import type {
   SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 import {
-  type AnySyncoreSchema,
   createDevtoolsCommandHandler,
   createDevtoolsSubscriptionHost,
   type DevtoolsSqlAnalysis,
@@ -35,6 +34,7 @@ import {
   type StorageObject,
   type StorageWriteInput,
   type SyncoreCapabilities,
+  type SyncoreDataModel,
   SyncoreRuntime,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
@@ -48,7 +48,9 @@ export type {
   SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 
-export type NodeSyncoreSchema = AnySyncoreSchema;
+export type NodeSyncoreSchema<
+  TSchema extends SyncoreDataModel = SyncoreDataModel
+> = TSchema;
 
 const nodeRequire = createNodeRequire(import.meta.url);
 const { Parser: NodeSqlParser } = nodeRequire("node-sql-parser") as {
@@ -363,12 +365,14 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
   }
 }
 
-export interface CreateNodeRuntimeOptions {
+export interface CreateNodeRuntimeOptions<
+  TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
+> {
   databasePath: string;
   storageDirectory: string;
-  schema: NodeSyncoreSchema;
-  functions: SyncoreRuntimeOptions<NodeSyncoreSchema>["functions"];
-  components?: SyncoreRuntimeOptions<NodeSyncoreSchema>["components"];
+  schema: TSchema;
+  functions: SyncoreRuntimeOptions<TSchema>["functions"];
+  components?: SyncoreRuntimeOptions<TSchema>["components"];
   capabilities?: SyncoreCapabilities;
   appName?: string;
   origin?: string;
@@ -382,14 +386,18 @@ export interface CreateNodeRuntimeOptions {
 /**
  * Options for creating a managed Node Syncore client.
  */
-export type WithNodeSyncoreClientOptions = CreateNodeRuntimeOptions;
+export type WithNodeSyncoreClientOptions<
+  TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
+> = CreateNodeRuntimeOptions<TSchema>;
 
 /**
  * A started local Node runtime paired with its client and a dispose helper.
  */
-export interface ManagedNodeSyncoreClient {
-  runtime: SyncoreRuntime<NodeSyncoreSchema>;
-  client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>;
+export interface ManagedNodeSyncoreClient<
+  TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
+> {
+  runtime: SyncoreRuntime<TSchema>;
+  client: ReturnType<SyncoreRuntime<TSchema>["createClient"]>;
   dispose(): Promise<void>;
 }
 
@@ -432,9 +440,11 @@ export interface CreateSyncoreRendererWindowClientOptions {
 /**
  * Create a Node or Electron runtime backed by SQLite and local file storage.
  */
-export function createNodeSyncoreRuntime(
-  options: CreateNodeRuntimeOptions
-): SyncoreRuntime<NodeSyncoreSchema> {
+export function createNodeSyncoreRuntime<
+  TSchema extends NodeSyncoreSchema
+>(
+  options: CreateNodeRuntimeOptions<TSchema>
+): SyncoreRuntime<TSchema> {
   const resolvedDevtoolsUrl =
     options.devtoolsUrl ?? resolveDefaultNodeDevtoolsUrl();
   const websocketDevtools =
@@ -454,7 +464,7 @@ export function createNodeSyncoreRuntime(
           storageIdentity: `file::${path.resolve(options.databasePath)}`
         })
       : undefined;
-  const runtimeOptions: SyncoreRuntimeOptions<NodeSyncoreSchema> = {
+  const runtimeOptions: SyncoreRuntimeOptions<TSchema> = {
     schema: options.schema,
     functions: options.functions,
     ...(options.components ? { components: options.components } : {}),
@@ -508,18 +518,20 @@ export function createNodeSyncoreRuntime(
 /**
  * Create a same-process Syncore client from a started Node runtime.
  */
-export function createNodeSyncoreClient(
-  runtime: SyncoreRuntime<NodeSyncoreSchema>
-) {
+export function createNodeSyncoreClient<
+  TSchema extends NodeSyncoreSchema
+>(runtime: SyncoreRuntime<TSchema>) {
   return runtime.createClient();
 }
 
 /**
  * Start a Node Syncore runtime and return its client together with a dispose helper.
  */
-export async function createManagedNodeSyncoreClient(
-  options: WithNodeSyncoreClientOptions
-): Promise<ManagedNodeSyncoreClient> {
+export async function createManagedNodeSyncoreClient<
+  TSchema extends NodeSyncoreSchema
+>(
+  options: WithNodeSyncoreClientOptions<TSchema>
+): Promise<ManagedNodeSyncoreClient<TSchema>> {
   const runtime = createNodeSyncoreRuntime(options);
   await runtime.start();
   return {
@@ -541,11 +553,14 @@ export async function createManagedNodeSyncoreClient(
  * });
  * ```
  */
-export async function withNodeSyncoreClient<TResult>(
-  options: WithNodeSyncoreClientOptions,
+export async function withNodeSyncoreClient<
+  TSchema extends NodeSyncoreSchema,
+  TResult
+>(
+  options: WithNodeSyncoreClientOptions<TSchema>,
   callback: (
-    client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>,
-    runtime: SyncoreRuntime<NodeSyncoreSchema>
+    client: ReturnType<SyncoreRuntime<TSchema>["createClient"]>,
+    runtime: SyncoreRuntime<TSchema>
   ) => Promise<TResult> | TResult
 ): Promise<TResult> {
   const managed = await createManagedNodeSyncoreClient(options);
@@ -674,7 +689,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
 }
 
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
-  attachRuntime(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+  attachRuntime(runtime: SyncoreRuntime<NodeSyncoreSchema>): void;
   attachCommandHandler(handler: DevtoolsCommandHandler): void;
   attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
   dispose(): void;

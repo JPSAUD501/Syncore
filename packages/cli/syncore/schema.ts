@@ -1,8 +1,8 @@
-import { defineSchema, defineTable, v } from "syncorejs";
+import { defineSchema, defineTable, s } from "syncorejs";
 
 export default defineSchema({
   tasks: defineTable({
-    text: v.string(),
-    done: v.boolean()
+    text: s.string(),
+    done: s.boolean()
   }).index("by_done", ["done"])
 });

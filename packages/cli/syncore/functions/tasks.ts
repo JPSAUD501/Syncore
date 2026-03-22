@@ -1,4 +1,4 @@
-import { mutation, query, v } from "../_generated/server";
+import { mutation, query, s } from "../_generated/server";
 
 export const list = query({
   args: {},
@@ -7,7 +7,7 @@ export const list = query({
 });
 
 export const create = mutation({
-  args: { text: v.string() },
+  args: { text: s.string() },
   handler: async (ctx, args) =>
     ctx.db.insert("tasks", { text: args.text, done: false })
 });

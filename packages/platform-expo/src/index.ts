@@ -5,7 +5,6 @@ import {
   type SQLiteDatabase
 } from "expo-sqlite";
 import {
-  type AnySyncoreSchema,
   type ImpactScope,
   type DevtoolsSink,
   type SyncoreExternalChangeApplier,
@@ -13,6 +12,7 @@ import {
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,
+  type SyncoreDataModel,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
   type SyncoreStorageAdapter,
@@ -24,7 +24,9 @@ import {
   createDefaultSyncChannelName
 } from "@syncore/platform-web";
 
-export type ExpoSyncoreSchema = AnySyncoreSchema;
+export type ExpoSyncoreSchema<
+  TSchema extends SyncoreDataModel = SyncoreDataModel
+> = TSchema;
 
 /**
  * Options for constructing an Expo Syncore runtime.
@@ -32,15 +34,17 @@ export type ExpoSyncoreSchema = AnySyncoreSchema;
  * Use this when you want Syncore to persist locally with `expo-sqlite` and the
  * Expo file system.
  */
-export interface CreateExpoRuntimeOptions {
+export interface CreateExpoRuntimeOptions<
+  TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema
+> {
   /** The schema for the local Syncore app. */
-  schema: ExpoSyncoreSchema;
+  schema: TSchema;
 
   /** The generated function registry for the local Syncore app. */
-  functions: SyncoreRuntimeOptions<ExpoSyncoreSchema>["functions"];
+  functions: SyncoreRuntimeOptions<TSchema>["functions"];
 
   /** Optional resolved installed components for the local Syncore app. */
-  components?: SyncoreRuntimeOptions<ExpoSyncoreSchema>["components"];
+  components?: SyncoreRuntimeOptions<TSchema>["components"];
 
   /** Optional platform capabilities exposed to function handlers. */
   capabilities?: SyncoreCapabilities;
@@ -79,13 +83,15 @@ export interface CreateExpoRuntimeOptions {
 /**
  * A reusable bootstrap that lazily creates, starts, and stops an Expo Syncore runtime.
  */
-export interface ExpoSyncoreBootstrap {
+export interface ExpoSyncoreBootstrap<
+  TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema
+> {
   /** Synchronous access is unavailable; use `getClient()` instead. */
   getRuntime(): never;
 
   /** Start the runtime if needed and return a ready client. */
   getClient(): Promise<
-    ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>
+    ReturnType<SyncoreRuntime<TSchema>["createClient"]>
   >;
 
   /** Stop the current runtime instance if one exists. */
@@ -98,9 +104,11 @@ export interface ExpoSyncoreBootstrap {
 /**
  * Create an Expo Syncore runtime backed by `expo-sqlite` and local file storage.
  */
-export function createExpoSyncoreRuntime(
-  options: CreateExpoRuntimeOptions
-): SyncoreRuntime<ExpoSyncoreSchema> {
+export function createExpoSyncoreRuntime<
+  TSchema extends ExpoSyncoreSchema
+>(
+  options: CreateExpoRuntimeOptions<TSchema>
+): SyncoreRuntime<TSchema> {
   const databaseDirectory =
     options.databaseDirectory ??
     (typeof defaultDatabaseDirectory === "string"
@@ -167,21 +175,23 @@ export function createExpoSyncoreRuntime(
 /**
  * Create a same-process Syncore client from a started Expo runtime.
  */
-export function createExpoSyncoreClient(
-  runtime: SyncoreRuntime<ExpoSyncoreSchema>
-) {
+export function createExpoSyncoreClient<
+  TSchema extends ExpoSyncoreSchema
+>(runtime: SyncoreRuntime<TSchema>) {
   return runtime.createClient();
 }
 
 /**
  * Create a reusable Expo bootstrap that lazily starts the local runtime.
  */
-export function createExpoSyncoreBootstrap(
-  options: CreateExpoRuntimeOptions
-): ExpoSyncoreBootstrap {
-  let runtime: SyncoreRuntime<ExpoSyncoreSchema> | null = null;
+export function createExpoSyncoreBootstrap<
+  TSchema extends ExpoSyncoreSchema
+>(
+  options: CreateExpoRuntimeOptions<TSchema>
+): ExpoSyncoreBootstrap<TSchema> {
+  let runtime: SyncoreRuntime<TSchema> | null = null;
   let started: Promise<
-    ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>
+    ReturnType<SyncoreRuntime<TSchema>["createClient"]>
   > | null = null;
 
   const ensureRuntime = () => {

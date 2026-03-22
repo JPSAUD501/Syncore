@@ -1,33 +1,36 @@
+type Expand<T> = { [TKey in keyof T]: T[TKey] } & {};
+
 export type ValidatorKind =
   | "string"
   | "number"
   | "boolean"
   | "literal"
+  | "enum"
   | "array"
   | "object"
+  | "record"
+  | "union"
   | "id"
   | "optional"
   | "any"
-  | "null";
+  | "null"
+  | "codec";
 
 /**
- * Validates unknown input at runtime and carries its parsed TypeScript type.
- *
- * Syncore uses validators for function arguments, return values, and table
- * definitions. Most apps create validators through {@link v} instead of
- * instantiating validator classes directly.
+ * A schema field definition that combines validation, serialization, and
+ * field-path metadata for Syncore's data model.
  */
-export interface Validator<TValue> {
+export interface Validator<
+  TValue = unknown,
+  TStorage = TValue,
+  TFieldPaths extends string = never
+> {
   readonly kind: ValidatorKind;
-
-  /**
-   * Parse and validate an unknown value.
-   *
-   * @param value - The value to validate.
-   * @param path - A human-readable path used in validation errors.
-   * @returns The parsed value when validation succeeds.
-   */
+  readonly fieldPaths?: TFieldPaths;
   parse(value: unknown, path?: string): TValue;
+  serialize?(value: TValue, path?: string): TStorage;
+  deserialize?(value: unknown, path?: string): TValue;
+  describe?(): ValidatorDescription;
 }
 
 export type ValidatorDescription =
@@ -37,17 +40,115 @@ export type ValidatorDescription =
   | { kind: "null" }
   | { kind: "any" }
   | { kind: "literal"; value: string | number | boolean | null }
+  | { kind: "enum"; values: string[] }
   | { kind: "array"; item: ValidatorDescription }
-  | { kind: "object"; shape: Record<string, ValidatorDescription> }
+  | {
+      kind: "object";
+      shape: Record<
+        string,
+        {
+          validator: ValidatorDescription;
+          optional: boolean;
+        }
+      >;
+    }
+  | { kind: "record"; key: ValidatorDescription; value: ValidatorDescription }
+  | { kind: "union"; members: ValidatorDescription[] }
   | { kind: "id"; tableName: string }
-  | { kind: "optional"; inner: ValidatorDescription };
+  | { kind: "optional"; inner: ValidatorDescription }
+  | {
+      kind: "codec";
+      value: ValidatorDescription;
+      storage: ValidatorDescription;
+    };
+
+export type Infer<TValidator> =
+  TValidator extends Validator<infer TValue, unknown, string> ? TValue : never;
+
+export type InferStorage<TValidator> =
+  TValidator extends Validator<unknown, infer TStorage, string>
+    ? TStorage
+    : never;
+
+export type FieldPaths<TValidator> =
+  TValidator extends Validator<unknown, unknown, infer TFieldPaths>
+    ? TFieldPaths
+    : never;
 
 export interface ObjectValidatorShape {
-  [key: string]: Validator<unknown>;
+  [key: string]: Validator<unknown, unknown, string>;
 }
 
-export class StringValidator implements Validator<string> {
-  readonly kind = "string" as const;
+export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
+
+type OptionalKeys<TShape extends ObjectValidatorShape> = {
+  [TKey in keyof TShape]:
+    TShape[TKey] extends OptionalValidator<unknown, unknown, string>
+      ? TKey
+      : never;
+}[keyof TShape];
+
+type RequiredKeys<TShape extends ObjectValidatorShape> = Exclude<
+  keyof TShape,
+  OptionalKeys<TShape>
+>;
+
+type InferObject<TShape extends ObjectValidatorShape> = Expand<
+  {
+    [TKey in OptionalKeys<TShape>]?: Exclude<Infer<TShape[TKey]>, undefined>;
+  } & {
+    [TKey in RequiredKeys<TShape>]: Infer<TShape[TKey]>;
+  }
+>;
+
+type InferStoredObject<TShape extends ObjectValidatorShape> = Expand<
+  {
+    [TKey in OptionalKeys<TShape>]?: Exclude<
+      InferStorage<TShape[TKey]>,
+      undefined
+    >;
+  } & {
+    [TKey in RequiredKeys<TShape>]: InferStorage<TShape[TKey]>;
+  }
+>;
+
+export type JoinFieldPaths<
+  TStart extends string,
+  TEnd extends string
+> = `${TStart}.${TEnd}`;
+
+type ShapeFieldPaths<TShape extends ObjectValidatorShape> = {
+  [TKey in keyof TShape & string]: FieldPaths<TShape[TKey]> extends never
+    ? TKey
+    : TKey | JoinFieldPaths<TKey, FieldPaths<TShape[TKey]>>;
+}[keyof TShape & string];
+
+abstract class BaseValidator<
+  TValue,
+  TStorage = TValue,
+  TFieldPaths extends string = never
+> implements Validator<TValue, TStorage, TFieldPaths> {
+  declare readonly fieldPaths: TFieldPaths;
+
+  constructor(public readonly kind: ValidatorKind) {}
+
+  abstract parse(value: unknown, path?: string): TValue;
+
+  serialize(value: TValue, path = "value"): TStorage {
+    return this.parse(value, path) as unknown as TStorage;
+  }
+
+  deserialize(value: unknown, path = "value"): TValue {
+    return this.parse(value, path);
+  }
+
+  abstract describe(): ValidatorDescription;
+}
+
+export class StringValidator extends BaseValidator<string> {
+  constructor() {
+    super("string");
+  }
 
   parse(value: unknown, path = "value"): string {
     if (typeof value !== "string") {
@@ -55,10 +156,16 @@ export class StringValidator implements Validator<string> {
     }
     return value;
   }
+
+  describe(): ValidatorDescription {
+    return { kind: "string" };
+  }
 }
 
-export class NumberValidator implements Validator<number> {
-  readonly kind = "number" as const;
+export class NumberValidator extends BaseValidator<number> {
+  constructor() {
+    super("number");
+  }
 
   parse(value: unknown, path = "value"): number {
     if (typeof value !== "number" || Number.isNaN(value)) {
@@ -66,10 +173,16 @@ export class NumberValidator implements Validator<number> {
     }
     return value;
   }
+
+  describe(): ValidatorDescription {
+    return { kind: "number" };
+  }
 }
 
-export class BooleanValidator implements Validator<boolean> {
-  readonly kind = "boolean" as const;
+export class BooleanValidator extends BaseValidator<boolean> {
+  constructor() {
+    super("boolean");
+  }
 
   parse(value: unknown, path = "value"): boolean {
     if (typeof value !== "boolean") {
@@ -77,10 +190,16 @@ export class BooleanValidator implements Validator<boolean> {
     }
     return value;
   }
+
+  describe(): ValidatorDescription {
+    return { kind: "boolean" };
+  }
 }
 
-export class NullValidator implements Validator<null> {
-  readonly kind = "null" as const;
+export class NullValidator extends BaseValidator<null> {
+  constructor() {
+    super("null");
+  }
 
   parse(value: unknown, path = "value"): null {
     if (value !== null) {
@@ -88,22 +207,32 @@ export class NullValidator implements Validator<null> {
     }
     return null;
   }
+
+  describe(): ValidatorDescription {
+    return { kind: "null" };
+  }
 }
 
-export class AnyValidator implements Validator<unknown> {
-  readonly kind = "any" as const;
+export class AnyValidator extends BaseValidator<unknown, unknown, never> {
+  constructor() {
+    super("any");
+  }
 
   parse(value: unknown): unknown {
     return value;
+  }
+
+  describe(): ValidatorDescription {
+    return { kind: "any" };
   }
 }
 
 export class LiteralValidator<
   TValue extends string | number | boolean | null
-> implements Validator<TValue> {
-  readonly kind = "literal" as const;
-
-  constructor(public readonly literalValue: TValue) {}
+> extends BaseValidator<TValue> {
+  constructor(public readonly literalValue: TValue) {
+    super("literal");
+  }
 
   parse(value: unknown, path = "value"): TValue {
     if (value !== this.literalValue) {
@@ -111,12 +240,47 @@ export class LiteralValidator<
     }
     return this.literalValue;
   }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "literal",
+      value: this.literalValue
+    };
+  }
 }
 
-export class ArrayValidator<TItem> implements Validator<TItem[]> {
-  readonly kind = "array" as const;
+export class EnumValidator<
+  TValues extends readonly [string, ...string[]]
+> extends BaseValidator<TValues[number]> {
+  constructor(public readonly values: TValues) {
+    super("enum");
+  }
 
-  constructor(public readonly itemValidator: Validator<TItem>) {}
+  parse(value: unknown, path = "value"): TValues[number] {
+    if (typeof value !== "string" || !this.values.includes(value)) {
+      throw new Error(
+        `${path} must be one of ${this.values.map((item) => JSON.stringify(item)).join(", ")}.`
+      );
+    }
+    return value as TValues[number];
+  }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "enum",
+      values: [...this.values]
+    };
+  }
+}
+
+export class ArrayValidator<
+  TItem,
+  TItemStorage,
+  TItemValidator extends Validator<TItem, TItemStorage, string>
+> extends BaseValidator<TItem[], TItemStorage[], never> {
+  constructor(public readonly itemValidator: TItemValidator) {
+    super("array");
+  }
 
   parse(value: unknown, path = "value"): TItem[] {
     if (!Array.isArray(value)) {
@@ -126,19 +290,43 @@ export class ArrayValidator<TItem> implements Validator<TItem[]> {
       this.itemValidator.parse(item, `${path}[${index}]`)
     );
   }
+
+  override serialize(value: TItem[], path = "value"): TItemStorage[] {
+    const parsed = this.parse(value, path);
+    return parsed.map((item, index) =>
+      serializeValue(this.itemValidator, item, `${path}[${index}]`)
+    );
+  }
+
+  override deserialize(value: unknown, path = "value"): TItem[] {
+    if (!Array.isArray(value)) {
+      throw new Error(`${path} must be an array.`);
+    }
+    return value.map((item, index) =>
+      deserializeValue(this.itemValidator, item, `${path}[${index}]`)
+    );
+  }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "array",
+      item: describeValidator(this.itemValidator)
+    };
+  }
 }
 
 export class ObjectValidator<
   TShape extends ObjectValidatorShape
-> implements Validator<{ [TKey in keyof TShape]: Infer<TShape[TKey]> }> {
-  readonly kind = "object" as const;
+> extends BaseValidator<
+  InferObject<TShape>,
+  InferStoredObject<TShape>,
+  ShapeFieldPaths<TShape>
+> {
+  constructor(public readonly shape: TShape) {
+    super("object");
+  }
 
-  constructor(public readonly shape: TShape) {}
-
-  parse(
-    value: unknown,
-    path = "value"
-  ): { [TKey in keyof TShape]: Infer<TShape[TKey]> } {
+  parse(value: unknown, path = "value"): InferObject<TShape> {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error(`${path} must be an object.`);
     }
@@ -147,24 +335,81 @@ export class ObjectValidator<
     const parsed: Record<string, unknown> = {};
 
     for (const [key, validator] of Object.entries(this.shape)) {
-      const optional =
-        validator.kind === "optional" && source[key] === undefined;
-      if (optional) {
+      if (validator.kind === "optional" && source[key] === undefined) {
         continue;
       }
       parsed[key] = validator.parse(source[key], `${path}.${key}`);
     }
 
-    return parsed as { [TKey in keyof TShape]: Infer<TShape[TKey]> };
+    return parsed as InferObject<TShape>;
+  }
+
+  override serialize(
+    value: InferObject<TShape>,
+    path = "value"
+  ): InferStoredObject<TShape> {
+    const parsed = this.parse(value, path) as Record<string, unknown>;
+    const serialized: Record<string, unknown> = {};
+
+    for (const [key, validator] of Object.entries(this.shape)) {
+      if (parsed[key] === undefined && validator.kind === "optional") {
+        continue;
+      }
+      serialized[key] = serializeValue(
+        validator,
+        parsed[key],
+        `${path}.${key}`
+      );
+    }
+
+    return serialized as InferStoredObject<TShape>;
+  }
+
+  override deserialize(value: unknown, path = "value"): InferObject<TShape> {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new Error(`${path} must be an object.`);
+    }
+
+    const source = value as Record<string, unknown>;
+    const parsed: Record<string, unknown> = {};
+
+    for (const [key, validator] of Object.entries(this.shape)) {
+      if (validator.kind === "optional" && source[key] === undefined) {
+        continue;
+      }
+      parsed[key] = deserializeValue(validator, source[key], `${path}.${key}`);
+    }
+
+    return parsed as InferObject<TShape>;
+  }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "object",
+      shape: Object.fromEntries(
+        Object.entries(this.shape).map(([key, validator]) => [
+          key,
+          {
+            validator:
+              validator.kind === "optional"
+                ? describeValidator(
+                    (validator as OptionalValidator<unknown, unknown, string>).inner
+                  )
+                : describeValidator(validator),
+            optional: validator.kind === "optional"
+          }
+        ])
+      )
+    };
   }
 }
 
 export class IdValidator<
   TTableName extends string
-> implements Validator<string> {
-  readonly kind = "id" as const;
-
-  constructor(public readonly tableName: TTableName) {}
+> extends BaseValidator<string> {
+  constructor(public readonly tableName: TTableName) {
+    super("id");
+  }
 
   parse(value: unknown, path = "value"): string {
     if (typeof value !== "string" || value.length === 0) {
@@ -172,14 +417,27 @@ export class IdValidator<
     }
     return value;
   }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "id",
+      tableName: this.tableName
+    };
+  }
 }
 
-export class OptionalValidator<TValue> implements Validator<
-  TValue | undefined
+export class OptionalValidator<
+  TValue,
+  TStorage = TValue,
+  TFieldPaths extends string = never
+> extends BaseValidator<
+  TValue | undefined,
+  TStorage | undefined,
+  TFieldPaths
 > {
-  readonly kind = "optional" as const;
-
-  constructor(public readonly inner: Validator<TValue>) {}
+  constructor(public readonly inner: Validator<TValue, TStorage, TFieldPaths>) {
+    super("optional");
+  }
 
   parse(value: unknown, path = "value"): TValue | undefined {
     if (value === undefined) {
@@ -187,130 +445,299 @@ export class OptionalValidator<TValue> implements Validator<
     }
     return this.inner.parse(value, path);
   }
+
+  override serialize(
+    value: TValue | undefined,
+    path = "value"
+  ): TStorage | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    return serializeValue(this.inner, value, path);
+  }
+
+  override deserialize(
+    value: unknown,
+    path = "value"
+  ): TValue | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    return deserializeValue(this.inner, value, path);
+  }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "optional",
+      inner: describeValidator(this.inner)
+    };
+  }
 }
 
-export type Infer<TValidator> =
-  TValidator extends Validator<infer TValue> ? TValue : never;
+export class RecordValidator<
+  TKey extends string,
+  TValue,
+  TStorage,
+  TKeyValidator extends Validator<TKey, string, string>,
+  TValueValidator extends Validator<TValue, TStorage, string>
+> extends BaseValidator<Record<TKey, TValue>, Record<TKey, TStorage>, never> {
+  constructor(
+    public readonly keyValidator: TKeyValidator,
+    public readonly valueValidator: TValueValidator
+  ) {
+    super("record");
+  }
 
-export type ValidatorMap = Record<string, Validator<unknown>>;
+  parse(value: unknown, path = "value"): Record<TKey, TValue> {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new Error(`${path} must be an object.`);
+    }
+    const source = value as Record<string, unknown>;
+    const parsed: Record<string, TValue> = {};
+    for (const [key, item] of Object.entries(source)) {
+      const parsedKey = this.keyValidator.parse(key, `${path}.{key}`);
+      parsed[parsedKey] = this.valueValidator.parse(item, `${path}.${key}`);
+    }
+    return parsed as Record<TKey, TValue>;
+  }
+
+  override serialize(
+    value: Record<TKey, TValue>,
+    path = "value"
+  ): Record<TKey, TStorage> {
+    const parsed = this.parse(value, path);
+    const serialized: Record<string, TStorage> = {};
+    for (const [key, item] of Object.entries(parsed)) {
+      serialized[key] = serializeValue(this.valueValidator, item, `${path}.${key}`);
+    }
+    return serialized as Record<TKey, TStorage>;
+  }
+
+  override deserialize(
+    value: unknown,
+    path = "value"
+  ): Record<TKey, TValue> {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new Error(`${path} must be an object.`);
+    }
+    const source = value as Record<string, unknown>;
+    const parsed: Record<string, TValue> = {};
+    for (const [key, item] of Object.entries(source)) {
+      const parsedKey = this.keyValidator.parse(key, `${path}.{key}`);
+      parsed[parsedKey] = deserializeValue(
+        this.valueValidator,
+        item,
+        `${path}.${key}`
+      );
+    }
+    return parsed as Record<TKey, TValue>;
+  }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "record",
+      key: describeValidator(this.keyValidator),
+      value: describeValidator(this.valueValidator)
+    };
+  }
+}
+
+export class UnionValidator<
+  TMembers extends readonly Validator<unknown, unknown, string>[]
+> extends BaseValidator<
+  Infer<TMembers[number]>,
+  InferStorage<TMembers[number]>,
+  FieldPaths<TMembers[number]>
+> {
+  constructor(public readonly members: TMembers) {
+    super("union");
+  }
+
+  parse(value: unknown, path = "value"): Infer<TMembers[number]> {
+    for (const member of this.members) {
+      try {
+        return member.parse(value, path) as Infer<TMembers[number]>;
+      } catch {
+        continue;
+      }
+    }
+    throw new Error(`${path} did not match any union member.`);
+  }
+
+  override serialize(
+    value: Infer<TMembers[number]>,
+    path = "value"
+  ): InferStorage<TMembers[number]> {
+    for (const member of this.members) {
+      try {
+        const parsed = member.parse(value, path);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+        return serializeValue(
+          member as Validator<
+            Infer<TMembers[number]>,
+            InferStorage<TMembers[number]>,
+            string
+          >,
+          parsed,
+          path
+        ) as InferStorage<TMembers[number]>;
+      } catch {
+        continue;
+      }
+    }
+    throw new Error(`${path} did not match any union member.`);
+  }
+
+  override deserialize(
+    value: unknown,
+    path = "value"
+  ): Infer<TMembers[number]> {
+    for (const member of this.members) {
+      try {
+        return deserializeValue(
+          member as Validator<Infer<TMembers[number]>, InferStorage<TMembers[number]>, string>,
+          value,
+          path
+        );
+      } catch {
+        continue;
+      }
+    }
+    throw new Error(`${path} did not match any union member.`);
+  }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "union",
+      members: this.members.map((member) => describeValidator(member))
+    };
+  }
+}
+
+export class CodecValidator<
+  TValue,
+  TStored,
+  TStorageFieldValidator extends Validator<TStored, unknown, string>,
+  TValueFieldValidator extends Validator<TValue, unknown, string>
+> extends BaseValidator<
+  TValue,
+  InferStorage<TStorageFieldValidator>,
+  FieldPaths<TValueFieldValidator>
+> {
+  constructor(
+    public readonly valueValidator: TValueFieldValidator,
+    public readonly storageValidator: TStorageFieldValidator,
+    private readonly codec: {
+      serialize(value: TValue): TStored;
+      deserialize(value: TStored): TValue;
+    }
+  ) {
+    super("codec");
+  }
+
+  parse(value: unknown, path = "value"): TValue {
+    return this.valueValidator.parse(value, path);
+  }
+
+  override serialize(
+    value: TValue,
+    path = "value"
+  ): InferStorage<TStorageFieldValidator> {
+    const parsed = this.valueValidator.parse(value, path);
+    const serialized = this.codec.serialize(parsed);
+    return serializeValue(
+      this.storageValidator,
+      this.storageValidator.parse(serialized, path),
+      path
+    ) as InferStorage<TStorageFieldValidator>;
+  }
+
+  override deserialize(value: unknown, path = "value"): TValue {
+    const parsedStored = deserializeValue(this.storageValidator, value, path);
+    return this.valueValidator.parse(
+      this.codec.deserialize(parsedStored),
+      path
+    );
+  }
+
+  describe(): ValidatorDescription {
+    return {
+      kind: "codec",
+      value: describeValidator(this.valueValidator),
+      storage: describeValidator(this.storageValidator)
+    };
+  }
+}
 
 /**
- * The public validator builder API.
- *
- * Hover each property in your editor to see what it validates and how to use it.
+ * Public builder namespace for declaring Syncore schema fields and codecs.
  */
 export interface ValidatorBuilderApi {
-  /**
-   * Validate a string value.
-   *
-   * @returns A validator that accepts JavaScript strings.
-   */
   string(): StringValidator;
-
-  /**
-   * Validate a number value.
-   *
-   * @returns A validator that accepts finite JavaScript numbers.
-   */
   number(): NumberValidator;
-
-  /**
-   * Validate a boolean value.
-   *
-   * @returns A validator that accepts `true` and `false`.
-   */
   boolean(): BooleanValidator;
-
-  /**
-   * Validate the literal value `null`.
-   *
-   * @returns A validator that only accepts `null`.
-   */
   null(): NullValidator;
-
-  /**
-   * Accept any value without validation.
-   *
-   * Use this sparingly for escape hatches when you do not want Syncore to
-   * enforce a more specific runtime shape.
-   */
   any(): AnyValidator;
-
-  /**
-   * Validate a single literal value.
-   *
-   * @param literalValue - The exact value that must be provided.
-   * @returns A validator that only accepts that one value.
-   */
   literal<TValue extends string | number | boolean | null>(
     literalValue: TValue
   ): LiteralValidator<TValue>;
-
-  /**
-   * Validate an array whose items all use the same validator.
-   *
-   * @param itemValidator - The validator for each item in the array.
-   * @returns A validator for arrays of the provided item type.
-   */
-  array<TItem>(itemValidator: Validator<TItem>): ArrayValidator<TItem>;
-
-  /**
-   * Validate an object with a fixed property shape.
-   *
-   * @param shape - The validators for each property on the object.
-   * @returns A validator for objects matching that shape.
-   */
+  enum<TValues extends readonly [string, ...string[]]>(
+    values: TValues
+  ): EnumValidator<TValues>;
+  array<
+    TItem,
+    TItemStorage,
+    TValidator extends Validator<TItem, TItemStorage, string>
+  >(itemValidator: TValidator): ArrayValidator<TItem, TItemStorage, TValidator>;
   object<TShape extends ObjectValidatorShape>(
     shape: TShape
   ): ObjectValidator<TShape>;
-
-  /**
-   * Validate an identifier string that points at a table.
-   *
-   * Use this for document ids that come from Syncore tables.
-   *
-   * @param tableName - The name of the referenced table.
-   * @returns A validator for ids belonging to that table.
-   */
   id<TTableName extends string>(tableName: TTableName): IdValidator<TTableName>;
-
-  /**
-   * Make another validator optional.
-   *
-   * @param inner - The validator for the defined case.
-   * @returns A validator that accepts `undefined` or the inner value.
-   */
-  optional<TValue>(inner: Validator<TValue>): OptionalValidator<TValue>;
-}
-
-function isValidator(
-  value: Validator<unknown> | ValidatorMap
-): value is Validator<unknown> {
-  return typeof (value as Validator<unknown>).parse === "function";
-}
-
-export function ensureObjectValidator(
-  value: Validator<unknown> | ValidatorMap
-): Validator<unknown> {
-  if (isValidator(value)) {
-    return value;
-  }
-  return new ObjectValidator(value);
+  optional<TValue, TStorage, TFieldPaths extends string>(
+    inner: Validator<TValue, TStorage, TFieldPaths>
+  ): OptionalValidator<TValue, TStorage, TFieldPaths>;
+  record<
+    TKey extends string,
+    TValue,
+    TStorage,
+    TKeyValidator extends Validator<TKey, string, string>,
+    TValueValidator extends Validator<TValue, TStorage, string>
+  >(
+    keyValidator: TKeyValidator,
+    valueValidator: TValueValidator
+  ): RecordValidator<TKey, TValue, TStorage, TKeyValidator, TValueValidator>;
+  union<
+    TMembers extends readonly Validator<unknown, unknown, string>[]
+  >(...members: TMembers): UnionValidator<TMembers>;
+  nullable<TValue, TStorage, TFieldPaths extends string>(
+    inner: Validator<TValue, TStorage, TFieldPaths>
+  ): UnionValidator<
+    readonly [Validator<TValue, TStorage, TFieldPaths>, NullValidator]
+  >;
+  codec<
+    TValue,
+    TStored,
+    TStorageFieldValidator extends Validator<TStored, unknown, string>,
+    TValueFieldValidator extends Validator<TValue, unknown, string>
+  >(
+    valueValidator: TValueFieldValidator,
+    config: {
+      storage: TStorageFieldValidator;
+      serialize(value: TValue): TStored;
+      deserialize(value: TStored): TValue;
+    }
+  ): CodecValidator<
+    TValue,
+    TStored,
+    TStorageFieldValidator,
+    TValueFieldValidator
+  >;
 }
 
 /**
- * Build runtime validators for schemas, function args, and return values.
- *
- * @example
- * ```ts
- * defineTable({
- *   text: v.string(),
- *   done: v.boolean(),
- *   ownerId: v.optional(v.id("users"))
- * });
- * ```
+ * Primary schema builder namespace for Syncore's data-model DSL.
  */
-export const v: ValidatorBuilderApi = {
+export const s: ValidatorBuilderApi = {
   string: () => new StringValidator(),
   number: () => new NumberValidator(),
   boolean: () => new BooleanValidator(),
@@ -319,18 +746,127 @@ export const v: ValidatorBuilderApi = {
   literal: <TValue extends string | number | boolean | null>(
     literalValue: TValue
   ) => new LiteralValidator(literalValue),
-  array: <TItem>(itemValidator: Validator<TItem>) =>
-    new ArrayValidator(itemValidator),
+  enum: <TValues extends readonly [string, ...string[]]>(values: TValues) =>
+    new EnumValidator(values),
+  array: <
+    TItem,
+    TItemStorage,
+    TValidator extends Validator<TItem, TItemStorage, string>
+  >(
+    itemValidator: TValidator
+  ) =>
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    new ArrayValidator(itemValidator) as ArrayValidator<TItem, TItemStorage, TValidator>,
   object: <TShape extends ObjectValidatorShape>(shape: TShape) =>
     new ObjectValidator(shape),
   id: <TTableName extends string>(tableName: TTableName) =>
     new IdValidator(tableName),
-  optional: <TValue>(inner: Validator<TValue>) => new OptionalValidator(inner)
+  optional: <TValue, TStorage, TFieldPaths extends string>(
+    inner: Validator<TValue, TStorage, TFieldPaths>
+  ) => new OptionalValidator(inner),
+  record: <
+    TKey extends string,
+    TValue,
+    TStorage,
+    TKeyValidator extends Validator<TKey, string, string>,
+    TValueValidator extends Validator<TValue, TStorage, string>
+  >(
+    keyValidator: TKeyValidator,
+    valueValidator: TValueValidator
+  ) =>
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    new RecordValidator(keyValidator, valueValidator) as RecordValidator<
+      TKey,
+      TValue,
+      TStorage,
+      TKeyValidator,
+      TValueValidator
+    >,
+  union: <TMembers extends readonly Validator<unknown, unknown, string>[]>(
+    ...members: TMembers
+  ) => new UnionValidator(members),
+  nullable: <TValue, TStorage, TFieldPaths extends string>(
+    inner: Validator<TValue, TStorage, TFieldPaths>
+  ) => new UnionValidator([inner, new NullValidator()] as const),
+  codec: <
+    TValue,
+    TStored,
+    TStorageFieldValidator extends Validator<TStored, unknown, string>,
+    TValueFieldValidator extends Validator<TValue, unknown, string>
+  >(
+    valueValidator: TValueFieldValidator,
+    config: {
+      storage: TStorageFieldValidator;
+      serialize(value: TValue): TStored;
+      deserialize(value: TStored): TValue;
+    }
+  ) =>
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    new CodecValidator(valueValidator, config.storage, {
+      serialize: (value) => config.serialize(value),
+      deserialize: (value) => config.deserialize(value)
+    }) as CodecValidator<
+      TValue,
+      TStored,
+      TStorageFieldValidator,
+      TValueFieldValidator
+    >
 };
 
+export function isValidator(
+  value: Validator<unknown, unknown, string> | ValidatorMap
+): value is Validator<unknown, unknown, string> {
+  return typeof (value as Validator<unknown, unknown, string>).parse === "function";
+}
+
+export function ensureObjectValidator<TShape extends ObjectValidatorShape>(
+  value: TShape
+): ObjectValidator<TShape>;
+export function ensureObjectValidator<TValidator extends Validator<unknown, unknown, string>>(
+  value: TValidator
+): TValidator;
+export function ensureObjectValidator(
+  value: Validator<unknown, unknown, string> | ValidatorMap
+): Validator<unknown, unknown, string> {
+  if (isValidator(value)) {
+    return value;
+  }
+  return new ObjectValidator(value);
+}
+
+export function serializeValue<TValue, TStorage, TFieldPaths extends string>(
+  validator: Validator<TValue, TStorage, TFieldPaths>,
+  value: TValue,
+  path = "value"
+): TStorage {
+  if (validator.serialize) {
+    return validator.serialize(value, path);
+  }
+  return value as unknown as TStorage;
+}
+
+export function deserializeValue<
+  TValue,
+  TStorage,
+  TFieldPaths extends string
+>(
+  validator: Validator<TValue, TStorage, TFieldPaths>,
+  value: unknown,
+  path = "value"
+): TValue {
+  if (validator.deserialize) {
+    return validator.deserialize(value, path);
+  }
+  return validator.parse(value, path);
+}
+
 export function describeValidator(
-  validator: Validator<unknown>
+  validator: Validator<unknown, unknown, string>
 ): ValidatorDescription {
+  if (validator.describe) {
+    return validator.describe();
+  }
+
   switch (validator.kind) {
     case "string":
     case "number":
@@ -344,26 +880,106 @@ export function describeValidator(
         value: (validator as LiteralValidator<string | number | boolean | null>)
           .literalValue
       };
+    case "enum":
+      return {
+        kind: "enum",
+        values: [...(validator as EnumValidator<readonly [string, ...string[]]>).values]
+      };
     case "array":
       return {
         kind: "array",
         item: describeValidator(
-          (validator as ArrayValidator<unknown>).itemValidator
+          (validator as ArrayValidator<unknown, unknown, Validator<unknown, unknown, string>>)
+            .itemValidator
         )
       };
     case "object": {
-      const objectValidator =
-        validator as ObjectValidator<ObjectValidatorShape>;
+      const objectShape =
+        "shape" in validator
+          ? (validator as {
+              shape: Record<
+                string,
+                | Validator<unknown, unknown, string>
+                | {
+                    validator?: ValidatorDescription;
+                    field?: ValidatorDescription;
+                    optional?: boolean;
+                  }
+              >;
+            }).shape
+          : {};
+
       return {
         kind: "object",
         shape: Object.fromEntries(
-          Object.entries(objectValidator.shape).map(([key, nested]) => [
-            key,
-            describeValidator(nested)
-          ])
+          Object.entries(objectShape).map(([key, field]) => {
+            if (isValidator(field as Validator<unknown, unknown, string>)) {
+              return [
+                key,
+                {
+                  validator:
+                    (field as Validator<unknown, unknown, string>).kind === "optional"
+                      ? describeValidator(
+                          (
+                            field as OptionalValidator<unknown, unknown, string>
+                          ).inner
+                        )
+                      : describeValidator(
+                          field as Validator<unknown, unknown, string>
+                        ),
+                  optional:
+                    (field as Validator<unknown, unknown, string>).kind === "optional"
+                }
+              ];
+            }
+            const metadata = field as {
+              validator?: ValidatorDescription;
+              field?: ValidatorDescription;
+              optional?: boolean;
+            };
+            return [
+              key,
+              {
+                validator:
+                  metadata.validator ??
+                  metadata.field ??
+                  ({ kind: "any" } satisfies ValidatorDescription),
+                optional: metadata.optional ?? false
+              }
+            ];
+          })
         )
       };
     }
+    case "record":
+      return {
+        kind: "record",
+        key: describeValidator(
+          (validator as RecordValidator<
+            string,
+            unknown,
+            unknown,
+            Validator<string, string, string>,
+            Validator<unknown, unknown, string>
+          >).keyValidator
+        ),
+        value: describeValidator(
+          (validator as RecordValidator<
+            string,
+            unknown,
+            unknown,
+            Validator<string, string, string>,
+            Validator<unknown, unknown, string>
+          >).valueValidator
+        )
+      };
+    case "union":
+      return {
+        kind: "union",
+        members: (
+          validator as UnionValidator<readonly Validator<unknown, unknown, string>[]>
+        ).members.map((member) => describeValidator(member))
+      };
     case "id":
       return {
         kind: "id",
@@ -373,7 +989,27 @@ export function describeValidator(
       return {
         kind: "optional",
         inner: describeValidator(
-          (validator as OptionalValidator<unknown>).inner
+          (validator as OptionalValidator<unknown, unknown, string>).inner
+        )
+      };
+    case "codec":
+      return {
+        kind: "codec",
+        value: describeValidator(
+          (validator as CodecValidator<
+            unknown,
+            unknown,
+            Validator<unknown, unknown, string>,
+            Validator<unknown, unknown, string>
+          >).valueValidator
+        ),
+        storage: describeValidator(
+          (validator as CodecValidator<
+            unknown,
+            unknown,
+            Validator<unknown, unknown, string>,
+            Validator<unknown, unknown, string>
+          >).storageValidator
         )
       };
   }

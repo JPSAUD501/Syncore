@@ -4,7 +4,6 @@
 
 ```ts
 
-import { AnySyncoreSchema } from '@syncore/core';
 import { AttachedRuntimeBridge } from '@syncore/core';
 import { AttachRuntimeBridgeOptions } from '@syncore/core';
 import { BridgeQueryWatch } from '@syncore/core';
@@ -25,6 +24,7 @@ import { SyncoreExternalChangeEvent } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
+import { SyncoreSchema } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 
 // @public (undocumented)
@@ -76,7 +76,7 @@ export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
     // (undocumented)
     attachCommandHandler(handler: DevtoolsCommandHandler): void;
     // (undocumented)
-    attachRuntime(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+    attachRuntime(runtime: SyncoreRuntime<WebSyncoreSchema>): void;
     // (undocumented)
     attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
     // (undocumented)
@@ -112,7 +112,7 @@ export type CreateBrowserRuntimeOptions = CreateWebRuntimeOptions;
 export function createBrowserSyncoreClient(runtime: SyncoreRuntime<BrowserSyncoreSchema>): _syncore_core0.SyncoreClient;
 
 // @public
-export function createBrowserSyncoreRuntime(options: CreateBrowserRuntimeOptions): Promise<SyncoreRuntime<AnySyncoreSchema>>;
+export function createBrowserSyncoreRuntime(options: CreateBrowserRuntimeOptions): Promise<SyncoreRuntime<WebSyncoreSchema>>;
 
 // @public (undocumented)
 export function createBrowserWebSocketDevtoolsSink(options: BrowserWebSocketDevtoolsSinkOptions): BrowserWebSocketDevtoolsSink;
@@ -354,10 +354,10 @@ export interface WebExternalChangeSupport {
 export type WebPersistenceMode = "auto" | "indexeddb" | "opfs";
 
 // @public (undocumented)
-export type WebSyncoreSchema = AnySyncoreSchema;
+export type WebSyncoreSchema = SyncoreSchema<any>;
 
 // @public (undocumented)
-export type WebWorkerSyncoreSchema = AnySyncoreSchema;
+export type WebWorkerSyncoreSchema = SyncoreSchema<any>;
 
 // @public (undocumented)
 export type WorkerQueryWatch<TValue> = BridgeQueryWatch<TValue>;

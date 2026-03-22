@@ -11,11 +11,12 @@ import {
   defineTable,
   mutation,
   query,
-  v,
+  s,
   type MutationCtx,
   type QueryCtx,
   type SyncoreRuntime
 } from "@syncore/core";
+import type { SyncoreSchema } from "@syncore/core";
 
 const wasmFilePath = path.resolve(
   process.cwd(),
@@ -24,8 +25,8 @@ const wasmFilePath = path.resolve(
 
 const schema = defineSchema({
   todos: defineTable({
-    title: v.string(),
-    complete: v.boolean()
+    title: s.string(),
+    complete: s.boolean()
   })
     .index("by_complete", ["complete"])
     .searchIndex("search_title", { searchField: "title" })
@@ -38,7 +39,7 @@ const functions = {
       ctx.db.query("todos").order("desc").collect()
   }),
   "todos/create": mutation({
-    args: { title: v.string() },
+    args: { title: s.string() },
     handler: async (ctx: MutationCtx<typeof schema>, args: { title: string }) =>
       ctx.db.insert("todos", {
         title: args.title,
@@ -46,7 +47,7 @@ const functions = {
       })
   }),
   "todos/scheduleCreate": mutation({
-    args: { title: v.string(), delayMs: v.number() },
+    args: { title: s.string(), delayMs: s.number() },
     handler: async (
       ctx: MutationCtx<typeof schema>,
       args: { title: string; delayMs: number }
@@ -64,8 +65,8 @@ const functions = {
   }),
   "files/put": mutation({
     args: {
-      name: v.string(),
-      body: v.string()
+      name: s.string(),
+      body: s.string()
     },
     handler: async (
       ctx: MutationCtx<typeof schema>,
@@ -79,7 +80,7 @@ const functions = {
   }),
   "files/get": query({
     args: {
-      id: v.string()
+      id: s.string()
     },
     handler: async (ctx: QueryCtx<typeof schema>, args: { id: string }) => {
       const file = await ctx.storage.get(args.id);
@@ -127,8 +128,8 @@ type RuntimeFactory = {
   createRuntime(): Promise<SyncoreRuntime<ContractSchema>>;
   dispose(): Promise<void>;
   createDestructiveRuntime(
-    destructiveSchema: typeof schema
-  ): Promise<SyncoreRuntime<ContractSchema>>;
+    destructiveSchema: SyncoreSchema<any>
+  ): Promise<SyncoreRuntime<SyncoreSchema<any>>>;
 };
 
 type NodeFactory = RuntimeFactory & {
@@ -258,8 +259,8 @@ describe("adapter runtime contracts", () => {
 
         const destructiveSchema = defineSchema({
           todos: defineTable({
-            title: v.string(),
-            complete: v.boolean()
+            title: s.string(),
+            complete: s.boolean()
           })
         });
 
@@ -428,3 +429,4 @@ async function waitFor(
 function wait(durationMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
+

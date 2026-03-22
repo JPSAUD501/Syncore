@@ -4,7 +4,6 @@
 
 ```ts
 
-import { AnySyncoreSchema } from '@syncore/core';
 import { AttachedRuntimeBridge } from '@syncore/core';
 import { AttachRuntimeBridgeOptions } from '@syncore/core';
 import { BridgeQueryWatch } from '@syncore/core';
@@ -23,6 +22,7 @@ import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreRuntimeSummary } from '@syncore/devtools-protocol';
+import { SyncoreSchema } from '@syncore/core';
 import { SyncoreSqlDriver } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 
@@ -159,7 +159,7 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
 }
 
 // @public (undocumented)
-export type NodeIpcSyncoreSchema = AnySyncoreSchema;
+export type NodeIpcSyncoreSchema = SyncoreSchema<any>;
 
 // @public (undocumented)
 export class NodeSqliteDriver implements SyncoreSqlDriver {
@@ -184,14 +184,14 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
 }
 
 // @public (undocumented)
-export type NodeSyncoreSchema = AnySyncoreSchema;
+export type NodeSyncoreSchema = SyncoreSchema<any>;
 
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
     // (undocumented)
     attachCommandHandler(handler: DevtoolsCommandHandler): void;
     // (undocumented)
-    attachRuntime(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+    attachRuntime(runtime: SyncoreRuntime<NodeSyncoreSchema>): void;
     // (undocumented)
     attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
     // (undocumented)

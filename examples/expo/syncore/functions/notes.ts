@@ -2,7 +2,7 @@ import {
   createFunctionReference,
   mutation,
   query,
-  v
+  s
 } from "../_generated/server";
 
 export const list = query({
@@ -12,12 +12,12 @@ export const list = query({
 });
 
 export const get = query({
-  args: { id: v.string() },
+  args: { id: s.string() },
   handler: async (ctx, args) => ctx.db.get("notes", args.id)
 });
 
 export const search = query({
-  args: { query: v.string() },
+  args: { query: s.string() },
   handler: async (ctx, args) => {
     if (!args.query.trim()) return [];
     return ctx.db
@@ -28,7 +28,7 @@ export const search = query({
 });
 
 export const create = mutation({
-  args: { title: v.string(), body: v.string(), color: v.string() },
+  args: { title: s.string(), body: s.string(), color: s.string() },
   handler: async (ctx, args) => {
     const now = Date.now();
     return ctx.db.insert("notes", {
@@ -43,7 +43,7 @@ export const create = mutation({
 });
 
 export const update = mutation({
-  args: { id: v.string(), title: v.string(), body: v.string() },
+  args: { id: s.string(), title: s.string(), body: s.string() },
   handler: async (ctx, args) => {
     await ctx.db.patch("notes", args.id, {
       title: args.title,
@@ -54,8 +54,8 @@ export const update = mutation({
 });
 
 export const togglePin = mutation({
-  args: { id: v.string() },
-  returns: v.null(),
+  args: { id: s.string() },
+  returns: s.null(),
   handler: async (ctx, args) => {
     const note = await ctx.db.get("notes", args.id);
     if (!note) return null;
@@ -68,8 +68,8 @@ export const togglePin = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.string() },
-  returns: v.null(),
+  args: { id: s.string() },
+  returns: s.null(),
   handler: async (ctx, args) => {
     await ctx.db.delete("notes", args.id);
     return null;
@@ -77,7 +77,7 @@ export const remove = mutation({
 });
 
 export const scheduleAutoSave = mutation({
-  args: { id: v.string(), title: v.string(), body: v.string() },
+  args: { id: s.string(), title: s.string(), body: s.string() },
   handler: async (ctx, args) =>
     ctx.scheduler.runAfter(
       1500,

@@ -9,7 +9,7 @@ import {
   defineTable,
   query,
   SyncoreRuntime,
-  v,
+  s,
   type QueryCtx,
   type SyncoreCapabilities,
 } from "@syncore/core";
@@ -27,15 +27,15 @@ const wasmFilePath = path.resolve(
 
 const schema = defineSchema({
   tasks: defineTable({
-    title: v.string()
+    title: s.string()
   })
 });
 
 const functions = {
   "tasks/readCapabilities": query({
     args: {},
-    returns: v.object({
-      platformProvided: v.string()
+    returns: s.object({
+      platformProvided: s.string()
     }),
     handler: async (ctx: QueryCtx<typeof schema>) => {
       const capabilities = ctx.capabilities as Record<string, string>;
@@ -171,3 +171,4 @@ async function deleteIndexedDbDatabase(name: string): Promise<void> {
     request.onblocked = () => resolve();
   });
 }
+

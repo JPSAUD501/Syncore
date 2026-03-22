@@ -7,7 +7,7 @@ This repository builds a local-first application platform around a typed runtime
 ## Package Map
 
 - `packages/core`: runtime, function references, scheduler, storage coordination, devtools events.
-- `packages/schema`: validators, schema definitions, migration planning.
+- `packages/schema`: schema builders, data-model definitions, field-path typing, and migration planning.
 - `packages/cli`: init/codegen/migration/devtools hub commands.
 - `packages/react`: React hooks and provider surface.
 - `packages/platform-node`, `packages/platform-web`, `packages/platform-expo`, `packages/next`: platform-specific adapters.
@@ -41,3 +41,6 @@ This repository builds a local-first application platform around a typed runtime
 - When editing adapters, add tests for both happy-path data flow and error propagation.
 - When editing exported types or entrypoints in published packages, run `bun run api:update`, review the generated API report diff, and ensure `bun run api:check` passes before the PR.
 - Keep examples minimal and representative; they are fixtures for integration validation, not product demos.
+- Prefer `s.*` schema builders and structured document fields over `any`-shaped payloads.
+- Treat schema work as data-model work first: document shape, field paths, indexes, and codecs should stay explicit and typed.
+- Do not introduce Zod into Syncore core. Use Convex as a reference for type-system and schema design, not as a runtime dependency.

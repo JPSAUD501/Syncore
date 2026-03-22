@@ -1,4 +1,4 @@
-import { mutation, query, v } from "../_generated/server.js";
+import { mutation, query, s } from "../_generated/server.js";
 
 const MOODS = ["great", "good", "okay", "low", "rough"] as const;
 
@@ -19,7 +19,7 @@ export const list = query({
 
 /** Get entry for a specific date. */
 export const getByDate = query({
-  args: { date: v.string() },
+  args: { date: s.string() },
   handler: async (ctx, args) =>
     ctx.db
       .query("entries")
@@ -29,7 +29,7 @@ export const getByDate = query({
 
 /** Full-text search across journal entries. */
 export const search = query({
-  args: { query: v.string() },
+  args: { query: s.string() },
   handler: async (ctx, args) => {
     if (!args.query.trim()) return [];
     return ctx.db
@@ -41,7 +41,7 @@ export const search = query({
 
 /** Create or update today's entry. */
 export const upsert = mutation({
-  args: { date: v.string(), body: v.string(), mood: v.string() },
+  args: { date: s.string(), body: s.string(), mood: s.string() },
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("entries")
@@ -74,8 +74,8 @@ export const upsert = mutation({
 
 /** Delete an entry. */
 export const remove = mutation({
-  args: { id: v.string() },
-  returns: v.null(),
+  args: { id: s.string() },
+  returns: s.null(),
   handler: async (ctx, args) => {
     await ctx.db.delete("entries", args.id);
     return null;

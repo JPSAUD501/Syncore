@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export function action<TContext = unknown, TValidator extends Validator<unknown> = Validator<unknown>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
+export function action<TContext = unknown, TValidator extends Validator<unknown, unknown, string> = Validator<unknown, unknown, string>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
     args: TValidator;
 }): SyncoreFunctionDefinition<"action", TContext, Infer<TValidator>, TResult>;
 
@@ -15,7 +15,7 @@ export function action<TContext = unknown, TArgsShape extends ValidatorMap = Val
 }): SyncoreFunctionDefinition<"action", TContext, InferArgs<TArgsShape>, TResult>;
 
 // @public
-export interface ActionCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> extends QueryCtx<TSchema> {
+export interface ActionCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends QueryCtx<TSchema> {
     // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.mts
@@ -27,31 +27,35 @@ export interface ActionCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> 
 }
 
 // @public (undocumented)
-export type AnySyncoreFunctionDefinition = SyncoreFunctionDefinition<SyncoreFunctionKind, unknown, unknown, unknown>;
+export type AnySyncoreFunctionDefinition = SyncoreFunctionDefinition<SyncoreFunctionKind, any, any, unknown>;
 
 // @public (undocumented)
-export type AnySyncoreSchema = SyncoreSchema<any>;
+export type AnyTableDefinition = TableDefinition<Validator<Record<string, unknown>, Record<string, unknown>, string>, GenericTableIndexes, GenericTableSearchIndexes>;
 
+// Warning: (ae-forgotten-export) The symbol "BaseValidator" needs to be exported by the entry point index.d.mts
+//
 // @public (undocumented)
-export type AnyTableDefinition = TableDefinition<Validator<unknown>>;
-
-// @public (undocumented)
-export class AnyValidator implements Validator<unknown> {
+export class AnyValidator extends BaseValidator<unknown, unknown, never> {
+    constructor();
     // (undocumented)
-    readonly kind: "any";
+    describe(): ValidatorDescription;
     // (undocumented)
     parse(value: unknown): unknown;
 }
 
 // @public (undocumented)
-export class ArrayValidator<TItem> implements Validator<TItem[]> {
-    constructor(itemValidator: Validator<TItem>);
+export class ArrayValidator<TItem, TItemStorage, TItemValidator extends Validator<TItem, TItemStorage, string>> extends BaseValidator<TItem[], TItemStorage[], never> {
+    constructor(itemValidator: TItemValidator);
     // (undocumented)
-    readonly itemValidator: Validator<TItem>;
+    describe(): ValidatorDescription;
     // (undocumented)
-    readonly kind: "array";
+    deserialize(value: unknown, path?: string): TItem[];
+    // (undocumented)
+    readonly itemValidator: TItemValidator;
     // (undocumented)
     parse(value: unknown, path?: string): TItem[];
+    // (undocumented)
+    serialize(value: TItem[], path?: string): TItemStorage[];
 }
 
 // @public (undocumented)
@@ -63,10 +67,10 @@ export interface AttachedRuntimeBridge {
 }
 
 // @public (undocumented)
-export function attachRuntimeBridge<TSchema extends AnySyncoreSchema>(options: AttachRuntimeBridgeOptions<TSchema>): AttachedRuntimeBridge;
+export function attachRuntimeBridge<TSchema extends SyncoreSchema<any>>(options: AttachRuntimeBridgeOptions<TSchema>): AttachedRuntimeBridge;
 
 // @public (undocumented)
-export interface AttachRuntimeBridgeOptions<TSchema extends AnySyncoreSchema> {
+export interface AttachRuntimeBridgeOptions<TSchema extends SyncoreSchema<any>> {
     // (undocumented)
     createRuntime: (() => Promise<SyncoreRuntime<TSchema>>) | (() => SyncoreRuntime<TSchema>);
     // (undocumented)
@@ -74,9 +78,10 @@ export interface AttachRuntimeBridgeOptions<TSchema extends AnySyncoreSchema> {
 }
 
 // @public (undocumented)
-export class BooleanValidator implements Validator<boolean> {
+export class BooleanValidator extends BaseValidator<boolean> {
+    constructor();
     // (undocumented)
-    readonly kind: "boolean";
+    describe(): ValidatorDescription;
     // (undocumented)
     parse(value: unknown, path?: string): boolean;
 }
@@ -101,6 +106,26 @@ export interface CapabilityDescriptor {
 }
 
 // @public (undocumented)
+export class CodecValidator<TValue, TStored, TStorageFieldValidator extends Validator<TStored, unknown, string>, TValueFieldValidator extends Validator<TValue, unknown, string>> extends BaseValidator<TValue, InferStorage<TStorageFieldValidator>, FieldPaths<TValueFieldValidator>> {
+    constructor(valueValidator: TValueFieldValidator, storageValidator: TStorageFieldValidator, codec: {
+        serialize(value: TValue): TStored;
+        deserialize(value: TStored): TValue;
+    });
+    // (undocumented)
+    describe(): ValidatorDescription;
+    // (undocumented)
+    deserialize(value: unknown, path?: string): TValue;
+    // (undocumented)
+    parse(value: unknown, path?: string): TValue;
+    // (undocumented)
+    serialize(value: TValue, path?: string): InferStorage<TStorageFieldValidator>;
+    // (undocumented)
+    readonly storageValidator: TStorageFieldValidator;
+    // (undocumented)
+    readonly valueValidator: TValueFieldValidator;
+}
+
+// @public (undocumented)
 export type ComparisonOperator = "=" | ">" | ">=" | "<" | "<=";
 
 // @public (undocumented)
@@ -109,8 +134,10 @@ export type ComponentPath = string;
 // @public (undocumented)
 export function composeProjectFunctionRegistry(rootFunctions: SyncoreFunctionRegistry, manifest?: SyncoreComponentsManifest): SyncoreFunctionRegistry;
 
+// Warning: (ae-forgotten-export) The symbol "TablesOfSchema" needs to be exported by the entry point index.d.mts
+//
 // @public (undocumented)
-export function composeProjectSchema<TRootSchema extends SyncoreSchema<SyncoreSchemaDefinition>>(rootSchema: TRootSchema, manifest?: SyncoreComponentsManifest): SyncoreSchema<Record<string, AnyTableDefinition>>;
+export function composeProjectSchema<TRootSchema extends SyncoreSchema<any>>(rootSchema: TRootSchema, manifest?: SyncoreComponentsManifest): SyncoreSchema<TablesOfSchema<TRootSchema> & Record<string, AnyTableDefinition>>;
 
 // @public (undocumented)
 export function createBindingFunctionReference<TKind extends SyncoreFunctionKind, TArgs = JsonObject, TResult = unknown>(kind: TKind, bindingName: string, functionName: string): FunctionReference<TKind, TArgs, TResult>;
@@ -137,8 +164,8 @@ export function createFunctionReference<TKind extends SyncoreFunctionKind, TArgs
 // @public
 export function createFunctionReferenceFor<TDefinition extends {
     kind: SyncoreFunctionKind;
-    argsValidator: Validator<unknown>;
-    returnsValidator?: Validator<unknown>;
+    argsValidator: Validator<unknown, unknown, string>;
+    returnsValidator?: Validator<unknown, unknown, string>;
 }>(kind: FunctionKindFromDefinition<TDefinition>, name: string): FunctionReference<FunctionKindFromDefinition<TDefinition>, FunctionArgsFromDefinition<TDefinition>, FunctionResultFromDefinition<TDefinition>>;
 
 // @public (undocumented)
@@ -172,22 +199,25 @@ export class CronJobs {
 export function cronJobs(): CronJobs;
 
 // @public (undocumented)
-export function defineComponent<TConfig = unknown, TSchema extends SyncoreSchema<SyncoreSchemaDefinition> | undefined = SyncoreSchema<SyncoreSchemaDefinition> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined>(component: Omit<SyncoreComponent<TConfig, TSchema, TPublic, TInternal>, "kind">): SyncoreComponent<TConfig, TSchema, TPublic, TInternal>;
+export function defineComponent<TConfig = unknown, TSchema extends SyncoreSchema<any> | undefined = SyncoreSchema<any> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined>(component: Omit<SyncoreComponent<TConfig, TSchema, TPublic, TInternal>, "kind">): SyncoreComponent<TConfig, TSchema, TPublic, TInternal>;
 
 // @public (undocumented)
 export function defineComponents<TManifest extends SyncoreComponentsManifest>(components: TManifest): TManifest;
 
-// @public
-export function defineSchema<TTables extends SyncoreSchemaDefinition>(tables: TTables): SyncoreSchema<TTables>;
-
-// @public
-export function defineTable<TShape extends ObjectValidatorShape>(validator: TShape): TableDefinition<ObjectValidator<TShape>>;
+// @public (undocumented)
+export function defineSchema<const TTables extends SyncoreSchemaDefinition>(tables: TTables): SyncoreSchema<TTables>;
 
 // @public (undocumented)
-export function defineTable<TValidator extends Validator<unknown>>(validator: TValidator): TableDefinition<TValidator>;
+export function defineTable<const TShape extends ObjectValidatorShape>(validator: TShape): TableDefinition<ObjectValidator<TShape>>;
 
 // @public (undocumented)
-export function describeValidator(validator: Validator<unknown>): ValidatorDescription;
+export function defineTable<TValidator extends Validator<Record<string, unknown>, Record<string, unknown>, string>>(validator: TValidator): TableDefinition<TValidator>;
+
+// @public (undocumented)
+export function describeValidator(validator: Validator<unknown, unknown, string>): ValidatorDescription;
+
+// @public (undocumented)
+export function deserializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: unknown, path?: string): TValue;
 
 // Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsCommandPayload" needs to be exported by the entry point index.d.mts
 // Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsCommandResultPayload" needs to be exported by the entry point index.d.mts
@@ -198,13 +228,13 @@ export type DevtoolsCommandHandler = (payload: SyncoreDevtoolsCommandPayload) =>
 // @public (undocumented)
 export interface DevtoolsCommandHandlerDeps {
     // (undocumented)
-    admin: SyncoreRuntimeAdmin<AnySyncoreSchema>;
+    admin: SyncoreRuntimeAdmin<SyncoreSchema<any>>;
     // (undocumented)
     driver: SyncoreSqlDriver;
     // (undocumented)
-    functions: SyncoreRuntimeOptions<AnySyncoreSchema>["functions"];
+    functions: SyncoreRuntimeOptions<SyncoreSchema<any>>["functions"];
     // (undocumented)
-    schema: AnySyncoreSchema;
+    schema: SyncoreSchema<any>;
     // (undocumented)
     sql?: DevtoolsSqlSupport;
 }
@@ -242,7 +272,7 @@ export interface DevtoolsLiveQuerySnapshot {
 // @public (undocumented)
 export interface DevtoolsSink {
     // (undocumented)
-    attachRuntime?(runtime: SyncoreRuntime<AnySyncoreSchema>): void;
+    attachRuntime?(runtime: SyncoreRuntime<SyncoreSchema<any>>): void;
     // (undocumented)
     emit(event: SyncoreDevtoolsEvent): void;
 }
@@ -305,13 +335,27 @@ export type DevtoolsSubscriptionListener = (payload: SyncoreDevtoolsSubscription
 export function diffSchemaSnapshots(previousSnapshot: SchemaSnapshot | null | undefined, nextSnapshot: SchemaSnapshot): SchemaMigrationPlan;
 
 // @public (undocumented)
-export type DocumentForTable<TSchema extends AnySyncoreSchema, TTableName extends TableNames<TSchema>> = InferDocument<TSchema["tables"][TTableName]>;
+export type DocumentForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = InferDocument<TSchema["tables"][TTableName]>;
 
 // @public (undocumented)
 export type EmptyArgs = Record<never, never>;
 
 // @public (undocumented)
-export function ensureObjectValidator(value: Validator<unknown> | ValidatorMap): Validator<unknown>;
+export function ensureObjectValidator<TShape extends ObjectValidatorShape>(value: TShape): ObjectValidator<TShape>;
+
+// @public (undocumented)
+export function ensureObjectValidator<TValidator extends Validator<unknown, unknown, string>>(value: TValidator): TValidator;
+
+// @public (undocumented)
+export class EnumValidator<TValues extends readonly [string, ...string[]]> extends BaseValidator<TValues[number]> {
+    constructor(values: TValues);
+    // (undocumented)
+    describe(): ValidatorDescription;
+    // (undocumented)
+    parse(value: unknown, path?: string): TValues[number];
+    // (undocumented)
+    readonly values: TValues;
+}
 
 // @public (undocumented)
 export interface ExecutionResult<TResult = unknown> {
@@ -337,6 +381,9 @@ export interface ExecutionResult<TResult = unknown> {
 }
 
 // @public (undocumented)
+export type FieldPaths<TValidator> = TValidator extends Validator<unknown, unknown, infer TFieldPaths> ? TFieldPaths : never;
+
+// @public (undocumented)
 export interface FilterBuilder {
     // (undocumented)
     and(...expressions: QueryExpression[]): QueryExpression;
@@ -359,17 +406,17 @@ export type FunctionArgs<TReference> = TReference extends FunctionReference<Sync
 
 // @public (undocumented)
 export type FunctionArgsFromDefinition<TDefinition> = TDefinition extends {
-    argsValidator: Validator<infer TArgs>;
+    argsValidator: Validator<infer TArgs, unknown, string>;
 } ? TArgs : never;
 
 // @public (undocumented)
 export interface FunctionConfig<TContext, TArgs, TResult> {
     // (undocumented)
-    args: Validator<TArgs> | ValidatorMap;
+    args: Validator<TArgs, TArgs, string> | ValidatorMap;
     // (undocumented)
     handler: (ctx: TContext, args: TArgs) => Promise<TResult> | TResult;
     // (undocumented)
-    returns?: Validator<TResult>;
+    returns?: Validator<TResult, TResult, string>;
 }
 
 // @public (undocumented)
@@ -402,17 +449,26 @@ export type FunctionResult<TReference> = TReference extends FunctionReference<Sy
 
 // @public (undocumented)
 export type FunctionResultFromDefinition<TDefinition> = TDefinition extends {
-    returnsValidator?: Validator<infer TResult>;
+    returnsValidator?: Validator<infer TResult, unknown, string>;
 } ? TResult : never;
 
 // @public
 export function generateId(): string;
 
 // @public (undocumented)
-export class IdValidator<TTableName extends string> implements Validator<string> {
+export type GenericTableIndexes = Record<string, readonly string[]>;
+
+// @public (undocumented)
+export type GenericTableSearchIndexes = Record<string, {
+    searchField: string;
+    filterFields: string;
+}>;
+
+// @public (undocumented)
+export class IdValidator<TTableName extends string> extends BaseValidator<string> {
     constructor(tableName: TTableName);
     // (undocumented)
-    readonly kind: "id";
+    describe(): ValidatorDescription;
     // (undocumented)
     parse(value: unknown, path?: string): string;
     // (undocumented)
@@ -427,7 +483,7 @@ export type ImpactSet = ReadonlySet<ImpactScope>;
 
 // @public (undocumented)
 export namespace index_d_exports {
-    export { ActionCtx, AnySyncoreFunctionDefinition, AnySyncoreSchema, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, ComponentPath, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionReferencesForTree, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, InstalledComponentApi, InstalledComponentsApi, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, ResolvedSyncoreComponent, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreComponent, SyncoreComponentFunctionMetadata, SyncoreComponentHookContext, SyncoreComponentInstall, SyncoreComponentsManifest, SyncoreCoreCapability, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreFunctionTree, SyncoreHostServiceName, SyncorePaginatedQueryStatus, SyncoreQueriesRequest, SyncoreQueryRequest, SyncoreQueryState, SyncoreQueryStatus, SyncoreRequestedCapability, SyncoreResolvedComponents, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeOptions, SyncoreRuntimeStatus, SyncoreRuntimeStatusKind, SyncoreRuntimeStatusReason, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, UsePaginatedQueryResult, action, attachRuntimeBridge, composeProjectFunctionRegistry, composeProjectSchema, createBindingFunctionReference, createComponentPhysicalTableName, createDeferredSyncoreClient, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInstalledComponentsApi, createInvokeRequest, createUnavailableSyncoreClient, createWatchKey, cronJobs, defineComponent, defineComponents, generateId, installComponent, mutation, normalizeOptionalArgs, query, resolveComponentsManifest, stableStringify, toCanonicalComponentFunctionName };
+    export { ActionCtx, AnySyncoreFunctionDefinition, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, ComponentPath, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionReferencesForTree, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, InstalledComponentApi, InstalledComponentsApi, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, PatchValueForTable, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, ResolvedSyncoreComponent, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreComponent, SyncoreComponentFunctionMetadata, SyncoreComponentHookContext, SyncoreComponentInstall, SyncoreComponentsManifest, SyncoreCoreCapability, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreFunctionTree, SyncoreHostServiceName, SyncorePaginatedQueryStatus, SyncoreQueriesRequest, SyncoreQueryRequest, SyncoreQueryState, SyncoreQueryStatus, SyncoreRequestedCapability, SyncoreResolvedComponents, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeOptions, SyncoreRuntimeStatus, SyncoreRuntimeStatusKind, SyncoreRuntimeStatusReason, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, UsePaginatedQueryResult, action, attachRuntimeBridge, composeProjectFunctionRegistry, composeProjectSchema, createBindingFunctionReference, createComponentPhysicalTableName, createDeferredSyncoreClient, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInstalledComponentsApi, createInvokeRequest, createUnavailableSyncoreClient, createWatchKey, cronJobs, defineComponent, defineComponents, generateId, installComponent, mutation, normalizeOptionalArgs, query, resolveComponentsManifest, stableStringify, toCanonicalComponentFunctionName };
 }
 
 // @public (undocumented)
@@ -439,35 +495,38 @@ export interface IndexDefinition {
 }
 
 // @public (undocumented)
-export interface IndexRangeBuilder {
+export interface IndexRangeBuilder<TFieldName extends string = string> {
     // (undocumented)
     build(): QueryCondition[];
     // (undocumented)
-    eq(field: string, value: unknown): IndexRangeBuilder;
+    eq(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
     // (undocumented)
-    gt(field: string, value: unknown): IndexRangeBuilder;
+    gt(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
     // (undocumented)
-    gte(field: string, value: unknown): IndexRangeBuilder;
+    gte(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
     // (undocumented)
-    lt(field: string, value: unknown): IndexRangeBuilder;
+    lt(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
     // (undocumented)
-    lte(field: string, value: unknown): IndexRangeBuilder;
+    lte(field: TFieldName, value: unknown): IndexRangeBuilder<TFieldName>;
 }
 
 // @public (undocumented)
-export type Infer<TValidator> = TValidator extends Validator<infer TValue> ? TValue : never;
+export type Infer<TValidator> = TValidator extends Validator<infer TValue, unknown, string> ? TValue : never;
 
 // @public (undocumented)
-export type InferArgs<TArgs extends Validator<unknown> | ValidatorMap> = TArgs extends Validator<unknown> ? Infer<TArgs> : TArgs extends ValidatorMap ? { [TKey in keyof TArgs]: Infer<TArgs[TKey]> } : never;
+export type InferArgs<TArgs extends Validator<unknown, unknown, string> | ValidatorMap> = TArgs extends Validator<unknown, unknown, string> ? Infer<TArgs> : TArgs extends ValidatorMap ? { [TKey in keyof TArgs]: Infer<TArgs[TKey]> } : never;
 
 // @public (undocumented)
 export type InferDocument<TTable extends AnyTableDefinition> = Infer<TTable["validator"]> & TableDocumentSystemFields;
 
 // @public (undocumented)
-export type InferTableInput<TTable extends AnyTableDefinition> = Omit<InferDocument<TTable>, keyof TableDocumentSystemFields>;
+export type InferStorage<TValidator> = TValidator extends Validator<unknown, infer TStorage, string> ? TStorage : never;
 
 // @public (undocumented)
-export type InsertValueForTable<TSchema extends AnySyncoreSchema, TTableName extends TableNames<TSchema>> = InferTableInput<TSchema["tables"][TTableName]>;
+export type InferTableInput<TTable extends AnyTableDefinition> = Infer<TTable["validator"]>;
+
+// @public (undocumented)
+export type InsertValueForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = InferTableInput<TSchema["tables"][TTableName]>;
 
 // @public (undocumented)
 export function installComponent<TComponent extends SyncoreComponent, TChildren extends SyncoreComponentsManifest = {}>(install: {
@@ -488,13 +547,19 @@ export type InstalledComponentApi<TInstall extends SyncoreComponentInstall> = Si
 export type InstalledComponentsApi<TManifest extends SyncoreComponentsManifest> = Simplify<{ [TAlias in keyof TManifest]: InstalledComponentApi<TManifest[TAlias]> }>;
 
 // @public (undocumented)
+export function isValidator(value: Validator<unknown, unknown, string> | ValidatorMap): value is Validator<unknown, unknown, string>;
+
+// @public (undocumented)
+export type JoinFieldPaths<TStart extends string, TEnd extends string> = `${TStart}.${TEnd}`;
+
+// @public (undocumented)
 export type JsonObject = Record<string, unknown>;
 
 // @public (undocumented)
-export class LiteralValidator<TValue extends string | number | boolean | null> implements Validator<TValue> {
+export class LiteralValidator<TValue extends string | number | boolean | null> extends BaseValidator<TValue> {
     constructor(literalValue: TValue);
     // (undocumented)
-    readonly kind: "literal";
+    describe(): ValidatorDescription;
     // (undocumented)
     readonly literalValue: TValue;
     // (undocumented)
@@ -514,7 +579,7 @@ export type MisfirePolicy = {
 };
 
 // @public
-export function mutation<TContext = unknown, TValidator extends Validator<unknown> = Validator<unknown>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
+export function mutation<TContext = unknown, TValidator extends Validator<unknown, unknown, string> = Validator<unknown, unknown, string>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
     args: TValidator;
 }): SyncoreFunctionDefinition<"mutation", TContext, Infer<TValidator>, TResult>;
 
@@ -524,7 +589,7 @@ export function mutation<TContext = unknown, TArgsShape extends ValidatorMap = V
 }): SyncoreFunctionDefinition<"mutation", TContext, InferArgs<TArgsShape>, TResult>;
 
 // @public
-export interface MutationCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> extends QueryCtx<TSchema> {
+export interface MutationCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends QueryCtx<TSchema> {
     // (undocumented)
     db: SyncoreDatabaseWriter<TSchema>;
     // (undocumented)
@@ -539,28 +604,38 @@ export interface MutationCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema
 export function normalizeOptionalArgs<TArgs>(args: [] | [TArgs] | readonly unknown[]): TArgs;
 
 // @public (undocumented)
-export class NullValidator implements Validator<null> {
+export class NullValidator extends BaseValidator<null> {
+    constructor();
     // (undocumented)
-    readonly kind: "null";
+    describe(): ValidatorDescription;
     // (undocumented)
     parse(value: unknown, path?: string): null;
 }
 
 // @public (undocumented)
-export class NumberValidator implements Validator<number> {
+export class NumberValidator extends BaseValidator<number> {
+    constructor();
     // (undocumented)
-    readonly kind: "number";
+    describe(): ValidatorDescription;
     // (undocumented)
     parse(value: unknown, path?: string): number;
 }
 
+// Warning: (ae-forgotten-export) The symbol "InferObject" needs to be exported by the entry point index.d.mts
+// Warning: (ae-forgotten-export) The symbol "InferStoredObject" needs to be exported by the entry point index.d.mts
+// Warning: (ae-forgotten-export) The symbol "ShapeFieldPaths" needs to be exported by the entry point index.d.mts
+//
 // @public (undocumented)
-export class ObjectValidator<TShape extends ObjectValidatorShape> implements Validator<{ [TKey in keyof TShape]: Infer<TShape[TKey]> }> {
+export class ObjectValidator<TShape extends ObjectValidatorShape> extends BaseValidator<InferObject<TShape>, InferStoredObject<TShape>, ShapeFieldPaths<TShape>> {
     constructor(shape: TShape);
     // (undocumented)
-    readonly kind: "object";
+    describe(): ValidatorDescription;
     // (undocumented)
-    parse(value: unknown, path?: string): { [TKey in keyof TShape]: Infer<TShape[TKey]> };
+    deserialize(value: unknown, path?: string): InferObject<TShape>;
+    // (undocumented)
+    parse(value: unknown, path?: string): InferObject<TShape>;
+    // (undocumented)
+    serialize(value: InferObject<TShape>, path?: string): InferStoredObject<TShape>;
     // (undocumented)
     readonly shape: TShape;
 }
@@ -568,18 +643,22 @@ export class ObjectValidator<TShape extends ObjectValidatorShape> implements Val
 // @public (undocumented)
 export interface ObjectValidatorShape {
     // (undocumented)
-    [key: string]: Validator<unknown>;
+    [key: string]: Validator<unknown, unknown, string>;
 }
 
 // @public (undocumented)
-export class OptionalValidator<TValue> implements Validator<TValue | undefined> {
-    constructor(inner: Validator<TValue>);
+export class OptionalValidator<TValue, TStorage = TValue, TFieldPaths extends string = never> extends BaseValidator<TValue | undefined, TStorage | undefined, TFieldPaths> {
+    constructor(inner: Validator<TValue, TStorage, TFieldPaths>);
     // (undocumented)
-    readonly inner: Validator<TValue>;
+    describe(): ValidatorDescription;
     // (undocumented)
-    readonly kind: "optional";
+    deserialize(value: unknown, path?: string): TValue | undefined;
+    // (undocumented)
+    readonly inner: Validator<TValue, TStorage, TFieldPaths>;
     // (undocumented)
     parse(value: unknown, path?: string): TValue | undefined;
+    // (undocumented)
+    serialize(value: TValue | undefined, path?: string): TStorage | undefined;
 }
 
 // @public (undocumented)
@@ -603,8 +682,13 @@ export interface PaginationResult<TItem> {
 // @public (undocumented)
 export function parseSchemaSnapshot(source: string): SchemaSnapshot;
 
+// Warning: (ae-forgotten-export) The symbol "PatchValue" needs to be exported by the entry point index.d.mts
+//
+// @public (undocumented)
+export type PatchValueForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = PatchValue<InsertValueForTable<TSchema, TTableName>>;
+
 // @public
-export function query<TContext = unknown, TValidator extends Validator<unknown> = Validator<unknown>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
+export function query<TContext = unknown, TValidator extends Validator<unknown, unknown, string> = Validator<unknown, unknown, string>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
     args: TValidator;
 }): SyncoreFunctionDefinition<"query", TContext, Infer<TValidator>, TResult>;
 
@@ -614,7 +698,7 @@ export function query<TContext = unknown, TArgsShape extends ValidatorMap = Vali
 }): SyncoreFunctionDefinition<"query", TContext, InferArgs<TArgsShape>, TResult>;
 
 // @public
-export interface QueryBuilder<TDocument> {
+export interface QueryBuilder<TTable extends AnyTableDefinition, TDocument = InferDocument<TTable>> {
     // (undocumented)
     collect(): Promise<TDocument[]>;
     // (undocumented)
@@ -630,9 +714,9 @@ export interface QueryBuilder<TDocument> {
     // (undocumented)
     unique(): Promise<TDocument | null>;
     // (undocumented)
-    withIndex(indexName: string, builder?: (range: IndexRangeBuilder) => IndexRangeBuilder): this;
+    withIndex<TIndexName extends TableIndexNames<TTable>>(indexName: TIndexName, builder?: (range: IndexRangeBuilder<TableIndexFields<TTable, TIndexName>[number]>) => IndexRangeBuilder<TableIndexFields<TTable, TIndexName>[number]>): this;
     // (undocumented)
-    withSearchIndex(indexName: string, builder: (search: SearchIndexBuilder) => SearchIndexBuilder): this;
+    withSearchIndex<TIndexName extends TableSearchIndexNames<TTable>>(indexName: TIndexName, builder: (search: SearchIndexBuilder<TableSearchIndexConfig<TTable, TIndexName>["searchField"], TableSearchIndexConfig<TTable, TIndexName>["filterFields"]>) => SearchIndexBuilder<TableSearchIndexConfig<TTable, TIndexName>["searchField"], TableSearchIndexConfig<TTable, TIndexName>["filterFields"]>): this;
 }
 
 // @public (undocumented)
@@ -643,7 +727,7 @@ export type QueryCondition = {
 };
 
 // @public
-export interface QueryCtx<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+export interface QueryCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
     // (undocumented)
     capabilities?: Readonly<SyncoreCapabilities>;
     // (undocumented)
@@ -674,6 +758,23 @@ export type QueryExpression = {
     type: "or";
     expressions: QueryExpression[];
 };
+
+// @public (undocumented)
+export class RecordValidator<TKey extends string, TValue, TStorage, TKeyValidator extends Validator<TKey, string, string>, TValueValidator extends Validator<TValue, TStorage, string>> extends BaseValidator<Record<TKey, TValue>, Record<TKey, TStorage>, never> {
+    constructor(keyValidator: TKeyValidator, valueValidator: TValueValidator);
+    // (undocumented)
+    describe(): ValidatorDescription;
+    // (undocumented)
+    deserialize(value: unknown, path?: string): Record<TKey, TValue>;
+    // (undocumented)
+    readonly keyValidator: TKeyValidator;
+    // (undocumented)
+    parse(value: unknown, path?: string): Record<TKey, TValue>;
+    // (undocumented)
+    serialize(value: Record<TKey, TValue>, path?: string): Record<TKey, TStorage>;
+    // (undocumented)
+    readonly valueValidator: TValueValidator;
+}
 
 // @public (undocumented)
 export interface RecurringDailySchedule {
@@ -735,13 +836,13 @@ export interface RegisteredSyncoreFunction {
     // (undocumented)
     __syncoreComponent?: SyncoreComponentFunctionMetadata;
     // (undocumented)
-    argsValidator: Validator<unknown>;
+    argsValidator: Validator<unknown, unknown, string>;
     // (undocumented)
     handler: RegisteredSyncoreHandler;
     // (undocumented)
     kind: SyncoreFunctionKind;
     // (undocumented)
-    returnsValidator?: Validator<unknown>;
+    returnsValidator?: Validator<unknown, unknown, string>;
 }
 
 // @public (undocumented)
@@ -807,7 +908,7 @@ export interface ResolvedSyncoreComponent {
     // (undocumented)
     requestedCapabilities: readonly SyncoreRequestedCapability[];
     // (undocumented)
-    schema: SyncoreSchema<SyncoreSchemaDefinition> | undefined;
+    schema: SyncoreSchema<any> | undefined;
     // (undocumented)
     source: string;
     // (undocumented)
@@ -821,6 +922,9 @@ export interface RunResult {
     // (undocumented)
     lastInsertRowid?: number | string;
 }
+
+// @public
+export const s: ValidatorBuilderApi;
 
 // @public (undocumented)
 export interface SchedulerApi {
@@ -845,13 +949,13 @@ export interface SchemaMigrationPlan {
     // (undocumented)
     destructiveChanges: string[];
     // (undocumented)
-    formatVersion: 2;
+    formatVersion: 3;
     // (undocumented)
     fromSchemaHash: string | null;
     // (undocumented)
     nextHash: string;
     // (undocumented)
-    plannerVersion: 1;
+    plannerVersion: 2;
     // (undocumented)
     previousHash: string | null;
     // (undocumented)
@@ -865,11 +969,11 @@ export interface SchemaMigrationPlan {
 // @public (undocumented)
 export interface SchemaSnapshot {
     // (undocumented)
-    formatVersion: 2;
+    formatVersion: 3;
     // (undocumented)
     hash: string;
     // (undocumented)
-    plannerVersion: 1;
+    plannerVersion: 2;
     // (undocumented)
     runtimeVersion?: string;
     // (undocumented)
@@ -877,13 +981,13 @@ export interface SchemaSnapshot {
 }
 
 // @public (undocumented)
-export interface SearchIndexBuilder {
+export interface SearchIndexBuilder<TSearchField extends string = string, TFilterField extends string = string> {
     // (undocumented)
     build(): SearchQuery;
     // (undocumented)
-    eq(field: string, value: unknown): SearchIndexBuilder;
+    eq(field: TFilterField, value: unknown): SearchIndexBuilder<TSearchField, TFilterField>;
     // (undocumented)
-    search(field: string, value: string): SearchIndexBuilder;
+    search(field: TSearchField, value: string): SearchIndexBuilder<TSearchField, TFilterField>;
 }
 
 // @public (undocumented)
@@ -905,6 +1009,9 @@ export type SearchQuery = {
     searchText: string;
     filters: QueryCondition[];
 };
+
+// @public (undocumented)
+export function serializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: TValue, path?: string): TStorage;
 
 // @public (undocumented)
 export function stableStringify(value: unknown): string;
@@ -932,9 +1039,10 @@ export interface StorageWriteInput {
 }
 
 // @public (undocumented)
-export class StringValidator implements Validator<string> {
+export class StringValidator extends BaseValidator<string> {
+    constructor();
     // (undocumented)
-    readonly kind: "string";
+    describe(): ValidatorDescription;
     // (undocumented)
     parse(value: unknown, path?: string): string;
 }
@@ -1067,7 +1175,7 @@ export interface SyncoreClient {
 }
 
 // @public (undocumented)
-export interface SyncoreComponent<TConfig = unknown, TSchema extends SyncoreSchema<SyncoreSchemaDefinition> | undefined = SyncoreSchema<SyncoreSchemaDefinition> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined> {
+export interface SyncoreComponent<TConfig = unknown, TSchema extends SyncoreSchema<any> | undefined = SyncoreSchema<any> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined> {
     // (undocumented)
     readonly config?: Validator<TConfig>;
     // (undocumented)
@@ -1157,23 +1265,23 @@ export type SyncoreComponentsManifest = Record<string, SyncoreComponentInstall>;
 export type SyncoreCoreCapability = "storage" | "scheduler" | "devtools" | "ownTables" | "publicExports" | "internalActions";
 
 // @public (undocumented)
-export interface SyncoreDatabaseReader<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+export interface SyncoreDatabaseReader<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
     // (undocumented)
     get<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<DocumentForTable<TSchema, TTableName> | null>;
     // (undocumented)
-    query<TTableName extends TableNames<TSchema>>(table: TTableName): QueryBuilder<DocumentForTable<TSchema, TTableName>>;
+    query<TTableName extends TableNames<TSchema>>(table: TTableName): QueryBuilder<TSchema["tables"][TTableName], DocumentForTable<TSchema, TTableName>>;
     // (undocumented)
     raw<TValue = unknown>(sql: string, params?: unknown[]): Promise<TValue[]>;
 }
 
 // @public (undocumented)
-export interface SyncoreDatabaseWriter<TSchema extends AnySyncoreSchema = AnySyncoreSchema> extends SyncoreDatabaseReader<TSchema> {
+export interface SyncoreDatabaseWriter<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends SyncoreDatabaseReader<TSchema> {
     // (undocumented)
     delete<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<void>;
     // (undocumented)
     insert<TTableName extends TableNames<TSchema>>(table: TTableName, value: InsertValueForTable<TSchema, TTableName>): Promise<string>;
     // (undocumented)
-    patch<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: Partial<InsertValueForTable<TSchema, TTableName>>): Promise<void>;
+    patch<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: PatchValueForTable<TSchema, TTableName>): Promise<void>;
     // (undocumented)
     replace<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: InsertValueForTable<TSchema, TTableName>): Promise<void>;
 }
@@ -1279,13 +1387,13 @@ export interface SyncoreExternalChangeSignal {
 // @public (undocumented)
 export interface SyncoreFunctionDefinition<TKind extends SyncoreFunctionKind, TContext, TArgs, TResult> {
     // (undocumented)
-    argsValidator: Validator<TArgs>;
+    argsValidator: Validator<TArgs, TArgs, string>;
     // (undocumented)
     handler: (ctx: TContext, args: TArgs) => Promise<TResult> | TResult;
     // (undocumented)
     kind: TKind;
     // (undocumented)
-    returnsValidator?: Validator<TResult>;
+    returnsValidator?: Validator<TResult, TResult, string>;
 }
 
 // @public (undocumented)
@@ -1350,7 +1458,7 @@ export type SyncoreRequestedCapability = SyncoreCoreCapability | `host:${Syncore
 export type SyncoreResolvedComponents = readonly ResolvedSyncoreComponent[];
 
 // @public
-export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
+export class SyncoreRuntime<TSchema extends SyncoreSchema<any>> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
     // (undocumented)
     createClient(): SyncoreClient;
@@ -1375,7 +1483,7 @@ export class SyncoreRuntime<TSchema extends AnySyncoreSchema> {
 }
 
 // @public (undocumented)
-export interface SyncoreRuntimeAdmin<TSchema extends AnySyncoreSchema = AnySyncoreSchema> {
+export interface SyncoreRuntimeAdmin<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
     // (undocumented)
     cancelScheduledJob(id: string): Promise<boolean>;
     // (undocumented)
@@ -1413,7 +1521,7 @@ export interface SyncoreRuntimeAdmin<TSchema extends AnySyncoreSchema = AnySynco
 }
 
 // @public (undocumented)
-export interface SyncoreRuntimeOptions<TSchema extends AnySyncoreSchema> {
+export interface SyncoreRuntimeOptions<TSchema extends SyncoreSchema<any>> {
     // (undocumented)
     capabilities?: SyncoreCapabilities;
     // (undocumented)
@@ -1485,7 +1593,7 @@ export interface SyncoreRuntimeSummary {
 }
 
 // @public (undocumented)
-export class SyncoreSchema<TTables extends SyncoreSchemaDefinition> {
+export class SyncoreSchema<TTables> {
     constructor(tables: TTables);
     // (undocumented)
     getTable<TTableName extends Extract<keyof TTables, string>>(tableName: TTableName): TTables[TTableName];
@@ -1557,20 +1665,47 @@ export interface SyncoreWatch<TValue> {
     onUpdate(callback: () => void): () => void;
 }
 
-// @public
-export class TableDefinition<TValidator extends Validator<unknown>> {
+// @public (undocumented)
+export class TableDefinition<TValidator extends Validator<Record<string, unknown>, Record<string, unknown>, string>, TIndexes = Record<never, never>, TSearchIndexes = Record<never, never>> {
     constructor(validator: TValidator, options?: TableDefinitionOptions);
-    index(name: string, fields: string[]): this;
+    // (undocumented)
+    describe(): ValidatorDescription;
+    // (undocumented)
+    deserialize(value: unknown): Infer<TValidator>;
+    // (undocumented)
+    readonly document: Infer<TValidator>;
+    // (undocumented)
+    readonly fieldPaths: FieldPaths<TValidator>;
+    // Warning: (ae-forgotten-export) The symbol "Expand" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
+    index<const TIndexName extends string, TFirstField extends FieldPaths<TValidator>, TRestFields extends FieldPaths<TValidator>[]>(name: TIndexName, fields: [TFirstField, ...TRestFields]): TableDefinition<TValidator, Expand<TIndexes & Record<TIndexName, readonly [TFirstField, ...TRestFields]>>, TSearchIndexes>;
     // (undocumented)
     readonly indexes: IndexDefinition[];
     // (undocumented)
+    readonly indexesByName: TIndexes;
+    // (undocumented)
     readonly options: TableDefinitionOptions;
-    searchIndex(name: string, config: {
-        searchField: string;
-        filterFields?: string[];
-    }): this;
+    // (undocumented)
+    parse(value: unknown): Infer<TValidator>;
+    // (undocumented)
+    parseAndSerialize(value: unknown): InferStorage<TValidator>;
+    // (undocumented)
+    searchIndex<const TIndexName extends string, TSearchField extends FieldPaths<TValidator>, TFilterField extends FieldPaths<TValidator> = never>(name: TIndexName, config: {
+        searchField: TSearchField;
+        filterFields?: TFilterField[];
+    }): TableDefinition<TValidator, TIndexes, Expand<TSearchIndexes & Record<TIndexName, {
+        searchField: TSearchField;
+        filterFields: TFilterField;
+    }>>>;
     // (undocumented)
     readonly searchIndexes: SearchIndexDefinition[];
+    // (undocumented)
+    readonly searchIndexesByName: TSearchIndexes;
+    // (undocumented)
+    serialize(value: Infer<TValidator>): InferStorage<TValidator>;
+    // (undocumented)
+    readonly storageDocument: InferStorage<TValidator>;
     // (undocumented)
     readonly validator: TValidator;
 }
@@ -1594,7 +1729,48 @@ export interface TableDocumentSystemFields {
 }
 
 // @public (undocumented)
-export type TableNames<TSchema extends AnySyncoreSchema> = Extract<keyof TSchema["tables"], string>;
+export type TableFieldDefinitionSummary = {
+    name: string;
+    validator: ReturnType<AnyTableDefinition["describe"]>;
+    storage: ReturnType<AnyTableDefinition["describe"]>;
+    optional: boolean;
+};
+
+// @public (undocumented)
+export type TableFieldPaths<TTable> = TTable extends TableDefinition<infer TValidator, unknown, unknown> ? FieldPaths<TValidator> : never;
+
+// @public (undocumented)
+export interface TableFieldSnapshot {
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    optional: boolean;
+    // (undocumented)
+    storage: ValidatorDescription;
+    // (undocumented)
+    validator: ValidatorDescription;
+}
+
+// @public (undocumented)
+export type TableIndexes<TTable> = TTable extends TableDefinition<Validator<Record<string, unknown>, Record<string, unknown>, string>, infer TIndexes, unknown> ? TIndexes : never;
+
+// @public (undocumented)
+export type TableIndexFields<TTable, TIndexName extends TableIndexNames<TTable>> = TableIndexes<TTable>[TIndexName];
+
+// @public (undocumented)
+export type TableIndexNames<TTable> = Extract<keyof TableIndexes<TTable>, string>;
+
+// @public (undocumented)
+export type TableNames<TSchema extends SyncoreSchema<any>> = Extract<keyof TSchema["tables"], string>;
+
+// @public (undocumented)
+export type TableSearchIndexConfig<TTable, TIndexName extends TableSearchIndexNames<TTable>> = TableSearchIndexes<TTable>[TIndexName];
+
+// @public (undocumented)
+export type TableSearchIndexes<TTable> = TTable extends TableDefinition<Validator<Record<string, unknown>, Record<string, unknown>, string>, unknown, infer TSearchIndexes> ? TSearchIndexes : never;
+
+// @public (undocumented)
+export type TableSearchIndexNames<TTable> = Extract<keyof TableSearchIndexes<TTable>, string>;
 
 // @public (undocumented)
 export interface TableSnapshot {
@@ -1604,6 +1780,10 @@ export interface TableSnapshot {
     componentPath?: string;
     // (undocumented)
     displayName?: string;
+    // (undocumented)
+    fieldPaths: string[];
+    // (undocumented)
+    fields: TableFieldSnapshot[];
     // (undocumented)
     indexes: Array<{
         name: string;
@@ -1623,6 +1803,21 @@ export interface TableSnapshot {
 
 // @public (undocumented)
 export function toCanonicalComponentFunctionName(componentPath: ComponentPath, visibility: "public" | "internal", localName: string): string;
+
+// @public (undocumented)
+export class UnionValidator<TMembers extends readonly Validator<unknown, unknown, string>[]> extends BaseValidator<Infer<TMembers[number]>, InferStorage<TMembers[number]>, FieldPaths<TMembers[number]>> {
+    constructor(members: TMembers);
+    // (undocumented)
+    describe(): ValidatorDescription;
+    // (undocumented)
+    deserialize(value: unknown, path?: string): Infer<TMembers[number]>;
+    // (undocumented)
+    readonly members: TMembers;
+    // (undocumented)
+    parse(value: unknown, path?: string): Infer<TMembers[number]>;
+    // (undocumented)
+    serialize(value: Infer<TMembers[number]>, path?: string): InferStorage<TMembers[number]>;
+}
 
 // @public (undocumented)
 export interface UpdateScheduledJobOptions {
@@ -1663,27 +1858,57 @@ export interface UsePaginatedQueryResult<TItem> {
 }
 
 // @public
-export const v: ValidatorBuilderApi;
-
-// @public
-export interface Validator<TValue> {
+export interface Validator<TValue = unknown, TStorage = TValue, TFieldPaths extends string = never> {
+    // (undocumented)
+    describe?(): ValidatorDescription;
+    // (undocumented)
+    deserialize?(value: unknown, path?: string): TValue;
+    // (undocumented)
+    readonly fieldPaths?: TFieldPaths;
     // (undocumented)
     readonly kind: ValidatorKind;
+    // (undocumented)
     parse(value: unknown, path?: string): TValue;
+    // (undocumented)
+    serialize?(value: TValue, path?: string): TStorage;
 }
 
 // @public
 export interface ValidatorBuilderApi {
+    // (undocumented)
     any(): AnyValidator;
-    array<TItem>(itemValidator: Validator<TItem>): ArrayValidator<TItem>;
+    // (undocumented)
+    array<TItem, TItemStorage, TValidator extends Validator<TItem, TItemStorage, string>>(itemValidator: TValidator): ArrayValidator<TItem, TItemStorage, TValidator>;
+    // (undocumented)
     boolean(): BooleanValidator;
+    // (undocumented)
+    codec<TValue, TStored, TStorageFieldValidator extends Validator<TStored, unknown, string>, TValueFieldValidator extends Validator<TValue, unknown, string>>(valueValidator: TValueFieldValidator, config: {
+        storage: TStorageFieldValidator;
+        serialize(value: TValue): TStored;
+        deserialize(value: TStored): TValue;
+    }): CodecValidator<TValue, TStored, TStorageFieldValidator, TValueFieldValidator>;
+    // (undocumented)
+    enum<TValues extends readonly [string, ...string[]]>(values: TValues): EnumValidator<TValues>;
+    // (undocumented)
     id<TTableName extends string>(tableName: TTableName): IdValidator<TTableName>;
+    // (undocumented)
     literal<TValue extends string | number | boolean | null>(literalValue: TValue): LiteralValidator<TValue>;
+    // (undocumented)
     null(): NullValidator;
+    // (undocumented)
+    nullable<TValue, TStorage, TFieldPaths extends string>(inner: Validator<TValue, TStorage, TFieldPaths>): UnionValidator<readonly [Validator<TValue, TStorage, TFieldPaths>, NullValidator]>;
+    // (undocumented)
     number(): NumberValidator;
+    // (undocumented)
     object<TShape extends ObjectValidatorShape>(shape: TShape): ObjectValidator<TShape>;
-    optional<TValue>(inner: Validator<TValue>): OptionalValidator<TValue>;
+    // (undocumented)
+    optional<TValue, TStorage, TFieldPaths extends string>(inner: Validator<TValue, TStorage, TFieldPaths>): OptionalValidator<TValue, TStorage, TFieldPaths>;
+    // (undocumented)
+    record<TKey extends string, TValue, TStorage, TKeyValidator extends Validator<TKey, string, string>, TValueValidator extends Validator<TValue, TStorage, string>>(keyValidator: TKeyValidator, valueValidator: TValueValidator): RecordValidator<TKey, TValue, TStorage, TKeyValidator, TValueValidator>;
+    // (undocumented)
     string(): StringValidator;
+    // (undocumented)
+    union<TMembers extends readonly Validator<unknown, unknown, string>[]>(...members: TMembers): UnionValidator<TMembers>;
 }
 
 // @public (undocumented)
@@ -1701,24 +1926,41 @@ export type ValidatorDescription = {
     kind: "literal";
     value: string | number | boolean | null;
 } | {
+    kind: "enum";
+    values: string[];
+} | {
     kind: "array";
     item: ValidatorDescription;
 } | {
     kind: "object";
-    shape: Record<string, ValidatorDescription>;
+    shape: Record<string, {
+        validator: ValidatorDescription;
+        optional: boolean;
+    }>;
+} | {
+    kind: "record";
+    key: ValidatorDescription;
+    value: ValidatorDescription;
+} | {
+    kind: "union";
+    members: ValidatorDescription[];
 } | {
     kind: "id";
     tableName: string;
 } | {
     kind: "optional";
     inner: ValidatorDescription;
+} | {
+    kind: "codec";
+    value: ValidatorDescription;
+    storage: ValidatorDescription;
 };
 
 // @public (undocumented)
-export type ValidatorKind = "string" | "number" | "boolean" | "literal" | "array" | "object" | "id" | "optional" | "any" | "null";
+export type ValidatorKind = "string" | "number" | "boolean" | "literal" | "enum" | "array" | "object" | "record" | "union" | "id" | "optional" | "any" | "null" | "codec";
 
 // @public (undocumented)
-export type ValidatorMap = Record<string, Validator<unknown>>;
+export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
 
 // (No @packageDocumentation comment for this package)
 

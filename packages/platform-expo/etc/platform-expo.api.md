@@ -4,7 +4,6 @@
 
 ```ts
 
-import { AnySyncoreSchema } from '@syncore/core';
 import { DevtoolsSink } from '@syncore/core';
 import { SchedulerOptions } from '@syncore/core';
 import { SQLiteDatabase } from 'expo-sqlite';
@@ -16,6 +15,7 @@ import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
+import { SyncoreSchema } from '@syncore/core';
 import { SyncoreSqlDriver } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 
@@ -95,7 +95,7 @@ export interface ExpoSyncoreBootstrap {
 }
 
 // @public (undocumented)
-export type ExpoSyncoreSchema = AnySyncoreSchema;
+export type ExpoSyncoreSchema = SyncoreSchema<any>;
 
 // (No @packageDocumentation comment for this package)
 

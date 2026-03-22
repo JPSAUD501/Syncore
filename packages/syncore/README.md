@@ -18,7 +18,7 @@ npx syncorejs dev
 ## Imports
 
 ```ts
-import { defineSchema, defineTable, query, mutation, v } from "syncorejs";
+import { defineSchema, defineTable, query, mutation, s } from "syncorejs";
 import { useQuery, useMutation } from "syncorejs/react";
 import { createBrowserWorkerClient } from "syncorejs/browser";
 import { SyncoreNextProvider } from "syncorejs/next";
@@ -28,3 +28,4 @@ import { SyncoreNextProvider } from "syncorejs/next";
 
 - Repository: https://github.com/JPSAUD501/Syncore
 - Quickstarts: https://github.com/JPSAUD501/Syncore/tree/main/docs/quickstarts
+

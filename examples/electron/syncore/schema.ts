@@ -1,13 +1,13 @@
-import { defineSchema, defineTable, v } from "syncorejs";
+import { defineSchema, defineTable, s } from "syncorejs";
 
 export default defineSchema({
   entries: defineTable({
-    date: v.string(),
-    body: v.string(),
-    mood: v.string(),
-    wordCount: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number()
+    date: s.string(),
+    body: s.string(),
+    mood: s.string(),
+    wordCount: s.number(),
+    createdAt: s.number(),
+    updatedAt: s.number()
   })
     .index("by_date", ["date"])
     .searchIndex("search_body", {

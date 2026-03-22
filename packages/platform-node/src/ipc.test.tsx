@@ -8,7 +8,7 @@ import {
   defineTable,
   mutation,
   query,
-  v,
+  s,
   type MutationCtx,
   type QueryCtx
 } from "../../core/src/index.ts";
@@ -34,8 +34,8 @@ describe("Node IPC bridge", () => {
   it("proxies queries, mutations, and reactivity through the main-process runtime", async () => {
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
 
@@ -46,7 +46,7 @@ describe("Node IPC bridge", () => {
           ctx.db.query("tasks").collect()
       }),
       "tasks/create": mutation({
-        args: { text: v.string() },
+        args: { text: s.string() },
         handler: async (
           ctx: MutationCtx<typeof schema>,
           args: { text: string }
@@ -110,8 +110,8 @@ describe("Node IPC bridge", () => {
   it("propagates query failures to both direct invocations and reactive watches", async () => {
     const schema = defineSchema({
       tasks: defineTable({
-        text: v.string(),
-        done: v.boolean()
+        text: s.string(),
+        done: s.boolean()
       })
     });
 
@@ -223,3 +223,4 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+

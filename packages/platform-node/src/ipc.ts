@@ -1,14 +1,16 @@
 import {
-  type AnySyncoreSchema,
   attachRuntimeBridge,
   type AttachRuntimeBridgeOptions,
   type AttachedRuntimeBridge,
   type BridgeQueryWatch,
   SyncoreBridgeClient,
-  type SyncoreBridgeMessageEndpoint
+  type SyncoreBridgeMessageEndpoint,
+  type SyncoreDataModel
 } from "@syncore/core";
 
-export type NodeIpcSyncoreSchema = AnySyncoreSchema;
+export type NodeIpcSyncoreSchema<
+  TSchema extends SyncoreDataModel = SyncoreDataModel
+> = TSchema;
 export type SyncoreIpcMessageEndpoint = SyncoreBridgeMessageEndpoint;
 export type RendererQueryWatch<TValue> = BridgeQueryWatch<TValue>;
 
@@ -19,8 +21,9 @@ export class SyncoreRendererClient extends SyncoreBridgeClient {
   declare watchQuery: SyncoreBridgeClient["watchQuery"];
 }
 
-export type AttachNodeIpcRuntimeOptions =
-  AttachRuntimeBridgeOptions<NodeIpcSyncoreSchema>;
+export type AttachNodeIpcRuntimeOptions<
+  TSchema extends NodeIpcSyncoreSchema = NodeIpcSyncoreSchema
+> = AttachRuntimeBridgeOptions<TSchema>;
 export type AttachedNodeIpcRuntime = AttachedRuntimeBridge;
 
 export interface SyncoreRendererBridge {

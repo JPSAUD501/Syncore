@@ -6,18 +6,18 @@ import {
   defineTable,
   mutation,
   query,
-  v,
+  s,
   type MutationCtx,
   type QueryCtx
 } from "syncorejs";
 
 const schema = defineSchema({
   contacts: defineTable({
-    name: v.string(),
-    email: v.string(),
-    company: v.string(),
-    color: v.string(),
-    createdAt: v.number()
+    name: s.string(),
+    email: s.string(),
+    company: s.string(),
+    color: s.string(),
+    createdAt: s.number()
   })
     .index("by_created", ["createdAt"])
     .searchIndex("search_name", { searchField: "name" })
@@ -38,7 +38,7 @@ const COLORS = [
 const functions = {
   "contacts/list": query({
     args: {},
-    returns: v.array(v.any()),
+    returns: s.array(s.any()),
     handler: async (ctx) =>
       (ctx as Ctx).db
         .query("contacts")
@@ -47,8 +47,8 @@ const functions = {
         .collect()
   }),
   "contacts/search": query({
-    args: { query: v.string() },
-    returns: v.array(v.any()),
+    args: { query: s.string() },
+    returns: s.array(s.any()),
     handler: async (ctx, args) => {
       const q = (args as { query: string }).query.trim();
       if (!q) return [];
@@ -59,8 +59,8 @@ const functions = {
     }
   }),
   "contacts/create": mutation({
-    args: { name: v.string(), email: v.string(), company: v.string() },
-    returns: v.string(),
+    args: { name: s.string(), email: s.string(), company: s.string() },
+    returns: s.string(),
     handler: async (ctx, args) => {
       const a = args as { name: string; email: string; company: string };
       return (ctx as MCtx).db.insert("contacts", {
@@ -73,8 +73,8 @@ const functions = {
     }
   }),
   "contacts/remove": mutation({
-    args: { id: v.string() },
-    returns: v.null(),
+    args: { id: s.string() },
+    returns: s.null(),
     handler: async (ctx, args) => {
       await (ctx as MCtx).db.delete("contacts", (args as { id: string }).id);
       return null;

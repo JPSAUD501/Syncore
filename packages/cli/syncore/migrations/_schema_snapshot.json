@@ -1,19 +1,52 @@
 {
-  "version": 1,
+  "formatVersion": 3,
+  "plannerVersion": 2,
   "tables": [
     {
       "name": "tasks",
       "validator": {
         "kind": "object",
         "shape": {
-          "text": {
-            "kind": "string"
-          },
           "done": {
-            "kind": "boolean"
+            "optional": false,
+            "validator": {
+              "kind": "boolean"
+            }
+          },
+          "text": {
+            "optional": false,
+            "validator": {
+              "kind": "string"
+            }
           }
         }
       },
+      "fieldPaths": [
+        "text",
+        "done"
+      ],
+      "fields": [
+        {
+          "name": "done",
+          "validator": {
+            "kind": "boolean"
+          },
+          "storage": {
+            "kind": "boolean"
+          },
+          "optional": false
+        },
+        {
+          "name": "text",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        }
+      ],
       "indexes": [
         {
           "name": "by_done",
@@ -25,5 +58,5 @@
       "searchIndexes": []
     }
   ],
-  "hash": "{\"tables\":[{\"indexes\":[{\"fields\":[\"done\"],\"name\":\"by_done\"}],\"name\":\"tasks\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"done\":{\"kind\":\"boolean\"},\"text\":{\"kind\":\"string\"}}}}],\"version\":1}"
+  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"text\",\"done\"],\"fields\":[{\"name\":\"done\",\"optional\":false,\"storage\":{\"kind\":\"boolean\"},\"validator\":{\"kind\":\"boolean\"}},{\"name\":\"text\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"done\"],\"name\":\"by_done\"}],\"name\":\"tasks\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"done\":{\"optional\":false,\"validator\":{\"kind\":\"boolean\"}},\"text\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}}]}"
 }
