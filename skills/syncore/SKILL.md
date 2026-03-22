@@ -53,6 +53,7 @@ Pick the narrowest reference set that matches the task:
   - [references/quickstarts/next-pwa.md](references/quickstarts/next-pwa.md)
   - [references/quickstarts/expo.md](references/quickstarts/expo.md)
   - [references/quickstarts/electron.md](references/quickstarts/electron.md)
+  - [references/quickstarts/svelte.md](references/quickstarts/svelte.md)
   - [references/quickstarts/node-script.md](references/quickstarts/node-script.md)
 - Conceptual guides:
   - [references/guides/syncore-vs-convex.md](references/guides/syncore-vs-convex.md)
@@ -67,7 +68,7 @@ Choose an order based on the task:
    `architecture` -> `development` -> `best-practices` -> narrow domain reference
 2. Backend logic:
    `best-practices` -> `functions` -> `schema-migrations` when data shape changes
-3. React UI or app wiring:
+3. React or Svelte UI and app wiring:
    `best-practices` -> relevant quickstart -> `react-realtime` -> `platform-adapters`
 4. CLI or generated output:
    `development` -> `cli-codegen` -> `guides/cli-product-contract`
@@ -84,6 +85,7 @@ Choose an order based on the task:
 - Need function authoring patterns or validator guidance: read `references/functions.md`
 - Need migration sequencing or drift safety: read `references/schema-migrations.md`
 - Need React loading-state or `skip` semantics: read `references/react-realtime.md`
+- Need Svelte stores or browser-worker wiring: read `references/quickstarts/svelte.md` and `references/platform-adapters.md`
 - Need `syncorejs dev`, `codegen`, `doctor`, `targets`, or migration command behavior: read `references/cli-codegen.md`
 - Need Node, browser worker, Expo, Next, or Electron wiring: read `references/platform-adapters.md` and the matching quickstart
 - Need recurring jobs, misfire policy, or storage metadata behavior: read `references/scheduler-storage.md`

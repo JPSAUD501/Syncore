@@ -47,7 +47,7 @@ export const syncore = createExpoSyncoreBootstrap({
 
 ```tsx
 import { Text, View } from "react-native";
-import { useQuery } from "syncorejs/react";
+import { useQuery, useSyncoreStatus } from "syncorejs/react";
 import { SyncoreExpoProvider } from "syncorejs/expo/react";
 import { syncore } from "./lib/syncore";
 import { api } from "./syncore/_generated/api";
@@ -64,7 +64,11 @@ export default function App() {
 }
 
 function NotesScreen() {
+  const runtime = useSyncoreStatus();
   const tasks = useQuery(api.tasks.list) ?? [];
+  if (runtime.kind !== "ready") {
+    return <Text>Syncore status: {runtime.kind}</Text>;
+  }
   return (
     <View>
       {tasks.map((task) => (
@@ -74,6 +78,9 @@ function NotesScreen() {
   );
 }
 ```
+
+Expo boot should be modeled as runtime lifecycle from the provider, not as a
+separate app-local loading system.
 
 ## 6. Run the app
 

@@ -92,6 +92,15 @@ void createBrowserWorkerRuntime({
 });
 ```
 
+When mounted through `SyncoreBrowserProvider`, the React tree should see
+`starting/booting` while the worker client is being created. Worker creation
+failures should surface as runtime status, typically
+`unavailable/worker-unavailable`, instead of crashing the initial render.
+
+The same browser-worker client can be used from Svelte bindings. In that case,
+set the managed client once with `setSyncoreClient(managed.client)` and derive
+runtime lifecycle with `createSyncoreStatusStore()`.
+
 ## Expo
 
 ```ts
@@ -109,6 +118,10 @@ export const syncore = createExpoSyncoreBootstrap({
 });
 ```
 
+`SyncoreExpoProvider` should behave like a deferred bootstrap: mount the tree
+immediately, expose `starting/booting`, and transition to `ready` or an
+unavailable runtime state once `bootstrap.getClient()` resolves.
+
 ## Next PWA
 
 ```ts
@@ -119,12 +132,31 @@ export default withSyncoreNext({
 });
 ```
 
+`SyncoreNextProvider` should avoid creating worker-backed clients during server
+render. The provider should mount with a booting runtime state and only attempt
+worker startup on the client, promoting startup failures to runtime lifecycle
+state rather than a 500 during SSR.
+
+## Svelte
+
+Use `syncorejs/svelte` when the app host is Svelte or SvelteKit:
+
+- `setSyncoreClient(...)` installs the active client for the binding
+- `createQueryStore(...)` is the simple reactive query path
+- `createQueriesStore(...)` preserves keyed per-query state
+- `createPaginatedQueryStore(...)` exposes app-ready pagination state
+- `createSyncoreStatusStore()` mirrors `watchRuntimeStatus()`
+
+The capability target should match React even though the ergonomics are store
+based instead of hook based.
+
 ## Best Practices
 
 - keep the runtime in the environment best suited for local storage and lifecycle control
 - preserve typed refs across transports and clients
 - pass `resolvedComponents` when the app installs components
 - use the current app bootstrap files as the source of truth for target-specific wiring
+- model worker, IPC, and bootstrap failures as runtime lifecycle state in app bindings
 
 ## Common Pitfalls
 

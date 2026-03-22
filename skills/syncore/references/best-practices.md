@@ -40,6 +40,16 @@ Do not hand-edit them.
 
 Use public `syncorejs/*` entrypoints in app code and docs whenever possible.
 
+For app bindings, prefer the public state-aware surface over ad hoc local boot
+flags:
+
+- React: `useQueryState`, `useQueries`, `usePaginatedQuery`, `useSyncoreStatus`
+- Svelte: `createQueryStore`, `createQueriesStore`,
+  `createPaginatedQueryStore`, `createSyncoreStatusStore`
+
+Treat worker, IPC, and bootstrap problems as runtime lifecycle state before
+turning them into app-specific error UI.
+
 ## App Code vs Reusable Components
 
 Use app code for app-specific schema, functions, install decisions, and
@@ -53,3 +63,4 @@ functions, and capabilities designed for reuse.
 3. mixing app-specific code and reusable component code without a clear boundary
 4. importing internal implementation paths instead of `syncorejs/*`
 5. assuming hosted-backend patterns apply unchanged to Syncore
+6. duplicating boot or transport state in app code instead of reading runtime status from the binding

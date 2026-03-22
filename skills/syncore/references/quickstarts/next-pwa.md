@@ -63,7 +63,7 @@ void createBrowserWorkerRuntime({
 ```tsx
 "use client";
 
-import { useQuery } from "syncorejs/react";
+import { useQuery, useSyncoreStatus } from "syncorejs/react";
 import { SyncoreNextProvider } from "syncorejs/next";
 import { api } from "../syncore/_generated/api";
 
@@ -73,7 +73,11 @@ const createWorker = () =>
   });
 
 function Todos() {
+  const runtime = useSyncoreStatus();
   const tasks = useQuery(api.tasks.list) ?? [];
+  if (runtime.kind !== "ready") {
+    return <div>Syncore status: {runtime.kind}</div>;
+  }
   return <pre>{JSON.stringify(tasks, null, 2)}</pre>;
 }
 
@@ -85,6 +89,10 @@ export default function Page() {
   );
 }
 ```
+
+`SyncoreNextProvider` should mount cleanly during SSR and only start the worker
+after hydration. App shells should read runtime lifecycle through
+`useSyncoreStatus()`.
 
 ## 7. Serve the wasm asset and service worker
 

@@ -34,11 +34,29 @@ Platform adapters only provide environment-specific IO:
 
 Keep user functions portable and adapter code thin.
 
+The app-facing client surface is intentionally reactive:
+
+- `SyncoreClient.watchQuery(...)` powers query subscriptions
+- `SyncoreClient.watchRuntimeStatus()` exposes local runtime lifecycle
+- app bindings should treat bootstrap and transport availability as explicit
+  state, not as hidden global conditions
+
 Current adapter direction:
 
 - Node and Electron: native SQLite plus real filesystem
 - Web and Next: dedicated worker plus SQLite WASM with OPFS or IndexedDB persistence
 - Expo: `expo-sqlite` plus device-local file storage
+
+Current app-binding direction:
+
+- React keeps `useQuery()` as the simple happy path
+- richer state lives in `useQueryState()`, keyed `useQueries()`,
+  `usePaginatedQuery()`, and `useSyncoreStatus()`
+- Svelte exposes equivalent capability through stores such as
+  `createQueryStore()`, `createQueriesStore()`,
+  `createPaginatedQueryStore()`, and `createSyncoreStatusStore()`
+- local-first lifecycle reasons such as `booting`, `rehydrating`,
+  `worker-unavailable`, and `ipc-unavailable` are first-class
 
 ## Storage Model
 

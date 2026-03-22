@@ -88,7 +88,7 @@ eval(installSyncoreWindowBridge());
 
 ```tsx
 import { SyncoreElectronProvider } from "syncorejs/node/ipc/react";
-import { useQuery } from "syncorejs/react";
+import { useQuery, useSyncoreStatus } from "syncorejs/react";
 import { api } from "../../syncore/_generated/api";
 
 export function App() {
@@ -100,10 +100,17 @@ export function App() {
 }
 
 function Tasks() {
+  const runtime = useSyncoreStatus();
   const tasks = useQuery(api.tasks.list) ?? [];
+  if (runtime.kind !== "ready") {
+    return <div>Syncore status: {runtime.kind}</div>;
+  }
   return <pre>{JSON.stringify(tasks, null, 2)}</pre>;
 }
 ```
+
+If the preload bridge is missing or invalid, treat that as runtime lifecycle
+state in the renderer rather than inventing a second IPC boot flag.
 
 ## 7. Run the app
 

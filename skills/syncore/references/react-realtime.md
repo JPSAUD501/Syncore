@@ -17,6 +17,11 @@ Common wrapper providers:
 - `SyncoreExpoProvider` from `syncorejs/expo/react`
 - `SyncoreNextProvider` from `syncorejs/next`
 
+Worker-backed providers should not turn bootstrap into a render-time crash.
+Browser, Next, and Expo providers mount with runtime status such as
+`starting/booting` first and then transition to `ready` or an unavailable
+state after local startup completes.
+
 ## useQuery
 
 `useQuery` returns `undefined` while the first result is still loading:
@@ -60,6 +65,11 @@ if (entry.status === "error") {
   return <div>{entry.error?.message}</div>;
 }
 ```
+
+Runtime bootstrap and local transport outages are surfaced through
+`entry.runtimeStatus`, not by making `useQuery` fail during the initial mount.
+Treat `worker-unavailable`, `ipc-unavailable`, and similar reasons as app shell
+states first.
 
 ## useQueries
 
@@ -114,6 +124,14 @@ const runtime = useSyncoreStatus();
 This is especially useful in worker, IPC, Expo, and other local-runtime
 integrations where bootstrap and availability are first-class app states.
 
+Common runtime states for local-first apps include:
+
+- `starting/booting`
+- `recovering/rehydrating`
+- `unavailable/worker-unavailable`
+- `unavailable/ipc-unavailable`
+- `unavailable/runtime-unavailable`
+
 ## useMutation and useAction
 
 ```tsx
@@ -145,6 +163,7 @@ const entry = useQuery(components.cache.get, { key: "home" });
 - reach for `useQueryState` or `useQueries` when the view needs state, not just data
 - use `usePaginatedQuery` instead of hand-rolling cursor state in components
 - use `useSyncoreStatus` for runtime lifecycle instead of out-of-band boot flags
+- let app shells react to `runtimeStatus` before treating local startup issues as query failures
 - use `skip` instead of hand-rolled conditional subscriptions
 - keep React code thin over the generated API and client surface
 

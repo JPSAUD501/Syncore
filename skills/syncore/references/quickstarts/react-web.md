@@ -71,12 +71,21 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 `src/App.tsx`
 
 ```tsx
-import { useMutation, useQuery } from "syncorejs/react";
+import {
+  useMutation,
+  useQuery,
+  useSyncoreStatus
+} from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 export default function App() {
+  const runtime = useSyncoreStatus();
   const tasks = useQuery(api.tasks.list) ?? [];
   const createTask = useMutation(api.tasks.create);
+
+  if (runtime.kind !== "ready") {
+    return <main>Syncore status: {runtime.kind}</main>;
+  }
 
   return (
     <main>
@@ -90,6 +99,9 @@ export default function App() {
   );
 }
 ```
+
+For local-first apps, treat worker bootstrap and availability through
+`useSyncoreStatus()` instead of hand-rolled boot flags.
 
 ## 7. Run the app
 
