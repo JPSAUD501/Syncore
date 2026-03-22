@@ -132,19 +132,14 @@ Use the examples as the baseline:
 {
   "extends": ["//"],
   "tasks": {
-    "build:deps": {
-      "cache": false
-    },
     "dev:app": {
       "cache": false,
       "persistent": true,
-      "dependsOn": ["build:deps"],
       "with": ["dev:syncore"]
     },
     "dev:syncore": {
       "cache": false,
-      "persistent": true,
-      "dependsOn": ["build:deps"]
+      "persistent": true
     }
   }
 }
@@ -162,6 +157,8 @@ Why this is the default recommendation:
 Do not recommend ad-hoc parallel shell commands first when the project already
 uses Turborepo. Prefer the `dev`/`dev:app`/`dev:syncore` split above so the app
 and dashboard come up together in a repeatable workspace-native flow.
+Do not tell users to add monorepo-only helper tasks such as `build:deps`
+unless their repo actually needs that wiring.
 
 ## Syncore vs Convex
 
