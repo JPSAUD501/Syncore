@@ -50,6 +50,11 @@ jobs:
       - name: Validate published package readiness
         run: bun run validate:pack:syncore
 
+      - name: Auto-create syncorejs changeset
+        run: bun run changeset:auto:syncore
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+
       - name: Target beta as the Changesets release branch
         run: node ./scripts/set-changeset-base-branch.mjs beta
 

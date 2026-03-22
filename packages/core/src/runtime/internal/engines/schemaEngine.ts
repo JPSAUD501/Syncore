@@ -1,10 +1,12 @@
 import {
   describeValidator,
   createSchemaSnapshot,
+  deserializeValue,
   diffSchemaSnapshots,
   parseSchemaSnapshot,
   renderCreateSearchIndexStatement,
   renderMigrationSql,
+  serializeValue,
   type Validator
 } from "@syncore/schema";
 import type {
@@ -30,6 +32,11 @@ import { type DevtoolsEngine } from "./devtoolsEngine.js";
 type RecordDocument = Record<string, unknown>;
 type StructuredValidator = Validator<RecordDocument, RecordDocument, string>;
 type StructuredTableDefinition = TableDefinition<StructuredValidator>;
+type SystemDocumentFields = {
+  _id: string;
+  _creationTime: number;
+};
+type StructuredRuntimeDocument = RecordDocument & SystemDocumentFields;
 
 type SchemaEngineDeps<TSchema extends SyncoreDataModel> = {
   schema: TSchema;
@@ -179,17 +186,24 @@ export class SchemaEngine<
 
   validateDocument(tableName: string, value: JsonObject): JsonObject {
     const table = this.getTableDefinition(tableName);
-    return table.parseAndSerialize(value) as JsonObject;
+    const validator: StructuredValidator = table.validator;
+    const parsed = validator.parse(value);
+    return this.ensureRecordDocument(
+      serializeValue(validator, parsed),
+      "Validated Syncore document payload must serialize to a JSON object."
+    );
   }
 
   deserializeDocument<TDocument>(tableName: string, row: DatabaseRow): TDocument {
     const table = this.getTableDefinition(tableName);
+    const validator: StructuredValidator = table.validator;
     const payload = this.parseStoredDocument(row._json);
-    const document: RecordDocument & {
-      _id: string;
-      _creationTime: number;
-    } = {
-      ...table.deserialize(payload),
+    const deserialized = this.ensureRecordDocument(
+      deserializeValue(validator, payload),
+      "Stored Syncore document payload must deserialize to a JSON object."
+    );
+    const document: StructuredRuntimeDocument = {
+      ...deserialized,
       _id: row._id,
       _creationTime: row._creationTime
     };
@@ -223,8 +237,18 @@ export class SchemaEngine<
 
   private parseStoredDocument(json: string): RecordDocument {
     const value = JSON.parse(json) as unknown;
+    return this.ensureRecordDocument(
+      value,
+      "Stored Syncore document payload must be a JSON object."
+    );
+  }
+
+  private ensureRecordDocument(
+    value: unknown,
+    message: string
+  ): RecordDocument {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("Stored Syncore document payload must be a JSON object.");
+      throw new Error(message);
     }
     return value as RecordDocument;
   }
@@ -251,7 +275,8 @@ export class SchemaEngine<
 
     for (const name of this.deps.schema.tableNames()) {
       const table = this.getTableDefinition(name);
-      const validatorDesc = describeValidator(table.validator);
+      const validator: StructuredValidator = table.validator;
+      const validatorDesc = describeValidator(validator);
       const fields =
         validatorDesc.kind === "object"
           ? Object.entries(validatorDesc.shape).map(

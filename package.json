@@ -17,6 +17,7 @@
     "api:update": "node ./scripts/run-api-extractor.mjs --local",
     "build": "turbo run build --concurrency=2",
     "changeset": "changeset",
+    "changeset:auto:syncore": "node ./scripts/create-auto-syncore-changeset.mjs",
     "changeset:beta:enter": "bunx changeset pre enter beta",
     "changeset:beta:exit": "bunx changeset pre exit",
     "changeset:beta:publish": "node ./scripts/ensure-changeset-prerelease.mjs beta && bunx changeset publish",
