@@ -1,10 +1,20 @@
 import {
+  createUnavailableSyncoreClient,
+  type SyncoreClient
+} from "@syncore/core";
+import {
   createManagedWebWorkerClient,
   createSyncoreWebWorkerClient,
   type ManagedWebWorkerClient
 } from "@syncore/platform-web";
 import { SyncoreProvider } from "@syncore/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from "react";
 import { getSyncoreWorkerUrl } from "./config.js";
 
 export { getSyncoreWorkerUrl } from "./config.js";
@@ -144,48 +154,68 @@ export function SyncoreNextProvider({
   /** Optional public worker asset path for production builds. */
   workerAssetUrl?: string;
 }) {
-  const [managedClient, setManagedClient] =
-    useState<ManagedWebWorkerClient | null>(null);
   const createWorkerRef = useRef(createWorker);
   createWorkerRef.current = createWorker;
   const resolvedWorkerUrl =
     typeof workerUrl === "string" ? workerUrl : workerUrl?.toString();
+  const bootingClient = useMemo(
+    () =>
+      createUnavailableSyncoreClient({
+        kind: "starting",
+        reason: "booting"
+      }),
+    []
+  );
+  const [client, setClient] = useState<SyncoreClient>(bootingClient);
 
   useEffect(() => {
-    const workerFactory = createWorkerRef.current;
-    const nextClient = createNextSyncoreClient({
-      ...(workerFactory
-        ? {
-            createWorker: () => workerFactory()
-          }
-        : {}),
-      ...(resolvedWorkerUrl
-        ? {
-            workerUrl:
-              process.env.NODE_ENV === "production"
-                ? getSyncoreWorkerUrl()
-                : resolvedWorkerUrl
-          }
-        : {}),
-      ...(workerAssetUrl ? { workerAssetUrl } : {})
-    });
-    setManagedClient(nextClient);
+    let disposed = false;
+    let managedClient: ManagedWebWorkerClient | undefined;
+
+    setClient(bootingClient);
+
+    try {
+      const workerFactory = createWorkerRef.current;
+      managedClient = createNextSyncoreClient({
+        ...(workerFactory
+          ? {
+              createWorker: () => workerFactory()
+            }
+          : {}),
+        ...(resolvedWorkerUrl
+          ? {
+              workerUrl:
+                process.env.NODE_ENV === "production"
+                  ? getSyncoreWorkerUrl()
+                  : resolvedWorkerUrl
+            }
+          : {}),
+        ...(workerAssetUrl ? { workerAssetUrl } : {})
+      });
+      if (!disposed) {
+        setClient(managedClient.client);
+      }
+    } catch (error) {
+      if (!disposed) {
+        setClient(
+          createUnavailableSyncoreClient({
+            kind: "unavailable",
+            reason: "worker-unavailable",
+            ...(error instanceof Error ? { error } : {})
+          })
+        );
+      }
+    }
 
     return () => {
-      nextClient.dispose();
-      setManagedClient(null);
+      disposed = true;
+      managedClient?.dispose();
     };
-  }, [resolvedWorkerUrl, workerAssetUrl]);
-
-  if (!managedClient) {
-    return null;
-  }
+  }, [bootingClient, resolvedWorkerUrl, workerAssetUrl]);
 
   return (
     <SyncoreServiceWorker {...(serviceWorkerUrl ? { serviceWorkerUrl } : {})}>
-      <SyncoreProvider client={managedClient.client}>
-        {children}
-      </SyncoreProvider>
+      <SyncoreProvider client={client}>{children}</SyncoreProvider>
     </SyncoreServiceWorker>
   );
 }

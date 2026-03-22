@@ -7,8 +7,9 @@
     "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
     "syncorejs:codegen": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
     "build:deps": "bun run --filter syncorejs build:standalone",
-    "dev": "bun run build:deps && bun run syncorejs:codegen && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
+    "dev": "turbo run dev:app --filter=syncore-example-sveltekit",
     "dev:app": "vite dev",
+    "dev:syncore": "bun run syncorejs:dev",
     "build": "bun run syncorejs:codegen && vite build",
     "typecheck": "bun run syncorejs:codegen && tsc -p tsconfig.json --noEmit"
   },
@@ -19,7 +20,6 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
-    "concurrently": "^9.1.2",
     "typescript": "^5.8.2",
     "vite": "^6.4.1"
   }

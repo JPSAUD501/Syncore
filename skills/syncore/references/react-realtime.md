@@ -42,6 +42,78 @@ const results = useQuery(
 );
 ```
 
+## useQueryState
+
+Use `useQueryState` when the view needs explicit loading, error, or runtime
+status:
+
+```tsx
+import { useQueryState } from "syncorejs/react";
+
+const entry = useQueryState(api.entries.getByDate, { date: selectedDate });
+
+if (entry.status === "loading") {
+  return <div>Loading entry...</div>;
+}
+
+if (entry.status === "error") {
+  return <div>{entry.error?.message}</div>;
+}
+```
+
+## useQueries
+
+Use `useQueries` for keyed compositions without losing per-query state:
+
+```tsx
+import { skip, useQueries } from "syncorejs/react";
+
+const state = useQueries({
+  entries: { query: api.entries.list },
+  current: { query: api.entries.getByDate, args: { date: selectedDate } },
+  search: {
+    query: api.entries.search,
+    args: searchText.trim() ? { query: searchText.trim() } : skip
+  }
+});
+```
+
+Each keyed entry exposes `data`, `error`, `status`, `runtimeStatus`,
+`isLoading`, `isError`, and `isReady`.
+
+## usePaginatedQuery
+
+Use `usePaginatedQuery` for app-ready infinite lists backed by a paginated
+Syncore query:
+
+```tsx
+import { usePaginatedQuery } from "syncorejs/react";
+
+const feed = usePaginatedQuery(
+  api.feed.list,
+  { channel: "general" },
+  { initialNumItems: 20 }
+);
+
+const items = feed.results;
+```
+
+The returned state includes `results`, `pages`, `status`, `isLoadingMore`,
+`hasMore`, `cursor`, and `loadMore()`.
+
+## useSyncoreStatus
+
+Use `useSyncoreStatus` when the app shell needs to react to runtime lifecycle:
+
+```tsx
+import { useSyncoreStatus } from "syncorejs/react";
+
+const runtime = useSyncoreStatus();
+```
+
+This is especially useful in worker, IPC, Expo, and other local-runtime
+integrations where bootstrap and availability are first-class app states.
+
 ## useMutation and useAction
 
 ```tsx
@@ -70,6 +142,9 @@ const entry = useQuery(components.cache.get, { key: "home" });
 - always mount hooks under a Syncore provider
 - prefer inference over manual generics
 - handle `undefined` loading state explicitly
+- reach for `useQueryState` or `useQueries` when the view needs state, not just data
+- use `usePaginatedQuery` instead of hand-rolling cursor state in components
+- use `useSyncoreStatus` for runtime lifecycle instead of out-of-band boot flags
 - use `skip` instead of hand-rolled conditional subscriptions
 - keep React code thin over the generated API and client surface
 

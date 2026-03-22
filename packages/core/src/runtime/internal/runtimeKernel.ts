@@ -27,6 +27,7 @@ import { StorageEngine } from "./engines/storageEngine.js";
 import { inferDriverDatabasePath } from "./engines/shared.js";
 import { TransactionCoordinator } from "./transactionCoordinator.js";
 import { ensureSupportedSystemFormats } from "./systemMeta.js";
+import { RuntimeStatusController } from "./runtimeStatus.js";
 
 type DevtoolsEventMeta = {
   origin?: SyncoreDevtoolsEventOrigin;
@@ -46,6 +47,7 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
   readonly reactivityEngine: ReactivityEngine;
   readonly executionEngine: ExecutionEngine<TSchema>;
   readonly transactionCoordinator: TransactionCoordinator;
+  readonly runtimeStatus: RuntimeStatusController;
   readonly admin: SyncoreRuntimeAdmin<TSchema>;
   private prepared = false;
   private started = false;
@@ -84,6 +86,10 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
       devtools: this.devtoolsEngine
     });
     this.transactionCoordinator = new TransactionCoordinator(options.driver);
+    this.runtimeStatus = new RuntimeStatusController({
+      kind: "starting",
+      reason: "booting"
+    });
     this.schedulerEngine = new SchedulerEngine({
       driver: options.driver,
       runtimeId: this.runtimeId,
@@ -119,7 +125,8 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
       scheduler: this.schedulerEngine,
       reactivity: this.reactivityEngine,
       devtools: this.devtoolsEngine,
-      transactionCoordinator: this.transactionCoordinator
+      transactionCoordinator: this.transactionCoordinator,
+      runtimeStatus: this.runtimeStatus
     });
     this.admin = {
       prepareForDirectAccess: () => this.prepareForDirectAccess(),
@@ -180,12 +187,19 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
     if (this.started) {
       return;
     }
+    this.runtimeStatus.setStatus({
+      kind: "starting",
+      reason: "booting"
+    });
     await this.prepareForDirectAccess();
     try {
       await this.runComponentHooks("onStart");
       this.reactivityEngine.start();
       this.schedulerEngine.startPolling();
       this.started = true;
+      this.runtimeStatus.setStatus({
+        kind: "ready"
+      });
       this.devtoolsEngine.emit({
         type: "runtime.connected",
         runtimeId: this.runtimeId,
@@ -197,6 +211,11 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
       this.reactivityEngine.stop();
       await this.options.driver.close?.().catch(() => undefined);
       this.started = false;
+      this.runtimeStatus.setStatus({
+        kind: "error",
+        reason: "runtime-unavailable",
+        ...(error instanceof Error ? { error } : {})
+      });
       throw error;
     }
   }
@@ -235,6 +254,10 @@ export class RuntimeKernel<TSchema extends AnySyncoreSchema> {
       });
     }
     this.started = false;
+    this.runtimeStatus.setStatus({
+      kind: "unavailable",
+      reason: "disposed"
+    });
     if (stopError) {
       throw stopError;
     }

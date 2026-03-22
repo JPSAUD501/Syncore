@@ -67,6 +67,7 @@ import {
   TransactionCoordinator,
   createEmptyExecutionResult
 } from "../transactionCoordinator.js";
+import type { RuntimeStatusController } from "../runtimeStatus.js";
 
 const DEFAULT_MISFIRE_POLICY: MisfirePolicy = { type: "catch_up" };
 
@@ -85,6 +86,7 @@ type ExecutionEngineDeps<TSchema extends AnySyncoreSchema> = {
   reactivity: ReactivityEngine;
   devtools: DevtoolsEngine;
   transactionCoordinator: TransactionCoordinator;
+  runtimeStatus: RuntimeStatusController;
 };
 
 class RuntimeFilterBuilder implements FilterBuilder {
@@ -301,7 +303,8 @@ export class ExecutionEngine<TSchema extends AnySyncoreSchema> {
       action: (reference, ...args) =>
         this.runAction(reference, normalizeOptionalArgs(args) as JsonObject),
       watchQuery: (reference, ...args) =>
-        this.watchQuery(reference, normalizeOptionalArgs(args) as JsonObject)
+        this.watchQuery(reference, normalizeOptionalArgs(args) as JsonObject),
+      watchRuntimeStatus: () => this.deps.runtimeStatus.watch()
     };
   }
 

@@ -119,6 +119,13 @@ export function createBindingFunctionReference<TKind extends SyncoreFunctionKind
 export function createComponentPhysicalTableName(componentPath: ComponentPath, tableName: string): string;
 
 // @public (undocumented)
+export function createDeferredSyncoreClient(options: {
+    loadClient: () => Promise<SyncoreClient>;
+    initialStatus?: SyncoreRuntimeStatus;
+    failureReason?: SyncoreRuntimeStatus["reason"];
+}): SyncoreClient;
+
+// @public (undocumented)
 export function createDevtoolsCommandHandler(deps: DevtoolsCommandHandlerDeps): DevtoolsCommandHandler;
 
 // @public (undocumented)
@@ -142,6 +149,9 @@ export function createInvokeRequest(requestId: string, kind: "query" | "mutation
 
 // @public (undocumented)
 export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(schema: SyncoreSchema<TTables>): SchemaSnapshot;
+
+// @public (undocumented)
+export function createUnavailableSyncoreClient(status: SyncoreRuntimeStatus): SyncoreClient;
 
 // @public (undocumented)
 export function createWatchKey(reference: FunctionReference<"query", unknown, unknown>, args: JsonObject): string;
@@ -417,7 +427,7 @@ export type ImpactSet = ReadonlySet<ImpactScope>;
 
 // @public (undocumented)
 export namespace index_d_exports {
-    export { ActionCtx, AnySyncoreFunctionDefinition, AnySyncoreSchema, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, ComponentPath, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionReferencesForTree, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, InstalledComponentApi, InstalledComponentsApi, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, ResolvedSyncoreComponent, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreComponent, SyncoreComponentFunctionMetadata, SyncoreComponentHookContext, SyncoreComponentInstall, SyncoreComponentsManifest, SyncoreCoreCapability, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreFunctionTree, SyncoreHostServiceName, SyncoreRequestedCapability, SyncoreResolvedComponents, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeOptions, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, action, attachRuntimeBridge, composeProjectFunctionRegistry, composeProjectSchema, createBindingFunctionReference, createComponentPhysicalTableName, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInstalledComponentsApi, createInvokeRequest, createWatchKey, cronJobs, defineComponent, defineComponents, generateId, installComponent, mutation, normalizeOptionalArgs, query, resolveComponentsManifest, stableStringify, toCanonicalComponentFunctionName };
+    export { ActionCtx, AnySyncoreFunctionDefinition, AnySyncoreSchema, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, ComponentPath, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionReferencesForTree, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, InstalledComponentApi, InstalledComponentsApi, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, ResolvedSyncoreComponent, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreComponent, SyncoreComponentFunctionMetadata, SyncoreComponentHookContext, SyncoreComponentInstall, SyncoreComponentsManifest, SyncoreCoreCapability, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreFunctionTree, SyncoreHostServiceName, SyncorePaginatedQueryStatus, SyncoreQueriesRequest, SyncoreQueryRequest, SyncoreQueryState, SyncoreQueryStatus, SyncoreRequestedCapability, SyncoreResolvedComponents, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeOptions, SyncoreRuntimeStatus, SyncoreRuntimeStatusKind, SyncoreRuntimeStatusReason, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, UsePaginatedQueryResult, action, attachRuntimeBridge, composeProjectFunctionRegistry, composeProjectSchema, createBindingFunctionReference, createComponentPhysicalTableName, createDeferredSyncoreClient, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInstalledComponentsApi, createInvokeRequest, createUnavailableSyncoreClient, createWatchKey, cronJobs, defineComponent, defineComponents, generateId, installComponent, mutation, normalizeOptionalArgs, query, resolveComponentsManifest, stableStringify, toCanonicalComponentFunctionName };
 }
 
 // @public (undocumented)
@@ -962,6 +972,8 @@ export class SyncoreBridgeClient implements SyncoreClient {
     query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple_2<TArgs>): Promise<TResult>;
     // (undocumented)
     watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple_2<TArgs>): BridgeQueryWatch<TResult>;
+    // (undocumented)
+    watchRuntimeStatus(): SyncoreWatch<SyncoreRuntimeStatus>;
 }
 
 // @public (undocumented)
@@ -1010,6 +1022,9 @@ export type SyncoreBridgeResponse = {
     type: "runtime.error";
     error: string;
 } | {
+    type: "runtime.status";
+    status: SyncoreRuntimeStatus;
+} | {
     type: "invoke.result";
     requestId: string;
     success: true;
@@ -1047,6 +1062,8 @@ export interface SyncoreClient {
     query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): SyncoreWatch<TResult>;
+    // (undocumented)
+    watchRuntimeStatus(): SyncoreWatch<SyncoreRuntimeStatus>;
 }
 
 // @public (undocumented)
@@ -1289,6 +1306,44 @@ export type SyncoreFunctionTree = {
 export type SyncoreHostServiceName = "http" | "notifications" | "secureStore" | "filesystem" | "backgroundTasks" | "crypto";
 
 // @public (undocumented)
+export type SyncorePaginatedQueryStatus = "loading" | "ready" | "loadingMore" | "exhausted" | "error";
+
+// @public (undocumented)
+export type SyncoreQueriesRequest = Record<string, SyncoreQueryRequest>;
+
+// @public (undocumented)
+export type SyncoreQueryRequest<TReference extends FunctionReference<"query"> = FunctionReference<"query">> = (Record<never, never> extends FunctionArgs<TReference> ? {
+    query: TReference;
+    args?: FunctionArgs<TReference>;
+} : {
+    query: TReference;
+    args: FunctionArgs<TReference>;
+}) & {
+    skip?: boolean;
+};
+
+// @public (undocumented)
+export interface SyncoreQueryState<TData> {
+    // (undocumented)
+    data: TData | undefined;
+    // (undocumented)
+    error: Error | undefined;
+    // (undocumented)
+    isError: boolean;
+    // (undocumented)
+    isLoading: boolean;
+    // (undocumented)
+    isReady: boolean;
+    // (undocumented)
+    runtimeStatus: SyncoreRuntimeStatus;
+    // (undocumented)
+    status: SyncoreQueryStatus;
+}
+
+// @public (undocumented)
+export type SyncoreQueryStatus = "loading" | "success" | "error" | "skipped";
+
+// @public (undocumented)
 export type SyncoreRequestedCapability = SyncoreCoreCapability | `host:${SyncoreHostServiceName}`;
 
 // @public (undocumented)
@@ -1384,6 +1439,22 @@ export interface SyncoreRuntimeOptions<TSchema extends AnySyncoreSchema> {
     // (undocumented)
     storage: SyncoreStorageAdapter;
 }
+
+// @public (undocumented)
+export interface SyncoreRuntimeStatus {
+    // (undocumented)
+    error?: Error;
+    // (undocumented)
+    kind: SyncoreRuntimeStatusKind;
+    // (undocumented)
+    reason?: SyncoreRuntimeStatusReason;
+}
+
+// @public (undocumented)
+export type SyncoreRuntimeStatusKind = "starting" | "ready" | "recovering" | "unavailable" | "error";
+
+// @public (undocumented)
+export type SyncoreRuntimeStatusReason = "booting" | "rehydrating" | "worker-restarting" | "worker-unavailable" | "ipc-unavailable" | "runtime-unavailable" | "disposed";
 
 // @public (undocumented)
 export interface SyncoreRuntimeSummary {
@@ -1565,6 +1636,30 @@ export interface UpdateScheduledJobOptions {
     runAt?: number;
     // (undocumented)
     schedule: RecurringSchedule;
+}
+
+// @public (undocumented)
+export interface UsePaginatedQueryResult<TItem> {
+    // (undocumented)
+    cursor: string | null;
+    // (undocumented)
+    error: Error | undefined;
+    // (undocumented)
+    hasMore: boolean;
+    // (undocumented)
+    isLoading: boolean;
+    // (undocumented)
+    isLoadingMore: boolean;
+    // (undocumented)
+    loadMore(numItems?: number): Promise<void> | void;
+    // (undocumented)
+    pages: PaginationResult<TItem>[];
+    // (undocumented)
+    results: TItem[];
+    // (undocumented)
+    runtimeStatus: SyncoreRuntimeStatus;
+    // (undocumented)
+    status: SyncorePaginatedQueryStatus;
 }
 
 // @public

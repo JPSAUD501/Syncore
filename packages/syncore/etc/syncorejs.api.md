@@ -753,6 +753,10 @@ export interface SyncoreClient {
     query<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // (undocumented)
     watchQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): SyncoreWatch<TResult>;
+    // Warning: (ae-forgotten-export) The symbol "SyncoreRuntimeStatus" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    watchRuntimeStatus(): SyncoreWatch<SyncoreRuntimeStatus>;
 }
 
 // @public (undocumented)

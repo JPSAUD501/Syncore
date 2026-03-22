@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { createDeferredSyncoreClient } from "@syncore/core";
+import { useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import { SyncoreProvider } from "@syncore/react";
 import type { SyncoreClient } from "@syncore/core";
@@ -28,26 +29,24 @@ export function SyncoreExpoProvider({
   children,
   fallback = null
 }: SyncoreExpoProviderProps): ReactNode {
-  const [client, setClient] = useState<ExpoSyncoreClient | null>(null);
+  const client = useMemo(
+    () =>
+      createDeferredSyncoreClient({
+        loadClient: () => bootstrap.getClient(),
+        initialStatus: {
+          kind: "starting",
+          reason: "booting"
+        },
+        failureReason: "runtime-unavailable"
+      }) as ExpoSyncoreClient,
+    [bootstrap]
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    void bootstrap.getClient().then((nextClient: ExpoSyncoreClient) => {
-      if (!cancelled) {
-        setClient(nextClient);
-      }
-    });
-
     return () => {
-      cancelled = true;
-      setClient(null);
       void bootstrap.stop();
     };
   }, [bootstrap]);
 
-  if (!client) {
-    return fallback;
-  }
-
-  return <SyncoreProvider client={client}>{children}</SyncoreProvider>;
+  return <SyncoreProvider client={client}>{children ?? fallback}</SyncoreProvider>;
 }

@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { createMutation, createQueryStore, setSyncoreClient } from "syncorejs/svelte";
+  import {
+    createMutation,
+    createQueryStore,
+    createSyncoreStatusStore,
+    setSyncoreClient
+  } from "syncorejs/svelte";
   import { createBrowserWorkerClient } from "syncorejs/browser";
   import { api } from "../syncore/_generated/api";
 
@@ -13,6 +18,7 @@
   /* Queries */
   const habitsStore = createQueryStore(api.habits.listHabits);
   const completionsStore = createQueryStore(api.habits.listCompletions);
+  const runtimeStatusStore = createSyncoreStatusStore();
 
   /* Mutations */
   const createHabit = createMutation(api.habits.createHabit);
@@ -94,9 +100,10 @@
   /* Reactive bindings */
   $: habitState = $habitsStore;
   $: completionState = $completionsStore;
+  $: runtimeStatus = $runtimeStatusStore;
   $: habits = habitState.data ?? [];
   $: completions = completionState.data ?? [];
-  $: loading = habitState.status === "loading";
+  $: loading = habitState.status === "loading" || runtimeStatus.kind !== "ready";
 
   /* Build a set of "habitId:date" for quick lookups */
   $: completionSet = new Set<string>(completions.map((c: { habitId: string; date: string }) => `${c.habitId}:${c.date}`));
@@ -182,7 +189,7 @@
 
   <!-- Loading -->
   {#if loading}
-    <p class="loading">Booting local runtime...</p>
+    <p class="loading">Local runtime: {runtimeStatus.kind}</p>
   {/if}
 
   <!-- Habit grid -->

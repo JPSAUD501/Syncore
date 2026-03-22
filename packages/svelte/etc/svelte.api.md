@@ -7,36 +7,80 @@
 import { FunctionArgs } from '@syncore/core';
 import { FunctionReference } from '@syncore/core';
 import { FunctionResult } from '@syncore/core';
+import { PaginationOptions } from '@syncore/core';
+import { PaginationResult } from '@syncore/core';
 import { Readable } from 'svelte/store';
 import { SyncoreClient } from '@syncore/core';
+import { SyncoreQueryState } from '@syncore/core';
+import { SyncoreRuntimeStatus } from '@syncore/core';
+import { UsePaginatedQueryResult } from '@syncore/core';
 
-// @public
+// @public (undocumented)
 export function createAction<TReference extends FunctionReference<"action">>(reference: TReference): (...args: OptionalArgsTuple<FunctionArgs<TReference>>) => Promise<FunctionResult<TReference>>;
 
-// @public
-export function createClientQueryStore<TReference extends FunctionReference<"query">>(client: SyncoreClient, reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Readable<SyncoreQueryStoreState<FunctionResult<TReference>>>;
+// Warning: (ae-forgotten-export) The symbol "PaginatedQueryReference" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "PaginatedQueryArgs" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "Skip" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "PaginatedQueryItem" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export function createClientPaginatedQueryStore<TReference extends PaginatedQueryReference>(client: SyncoreClient, reference: TReference, args: PaginatedQueryArgs<TReference> | Skip, options: {
+    initialNumItems: number;
+}): Readable<UsePaginatedQueryResult<PaginatedQueryItem<TReference>>>;
 
-// @public
+// Warning: (ae-forgotten-export) The symbol "QueriesRequestInput" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export function createClientQueriesStore<TEntries extends QueriesRequestInput>(client: SyncoreClient, entries: TEntries): Readable<CreateQueriesStoreResult<TEntries>>;
+
+// @public (undocumented)
+export function createClientQueryStore<TReference extends FunctionReference<"query">>(client: SyncoreClient, reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>> | [Skip]): Readable<SyncoreQueryStoreState<FunctionResult<TReference>>>;
+
+// @public (undocumented)
+export function createClientQueryValueStore<TReference extends FunctionReference<"query">>(client: SyncoreClient, reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>> | [Skip]): Readable<FunctionResult<TReference> | undefined>;
+
+// @public (undocumented)
+export function createClientSyncoreStatusStore(client: SyncoreClient): Readable<SyncoreRuntimeStatus>;
+
+// @public (undocumented)
 export function createMutation<TReference extends FunctionReference<"mutation">>(reference: TReference): (...args: OptionalArgsTuple<FunctionArgs<TReference>>) => Promise<FunctionResult<TReference>>;
 
-// @public
-export function createQueryStore<TReference extends FunctionReference<"query">>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>>): Readable<SyncoreQueryStoreState<FunctionResult<TReference>>>;
+// @public (undocumented)
+export function createPaginatedQueryStore<TReference extends PaginatedQueryReference>(reference: TReference, args: PaginatedQueryArgs<TReference> | Skip, options: {
+    initialNumItems: number;
+}): Readable<UsePaginatedQueryResult<PaginatedQueryItem<TReference>>>;
 
-// @public
+// @public (undocumented)
+export function createQueriesStore<TEntries extends QueriesRequestInput>(entries: TEntries): Readable<CreateQueriesStoreResult<TEntries>>;
+
+// Warning: (ae-forgotten-export) The symbol "QueryStateForEntry" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export type CreateQueriesStoreResult<TEntries extends QueriesRequestInput> = { [TKey in keyof TEntries]: QueryStateForEntry<TEntries[TKey]> };
+
+// @public (undocumented)
+export function createQueryStore<TReference extends FunctionReference<"query">>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>> | [Skip]): Readable<SyncoreQueryStoreState<FunctionResult<TReference>>>;
+
+// @public (undocumented)
+export function createQueryValueStore<TReference extends FunctionReference<"query">>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>> | [Skip]): Readable<FunctionResult<TReference> | undefined>;
+
+// @public (undocumented)
+export function createSyncoreStatusStore(): Readable<SyncoreRuntimeStatus>;
+
+// @public (undocumented)
 export function getSyncoreClient(): SyncoreClient;
 
 // @public (undocumented)
 export type OptionalArgsTuple<TArgs> = Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];
 
-// @public
+// @public (undocumented)
 export function setSyncoreClient(client: SyncoreClient): SyncoreClient;
 
-// @public
-export interface SyncoreQueryStoreState<TResult> {
-    data: TResult | undefined;
-    error: Error | undefined;
-    status: "loading" | "ready" | "error";
-}
+// @public (undocumented)
+export const skip: "skip";
+
+// @public (undocumented)
+export type SyncoreQueryStoreState<TResult> = SyncoreQueryState<TResult>;
 
 // (No @packageDocumentation comment for this package)
 

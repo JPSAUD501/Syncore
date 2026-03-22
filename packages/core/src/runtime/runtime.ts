@@ -15,6 +15,7 @@ import type {
   SyncoreComponentFunctionMetadata
 } from "./components.js";
 import type {
+  FunctionArgs,
   FunctionArgsFromDefinition,
   FunctionKindFromDefinition,
   FunctionReference,
@@ -255,6 +256,80 @@ export interface PaginationResult<TItem> {
   isDone: boolean;
 }
 
+export type SyncoreRuntimeStatusKind =
+  | "starting"
+  | "ready"
+  | "recovering"
+  | "unavailable"
+  | "error";
+
+export type SyncoreRuntimeStatusReason =
+  | "booting"
+  | "rehydrating"
+  | "worker-restarting"
+  | "worker-unavailable"
+  | "ipc-unavailable"
+  | "runtime-unavailable"
+  | "disposed";
+
+export interface SyncoreRuntimeStatus {
+  kind: SyncoreRuntimeStatusKind;
+  reason?: SyncoreRuntimeStatusReason;
+  error?: Error;
+}
+
+export type SyncoreQueryStatus =
+  | "loading"
+  | "success"
+  | "error"
+  | "skipped";
+
+export interface SyncoreQueryState<TData> {
+  data: TData | undefined;
+  error: Error | undefined;
+  status: SyncoreQueryStatus;
+  runtimeStatus: SyncoreRuntimeStatus;
+  isLoading: boolean;
+  isError: boolean;
+  isReady: boolean;
+}
+
+export type SyncoreQueryRequest<
+  TReference extends FunctionReference<"query"> = FunctionReference<"query">
+> = (Record<never, never> extends FunctionArgs<TReference>
+  ? {
+      query: TReference;
+      args?: FunctionArgs<TReference>;
+    }
+  : {
+      query: TReference;
+      args: FunctionArgs<TReference>;
+    }) & {
+  skip?: boolean;
+};
+
+export type SyncoreQueriesRequest = Record<string, SyncoreQueryRequest>;
+
+export type SyncorePaginatedQueryStatus =
+  | "loading"
+  | "ready"
+  | "loadingMore"
+  | "exhausted"
+  | "error";
+
+export interface UsePaginatedQueryResult<TItem> {
+  results: TItem[];
+  pages: PaginationResult<TItem>[];
+  status: SyncorePaginatedQueryStatus;
+  error: Error | undefined;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
+  cursor: string | null;
+  runtimeStatus: SyncoreRuntimeStatus;
+  loadMore(numItems?: number): Promise<void> | void;
+}
+
 export interface SyncoreWatch<TValue> {
   onUpdate(callback: () => void): () => void;
   localQueryResult(): TValue | undefined;
@@ -443,6 +518,7 @@ export interface SyncoreClient {
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): SyncoreWatch<TResult>;
+  watchRuntimeStatus(): SyncoreWatch<SyncoreRuntimeStatus>;
 }
 
 export interface SyncoreRuntimeAdmin<

@@ -4,10 +4,17 @@
 
 ```ts
 
+import { FunctionArgs } from '@syncore/core';
 import { FunctionReference } from '@syncore/core';
+import { FunctionResult } from '@syncore/core';
+import { PaginationOptions } from '@syncore/core';
+import { PaginationResult } from '@syncore/core';
 import * as react_jsx_runtime0 from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 import { SyncoreClient } from '@syncore/core';
+import { SyncoreQueryState } from '@syncore/core';
+import { SyncoreRuntimeStatus } from '@syncore/core';
+import { UsePaginatedQueryResult } from '@syncore/core';
 
 // @public
 export const skip: "skip";
@@ -26,20 +33,37 @@ export function useAction<TArgs, TResult>(reference: FunctionReference<"action",
 // @public
 export function useMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>): (...args: OptionalArgsTuple<TArgs>) => Promise<TResult>;
 
-// @public
-export function useQueries<TResult>(entries: Array<{
-    key: string;
-    reference: FunctionReference<"query">;
-    args?: Record<string, unknown>;
-}>): Record<string, TResult | undefined>;
-
+// Warning: (ae-forgotten-export) The symbol "PaginatedQueryReference" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "PaginatedQueryArgs" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "Skip" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "PaginatedQueryItem" needs to be exported by the entry point index.d.ts
 //
+// @public
+export function usePaginatedQuery<TReference extends PaginatedQueryReference>(reference: TReference, args: PaginatedQueryArgs<TReference> | Skip, options: {
+    initialNumItems: number;
+}): UsePaginatedQueryResult<PaginatedQueryItem<TReference>>;
+
+// Warning: (ae-forgotten-export) The symbol "QueriesRequestInput" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function useQueries<TEntries extends QueriesRequestInput>(entries: TEntries): UseQueriesResult<TEntries>;
+
+// Warning: (ae-forgotten-export) The symbol "QueryStateForEntry" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export type UseQueriesResult<TEntries extends QueriesRequestInput> = { [TKey in keyof TEntries]: QueryStateForEntry<TEntries[TKey]> };
+
 // @public
 export function useQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs> | [Skip]): TResult | undefined;
 
 // @public
+export function useQueryState<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs> | [Skip]): SyncoreQueryState<TResult>;
+
+// @public
 export function useSyncore(): SyncoreClient;
+
+// @public
+export function useSyncoreStatus(): SyncoreRuntimeStatus;
 
 // (No @packageDocumentation comment for this package)
 

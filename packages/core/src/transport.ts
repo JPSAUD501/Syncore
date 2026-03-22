@@ -3,10 +3,12 @@ import {
   type SyncoreClient,
   type SyncoreRuntime,
   type JsonObject,
+  type SyncoreRuntimeStatus,
   type SyncoreWatch
 } from "./runtime/runtime.js";
 import { generateId } from "./runtime/id.js";
 import type { FunctionReference } from "./runtime/functions.js";
+import { RuntimeStatusController } from "./runtime/internal/runtimeStatus.js";
 
 export interface SyncoreBridgeMessageEndpoint {
   postMessage(message: unknown): void;
@@ -56,6 +58,7 @@ export type SyncoreBridgeRequest =
 export type SyncoreBridgeResponse =
   | { type: "runtime.ready" }
   | { type: "runtime.error"; error: string }
+  | { type: "runtime.status"; status: SyncoreRuntimeStatus }
   | {
       type: "invoke.result";
       requestId: string;
@@ -105,6 +108,10 @@ export class SyncoreBridgeClient implements SyncoreClient {
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private readonly watchRecordsByKey = new Map<string, WatchRecord>();
   private readonly watchKeyBySubscriptionId = new Map<string, string>();
+  private readonly runtimeStatus = new RuntimeStatusController({
+    kind: "starting",
+    reason: "booting"
+  });
   private disposed = false;
 
   private readonly handleMessage = (event: MessageEvent<unknown>) => {
@@ -115,9 +122,33 @@ export class SyncoreBridgeClient implements SyncoreClient {
 
     switch (message.type) {
       case "runtime.ready":
+        this.runtimeStatus.setStatus({
+          kind: "ready"
+        });
         return;
       case "runtime.error":
+        this.runtimeStatus.setStatus({
+          kind: "error",
+          reason: "runtime-unavailable",
+          error: new Error(message.error)
+        });
+        for (const watchRecord of this.watchRecordsByKey.values()) {
+          for (const listener of watchRecord.listeners) {
+            listener();
+          }
+        }
         this.rejectAllPending(new Error(message.error));
+        return;
+      case "runtime.status":
+        this.runtimeStatus.setStatus(message.status);
+        for (const watchRecord of this.watchRecordsByKey.values()) {
+          for (const listener of watchRecord.listeners) {
+            listener();
+          }
+        }
+        if (message.status.error) {
+          this.rejectAllPending(message.status.error);
+        }
         return;
       case "invoke.result": {
         const pending = this.pendingRequests.get(message.requestId);
@@ -254,11 +285,20 @@ export class SyncoreBridgeClient implements SyncoreClient {
     };
   }
 
+  watchRuntimeStatus(): SyncoreWatch<SyncoreRuntimeStatus> {
+    return this.runtimeStatus.watch();
+  }
+
   dispose(errorMessage = "Syncore bridge client was disposed."): void {
     if (this.disposed) {
       return;
     }
     this.disposed = true;
+    this.runtimeStatus.setStatus({
+      kind: "unavailable",
+      reason: "disposed",
+      error: new Error(errorMessage)
+    });
     this.endpoint.removeEventListener("message", this.handleMessage);
     for (const watchRecord of this.watchRecordsByKey.values()) {
       this.endpoint.postMessage({
@@ -307,6 +347,142 @@ export class SyncoreBridgeClient implements SyncoreClient {
   }
 }
 
+export function createUnavailableSyncoreClient(
+  status: SyncoreRuntimeStatus
+): SyncoreClient {
+  const runtimeStatus = new RuntimeStatusController(status);
+  const error =
+    status.error ??
+    new Error(
+      status.reason
+        ? `Syncore client is unavailable (${status.reason}).`
+        : "Syncore client is unavailable."
+    );
+
+  return {
+    query: async () => Promise.reject(error),
+    mutation: async () => Promise.reject(error),
+    action: async () => Promise.reject(error),
+    watchQuery: () => ({
+      onUpdate: (callback) => {
+        queueMicrotask(callback);
+        return () => undefined;
+      },
+      localQueryResult: () => undefined,
+      localQueryError: () => undefined
+    }),
+    watchRuntimeStatus: () => runtimeStatus.watch()
+  };
+}
+
+export function createDeferredSyncoreClient(options: {
+  loadClient: () => Promise<SyncoreClient>;
+  initialStatus?: SyncoreRuntimeStatus;
+  failureReason?: SyncoreRuntimeStatus["reason"];
+}): SyncoreClient {
+  const runtimeStatus = new RuntimeStatusController(
+    options.initialStatus ?? {
+      kind: "starting",
+      reason: "booting"
+    }
+  );
+  const resolvedFailureReason = options.failureReason ?? "runtime-unavailable";
+  let currentClient: SyncoreClient | undefined;
+  let detachStatusListener: (() => void) | undefined;
+
+  const clientPromise = Promise.resolve()
+    .then(() => options.loadClient())
+    .then((client) => {
+      currentClient = client;
+      const statusWatch = client.watchRuntimeStatus();
+      const syncStatus = () => {
+        const nextStatus = statusWatch.localQueryResult();
+        if (nextStatus) {
+          runtimeStatus.setStatus(nextStatus);
+        }
+      };
+      syncStatus();
+      detachStatusListener = statusWatch.onUpdate(syncStatus);
+      return client;
+    })
+    .catch((error) => {
+      const resolvedError =
+        error instanceof Error ? error : new Error(String(error));
+      runtimeStatus.setStatus({
+        kind: "error",
+        reason: resolvedFailureReason,
+        error: resolvedError
+      });
+      throw resolvedError;
+    });
+
+  const waitForClient = () => clientPromise;
+
+  return {
+    query: async (reference, ...args) =>
+      waitForClient().then((client) => client.query(reference, ...args)),
+    mutation: async (reference, ...args) =>
+      waitForClient().then((client) => client.mutation(reference, ...args)),
+    action: async (reference, ...args) =>
+      waitForClient().then((client) => client.action(reference, ...args)),
+    watchQuery(reference, ...args) {
+      let innerWatch: SyncoreWatch<unknown> | undefined;
+      let detachInner: (() => void) | undefined;
+      let result: unknown;
+      let error: Error | undefined;
+      const listeners = new Set<() => void>();
+      let disposed = false;
+
+      const notify = () => {
+        for (const listener of listeners) {
+          listener();
+        }
+      };
+
+      void waitForClient()
+        .then((client) => {
+          if (disposed) {
+            return;
+          }
+          innerWatch = client.watchQuery(reference, ...args);
+          const sync = () => {
+            result = innerWatch?.localQueryResult();
+            error = innerWatch?.localQueryError();
+            notify();
+          };
+          sync();
+          detachInner = innerWatch.onUpdate(sync);
+        })
+        .catch((nextError) => {
+          error = undefined;
+          notify();
+        });
+
+      return {
+        onUpdate(callback) {
+          listeners.add(callback);
+          queueMicrotask(callback);
+          return () => {
+            listeners.delete(callback);
+          };
+        },
+        localQueryResult: () => result as typeof reference.__result | undefined,
+        localQueryError: () => error,
+        dispose() {
+          if (disposed) {
+            return;
+          }
+          disposed = true;
+          detachInner?.();
+          innerWatch?.dispose?.();
+          listeners.clear();
+        }
+      };
+    },
+    watchRuntimeStatus: () => runtimeStatus.watch()
+  };
+}
+
 export interface AttachRuntimeBridgeOptions<TSchema extends AnySyncoreSchema> {
   endpoint: SyncoreBridgeMessageEndpoint;
   createRuntime:
@@ -342,10 +518,24 @@ export function attachRuntimeBridge<TSchema extends AnySyncoreSchema>(
   const ready = clientPromise
     .then(() => {
       options.endpoint.postMessage({
+        type: "runtime.status",
+        status: {
+          kind: "ready"
+        }
+      } satisfies SyncoreBridgeResponse);
+      options.endpoint.postMessage({
         type: "runtime.ready"
       } satisfies SyncoreBridgeResponse);
     })
     .catch((error) => {
+      options.endpoint.postMessage({
+        type: "runtime.status",
+        status: {
+          kind: "error",
+          reason: "runtime-unavailable",
+          ...(error instanceof Error ? { error } : {})
+        }
+      } satisfies SyncoreBridgeResponse);
       options.endpoint.postMessage({
         type: "runtime.error",
         error: error instanceof Error ? error.message : String(error)
@@ -439,10 +629,24 @@ export function attachRuntimeBridge<TSchema extends AnySyncoreSchema>(
   };
 
   options.endpoint.addEventListener("message", handleMessage);
+  options.endpoint.postMessage({
+    type: "runtime.status",
+    status: {
+      kind: "starting",
+      reason: "booting"
+    }
+  } satisfies SyncoreBridgeResponse);
 
   return {
     ready,
     async dispose() {
+      options.endpoint.postMessage({
+        type: "runtime.status",
+        status: {
+          kind: "unavailable",
+          reason: "disposed"
+        }
+      } satisfies SyncoreBridgeResponse);
       options.endpoint.removeEventListener("message", handleMessage);
       for (const subscription of subscriptions.values()) {
         subscription.unsubscribe();

@@ -1,0 +1,19 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build:deps": {
+      "cache": false
+    },
+    "dev:app": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build:deps"],
+      "with": ["dev:syncore"]
+    },
+    "dev:syncore": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build:deps"]
+    }
+  }
+}

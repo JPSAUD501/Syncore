@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import {
+  createUnavailableSyncoreClient,
+  type SyncoreClient
+} from "@syncore/core";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { SyncoreProvider } from "@syncore/react";
 import {
@@ -33,29 +37,53 @@ export function SyncoreWebProvider({
   workerName,
   fallback = null
 }: SyncoreWebProviderProps): ReactNode {
-  const [managedClient, setManagedClient] =
-    useState<ManagedWebWorkerClient | null>(null);
+  const bootingClient = useMemo(
+    () =>
+      createUnavailableSyncoreClient({
+        kind: "starting",
+        reason: "booting"
+      }),
+    []
+  );
+  const [client, setClient] = useState<SyncoreClient>(bootingClient);
 
   useEffect(() => {
-    const nextClient = createSyncoreWebWorkerClient({
-      workerUrl,
-      ...(workerType ? { workerType } : {}),
-      ...(workerName ? { workerName } : {})
-    });
-    setManagedClient(nextClient);
+    let disposed = false;
+    let managedClient: ManagedWebWorkerClient | undefined;
+
+    setClient(bootingClient);
+
+    try {
+      managedClient = createSyncoreWebWorkerClient({
+        workerUrl,
+        ...(workerType ? { workerType } : {}),
+        ...(workerName ? { workerName } : {})
+      });
+      if (!disposed) {
+        setClient(managedClient.client);
+      }
+    } catch (error) {
+      if (!disposed) {
+        setClient(
+          createUnavailableSyncoreClient({
+            kind: "unavailable",
+            reason: "worker-unavailable",
+            ...(error instanceof Error ? { error } : {})
+          })
+        );
+      }
+    }
 
     return () => {
-      nextClient.dispose();
-      setManagedClient(null);
+      disposed = true;
+      managedClient?.dispose();
     };
-  }, [workerName, workerType, workerUrl]);
-
-  if (!managedClient) {
-    return fallback;
-  }
+  }, [bootingClient, workerName, workerType, workerUrl]);
 
   return (
-    <SyncoreProvider client={managedClient.client}>{children}</SyncoreProvider>
+    <SyncoreProvider client={client}>
+      {children ?? fallback}
+    </SyncoreProvider>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
+import { createUnavailableSyncoreClient } from "@syncore/core";
 import { SyncoreProvider } from "@syncore/react";
 import { createRendererSyncoreWindowClient } from "./ipc.js";
 
@@ -27,15 +28,31 @@ export function SyncoreElectronProvider({
 }: SyncoreElectronProviderProps): ReactNode {
   const resolvedWindow = windowObject ?? window;
   const client = useMemo(
-    () =>
-      createRendererSyncoreWindowClient(
-        resolvedWindow,
-        bridgeName ?? "syncoreBridge"
-      ),
+    () => {
+      try {
+        return createRendererSyncoreWindowClient(
+          resolvedWindow,
+          bridgeName ?? "syncoreBridge"
+        );
+      } catch (error) {
+        return createUnavailableSyncoreClient({
+          kind: "unavailable",
+          reason: "ipc-unavailable",
+          ...(error instanceof Error ? { error } : {})
+        });
+      }
+    },
     [bridgeName, resolvedWindow]
   );
 
-  useEffect(() => () => client.dispose(), [client]);
+  useEffect(
+    () => () => {
+      if ("dispose" in client && typeof client.dispose === "function") {
+        client.dispose();
+      }
+    },
+    [client]
+  );
 
   return <SyncoreProvider client={client}>{children}</SyncoreProvider>;
 }

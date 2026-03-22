@@ -8,8 +8,9 @@
     "syncorejs:codegen": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
     "syncorejs:migrate:generate": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts migrate generate init_planner",
     "build:deps": "bun run --filter syncorejs build:standalone",
-    "dev": "bun run build:deps && bun run copy:sqljs-wasm && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
-    "dev:app": "next dev",
+    "dev": "turbo run dev:app --filter=syncore-example-next-pwa",
+    "dev:app": "bun run copy:sqljs-wasm && next dev",
+    "dev:syncore": "bun run syncorejs:dev",
     "build": "bun run clean && bun run copy:sqljs-wasm && next build",
     "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true});require('node:fs').rmSync('public/sql-wasm.wasm',{force:true})\"",
     "copy:sqljs-wasm": "node ./scripts/copy-sqljs-wasm.mjs",
@@ -30,7 +31,6 @@
     "syncorejs": "workspace:*"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
     "vitest": "^3.0.8"
   }
 }

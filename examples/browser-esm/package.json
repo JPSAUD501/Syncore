@@ -7,8 +7,9 @@
     "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
     "build:deps": "bun run --filter syncorejs build:standalone",
     "build": "vite build",
-    "dev": "bun run build:deps && concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan \"bun run syncorejs:dev\" \"bun run dev:app\"",
-    "dev:app": "vite"
+    "dev": "turbo run dev:app --filter=syncore-example-browser-esm",
+    "dev:app": "vite",
+    "dev:syncore": "bun run syncorejs:dev"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -18,7 +19,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.2",
     "vite": "^6.4.1"
   }
 }

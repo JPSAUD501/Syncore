@@ -1,5 +1,5 @@
 import { SyncoreElectronProvider } from "syncorejs/node/ipc/react";
-import { useMutation, useQuery } from "syncorejs/react";
+import { skip, useMutation, useQuery, useSyncoreStatus } from "syncorejs/react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "../../syncore/_generated/api";
 
@@ -53,6 +53,7 @@ export function App() {
 }
 
 function JournalScreen() {
+  const runtimeStatus = useSyncoreStatus();
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [body, setBody] = useState("");
   const [mood, setMood] = useState<string>("okay");
@@ -67,7 +68,7 @@ function JournalScreen() {
   const currentEntry = useQuery(api.entries.getByDate, { date: selectedDate });
   const searchResults = useQuery(
     api.entries.search,
-    showSearch && searchQuery.trim() ? { query: searchQuery.trim() } : "skip"
+    showSearch && searchQuery.trim() ? { query: searchQuery.trim() } : skip
   );
 
   /* Mutations */
@@ -151,6 +152,11 @@ function JournalScreen() {
 
   return (
     <div className="journal">
+      {runtimeStatus.kind !== "ready" && (
+        <div className="sync-status-banner">
+          Local runtime: {runtimeStatus.kind}
+        </div>
+      )}
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
