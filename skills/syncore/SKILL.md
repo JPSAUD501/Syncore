@@ -28,8 +28,140 @@ Stable reasoning rules:
 - Treat Syncore as a local-first runtime, not a hosted backend.
 - Treat `syncore/_generated/*` as outputs, not hand-maintained source files.
 - Prefer public `syncorejs/*` entrypoints in app code and docs.
+- Use `s.*` as the only schema-builder surface.
+- Prefer a data-model-first approach over validator-first helpers.
+- Model document shape, field paths, indexes, search indexes, and codecs explicitly.
 - Validate monorepo-wide when DX, codegen, exported types, or adapters change.
 - Fix regressions at the type source instead of papering over them in examples.
+
+## Schema Authoring Rules
+
+When the task touches `syncore/schema.ts`, default to this model:
+
+- Start from the document shape, not from ad hoc validation snippets.
+- Use `defineSchema({ ... })` at the root and one `defineTable({ ... })` per table.
+- Prefer explicit domain fields over catch-all blobs.
+- Add indexes only for real query patterns.
+- Every `withIndex(...)` or `withSearchIndex(...)` should correspond to a schema definition.
+- Use `s.id("table")` for foreign keys instead of plain strings.
+- Use `s.enum([...])` for closed state machines and finite status sets.
+- Use `s.optional(...)` when a field may be omitted entirely.
+- Use `s.nullable(...)` when the field exists conceptually but may be `null`.
+- Use `s.union(...)` for true variant payloads.
+- Use `s.record(...)` only for dynamic keyed maps.
+- Use `s.codec(...)` when app shape and stored shape differ.
+- Treat `s.any()` as a last resort.
+
+Recommended `syncore/schema.ts` shape:
+
+```ts
+import { defineSchema, defineTable, s } from "syncorejs";
+
+const isoDate = s.codec(s.string(), {
+  storage: s.number(),
+  serialize: (value) => Date.parse(value),
+  deserialize: (value) => new Date(value).toISOString()
+});
+
+export default defineSchema({
+  projects: defineTable({
+    name: s.string(),
+    slug: s.string(),
+    color: s.string(),
+    archivedAt: s.optional(s.number())
+  }).index("by_slug", ["slug"]),
+
+  tasks: defineTable({
+    title: s.string(),
+    status: s.enum(["todo", "doing", "done"] as const),
+    projectId: s.nullable(s.id("projects")),
+    dueAt: s.optional(isoDate),
+    metadata: s.record(s.string(), s.string()),
+    payload: s.union(
+      s.object({
+        kind: s.literal("note"),
+        body: s.string()
+      }),
+      s.object({
+        kind: s.literal("checklist"),
+        items: s.array(
+          s.object({
+            text: s.string(),
+            done: s.boolean()
+          })
+        )
+      })
+    )
+  })
+    .index("by_status", ["status"])
+    .index("by_project_status", ["projectId", "status"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["status", "projectId"]
+    })
+});
+```
+
+Schema review checklist:
+
+- Does each field express the real application shape?
+- Are optional and nullable semantics modeled distinctly?
+- Are ids table-aware?
+- Do index names describe the access pattern?
+- Do indexed fields match actual query usage?
+- Is search backed by a dedicated search field when needed?
+- Is any codec explicit about storage type and round-trip behavior?
+- Is `s.any()` avoidable?
+
+## Dev Script Recommendation
+
+For Syncore app projects, recommend Turborepo in TUI mode as the default dev
+orchestration pattern so the app process and `syncorejs dev` stay up together.
+Use the examples as the baseline:
+
+- Root `turbo.json` should keep `"ui": "tui"` so developers can manage the
+  long-running app and Syncore processes in one terminal flow.
+- App `package.json` should expose:
+  - `dev`: `turbo run dev:app --filter=<package-name>`
+  - `dev:app`: the host app's actual dev command such as `vite`, `next dev`,
+    `expo start`, or the Electron entry
+  - `dev:syncore`: `bun run syncorejs:dev` or the equivalent local CLI entry
+- App-local `turbo.json` should make `dev:app` run with `dev:syncore`:
+
+```json
+{
+  "extends": ["//"],
+  "tasks": {
+    "build:deps": {
+      "cache": false
+    },
+    "dev:app": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build:deps"],
+      "with": ["dev:syncore"]
+    },
+    "dev:syncore": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build:deps"]
+    }
+  }
+}
+```
+
+Why this is the default recommendation:
+
+- `syncorejs dev` starts the local devtools hub and dashboard alongside the app
+- the TUI makes both long-running processes visible and restartable in one
+  place
+- this mirrors the real examples under `examples/browser-esm`,
+  `examples/electron`, `examples/expo`, `examples/next-pwa`, and
+  `examples/sveltekit`
+
+Do not recommend ad-hoc parallel shell commands first when the project already
+uses Turborepo. Prefer the `dev`/`dev:app`/`dev:syncore` split above so the app
+and dashboard come up together in a repeatable workspace-native flow.
 
 ## Syncore vs Convex
 
@@ -137,7 +269,7 @@ Pick the narrowest reference set that matches the task:
 - Architecture and runtime model: [references/architecture.md](references/architecture.md)
 - Contributor workflow and workspace validation: [references/development.md](references/development.md)
 - DX guardrails and project structure: [references/best-practices.md](references/best-practices.md)
-- Queries, mutations, actions, validators, and typed refs: [references/functions.md](references/functions.md)
+- Queries, mutations, actions, schema builders, and typed refs: [references/functions.md](references/functions.md)
 - Schema evolution and SQL migrations: [references/schema-migrations.md](references/schema-migrations.md)
 - React providers and hooks: [references/react-realtime.md](references/react-realtime.md)
 - CLI surface, codegen, and product contract: [references/cli-codegen.md](references/cli-codegen.md)
@@ -182,8 +314,9 @@ Choose an order based on the task:
 - Need to explain which product problems Syncore solves versus Convex: read `references/guides/syncore-vs-convex.md`
 - Need the monorepo workflow or release rules: read `references/development.md`
 - Need file layout, source-of-truth rules, or generated-file guardrails: read `references/best-practices.md`
-- Need function authoring patterns or validator guidance: read `references/functions.md`
+- Need function authoring patterns or schema-builder guidance: read `references/functions.md`
 - Need migration sequencing or drift safety: read `references/schema-migrations.md`
+- Need help designing `syncore/schema.ts` or choosing between `s.*` builders: read `references/schema-migrations.md` first, then `references/functions.md`
 - Need React loading-state or `skip` semantics: read `references/react-realtime.md`
 - Need Svelte stores or browser-worker wiring: read `references/quickstarts/svelte.md` and `references/platform-adapters.md`
 - Need `syncorejs dev`, `codegen`, `doctor`, `targets`, or migration command behavior: read `references/cli-codegen.md`

@@ -546,7 +546,7 @@ async function maybeOpenDashboard(
   }
   const opened = await openTarget(targetUrl);
   if (opened) {
-    context.info(`Opened dashboard at ${targetUrl}.`);
+    context.info(`Opened dashboard at ${targetUrl}`);
     return;
   }
   context.warn("Unable to open the dashboard automatically.");

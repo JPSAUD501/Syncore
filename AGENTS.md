@@ -44,3 +44,4 @@ This repository builds a local-first application platform around a typed runtime
 - Prefer `s.*` schema builders and structured document fields over `any`-shaped payloads.
 - Treat schema work as data-model work first: document shape, field paths, indexes, and codecs should stay explicit and typed.
 - Do not introduce Zod into Syncore core. Use Convex as a reference for type-system and schema design, not as a runtime dependency.
+- When updating Syncore skills or skill references for this repo, edit the versioned files under `./skills/*`. Do not treat `C:\Users\{{USER}}\.agents\skills\*` or any other local path as the source of truth for monorepo changes.
