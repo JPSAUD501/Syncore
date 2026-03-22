@@ -36,21 +36,24 @@ export default withSyncoreNext({
 
 ## 5. Add the worker runtime
 
-`app/syncore.worker.js`
+`app/syncore.worker.ts`
 
-```js
-/* eslint-disable */
-
+```ts
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "my-syncore-next",
   persistenceDatabaseName: "my-syncore-next",
+  storageNamespace: "my-syncore-next-storage",
+  // IndexedDB is more stable than OPFS during Next dev and HMR churn.
+  persistenceMode: "indexeddb",
   locateFile: () => "/sql-wasm.wasm",
   platform: "browser-worker"
 });
@@ -67,10 +70,11 @@ import { useQuery, useSyncoreStatus } from "syncorejs/react";
 import { SyncoreNextProvider } from "syncorejs/next";
 import { api } from "../syncore/_generated/api";
 
-const createWorker = () =>
-  new Worker(new URL("./syncore.worker.js", import.meta.url), {
+function createWorker() {
+  return new Worker(new URL("./syncore.worker.ts", import.meta.url), {
     type: "module"
   });
+}
 
 function Todos() {
   const runtime = useSyncoreStatus();
@@ -78,7 +82,13 @@ function Todos() {
   if (runtime.kind !== "ready") {
     return <div>Syncore status: {runtime.kind}</div>;
   }
-  return <pre>{JSON.stringify(tasks, null, 2)}</pre>;
+  return (
+    <ul>
+      {tasks.map((task) => (
+        <li key={task._id}>{task.text}</li>
+      ))}
+    </ul>
+  );
 }
 
 export default function Page() {
@@ -97,7 +107,8 @@ after hydration. App shells should read runtime lifecycle through
 ## 7. Serve the wasm asset and service worker
 
 Copy `node_modules/sql.js/dist/sql-wasm.wasm` into `public/sql-wasm.wasm` and
-add a simple `public/sw.js`.
+add a simple `public/sw.js`. Keep the worker asset client-only and let
+`SyncoreNextProvider` own the browser bootstrap.
 
 ## 8. Run the app
 

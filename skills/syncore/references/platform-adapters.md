@@ -155,7 +155,9 @@ based instead of hook based.
 - keep the runtime in the environment best suited for local storage and lifecycle control
 - preserve typed refs across transports and clients
 - pass `resolvedComponents` when the app installs components
+- prefer `syncore/_generated/schema` over handwritten schema imports in app-host docs when codegen is part of the flow
 - use the current app bootstrap files as the source of truth for target-specific wiring
+- keep documentation snippets aligned with the matching app in `examples/`
 - model worker, IPC, and bootstrap failures as runtime lifecycle state in app bindings
 
 ## Common Pitfalls

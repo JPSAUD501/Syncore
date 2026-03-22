@@ -31,6 +31,36 @@ Stable reasoning rules:
 - Validate monorepo-wide when DX, codegen, exported types, or adapters change.
 - Fix regressions at the type source instead of papering over them in examples.
 
+## Documentation Standards
+
+When writing or updating Syncore docs and skills:
+
+- Every supported host must have at least one code example:
+  - React web
+  - Next PWA
+  - Expo
+  - Electron
+  - Svelte
+  - Node scripts
+- Examples must be faithful to the current public API. Do not invent helper
+  names, props, or runtime options.
+- Prefer imports from generated outputs in app docs:
+  - `syncore/_generated/schema`
+  - `syncore/_generated/functions`
+  - `syncore/_generated/components` when components are installed
+- Each host example should show the real bootstrap point plus one realistic
+  consumption path such as a query, mutation, or runtime-status read.
+- Before changing snippets, cross-check the nearest package source and the
+  matching app under `examples/`.
+
+Current example apps to use as reality anchors:
+
+- React web: `examples/browser-esm`
+- Next PWA: `examples/next-pwa`
+- Expo: `examples/expo`
+- Electron: `examples/electron`
+- Svelte: `examples/sveltekit`
+
 ## Reference Routing
 
 Pick the narrowest reference set that matches the task:

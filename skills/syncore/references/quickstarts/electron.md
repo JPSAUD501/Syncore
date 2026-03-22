@@ -36,7 +36,8 @@ import {
   bindElectronWindowToSyncoreRuntime,
   createNodeSyncoreRuntime
 } from "syncorejs/node";
-import schema from "../syncore/schema.js";
+import schema from "../syncore/_generated/schema.js";
+import { resolvedComponents } from "../syncore/_generated/components.js";
 import { functions } from "../syncore/_generated/functions.js";
 
 const runtime = createNodeSyncoreRuntime({
@@ -44,6 +45,7 @@ const runtime = createNodeSyncoreRuntime({
   storageDirectory: path.join(app.getPath("userData"), "storage"),
   schema,
   functions,
+  components: resolvedComponents,
   platform: "electron-main"
 });
 
@@ -114,4 +116,6 @@ state in the renderer rather than inventing a second IPC boot flag.
 
 ## 7. Run the app
 
-Start your renderer dev server, then Electron.
+Start your renderer dev server, then Electron. Keep all SQLite and file-storage
+access in the main process and let the renderer talk only through the Syncore
+IPC bridge.

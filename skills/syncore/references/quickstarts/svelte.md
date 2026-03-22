@@ -27,15 +27,20 @@ npx syncorejs dev
 /// <reference lib="webworker" />
 
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "my-syncore-svelte",
-  persistenceMode: "opfs"
+  persistenceDatabaseName: "my-syncore-svelte",
+  persistenceMode: "opfs",
+  locateFile: () => "/sql-wasm.wasm",
+  platform: "browser-worker"
 });
 ```
 
@@ -48,6 +53,7 @@ void createBrowserWorkerRuntime({
   import { onDestroy } from "svelte";
   import { createBrowserWorkerClient } from "syncorejs/browser";
   import {
+    createMutation,
     createQueryStore,
     createSyncoreStatusStore,
     setSyncoreClient
@@ -62,6 +68,7 @@ void createBrowserWorkerRuntime({
 
   const tasksStore = createQueryStore(api.tasks.list);
   const runtimeStore = createSyncoreStatusStore();
+  const createTask = createMutation(api.tasks.create);
 
   onDestroy(() => {
     managed.dispose();
@@ -71,6 +78,9 @@ void createBrowserWorkerRuntime({
 {#if $runtimeStore.kind !== "ready"}
   <p>Syncore status: {$runtimeStore.kind}</p>
 {:else}
+  <button on:click={() => void createTask({ text: "Track from Svelte" })}>
+    Add task
+  </button>
   <pre>{JSON.stringify($tasksStore.data ?? [], null, 2)}</pre>
 {/if}
 ```
@@ -87,3 +97,6 @@ void createBrowserWorkerRuntime({
 ```bash
 npm run dev
 ```
+
+Copy `node_modules/sql.js/dist/sql-wasm.wasm` into `public/sql-wasm.wasm` or
+the equivalent static-assets directory used by the app host.

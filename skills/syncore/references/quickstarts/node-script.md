@@ -9,13 +9,13 @@ process without React, Expo, Electron, or Next.
 mkdir my-syncore-script
 cd my-syncore-script
 npm init -y
-npm pkg set type="module"
 ```
 
 ## 2. Install packages
 
 ```bash
 npm install syncorejs
+npm install -D tsx typescript @types/node
 ```
 
 ## 3. Start the Syncore dev loop
@@ -28,21 +28,23 @@ Project-local operational commands typically target `project`.
 
 ## 4. Create the script
 
-`script.mjs`
+`script.ts`
 
-```js
+```ts
 import path from "node:path";
 import { withNodeSyncoreClient } from "syncorejs/node";
-import { api } from "./syncore/_generated/api.ts";
-import schema from "./syncore/schema.ts";
-import { functions } from "./syncore/_generated/functions.ts";
+import { api } from "./syncore/_generated/api";
+import schema from "./syncore/_generated/schema";
+import { resolvedComponents } from "./syncore/_generated/components";
+import { functions } from "./syncore/_generated/functions";
 
 await withNodeSyncoreClient(
   {
     databasePath: path.join(process.cwd(), ".syncore", "syncore.db"),
     storageDirectory: path.join(process.cwd(), ".syncore", "storage"),
     schema,
-    functions
+    functions,
+    components: resolvedComponents
   },
   async (client) => {
     await client.mutation(api.tasks.create, { text: "Run from Node" });
@@ -54,5 +56,5 @@ await withNodeSyncoreClient(
 ## 5. Run the script
 
 ```bash
-node script.mjs
+npx tsx script.ts
 ```

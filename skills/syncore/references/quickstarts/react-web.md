@@ -25,7 +25,11 @@ npx syncorejs dev
 For web apps, operational commands run against connected `client:<id>` targets,
 not a project-local database.
 
-## 4. Add the worker runtime
+## 4. Copy the SQL.js wasm asset
+
+Copy `node_modules/sql.js/dist/sql-wasm.wasm` into `public/sql-wasm.wasm`.
+
+## 5. Add the worker runtime
 
 `src/syncore.worker.ts`
 
@@ -33,19 +37,24 @@ not a project-local database.
 /// <reference lib="webworker" />
 
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "my-syncore-web",
-  persistenceMode: "opfs"
+  persistenceDatabaseName: "my-syncore-web",
+  persistenceMode: "opfs",
+  locateFile: () => "/sql-wasm.wasm",
+  platform: "browser-worker"
 });
 ```
 
-## 5. Wrap the app
+## 6. Wrap the app
 
 `src/main.tsx`
 
@@ -66,7 +75,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 ```
 
-## 6. Query from React
+## 7. Query and mutate from React
 
 `src/App.tsx`
 
@@ -92,9 +101,11 @@ export default function App() {
       <button onClick={() => void createTask({ text: "Work offline" })}>
         Add task
       </button>
-      {tasks.map((task) => (
-        <div key={task._id}>{task.text}</div>
-      ))}
+      <ul>
+        {tasks.map((task) => (
+          <li key={task._id}>{task.text}</li>
+        ))}
+      </ul>
     </main>
   );
 }
@@ -103,7 +114,7 @@ export default function App() {
 For local-first apps, treat worker bootstrap and availability through
 `useSyncoreStatus()` instead of hand-rolled boot flags.
 
-## 7. Run the app
+## 8. Run the app
 
 ```bash
 npm run dev

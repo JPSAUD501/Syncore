@@ -30,12 +30,14 @@ For Expo apps, operational commands use connected `client:<id>` targets.
 
 ```ts
 import { createExpoSyncoreBootstrap } from "syncorejs/expo";
-import schema from "../syncore/schema";
+import schema from "../syncore/_generated/schema";
+import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 export const syncore = createExpoSyncoreBootstrap({
   schema,
   functions,
+  components: resolvedComponents,
   databaseName: "my-syncore-expo.db",
   storageDirectoryName: "my-syncore-expo-storage"
 });
@@ -47,7 +49,7 @@ export const syncore = createExpoSyncoreBootstrap({
 
 ```tsx
 import { Text, View } from "react-native";
-import { useQuery, useSyncoreStatus } from "syncorejs/react";
+import { useMutation, useQuery, useSyncoreStatus } from "syncorejs/react";
 import { SyncoreExpoProvider } from "syncorejs/expo/react";
 import { syncore } from "./lib/syncore";
 import { api } from "./syncore/_generated/api";
@@ -66,11 +68,15 @@ export default function App() {
 function NotesScreen() {
   const runtime = useSyncoreStatus();
   const tasks = useQuery(api.tasks.list) ?? [];
+  const createTask = useMutation(api.tasks.create);
   if (runtime.kind !== "ready") {
     return <Text>Syncore status: {runtime.kind}</Text>;
   }
   return (
     <View>
+      <Text onPress={() => void createTask({ text: "Capture on mobile" })}>
+        Add task
+      </Text>
       {tasks.map((task) => (
         <Text key={task._id}>{task.text}</Text>
       ))}
