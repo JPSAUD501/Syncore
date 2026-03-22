@@ -203,6 +203,90 @@ describe("syncore CLI", () => {
     expect(payload.data.suggestions.some((entry) => entry.includes("targets"))).toBe(true);
   });
 
+  test("doctor JSON exposes primaryIssue and diagnostics for incomplete projects", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await mkdir(path.join(cwd, "syncore", "functions"), { recursive: true });
+    await writeFile(path.join(cwd, "syncore.config.ts"), "export default {};\n");
+
+    const result = await runCli(cwd, ["doctor", "--json"]);
+    expect(result.exitCode).toBe(0);
+
+    const payload = JSON.parse(result.stdout) as {
+      data: {
+        status: string;
+        checks: Array<{ category: string; path: string; ok: boolean }>;
+        primaryIssue: { code: string; summary: string };
+        diagnostics: Array<{ id: string; category: string; status: string }>;
+      };
+    };
+    expect(payload.data.status).toBe("missing-project");
+    expect(payload.data.primaryIssue.code).toBe("missing-project");
+    expect(payload.data.diagnostics.some((entry) => entry.id === "project.structure")).toBe(
+      true
+    );
+    expect(
+      payload.data.checks.some(
+        (entry) => entry.category === "schema" && entry.path === "syncore/schema.ts" && !entry.ok
+      )
+    ).toBe(true);
+  });
+
+  test("doctor reports schema-drift with enriched drift metadata", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+
+    const schemaPath = path.join(cwd, "syncore", "schema.ts");
+    const originalSchema = await readFile(schemaPath, "utf8");
+    await writeFile(
+      schemaPath,
+      originalSchema.replace("text: v.string()", "text: v.string(),\n    done: v.optional(v.boolean())")
+    );
+
+    const result = await runCli(cwd, ["doctor", "--json"]);
+    expect(result.exitCode).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      data: {
+        status: string;
+        drift: {
+          state: string;
+          currentSchemaHash: string | null;
+          storedSchemaHash: string | null;
+        };
+        primaryIssue: { code: string };
+      };
+    };
+    expect(payload.data.status).toBe("schema-drift");
+    expect(payload.data.primaryIssue.code).toBe("schema-drift");
+    expect(payload.data.drift.state).not.toBe("clean");
+    expect(payload.data.drift.currentSchemaHash).not.toBe(payload.data.drift.storedSchemaHash);
+  });
+
+  test("doctor --fix regenerates generated files without touching the database", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+
+    const generatedApiPath = path.join(cwd, "syncore", "_generated", "api.ts");
+    const databasePath = path.join(cwd, ".syncore", "syncore.db");
+    await rm(generatedApiPath, { force: true });
+
+    const result = await runCli(cwd, ["doctor", "--fix", "--json"]);
+    expect(result.exitCode).toBe(0);
+    expect(await exists(generatedApiPath)).toBe(true);
+    expect(await exists(databasePath)).toBe(false);
+
+    const payload = JSON.parse(result.stdout) as {
+      summary?: string;
+      data: { appliedFixes?: string[]; autoFixesAvailable: boolean };
+    };
+    expect(payload.summary).toContain("Applied");
+    expect(payload.data.appliedFixes?.some((entry) => entry.includes("Regenerated"))).toBe(
+      true
+    );
+  });
+
   test("dev --once fails non-interactively when the project is missing", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
@@ -252,6 +336,110 @@ describe("syncore CLI", () => {
     expect(result.stdout).toContain("[info] Starting Syncore local dev session...");
     expect(result.stdout).not.toContain("[syncore] [info]");
     expect(result.stderr).not.toContain("[syncore] [error]");
+  }, 20_000);
+
+  test("dev --once --typecheck try skips cleanly when TypeScript is unavailable", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const result = await runCli(
+      cwd,
+      ["dev", "--once", "--template", "node", "--typecheck", "try"],
+      {
+        stdin: "y\n",
+        env: {
+          SYNCORE_FORCE_INTERACTIVE: "1"
+        }
+      }
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("Typecheck skipped");
+    expect(result.stdout).toContain("typecheck: skipped");
+  }, 20_000);
+
+  test("dev --once --typecheck enable fails when the compiler reports errors", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await mkdir(path.join(cwd, "node_modules", ".bin"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "node_modules", ".bin", "tsc.cmd"),
+      "@echo typecheck failed\r\n@exit /b 2\r\n"
+    );
+
+    const result = await runCli(
+      cwd,
+      ["dev", "--once", "--template", "node", "--typecheck", "enable"],
+      {
+        stdin: "y\n",
+        env: {
+          SYNCORE_FORCE_INTERACTIVE: "1"
+        }
+      }
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Typecheck failed.");
+  }, 20_000);
+
+  test("dev --once --tail-logs errors prints recent runtime signals on bootstrap failure", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    await mkdir(path.join(cwd, ".syncore", "logs"), { recursive: true });
+    await writeFile(
+      path.join(cwd, ".syncore", "logs", "runtime.jsonl"),
+      `${JSON.stringify({
+        version: 2,
+        timestamp: Date.now(),
+        runtimeId: "runtime-a",
+        targetId: "project",
+        runtimeLabel: "project",
+        origin: "runtime",
+        eventType: "log",
+        category: "system",
+        message: "Last useful runtime context",
+        event: {}
+      })}\n`
+    );
+    await writeFile(
+      path.join(cwd, "syncore", "schema.ts"),
+      "export default (() => {\n"
+    );
+
+    const result = await runCli(cwd, [
+      "dev",
+      "--once",
+      "--template",
+      "node",
+      "--tail-logs",
+      "errors"
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("Recent runtime signals:");
+    expect(result.stdout).toContain("Last useful runtime context");
+  }, 20_000);
+
+  test("dev --once ready summary includes codegen, drift, and typecheck status", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const result = await runCli(
+      cwd,
+      ["dev", "--once", "--template", "node", "--typecheck", "try"],
+      {
+        stdin: "y\n",
+        env: {
+          SYNCORE_FORCE_INTERACTIVE: "1"
+        }
+      }
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("codegen: refreshed");
+    expect(result.stdout).toContain("drift:");
+    expect(result.stdout).toContain("typecheck:");
   }, 20_000);
 
   test("migrate status/generate/apply work through the grouped subcommands", async () => {

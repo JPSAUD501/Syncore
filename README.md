@@ -29,6 +29,9 @@ Inside an app project, `syncorejs dev` is the main development loop. If
 Syncore has not been initialized yet, it scaffolds a minimal local backend
 first. Then it regenerates `syncore/_generated/*`, checks schema drift, applies
 local migrations, starts the local hub, and watches `syncore/` sources.
+It also supports `--typecheck enable|try|disable` and `--tail-logs always|errors|disable`
+so the local loop can surface real runtime and typing issues without forcing a
+cloud-style workflow.
 The public CLI always prints local URLs with `localhost`, and the `dev`
 bootstrap is intentionally compact so the ready state is easy to scan.
 
@@ -64,6 +67,9 @@ Useful conventions:
 - `--verbose` for extra diagnostics
 - `--yes` for non-interactive confirmations
 - `--no-interactive` for CI or scripts
+- `doctor --fix` for safe low-risk remediation such as regenerating `_generated/*` or refreshing the stored schema snapshot
+- `dev --typecheck enable|try|disable` to control whether the local dev loop runs `tsc --noEmit`
+- `dev --tail-logs always|errors|disable` to surface runtime log context in the same terminal
 - `--format pretty|json|jsonl` on read-style commands like `run`, `data`, and `logs`
 - `--target project|client:<id>` on operational commands like `run`, `data`, `import`, and `export`
 
@@ -71,6 +77,7 @@ Recommended flow:
 
 - `npx syncorejs init`
 - `npx syncorejs dev`
+- `npx syncorejs doctor`
 - `npx syncorejs targets`
 - `npx syncorejs run ...` / `data` / `logs`
 
@@ -210,11 +217,11 @@ Release channels:
 
 ## Quickstarts
 
-- [`docs/quickstarts/react-web.md`](docs/quickstarts/react-web.md)
-- [`docs/quickstarts/next-pwa.md`](docs/quickstarts/next-pwa.md)
-- [`docs/quickstarts/expo.md`](docs/quickstarts/expo.md)
-- [`docs/quickstarts/electron.md`](docs/quickstarts/electron.md)
-- [`docs/quickstarts/node-script.md`](docs/quickstarts/node-script.md)
+- [`skills/syncore/references/quickstarts/react-web.md`](skills/syncore/references/quickstarts/react-web.md)
+- [`skills/syncore/references/quickstarts/next-pwa.md`](skills/syncore/references/quickstarts/next-pwa.md)
+- [`skills/syncore/references/quickstarts/expo.md`](skills/syncore/references/quickstarts/expo.md)
+- [`skills/syncore/references/quickstarts/electron.md`](skills/syncore/references/quickstarts/electron.md)
+- [`skills/syncore/references/quickstarts/node-script.md`](skills/syncore/references/quickstarts/node-script.md)
 
 The current DX model is:
 
@@ -222,8 +229,11 @@ The current DX model is:
 - `npx syncorejs dev` is the main happy path and auto-scaffolds when needed
 - `npx syncorejs init --template <minimal|node|react-web|expo|electron|next>` is available when you want explicit scaffolding
 - `npx syncorejs dev` keeps `syncore/_generated/api`, `syncore/_generated/functions`, and `syncore/_generated/server` in sync during development
+- `npx syncorejs dev --typecheck try` is the default assisted mode for typechecking without forcing strict setup in every local project
+- `npx syncorejs dev --tail-logs errors` prints recent runtime context when bootstrap or client connectivity goes wrong
 - `npx syncorejs codegen` is available for one-off generation without the full dev loop
-- `npx syncorejs doctor` explains whether you are in an app package, a monorepo root, or an incomplete Syncore project
+- `npx syncorejs doctor` explains whether you are in an app package, a monorepo root, waiting on a client-managed runtime, or blocked by schema drift
+- `npx syncorejs doctor --fix` applies only safe low-risk fixes; it does not apply migrations or mutate the local database
 - `npx syncorejs targets` lists project and connected client targets with their capabilities
 - `npx syncorejs run tasks/list` and `npx syncorejs run api.tasks.create '{"text":"Ship"}'` execute local functions directly
 - `npx syncorejs data tasks --format json` inspects local SQLite rows without opening the dashboard
@@ -250,13 +260,14 @@ Use the channel that matches the request:
 
 Useful starting points:
 
-- [`docs/architecture.md`](docs/architecture.md)
-- [`docs/development.md`](docs/development.md)
-- [`docs/quickstarts/react-web.md`](docs/quickstarts/react-web.md)
-- [`docs/quickstarts/next-pwa.md`](docs/quickstarts/next-pwa.md)
-- [`docs/quickstarts/expo.md`](docs/quickstarts/expo.md)
-- [`docs/quickstarts/electron.md`](docs/quickstarts/electron.md)
-- [`docs/quickstarts/node-script.md`](docs/quickstarts/node-script.md)
+- [`skills/syncore/SKILL.md`](skills/syncore/SKILL.md)
+- [`skills/syncore/references/architecture.md`](skills/syncore/references/architecture.md)
+- [`skills/syncore/references/development.md`](skills/syncore/references/development.md)
+- [`skills/syncore/references/quickstarts/react-web.md`](skills/syncore/references/quickstarts/react-web.md)
+- [`skills/syncore/references/quickstarts/next-pwa.md`](skills/syncore/references/quickstarts/next-pwa.md)
+- [`skills/syncore/references/quickstarts/expo.md`](skills/syncore/references/quickstarts/expo.md)
+- [`skills/syncore/references/quickstarts/electron.md`](skills/syncore/references/quickstarts/electron.md)
+- [`skills/syncore/references/quickstarts/node-script.md`](skills/syncore/references/quickstarts/node-script.md)
 
 ## Contributing
 
@@ -271,7 +282,7 @@ Before opening a substantial PR, read:
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SUPPORT.md`](SUPPORT.md)
-- [`docs/open-source-guidelines.md`](docs/open-source-guidelines.md)
+- [`skills/syncore/references/project/open-source-guidelines.md`](skills/syncore/references/project/open-source-guidelines.md)
 
 ## How Syncore differs from Convex
 
@@ -291,8 +302,9 @@ product code.
 
 ## Additional docs
 
-- [`docs/architecture.md`](docs/architecture.md)
-- [`docs/development.md`](docs/development.md)
-- [`docs/guides/cli-product-contract.md`](docs/guides/cli-product-contract.md)
-- [`docs/guides/syncore-vs-convex.md`](docs/guides/syncore-vs-convex.md)
-- [`docs/open-source-guidelines.md`](docs/open-source-guidelines.md)
+- [`skills/syncore/SKILL.md`](skills/syncore/SKILL.md)
+- [`skills/syncore/references/architecture.md`](skills/syncore/references/architecture.md)
+- [`skills/syncore/references/development.md`](skills/syncore/references/development.md)
+- [`skills/syncore/references/guides/cli-product-contract.md`](skills/syncore/references/guides/cli-product-contract.md)
+- [`skills/syncore/references/guides/syncore-vs-convex.md`](skills/syncore/references/guides/syncore-vs-convex.md)
+- [`skills/syncore/references/project/open-source-guidelines.md`](skills/syncore/references/project/open-source-guidelines.md)

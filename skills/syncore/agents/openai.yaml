@@ -1,0 +1,4 @@
+interface:
+  display_name: "Syncore"
+  short_description: "Unified Syncore skill covering docs, quickstarts, runtime, CLI, hooks, adapters, migrations, scheduler, and storage"
+  default_prompt: "Use this skill for any Syncore task, then load only the domain references that match the current app, package, or workflow."

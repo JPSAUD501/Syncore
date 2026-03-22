@@ -1,3 +1,0 @@
-interface:
-  display_name: "Syncore React Realtime"
-  short_description: "Providers, hooks, skip behavior, and inference-safe React patterns"

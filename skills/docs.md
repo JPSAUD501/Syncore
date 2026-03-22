@@ -2,53 +2,41 @@
 
 Quick reference to the Syncore skill documents in this directory.
 
-## Getting Started
+## Start Here
 
-| Document               | Purpose                                  |
-| ---------------------- | ---------------------------------------- |
-| [README.md](README.md) | Overview of the Syncore skills set       |
-| [AGENTS.md](AGENTS.md) | Passive agent context and repo doc index |
-| [docs.md](docs.md)     | This document                            |
-| [files.md](files.md)   | Codebase structure for the skill set     |
+| Document                 | Purpose                                                |
+| ------------------------ | ------------------------------------------------------ |
+| [README.md](README.md)   | Overview of the skill layout                           |
+| [AGENTS.md](AGENTS.md)   | Passive agent context and source-of-truth rules        |
+| [syncore/SKILL.md](syncore/SKILL.md) | Main Syncore skill entrypoint               |
+| [files.md](files.md)     | Directory map for the skill set                        |
 
-## Skills Reference
+## Core Syncore References
 
-| Skill                                                                  | What it teaches                                 |
-| ---------------------------------------------------------------------- | ----------------------------------------------- |
-| [syncore](skills/syncore/SKILL.md)                                     | Routes an agent to the right Syncore sub-skill  |
-| [syncore-best-practices](skills/syncore-best-practices/SKILL.md)       | Structure, DX principles, and safety rails      |
-| [syncore-functions](skills/syncore-functions/SKILL.md)                 | Backend functions and typed references          |
-| [syncore-schema-migrations](skills/syncore-schema-migrations/SKILL.md) | Schema design, drift checks, and migration flow |
-| [syncore-react-realtime](skills/syncore-react-realtime/SKILL.md)       | Provider setup and reactive hooks               |
-| [syncore-cli-codegen](skills/syncore-cli-codegen/SKILL.md)             | CLI commands and generated code workflow        |
-| [syncore-platform-adapters](skills/syncore-platform-adapters/SKILL.md) | Runtime bootstrapping across supported targets  |
-| [syncore-scheduler-storage](skills/syncore-scheduler-storage/SKILL.md) | Local scheduling and file storage patterns      |
+| Document                                                                    | Purpose                                     |
+| --------------------------------------------------------------------------- | ------------------------------------------- |
+| [syncore/references/architecture.md](syncore/references/architecture.md)   | Runtime model, storage, scheduler, devtools |
+| [syncore/references/development.md](syncore/references/development.md)     | Dev loop, validation, CI, release channels  |
+| [syncore/references/best-practices.md](syncore/references/best-practices.md) | Project shape and DX guardrails          |
+| [syncore/references/functions.md](syncore/references/functions.md)         | Queries, mutations, actions, validators     |
+| [syncore/references/schema-migrations.md](syncore/references/schema-migrations.md) | Schema and migration flow          |
+| [syncore/references/react-realtime.md](syncore/references/react-realtime.md) | Providers and hooks                       |
+| [syncore/references/cli-codegen.md](syncore/references/cli-codegen.md)     | CLI commands and product contract           |
+| [syncore/references/platform-adapters.md](syncore/references/platform-adapters.md) | Node, browser, Expo, Next, Electron |
+| [syncore/references/scheduler-storage.md](syncore/references/scheduler-storage.md) | Scheduling and file storage         |
+| [syncore/references/components.md](syncore/references/components.md)       | Component model and plugin mental model     |
+| [syncore/references/component-authoring.md](syncore/references/component-authoring.md) | Reusable component packages      |
+| [syncore/references/component-integration.md](syncore/references/component-integration.md) | Installing components in apps   |
 
-## Primary Repo References
+## Quickstarts and Guides
 
-| Document                                                                  | Purpose                                     |
-| ------------------------------------------------------------------------- | ------------------------------------------- |
-| [`README.md`](../README.md)                                               | Product overview and workspace commands     |
-| [`docs/architecture.md`](../docs/architecture.md)                         | Runtime model, storage, scheduler, devtools |
-| [`docs/development.md`](../docs/development.md)                           | Dev loop, smoke tests, and reference policy |
-| [`docs/guides/syncore-vs-convex.md`](../docs/guides/syncore-vs-convex.md) | Local-first differences from Convex         |
-| [`examples/README.md`](../examples/README.md)                             | Working target-platform integrations        |
-
-## Package Guides
-
-| Guide                                                                     | Purpose                                   |
-| ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`packages/core/AGENTS.md`](../packages/core/AGENTS.md)                   | Typed runtime contracts and invariants    |
-| [`packages/schema/AGENTS.md`](../packages/schema/AGENTS.md)               | Validators and migration planning         |
-| [`packages/cli/AGENTS.md`](../packages/cli/AGENTS.md)                     | Codegen and devtools hub                  |
-| [`packages/react/AGENTS.md`](../packages/react/AGENTS.md)                 | React hook inference and watch lifecycle  |
-| [`packages/platform-node/AGENTS.md`](../packages/platform-node/AGENTS.md) | Node and Electron adapter concerns        |
-| [`packages/platform-web/AGENTS.md`](../packages/platform-web/AGENTS.md)   | Worker bridge and browser persistence     |
-| [`packages/testing/AGENTS.md`](../packages/testing/AGENTS.md)             | Cross-platform contract and smoke testing |
-
-## Reference Material
-
-| Document                                                    | Purpose                                               |
-| ----------------------------------------------------------- | ----------------------------------------------------- |
-| [`references/convex-backend`](../references/convex-backend) | Behavioral reference material kept in-tree            |
-| [`skills/README.md`](README.md)                             | Local conventions for this Syncore-specific skill set |
+| Document                                                                                  | Purpose                          |
+| ----------------------------------------------------------------------------------------- | -------------------------------- |
+| [syncore/references/quickstarts/react-web.md](syncore/references/quickstarts/react-web.md) | React web quickstart           |
+| [syncore/references/quickstarts/next-pwa.md](syncore/references/quickstarts/next-pwa.md)   | Next PWA quickstart            |
+| [syncore/references/quickstarts/expo.md](syncore/references/quickstarts/expo.md)           | Expo quickstart                |
+| [syncore/references/quickstarts/electron.md](syncore/references/quickstarts/electron.md)   | Electron quickstart            |
+| [syncore/references/quickstarts/node-script.md](syncore/references/quickstarts/node-script.md) | Node script quickstart     |
+| [syncore/references/guides/syncore-vs-convex.md](syncore/references/guides/syncore-vs-convex.md) | Conceptual comparison    |
+| [syncore/references/guides/cli-product-contract.md](syncore/references/guides/cli-product-contract.md) | CLI UX contract      |
+| [syncore/references/project/open-source-guidelines.md](syncore/references/project/open-source-guidelines.md) | Maintainer policy |

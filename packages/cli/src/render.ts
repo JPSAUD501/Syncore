@@ -1,4 +1,5 @@
 import type { CliContext } from "./context.js";
+import type { DoctorReport } from "./doctor.js";
 import type {
   ClientTargetDescriptor,
   SyncoreTargetDescriptor
@@ -24,6 +25,10 @@ export interface PersistedLogEntry {
   componentName?: string;
   message: string;
   event: Record<string, unknown>;
+}
+
+export function formatPersistedLogEntry(entry: PersistedLogEntry): string {
+  return formatLogEntry(entry);
 }
 
 export function renderOutput(
@@ -141,24 +146,7 @@ export function printTargetsTable(
 }
 
 export function printDoctorReport(
-  report: {
-    cwd?: string;
-    status?: string;
-    template?: string;
-    checks: Array<{ category: "project" | "generated" | "schema"; path: string; ok: boolean }>;
-    hub: {
-      running: boolean;
-      url: string;
-      dashboardUrl?: string;
-      dashboardRunning?: boolean;
-      ports?: { devtools: number; dashboard: number };
-    };
-    targets: SyncoreTargetDescriptor[];
-    projectTarget?: {
-      databasePath: string;
-      storageDirectory: string;
-    } | null;
-  },
+  report: DoctorReport,
   options: {
     verbose?: boolean;
   } = {}
@@ -172,10 +160,35 @@ export function printDoctorReport(
   if (report.status) {
     process.stdout.write(`  status: ${report.status}\n`);
   }
+  process.stdout.write("  issue:\n");
+  process.stdout.write(`    ${report.primaryIssue.summary}\n`);
+  process.stdout.write(`    details: ${report.primaryIssue.details}\n`);
+  process.stdout.write(`    impact: ${report.primaryIssue.impact}\n`);
+  if (report.primaryIssue.suggestedAction) {
+    process.stdout.write(`    action: ${report.primaryIssue.suggestedAction}\n`);
+  }
+
+  process.stdout.write("  diagnostics:\n");
+  for (const diagnostic of sortDiagnostics(report.diagnostics)) {
+    process.stdout.write(
+      `    ${diagnostic.status.toUpperCase()} ${diagnostic.category} ${diagnostic.summary}\n`
+    );
+    if (diagnostic.details) {
+      process.stdout.write(`      ${diagnostic.details}\n`);
+    }
+    if (diagnostic.suggestedAction) {
+      process.stdout.write(`      next: ${diagnostic.suggestedAction}\n`);
+    }
+    if (diagnostic.canAutoFix && diagnostic.fixCommand) {
+      process.stdout.write(`      autofix: ${diagnostic.fixCommand}\n`);
+    }
+  }
+
+  process.stdout.write("  files:\n");
   for (const category of ["project", "generated", "schema"] as const) {
-    process.stdout.write(`  ${category}:\n`);
+    process.stdout.write(`    ${category}:\n`);
     for (const check of report.checks.filter((entry) => entry.category === category)) {
-      process.stdout.write(`    ${check.ok ? "OK" : "MISSING"} ${check.path}\n`);
+      process.stdout.write(`      ${check.ok ? "OK" : "MISSING"} ${check.path}\n`);
     }
   }
 
@@ -192,13 +205,26 @@ export function printDoctorReport(
         `    ports: dashboard=${report.hub.ports.dashboard} devtools=${report.hub.ports.devtools}\n`
       );
     }
+  }
+
+  process.stdout.write("  drift:\n");
+  process.stdout.write(`    state: ${report.drift.state}\n`);
+  process.stdout.write(
+    `    current: ${report.drift.currentSchemaHash ?? "unavailable"}  stored: ${report.drift.storedSchemaHash ?? "none"}\n`
+  );
+  if (report.drift.details) {
+    process.stdout.write(`    ${report.drift.details}\n`);
+  }
+  if (report.drift.destructiveChanges.length > 0) {
+    process.stdout.write(`    destructive: ${report.drift.destructiveChanges.join("; ")}\n`);
+  }
+  if (report.projectTarget) {
     process.stdout.write("  project target:\n");
-    if (report.projectTarget) {
-      process.stdout.write(`    db: ${report.projectTarget.databasePath}\n`);
-      process.stdout.write(`    storage: ${report.projectTarget.storageDirectory}\n`);
-    } else {
-      process.stdout.write("    none\n");
-    }
+    process.stdout.write(`    db: ${report.projectTarget.databasePath}\n`);
+    process.stdout.write(`    storage: ${report.projectTarget.storageDirectory}\n`);
+  } else if (options.verbose) {
+    process.stdout.write("  project target:\n");
+    process.stdout.write("    none\n");
   }
 
   process.stdout.write("  targets:\n");
@@ -224,6 +250,15 @@ export function printDoctorReport(
       }
     }
   }
+
+  if (report.runtimeSignals.recent.length > 0 && (options.verbose || report.status !== "ready")) {
+    process.stdout.write("  runtime signals:\n");
+    for (const signal of report.runtimeSignals.recent) {
+      process.stdout.write(
+        `    ${new Date(signal.timestamp).toISOString()}  ${signal.category}  ${signal.targetId}  ${signal.message}\n`
+      );
+    }
+  }
 }
 
 export function printDevReadySummary(
@@ -234,6 +269,9 @@ export function printDevReadySummary(
     dashboardUrl: string;
     devtoolsUrl: string;
     targets: SyncoreTargetDescriptor[];
+    codegenStatus?: string;
+    driftStatus?: string;
+    typecheckStatus?: string;
   }
 ): void {
   const projectTarget = options.targets.find((target) => target.kind === "project");
@@ -246,6 +284,15 @@ export function printDevReadySummary(
   process.stdout.write(
     `  projectTarget: ${describeProjectTargetState(options.template, options.projectTargetConfigured)}\n`
   );
+  if (options.codegenStatus) {
+    process.stdout.write(`  codegen: ${options.codegenStatus}\n`);
+  }
+  if (options.driftStatus) {
+    process.stdout.write(`  drift: ${options.driftStatus}\n`);
+  }
+  if (options.typecheckStatus) {
+    process.stdout.write(`  typecheck: ${options.typecheckStatus}\n`);
+  }
   process.stdout.write(`  dashboard: ${options.dashboardUrl}\n`);
   process.stdout.write(`  devtools: ${options.devtoolsUrl}\n`);
   if (projectTarget && options.targets.length === 1) {
@@ -295,4 +342,21 @@ function formatLogEntry(entry: PersistedLogEntry): string {
       ? `  component:${entry.componentPath}`
       : "";
   return `${timestamp}  ${target}  ${runtime}${component}  ${entry.category}  ${entry.message}`;
+}
+
+function sortDiagnostics(
+  diagnostics: DoctorReport["diagnostics"]
+): DoctorReport["diagnostics"] {
+  const order: Record<"fail" | "warn" | "pass", number> = {
+    fail: 0,
+    warn: 1,
+    pass: 2
+  };
+  return [...diagnostics].sort((left, right) => {
+    const statusDiff = order[left.status] - order[right.status];
+    if (statusDiff !== 0) {
+      return statusDiff;
+    }
+    return left.id.localeCompare(right.id);
+  });
 }

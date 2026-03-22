@@ -30,17 +30,18 @@ Repository links:
 Before opening a support request, check:
 
 - [`README.md`](README.md)
-- [`docs/development.md`](docs/development.md)
-- [`docs/architecture.md`](docs/architecture.md)
-- quickstarts in [`docs/quickstarts`](docs/quickstarts)
+- [`skills/syncore/SKILL.md`](skills/syncore/SKILL.md)
+- [`skills/syncore/references/development.md`](skills/syncore/references/development.md)
+- [`skills/syncore/references/architecture.md`](skills/syncore/references/architecture.md)
+- quickstarts in [`skills/syncore/references/quickstarts`](skills/syncore/references/quickstarts)
 
 Quickstarts:
 
-- [`docs/quickstarts/react-web.md`](docs/quickstarts/react-web.md)
-- [`docs/quickstarts/next-pwa.md`](docs/quickstarts/next-pwa.md)
-- [`docs/quickstarts/expo.md`](docs/quickstarts/expo.md)
-- [`docs/quickstarts/electron.md`](docs/quickstarts/electron.md)
-- [`docs/quickstarts/node-script.md`](docs/quickstarts/node-script.md)
+- [`skills/syncore/references/quickstarts/react-web.md`](skills/syncore/references/quickstarts/react-web.md)
+- [`skills/syncore/references/quickstarts/next-pwa.md`](skills/syncore/references/quickstarts/next-pwa.md)
+- [`skills/syncore/references/quickstarts/expo.md`](skills/syncore/references/quickstarts/expo.md)
+- [`skills/syncore/references/quickstarts/electron.md`](skills/syncore/references/quickstarts/electron.md)
+- [`skills/syncore/references/quickstarts/node-script.md`](skills/syncore/references/quickstarts/node-script.md)
 
 ## How to Ask a Good Question
 

@@ -11,41 +11,6 @@
       "sourceType": "github",
       "computedHash": "0d8d067f56033d46b0e0c57f2bac95d85d834399becbcc3bc4961370e07e4a9b"
     },
-    "syncore-best-practices": {
-      "source": "JPSAUD501/Syncore",
-      "sourceType": "github",
-      "computedHash": "3bc33cb72f00e3fd17205bb969bdb1314d0126706fddf1ec751ec1dd017ee9c8"
-    },
-    "syncore-cli-codegen": {
-      "source": "JPSAUD501/Syncore",
-      "sourceType": "github",
-      "computedHash": "edcef61c63033682fb6faa4fc7d94ffd672c53b2dd22d811b8cde5b619888f92"
-    },
-    "syncore-functions": {
-      "source": "JPSAUD501/Syncore",
-      "sourceType": "github",
-      "computedHash": "a47b5575a6a1cee4688e2ba73177b520861100904cc8ee4c6778bb9bc01e36fa"
-    },
-    "syncore-platform-adapters": {
-      "source": "JPSAUD501/Syncore",
-      "sourceType": "github",
-      "computedHash": "6f0c8e07eb14f41e220141bc5364e3260b410270da4f826ba2d02d6f8aa80aff"
-    },
-    "syncore-react-realtime": {
-      "source": "JPSAUD501/Syncore",
-      "sourceType": "github",
-      "computedHash": "59ca5bc32d611a28181726a23b1f92e3e8f448ea8b8f16100b6b49dfe3576d89"
-    },
-    "syncore-scheduler-storage": {
-      "source": "JPSAUD501/Syncore",
-      "sourceType": "github",
-      "computedHash": "8d210c9003516c5efdc3b1611cf0eebc631524aae7d3222f27cb0be74b1d293c"
-    },
-    "syncore-schema-migrations": {
-      "source": "JPSAUD501/Syncore",
-      "sourceType": "github",
-      "computedHash": "c997e394af7d3c2635fda4e65b3d30b681dff783d48ff6ed01898664b6ca3fe1"
-    },
     "uncodixfy": {
       "source": "cyxzdev/uncodixfy",
       "sourceType": "github",

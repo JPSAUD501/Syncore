@@ -189,4 +189,4 @@ while workspace validation continues to run through Bun.
 - Avoid feature creep. Keep additions narrow and composable.
 
 For maintainer-facing project policy, see
-[`docs/open-source-guidelines.md`](docs/open-source-guidelines.md).
+[`skills/syncore/references/project/open-source-guidelines.md`](skills/syncore/references/project/open-source-guidelines.md).

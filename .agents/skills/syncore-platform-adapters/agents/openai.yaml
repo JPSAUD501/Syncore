@@ -1,3 +1,0 @@
-interface:
-  display_name: "Syncore Platform Adapters"
-  short_description: "Wire Syncore into Node, browser, Expo, Next, Electron, and Svelte"

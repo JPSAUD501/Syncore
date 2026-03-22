@@ -1,3 +1,0 @@
-interface:
-  display_name: "Syncore Scheduler And Storage"
-  short_description: "Recurring jobs, misfire policies, and local file storage APIs"

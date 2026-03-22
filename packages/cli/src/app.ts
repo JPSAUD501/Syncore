@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { Command } from "commander";
 import type { SyncoreDevtoolsSubscriptionResultPayload } from "@syncore/devtools-protocol";
 import {
@@ -13,6 +14,7 @@ import {
   VALID_SYNCORE_TEMPLATES,
   applyProjectMigrations,
   detectProjectTemplate,
+  fileExists,
   formatError,
   getNextMigrationNumber,
   hasSyncoreProject,
@@ -29,7 +31,7 @@ import {
 } from "@syncore/core/cli";
 import { CliContext, type CliChoice, type GlobalCliOptions, openTarget } from "./context.js";
 import { runShellCommand, printCompactDevPhase, printDevSessionIntro, withConsoleCapture } from "./dev-session.js";
-import { buildDoctorReport } from "./doctor.js";
+import { applyDoctorFixes, buildDoctorReport, type DoctorReport } from "./doctor.js";
 import { applyRootHelp } from "./help.js";
 import {
   buildDevBootstrapNextSteps,
@@ -63,6 +65,7 @@ import {
   writeExportData
 } from "./project.js";
 import {
+  formatPersistedLogEntry,
   type JsonLikeFormat,
   type PersistedLogEntry,
   printDevReadySummary,
@@ -84,6 +87,12 @@ interface DevCommandOptions {
   untilSuccess?: boolean;
   run?: string;
   runSh?: string;
+  typecheck: "enable" | "try" | "disable";
+  tailLogs: "always" | "errors" | "disable";
+}
+
+interface DoctorCommandOptions {
+  fix?: boolean;
 }
 
 interface RunCommandOptions {
@@ -285,26 +294,51 @@ function addDoctorCommand(program: Command): void {
     .command("doctor")
     .summary("Inspect the current Syncore project state")
     .description("Check project structure, template capabilities, hub state, and available targets.")
+    .option("--fix", "Apply safe low-risk fixes like codegen and snapshot refresh")
     .addHelpText(
       "after",
-      ["", "Examples:", "  npx syncorejs doctor", "  npx syncorejs doctor --json"].join("\n")
+      [
+        "",
+        "Examples:",
+        "  npx syncorejs doctor",
+        "  npx syncorejs doctor --json",
+        "  npx syncorejs doctor --fix"
+      ].join("\n")
     )
-    .action(async (_options: Record<string, never>, command: Command) => {
+    .action(async (options: DoctorCommandOptions, command: Command) => {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
-        const report = await buildDoctorReport(ctx.cwd);
+        let report = await buildDoctorReport(ctx.cwd);
+        let appliedFixes: string[] = [];
+        if (options.fix) {
+          appliedFixes = await applyDoctorFixes(ctx.cwd, report);
+          report = await buildDoctorReport(ctx.cwd);
+        }
         if (ctx.json) {
           ctx.printResult({
             command: "doctor",
-            data: report
+            ...(options.fix && appliedFixes.length > 0
+              ? { summary: `Applied ${appliedFixes.length} safe fix(es).` }
+              : {}),
+            data: {
+              ...report,
+              ...(options.fix ? { appliedFixes } : {})
+            }
           });
           return;
         }
 
-        ctx.info(`Detected template: ${report.template}`);
-        ctx.info(`Project status: ${report.status}`);
-        ctx.info(`Project target: ${describeProjectTarget(report.template, report.projectTarget)}`);
-        ctx.info(`Devtools hub: ${report.hub.running ? report.hub.url : "not running"}`);
+        ctx.info(report.primaryIssue.summary);
+        if (options.fix) {
+          if (appliedFixes.length > 0) {
+            ctx.success(`Applied ${appliedFixes.length} safe fix(es).`);
+            for (const fix of appliedFixes) {
+              ctx.info(fix);
+            }
+          } else {
+            ctx.info("No safe fixes were applied.");
+          }
+        }
         printDoctorReport(report, {
           verbose: ctx.verbose
         });
@@ -395,6 +429,16 @@ function addDevCommand(program: Command): void {
     .option("--run <function>", "Run a Syncore function after bootstrap succeeds")
     .option("--run-sh <command>", "Run a shell command after bootstrap succeeds")
     .option(
+      "--typecheck <mode>",
+      "Run TypeScript typecheck before entering the local dev loop: enable, try, or disable",
+      "try"
+    )
+    .option(
+      "--tail-logs <mode>",
+      "Control whether runtime logs appear in this terminal: always, errors, or disable",
+      "errors"
+    )
+    .option(
       "--no-open-dashboard",
       "Do not open the dashboard automatically after the hub is ready"
     )
@@ -408,7 +452,9 @@ function addDevCommand(program: Command): void {
         "  npx syncorejs dev --until-success",
         "  npx syncorejs dev --run tasks/list",
         "  npx syncorejs dev --no-open-dashboard",
-        "  npx syncorejs dev --run-sh \"npm run dev\""
+        "  npx syncorejs dev --run-sh \"npm run dev\"",
+        "  npx syncorejs dev --typecheck enable",
+        "  npx syncorejs dev --tail-logs always"
       ].join("\n")
     )
     .action(async (options: DevCommandOptions, command: Command) => {
@@ -421,11 +467,20 @@ function addDevCommand(program: Command): void {
         await ensureLocalPortConfiguration(ctx);
 
         const template = await resolveRequestedTemplate(ctx.cwd, options.template);
+        validateDevModes(ctx, options);
         printDevSessionIntro(ctx);
         await ensureDevProjectExists(ctx, template);
+        const preflight = await buildDoctorReport(ctx.cwd);
+        printDevPreflight(ctx, preflight);
+        const typecheckResult = await runDevTypecheck(ctx, options.typecheck);
 
         if (options.once) {
-          await runDevBootstrapLoop(ctx, template, options.untilSuccess ?? false);
+          const bootstrapReport = await runDevBootstrapLoop(
+            ctx,
+            template,
+            options.untilSuccess ?? false,
+            options.tailLogs
+          );
           await runDevFollowup(ctx, options);
           const targets = await listAvailableTargets(ctx.cwd);
           ctx.printResult({
@@ -439,39 +494,38 @@ function addDevCommand(program: Command): void {
               projectTargetConfigured: targets.some((target) => target.kind === "project"),
               dashboardUrl: resolveDashboardUrl(),
               devtoolsUrl: resolveDevtoolsUrl(),
-              targets
+              targets,
+              codegenStatus: "refreshed",
+              driftStatus: describeDevDriftStatus(bootstrapReport),
+              typecheckStatus: describeTypecheckStatus(typecheckResult)
             });
           }
           return;
         }
 
-        await runDevBootstrapLoop(ctx, template, options.untilSuccess ?? false);
+        const bootstrapReport = await runDevBootstrapLoop(
+          ctx,
+          template,
+          options.untilSuccess ?? false,
+          options.tailLogs
+        );
         const targets = await listAvailableTargets(ctx.cwd);
         printDevReadySummary(ctx, {
           template,
           projectTargetConfigured: targets.some((target) => target.kind === "project"),
           dashboardUrl: resolveDashboardUrl(),
           devtoolsUrl: resolveDevtoolsUrl(),
-          targets
+          targets,
+          codegenStatus: "refreshed",
+          driftStatus: describeDevDriftStatus(bootstrapReport),
+          typecheckStatus: describeTypecheckStatus(typecheckResult)
         });
 
         const hubSession = await startManagedDevHub(ctx, template);
         await maybeOpenDashboard(ctx, shouldOpenDashboard, hubSession);
-        await monitorLiveDevSession(ctx, template);
+        await monitorLiveDevSession(ctx, template, options.tailLogs);
       });
     });
-}
-
-function describeProjectTarget(
-  template: string,
-  projectTarget: { databasePath: string } | null
-): string {
-  if (projectTarget) {
-    return projectTarget.databasePath;
-  }
-  return templateUsesConnectedClients(template)
-    ? "client-managed"
-    : "not configured";
 }
 
 async function maybeOpenDashboard(
@@ -1189,16 +1243,19 @@ async function ensureLocalPortConfiguration(context: CliContext): Promise<void> 
 async function runDevBootstrapLoop(
   context: CliContext,
   template: SyncoreTemplateName,
-  untilSuccess: boolean
-): Promise<void> {
+  untilSuccess: boolean,
+  tailLogs: DevCommandOptions["tailLogs"]
+): Promise<DoctorReport> {
   while (true) {
     try {
+      let sawBootstrapFailure = false;
       printCompactDevPhase(context, "Project");
       printCompactDevPhase(context, "Codegen");
       printCompactDevPhase(context, "Schema");
       await withConsoleCapture(
         (method, message) => {
           if (/destructive schema changes/i.test(message)) {
+            sawBootstrapFailure = true;
             context.error("Syncore dev blocked by destructive schema changes.");
             return;
           }
@@ -1207,12 +1264,28 @@ async function runDevBootstrapLoop(
             return;
           }
           if (/bootstrap failed/i.test(message) || method === "error") {
+            sawBootstrapFailure = true;
             context.error(message);
           }
         },
         async () => runDevProjectBootstrap(context.cwd, template)
       );
-      return;
+      const report = await buildDoctorReport(context.cwd);
+      if (sawBootstrapFailure || report.status === "schema-destructive-drift") {
+        if (tailLogs === "errors") {
+          await printRecentRuntimeSignals(context, context.cwd);
+        }
+        context.fail(
+          report.primaryIssue.summary,
+          1,
+          report,
+          {
+            category: "runtime",
+            nextSteps: report.suggestions
+          }
+        );
+      }
+      return report;
     } catch (error) {
       if (!untilSuccess) {
         throw error;
@@ -1347,11 +1420,18 @@ async function runDevFollowup(
 
 async function monitorLiveDevSession(
   context: CliContext,
-  template: SyncoreTemplateName
+  template: SyncoreTemplateName,
+  tailLogs: DevCommandOptions["tailLogs"]
 ): Promise<void> {
+  const stopTailing =
+    tailLogs === "always" ? startRuntimeLogTail(context, context.cwd) : undefined;
   if (!templateUsesConnectedClients(template)) {
-    await waitForSignal();
-    return;
+    try {
+      await waitForSignal();
+      return;
+    } finally {
+      stopTailing?.();
+    }
   }
 
   let knownTargets = new Set<string>();
@@ -1368,6 +1448,9 @@ async function monitorLiveDevSession(
     for (const targetId of knownTargets) {
       if (!nextIds.has(targetId)) {
         context.warn(`Client target disconnected: ${targetId}`);
+        if (tailLogs === "errors") {
+          await printRecentRuntimeSignals(context, context.cwd);
+        }
       }
     }
 
@@ -1390,6 +1473,217 @@ async function monitorLiveDevSession(
     await waitForSignal();
   } finally {
     clearInterval(interval);
+    stopTailing?.();
+  }
+}
+
+function validateDevModes(context: CliContext, options: DevCommandOptions): void {
+  if (!["enable", "try", "disable"].includes(options.typecheck)) {
+    context.fail(
+      `Unknown typecheck mode ${JSON.stringify(options.typecheck)}. Expected enable, try, or disable.`
+    );
+  }
+  if (!["always", "errors", "disable"].includes(options.tailLogs)) {
+    context.fail(
+      `Unknown tail log mode ${JSON.stringify(options.tailLogs)}. Expected always, errors, or disable.`
+    );
+  }
+}
+
+interface DevTypecheckResult {
+  mode: DevCommandOptions["typecheck"];
+  attempted: boolean;
+  ok: boolean;
+  summary: string;
+  details?: string;
+}
+
+function printDevPreflight(context: CliContext, report: DoctorReport): void {
+  if (report.status === "missing-generated") {
+    context.info("Preflight: generated Syncore files are missing; dev will refresh them.");
+    return;
+  }
+  if (report.status === "schema-drift") {
+    context.info("Preflight: schema drift detected; dev will refresh local Syncore state where safe.");
+    return;
+  }
+  if (report.status === "waiting-for-client") {
+    context.info("Preflight: this template uses client-managed runtimes; connect the app to unlock live targets.");
+    return;
+  }
+  context.info("Preflight: Syncore project structure and local runtime prerequisites were inspected.");
+}
+
+async function runDevTypecheck(
+  context: CliContext,
+  mode: DevCommandOptions["typecheck"]
+): Promise<DevTypecheckResult> {
+  if (mode === "disable") {
+    return {
+      mode,
+      attempted: false,
+      ok: true,
+      summary: "disabled"
+    };
+  }
+
+  const tsconfigPath = await findTypecheckConfig(context.cwd);
+  if (!tsconfigPath) {
+    if (mode === "enable") {
+      context.fail("Typecheck was enabled but no tsconfig.json was found in this project.");
+    }
+    context.warn("Typecheck skipped because no tsconfig.json was found.");
+    return {
+      mode,
+      attempted: false,
+      ok: true,
+      summary: "skipped (no tsconfig)"
+    };
+  }
+
+  const tscPath = await findTypeScriptCompiler(context.cwd);
+  if (!tscPath) {
+    if (mode === "enable") {
+      context.fail("Typecheck was enabled but no local TypeScript compiler was found.");
+    }
+    context.warn("Typecheck skipped because TypeScript is not available in this workspace.");
+    return {
+      mode,
+      attempted: false,
+      ok: true,
+      summary: "skipped (tsc unavailable)"
+    };
+  }
+
+  context.info(`Typecheck: running tsc --noEmit -p ${path.basename(tsconfigPath)}.`);
+  const result = await runTypeScriptCompiler(context.cwd, tscPath, tsconfigPath);
+  if (result.ok) {
+    context.success("Typecheck passed.");
+    return {
+      mode,
+      attempted: true,
+      ok: true,
+      summary: "passed"
+    };
+  }
+
+  const detail = summarizeCompilerOutput(result.output);
+  if (mode === "enable") {
+    context.fail(
+      `Typecheck failed.${detail ? ` ${detail}` : ""}`,
+      1,
+      result.output,
+      {
+        category: "validation"
+      }
+    );
+  }
+  context.warn(`Typecheck reported issues but dev will continue.${detail ? ` ${detail}` : ""}`);
+  return {
+    mode,
+    attempted: true,
+    ok: false,
+    summary: "warning",
+    ...(detail ? { details: detail } : {})
+  };
+}
+
+async function findTypecheckConfig(cwd: string): Promise<string | null> {
+  for (const candidate of [
+    "tsconfig.json",
+    "tsconfig.app.json",
+    "tsconfig.main.json",
+    "tsconfig.build.json"
+  ]) {
+    const resolved = path.join(cwd, candidate);
+    if (await fileExists(resolved)) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+async function findTypeScriptCompiler(cwd: string): Promise<string | null> {
+  const executableName = process.platform === "win32" ? "tsc.cmd" : "tsc";
+  let current = cwd;
+  while (true) {
+    const candidate = path.join(current, "node_modules", ".bin", executableName);
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return null;
+}
+
+async function runTypeScriptCompiler(
+  cwd: string,
+  compilerPath: string,
+  tsconfigPath: string
+): Promise<{ ok: boolean; output: string }> {
+  return await new Promise((resolve, reject) => {
+    const isWindowsCmd =
+      process.platform === "win32" && /\.(cmd|bat)$/i.test(compilerPath);
+    const child = isWindowsCmd
+      ? spawn(
+          process.env.ComSpec ?? "cmd.exe",
+          ["/d", "/s", "/c", `"${compilerPath}" --noEmit -p "${tsconfigPath}"`],
+          {
+            cwd,
+            stdio: ["ignore", "pipe", "pipe"]
+          }
+        )
+      : spawn(compilerPath, ["--noEmit", "-p", tsconfigPath], {
+          cwd,
+          stdio: ["ignore", "pipe", "pipe"]
+        });
+    let output = "";
+    child.stdout.on("data", (chunk: Buffer | string) => {
+      output += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      output += chunk.toString();
+    });
+    child.once("error", reject);
+    child.once("exit", (code: number | null) => {
+      resolve({
+        ok: (code ?? 1) === 0,
+        output: output.trim()
+      });
+    });
+  });
+}
+
+function summarizeCompilerOutput(output: string): string | undefined {
+  const firstMeaningfulLine = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  return firstMeaningfulLine;
+}
+
+function describeTypecheckStatus(result: DevTypecheckResult): string {
+  return result.details ? `${result.summary} (${result.details})` : result.summary;
+}
+
+function describeDevDriftStatus(report: DoctorReport): string {
+  switch (report.drift.state) {
+    case "clean":
+      return "clean";
+    case "missing-snapshot":
+      return "snapshot refreshed";
+    case "snapshot-outdated":
+      return "snapshot refreshed";
+    case "migration-pending":
+      return "migration review pending";
+    case "destructive":
+      return "blocked";
+    default:
+      return "unavailable";
   }
 }
 
@@ -1617,6 +1911,49 @@ async function readPersistedLogs(cwd: string): Promise<PersistedLogEntry[]> {
     .map((line) => JSON.parse(line) as PersistedLogEntry)
     .filter((entry) => entry.version === 2)
     .filter((entry) => !shouldSuppressLogEntry(entry));
+}
+
+async function printRecentRuntimeSignals(
+  context: CliContext,
+  cwd: string,
+  limit = 5
+): Promise<void> {
+  const entries = await readPersistedLogs(cwd);
+  const recent = entries.slice(-limit);
+  if (recent.length === 0) {
+    return;
+  }
+  context.info("Recent runtime signals:");
+  for (const entry of recent) {
+    process.stdout.write(`  ${formatPersistedLogEntry(entry)}\n`);
+  }
+}
+
+function startRuntimeLogTail(
+  context: CliContext,
+  cwd: string
+): () => void {
+  let seenCount = 0;
+  let disposed = false;
+  const poll = async () => {
+    if (disposed) {
+      return;
+    }
+    const entries = await readPersistedLogs(cwd);
+    const next = entries.slice(seenCount);
+    for (const entry of next) {
+      process.stdout.write(`${formatPersistedLogEntry(entry)}\n`);
+    }
+    seenCount = entries.length;
+  };
+  const interval = setInterval(() => {
+    void poll();
+  }, 1200);
+  void poll();
+  return () => {
+    disposed = true;
+    clearInterval(interval);
+  };
 }
 
 function normalizeRuntimeEvent(
