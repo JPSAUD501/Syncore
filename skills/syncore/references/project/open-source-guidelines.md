@@ -44,12 +44,12 @@ For this repository, the practical public surface is `syncorejs`.
 
 Repository standard:
 
-- `bun run api:check`
-- `bun run lint`
-- `bun run typecheck`
-- `bun run test`
-- `bun run build`
-- `bun run test:smoke`
+- `npm run api:check`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test`
+- `npm run build`
+- `npm run test:smoke`
 
 ## Review Expectations
 

@@ -18,14 +18,14 @@ When using `syncorejs/browser` with `sql.js`, the app must serve `sql-wasm.wasm`
 The helper below copies it into `public/sql-wasm.wasm`:
 
 ```bash
-bun run --filter syncore-example-next-pwa copy:sqljs-wasm
+npm run copy:sqljs-wasm --workspace syncore-example-next-pwa
 ```
 
 Useful commands:
 
 ```bash
-bun run --filter syncore-example-next-pwa dev
-bun run --filter syncore-example-next-pwa test
-bun run --filter syncore-example-next-pwa build
-bun run --filter syncore-example-next-pwa clean
+npm run dev --workspace syncore-example-next-pwa
+npm run test --workspace syncore-example-next-pwa
+npm run build --workspace syncore-example-next-pwa
+npm run clean --workspace syncore-example-next-pwa
 ```

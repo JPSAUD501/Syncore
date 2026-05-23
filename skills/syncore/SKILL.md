@@ -125,7 +125,7 @@ Use the examples as the baseline:
   - `dev`: `turbo run dev:app --filter=<package-name>`
   - `dev:app`: the host app's actual dev command such as `vite`, `next dev`,
     `expo start`, or the Electron entry
-  - `dev:syncore`: `bun run syncorejs:dev` or the equivalent local CLI entry
+  - `dev:syncore`: `npm run syncorejs:dev` or the equivalent local CLI entry
 - App-local `turbo.json` should make `dev:app` run with `dev:syncore`:
 
 ```json

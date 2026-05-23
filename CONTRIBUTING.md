@@ -42,18 +42,16 @@ If you are unsure, start with a Discussion.
 
 ## Local Setup
 
-Syncore uses Bun for workspace commands and Node.js where the npm ecosystem
-still requires it.
+Syncore uses npm workspaces for dependency management and workspace commands.
 
 Minimum local setup:
 
-- Bun `1.3.8`
 - Node.js `22.18.0` or newer in the `22.x` line
 
 Install dependencies:
 
 ```bash
-bun install
+npm install
 ```
 
 ## Core Commands
@@ -61,21 +59,21 @@ bun install
 Run the full standard validation set:
 
 ```bash
-bun run api:check
-bun run lint
-bun run typecheck
-bun run test
-bun run build
-bun run test:smoke
+npm run api:check
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run test:smoke
 ```
 
 Useful companion commands:
 
 ```bash
-bun run api:update
-bun run changeset
-bun run validate:pack:syncore
-bun run clean
+npm run api:update
+npm run changeset
+npm run validate:pack:syncore
+npm run clean
 ```
 
 ## Validation Expectations
@@ -88,14 +86,14 @@ Docs-only changes:
 
 Internal code changes:
 
-- `bun run lint`
-- `bun run typecheck`
-- `bun run test`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test`
 
 Public API changes:
 
-- `bun run api:check`
-- `bun run api:update` if the API report change is intentional
+- `npm run api:check`
+- `npm run api:update` if the API report change is intentional
 - include the updated `packages/*/etc/*.api.md` files in the PR
 
 Cross-package, adapter, example, or integration changes:
@@ -106,8 +104,8 @@ Cross-package, adapter, example, or integration changes:
 
 Release or packaging changes:
 
-- `bun run build`
-- `bun run validate:pack:syncore`
+- `npm run build`
+- `npm run validate:pack:syncore`
 
 ## Changesets
 
@@ -178,7 +176,7 @@ Release flow, at a high level:
 
 Trusted publishing is configured through GitHub Actions and npm OIDC. The
 workflow still sets up Node.js because npm publishing requires the npm toolchain,
-while workspace validation continues to run through Bun.
+while workspace validation continues to run through npm.
 
 ## Project Norms
 

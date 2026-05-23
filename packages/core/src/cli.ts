@@ -104,6 +104,11 @@ interface ScannedFunctionEntry {
   kind: "query" | "mutation" | "action";
 }
 
+const loadedTypeScriptModules = new Map<
+  string,
+  { mtimeMs: number; loaded: Promise<Record<string, unknown>> }
+>();
+
 export interface ScaffoldProjectOptions {
   template: SyncoreTemplateName;
   force?: boolean;
@@ -118,13 +123,14 @@ export interface ScaffoldProjectResult {
 
 interface PackageJsonShape {
   name?: string;
+  type?: string;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 }
 
 const COMBINED_DEV_COMMAND =
-  'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "bun run syncorejs:dev" "bun run dev:app"';
+  'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "npm run syncorejs:dev" "npm run dev:app"';
 
 const program = new Command();
 const CORE_PACKAGE_ROOT = path.resolve(
@@ -345,7 +351,9 @@ export async function runCodegen(cwd: string): Promise<void> {
   const componentsManifestPath = path.join(cwd, "syncore", "components.ts");
   await mkdir(generatedDir, { recursive: true });
   const functionImportExtension = await resolveFunctionImportExtension(cwd);
-  const hasComponentsManifest = await fileExists(componentsManifestPath);
+  const hasComponentsManifest = await hasNonEmptyComponentsManifest(
+    componentsManifestPath
+  );
 
   const files = await listTypeScriptFiles(functionsDir);
   const functionEntries: ScannedFunctionEntry[] = [];
@@ -486,6 +494,27 @@ export async function runCodegen(cwd: string): Promise<void> {
     ``
   ].join("\n");
 
+  const runtimeSource = [
+    `/**`,
+    ` * Generated local runtime bundle for Syncore CLI and Node adapters.`,
+    ` *`,
+    ` * THIS CODE IS AUTOMATICALLY GENERATED.`,
+    ` *`,
+    ` * To regenerate, run \`npx syncorejs dev\` or \`npx syncorejs codegen\`.`,
+    ` * @module`,
+    ` */`,
+    ``,
+    `import schema from "./schema${functionImportExtension}";`,
+    `import { functions } from "./functions${functionImportExtension}";`,
+    ...(hasComponentsManifest
+      ? [`import { resolvedComponents } from "./components${functionImportExtension}";`]
+      : [`const resolvedComponents = [] as const;`]),
+    ``,
+    `export { functions, schema };`,
+    `export const components = resolvedComponents;`,
+    ``
+  ].join("\n");
+
   const serverSource = [
     `/**`,
     ` * Generated utilities for implementing Syncore query, mutation, and action functions.`,
@@ -582,11 +611,29 @@ export async function runCodegen(cwd: string): Promise<void> {
     ``
   ].join("\n");
 
-  await writeFile(path.join(generatedDir, "api.ts"), apiSource);
-  await writeFile(path.join(generatedDir, "components.ts"), componentsSource);
-  await writeFile(path.join(generatedDir, "functions.ts"), functionsSource);
-  await writeFile(path.join(generatedDir, "schema.ts"), schemaSource);
-  await writeFile(path.join(generatedDir, "server.ts"), serverSource);
+  await writeGeneratedFile(path.join(generatedDir, "api.ts"), apiSource);
+  await writeGeneratedFile(
+    path.join(generatedDir, "components.ts"),
+    componentsSource
+  );
+  await writeGeneratedFile(
+    path.join(generatedDir, "functions.ts"),
+    functionsSource
+  );
+  await writeGeneratedFile(path.join(generatedDir, "runtime.ts"), runtimeSource);
+  await writeGeneratedFile(path.join(generatedDir, "schema.ts"), schemaSource);
+  await writeGeneratedFile(path.join(generatedDir, "server.ts"), serverSource);
+}
+
+async function writeGeneratedFile(filePath: string, source: string): Promise<void> {
+  try {
+    if ((await readFile(filePath, "utf8")) === source) {
+      return;
+    }
+  } catch {
+    // Missing or unreadable generated files are replaced below.
+  }
+  await writeFile(filePath, source);
 }
 
 export async function scaffoldProject(
@@ -929,6 +976,8 @@ export async function detectProjectTemplate(
   if (
     "vite" in dependencies ||
     "@vitejs/plugin-react" in dependencies ||
+    (await fileExists(path.join(cwd, "src", "syncore.worker.ts"))) ||
+    (await fileExists(path.join(cwd, "src", "syncore-provider.tsx"))) ||
     ((await fileExists(path.join(cwd, "src", "main.tsx"))) &&
       "react" in dependencies)
   ) {
@@ -962,6 +1011,17 @@ async function ensurePackageScripts(
 ): Promise<void> {
   const packageJsonPath = path.join(cwd, "package.json");
   if (!(await fileExists(packageJsonPath))) {
+    const packageJson: PackageJsonShape = {
+      type: "module",
+      scripts: {
+        "syncorejs:dev": "syncorejs dev",
+        "syncorejs:codegen": "syncorejs codegen"
+      }
+    };
+    await writeFile(
+      packageJsonPath,
+      `${JSON.stringify(packageJson, null, 2)}\n`
+    );
     return;
   }
 
@@ -1637,10 +1697,7 @@ async function loadDefaultExport<TValue>(filePath: string): Promise<TValue> {
   if (!(await fileExists(filePath))) {
     throw new Error(`Missing file: ${path.relative(process.cwd(), filePath)}`);
   }
-  const moduleUrl = pathToFileURL(filePath).href;
-  const loaded = (await tsImport(moduleUrl, {
-    parentURL: import.meta.url
-  })) as { default?: TValue };
+  const loaded = (await loadTypeScriptModule(filePath)) as { default?: TValue };
   if (!("default" in loaded)) {
     throw new Error(
       `File ${path.relative(process.cwd(), filePath)} must have a default export.`
@@ -1662,10 +1719,10 @@ async function loadNamedExport<TValue>(
   if (!(await fileExists(filePath))) {
     throw new Error(`Missing file: ${path.relative(process.cwd(), filePath)}`);
   }
-  const moduleUrl = pathToFileURL(filePath).href;
-  const loaded = (await tsImport(moduleUrl, {
-    parentURL: import.meta.url
-  })) as Record<string, TValue | undefined>;
+  const loaded = (await loadTypeScriptModule(filePath)) as Record<
+    string,
+    TValue | undefined
+  >;
   const defaultExport =
     loaded.default &&
     typeof loaded.default === "object" &&
@@ -1684,6 +1741,34 @@ async function loadNamedExport<TValue>(
     );
   }
   return resolvedValue;
+}
+
+async function hasNonEmptyComponentsManifest(filePath: string): Promise<boolean> {
+  if (!(await fileExists(filePath))) {
+    return false;
+  }
+  const source = await readFile(filePath, "utf8");
+  return !/defineComponents\s*\(\s*\{\s*\}\s*\)/.test(source);
+}
+
+async function loadTypeScriptModule(
+  filePath: string
+): Promise<Record<string, unknown>> {
+  const fileStat = await stat(filePath);
+  const cached = loadedTypeScriptModules.get(filePath);
+  if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+    return await cached.loaded;
+  }
+
+  const moduleUrl = pathToFileURL(filePath).href;
+  const loaded = tsImport(moduleUrl, {
+    parentURL: import.meta.url
+  }) as Promise<Record<string, unknown>>;
+  loadedTypeScriptModules.set(filePath, {
+    mtimeMs: fileStat.mtimeMs,
+    loaded
+  });
+  return await loaded;
 }
 
 export async function loadProjectFunctions(
@@ -1708,6 +1793,14 @@ export async function loadProjectFunctions(
 export async function loadProjectResolvedComponents(
   cwd: string
 ): Promise<SyncoreResolvedComponents> {
+  const componentsManifestPath = path.join(cwd, "syncore", "components.ts");
+  if (await fileExists(componentsManifestPath)) {
+    const source = await readFile(componentsManifestPath, "utf8");
+    if (/defineComponents\s*\(\s*\{\s*\}\s*\)/.test(source)) {
+      return [];
+    }
+  }
+
   const filePath = path.join(cwd, "syncore", "_generated", "components.ts");
   if (!(await fileExists(filePath))) {
     await runCodegen(cwd);
@@ -1722,6 +1815,48 @@ export async function loadProjectResolvedComponents(
     );
   }
   return components;
+}
+
+export async function loadProjectRuntime(cwd: string): Promise<{
+  schema: SyncoreSchema<Record<string, AnyTableDefinition>>;
+  functions: SyncoreFunctionRegistry;
+  components: SyncoreResolvedComponents;
+}> {
+  const filePath = path.join(cwd, "syncore", "_generated", "runtime.ts");
+  if (!(await fileExists(filePath))) {
+    await runCodegen(cwd);
+  }
+  const loaded = await loadTypeScriptModule(filePath);
+  const schema = unwrapDefaultExport(loaded.schema) as
+    | SyncoreSchema<Record<string, AnyTableDefinition>>
+    | undefined;
+  const functions = unwrapDefaultExport(loaded.functions) as
+    | SyncoreFunctionRegistry
+    | undefined;
+  const components = unwrapDefaultExport(loaded.components) as
+    | SyncoreResolvedComponents
+    | undefined;
+
+  if (
+    !schema ||
+    typeof schema !== "object" ||
+    typeof schema.tableNames !== "function"
+  ) {
+    throw new Error(
+      "syncore/_generated/runtime.ts must export a composed Syncore schema."
+    );
+  }
+  if (!functions || typeof functions !== "object") {
+    throw new Error(
+      "syncore/_generated/runtime.ts must export a functions registry."
+    );
+  }
+  if (!Array.isArray(components)) {
+    throw new Error(
+      "syncore/_generated/runtime.ts must export resolved components."
+    );
+  }
+  return { schema, functions, components };
 }
 
 interface ProjectTargetBackend {
@@ -1974,11 +2109,7 @@ async function createProjectTargetBackend(
     return null;
   }
 
-  const [schema, functions, components] = await Promise.all([
-    loadProjectSchema(cwd),
-    loadProjectFunctions(cwd),
-    loadProjectResolvedComponents(cwd)
-  ]);
+  const { schema, functions, components } = await loadProjectRuntime(cwd);
   const databasePath = path.resolve(cwd, projectTarget.databasePath);
   const storageDirectory = path.resolve(cwd, projectTarget.storageDirectory);
   await mkdir(path.dirname(databasePath), { recursive: true });
@@ -2262,9 +2393,9 @@ async function resolveFunctionImportExtension(
     }
   }
 
-  // Source-generated files are usually consumed directly by app bundlers before any
-  // local transpilation step. Extensionless specifiers keep Next/Webpack and
-  // tsx aligned with the same source tree unless the app opts into NodeNext rules.
+  // Bundler-based app toolchains such as Next and Vite resolve extensionless
+  // TypeScript source imports reliably, while NodeNext projects need explicit
+  // JavaScript specifiers for emitted ESM.
   return "";
 }
 
@@ -2277,13 +2408,23 @@ export function formatError(error: unknown): string {
 
 export async function isLocalPortInUse(port: number): Promise<boolean> {
   return await new Promise((resolve) => {
+    let settled = false;
     const socket = connectToNet({ host: "127.0.0.1", port });
+    const finish = (inUse: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      socket.destroy();
+      resolve(inUse);
+    };
+    const timeout = setTimeout(() => finish(false), 100);
     socket.once("connect", () => {
-      socket.end();
-      resolve(true);
+      finish(true);
     });
     socket.once("error", () => {
-      resolve(false);
+      finish(false);
     });
   });
 }

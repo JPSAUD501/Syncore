@@ -4,6 +4,7 @@
 
 ```ts
 
+import * as _$_syncore_core0 from '@syncore/core';
 import { AttachedRuntimeBridge } from '@syncore/core';
 import { AttachRuntimeBridgeOptions } from '@syncore/core';
 import { BridgeQueryWatch } from '@syncore/core';
@@ -13,16 +14,15 @@ import { DevtoolsSubscriptionHost } from '@syncore/core';
 import { SchedulerOptions } from '@syncore/core';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
-import * as _syncore_core0 from '@syncore/core';
 import { SyncoreActiveQueryInfo } from '@syncore/devtools-protocol';
 import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreDataModel } from '@syncore/core';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreRuntimeSummary } from '@syncore/devtools-protocol';
-import { SyncoreSchema } from '@syncore/core';
 import { SyncoreSqlDriver } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 
@@ -33,7 +33,7 @@ export type AttachedNodeIpcRuntime = AttachedRuntimeBridge;
 export function attachNodeIpcRuntime(options: AttachNodeIpcRuntimeOptions): AttachedNodeIpcRuntime;
 
 // @public (undocumented)
-export type AttachNodeIpcRuntimeOptions = AttachRuntimeBridgeOptions<NodeIpcSyncoreSchema>;
+export type AttachNodeIpcRuntimeOptions<TSchema extends NodeIpcSyncoreSchema = NodeIpcSyncoreSchema> = AttachRuntimeBridgeOptions<TSchema>;
 
 // @public
 export function bindElectronWindowToSyncoreRuntime(options: {
@@ -52,7 +52,7 @@ export function bindElectronWindowToSyncoreRuntime(options: {
 }): SyncoreElectronIpcBinding;
 
 // @public
-export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): _syncore_core0.SyncoreBridgeMessageEndpoint & {
+export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): _$_syncore_core0.SyncoreBridgeMessageEndpoint & {
     dispose(): void;
 };
 
@@ -67,7 +67,7 @@ export interface CreateElectronSyncoreBridgeOptions {
 }
 
 // @public
-export function createManagedNodeSyncoreClient(options: WithNodeSyncoreClientOptions): Promise<ManagedNodeSyncoreClient>;
+export function createManagedNodeSyncoreClient<TSchema extends NodeSyncoreSchema>(options: WithNodeSyncoreClientOptions<TSchema>): Promise<ManagedNodeSyncoreClient<TSchema>>;
 
 // @public (undocumented)
 export function createNodeIpcMessageEndpoint(bridge: SyncoreMainProcessBridge): SyncoreIpcMessageEndpoint & {
@@ -75,13 +75,13 @@ export function createNodeIpcMessageEndpoint(bridge: SyncoreMainProcessBridge): 
 };
 
 // @public (undocumented)
-export interface CreateNodeRuntimeOptions {
+export interface CreateNodeRuntimeOptions<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> {
     // (undocumented)
     appName?: string;
     // (undocumented)
     capabilities?: SyncoreCapabilities;
     // (undocumented)
-    components?: SyncoreRuntimeOptions<NodeSyncoreSchema>["components"];
+    components?: SyncoreRuntimeOptions<TSchema>["components"];
     // (undocumented)
     databasePath: string;
     // (undocumented)
@@ -89,7 +89,7 @@ export interface CreateNodeRuntimeOptions {
     // (undocumented)
     devtoolsUrl?: string;
     // (undocumented)
-    functions: SyncoreRuntimeOptions<NodeSyncoreSchema>["functions"];
+    functions: SyncoreRuntimeOptions<TSchema>["functions"];
     // (undocumented)
     origin?: string;
     // (undocumented)
@@ -97,7 +97,7 @@ export interface CreateNodeRuntimeOptions {
     // (undocumented)
     scheduler?: SchedulerOptions;
     // (undocumented)
-    schema: NodeSyncoreSchema;
+    schema: TSchema;
     // (undocumented)
     sessionLabel?: string;
     // (undocumented)
@@ -105,10 +105,10 @@ export interface CreateNodeRuntimeOptions {
 }
 
 // @public
-export function createNodeSyncoreClient(runtime: SyncoreRuntime<NodeSyncoreSchema>): _syncore_core0.SyncoreClient;
+export function createNodeSyncoreClient<TSchema extends NodeSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): _$_syncore_core0.SyncoreClient;
 
 // @public
-export function createNodeSyncoreRuntime(options: CreateNodeRuntimeOptions): SyncoreRuntime<NodeSyncoreSchema>;
+export function createNodeSyncoreRuntime<TSchema extends NodeSyncoreSchema>(options: CreateNodeRuntimeOptions<TSchema>): SyncoreRuntime<TSchema>;
 
 // @public (undocumented)
 export function createNodeWebSocketDevtoolsSink(options: NodeWebSocketDevtoolsSinkOptions): NodeWebSocketDevtoolsSink;
@@ -134,13 +134,13 @@ export function installSyncoreWindowBridge(options?: {
 }): string;
 
 // @public
-export interface ManagedNodeSyncoreClient {
+export interface ManagedNodeSyncoreClient<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> {
     // (undocumented)
-    client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>;
+    client: ReturnType<SyncoreRuntime<TSchema>["createClient"]>;
     // (undocumented)
     dispose(): Promise<void>;
     // (undocumented)
-    runtime: SyncoreRuntime<NodeSyncoreSchema>;
+    runtime: SyncoreRuntime<TSchema>;
 }
 
 // @public (undocumented)
@@ -159,7 +159,7 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
 }
 
 // @public (undocumented)
-export type NodeIpcSyncoreSchema = SyncoreSchema<any>;
+export type NodeIpcSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
 // @public (undocumented)
 export class NodeSqliteDriver implements SyncoreSqlDriver {
@@ -184,7 +184,7 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
 }
 
 // @public (undocumented)
-export type NodeSyncoreSchema = SyncoreSchema<any>;
+export type NodeSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
@@ -299,10 +299,10 @@ export interface SyncoreWindowBridge {
 }
 
 // @public
-export function withNodeSyncoreClient<TResult>(options: WithNodeSyncoreClientOptions, callback: (client: ReturnType<SyncoreRuntime<NodeSyncoreSchema>["createClient"]>, runtime: SyncoreRuntime<NodeSyncoreSchema>) => Promise<TResult> | TResult): Promise<TResult>;
+export function withNodeSyncoreClient<TSchema extends NodeSyncoreSchema, TResult>(options: WithNodeSyncoreClientOptions<TSchema>, callback: (client: ReturnType<SyncoreRuntime<TSchema>["createClient"]>, runtime: SyncoreRuntime<TSchema>) => Promise<TResult> | TResult): Promise<TResult>;
 
 // @public
-export type WithNodeSyncoreClientOptions = CreateNodeRuntimeOptions;
+export type WithNodeSyncoreClientOptions<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> = CreateNodeRuntimeOptions<TSchema>;
 
 // (No @packageDocumentation comment for this package)
 

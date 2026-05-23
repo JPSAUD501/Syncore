@@ -16,16 +16,30 @@ function isDirectInvocation(moduleUrl: string): boolean {
   if (!entry) {
     return false;
   }
-  return (
-    realpathSync(path.resolve(entry)) ===
-    realpathSync(path.resolve(fileURLToPath(moduleUrl)))
-  );
+
+  const normalizedEntry = path.normalize(path.resolve(entry)).toLowerCase();
+  if (normalizedEntry.endsWith(path.join("packages", "cli", "src", "index.ts"))) {
+    return true;
+  }
+
+  try {
+    return (
+      realpathSync(path.resolve(entry)) ===
+      realpathSync(path.resolve(fileURLToPath(moduleUrl)))
+    );
+  } catch {
+    return false;
+  }
 }
 
 if (isDirectInvocation(import.meta.url)) {
-  void runSyncoreCli().catch((error) => {
-    process.nextTick(() => {
-      throw error;
+  void runSyncoreCli()
+    .then(() => {
+      process.exit(process.exitCode ?? 0);
+    })
+    .catch((error) => {
+      process.nextTick(() => {
+        throw error;
+      });
     });
-  });
 }

@@ -1,17 +1,18 @@
 {
   "name": "@syncore/testing",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "dependencies": {
-    "@syncore/core": "workspace:*",
-    "@syncore/next": "workspace:*",
-    "@syncore/platform-expo": "workspace:*",
-    "@syncore/platform-node": "workspace:*",
-    "@syncore/platform-web": "workspace:*",
-    "@syncore/react": "workspace:*",
-    "@syncore/schema": "workspace:*",
-    "@syncore/svelte": "workspace:*",
-    "syncorejs": "workspace:*"
+    "@syncore/core": "^0.1.0",
+    "@syncore/next": "^0.1.0",
+    "@syncore/platform-expo": "^0.1.0",
+    "@syncore/platform-node": "^0.1.0",
+    "@syncore/platform-web": "^0.1.0",
+    "@syncore/react": "^0.1.0",
+    "@syncore/schema": "^0.1.0",
+    "@syncore/svelte": "^0.1.0",
+    "syncorejs": "^0.2.2"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.5",
@@ -19,18 +20,18 @@
     "vitest": "^3.0.8"
   },
   "scripts": {
-    "build:deps": "bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build && bun run --filter @syncore/core build && bun run --filter @syncore/react build && bun run --filter @syncore/svelte build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build",
-    "snapshot:declarations": "bun src/snapshot-declaration-artifacts.ts",
+    "build:deps": "npm run build --workspace @syncore/devtools-protocol && npm run build --workspace @syncore/schema && npm run build --workspace @syncore/core && npm run build --workspace @syncore/react && npm run build --workspace @syncore/svelte && npm run build --workspace @syncore/platform-web && npm run build --workspace @syncore/platform-node && npm run build --workspace @syncore/platform-expo && npm run build --workspace @syncore/next",
+    "snapshot:declarations": "tsx src/snapshot-declaration-artifacts.ts",
     "build": "node -e \"process.exit(0)\"",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('.declaration-artifacts',{recursive:true,force:true});require('node:fs').rmSync('playwright-report',{recursive:true,force:true});require('node:fs').rmSync('test-results',{recursive:true,force:true})\"",
     "lint": "eslint playwright.config.ts src tests --ext .ts",
-    "test:contract": "bun run build:deps && vitest run --config vitest.config.ts src/runtime-contract.test.ts src/plugin-contract.test.ts src/adapter-expo-contract.test.ts",
-    "test:surface": "bun run build:deps && bun run snapshot:declarations && vitest run --config vitest.config.ts src/declaration-docs.test.ts src/surface-exports.test.ts src/surface-types.test.ts",
-    "test": "bun run build:deps && bun run snapshot:declarations && vitest run --config vitest.config.ts",
-    "test:smoke:electron": "bun run --cwd ../../examples/electron build && playwright test -c playwright.electron.config.ts",
+    "test:contract": "npm run build:deps && vitest run --config vitest.config.ts src/runtime-contract.test.ts src/plugin-contract.test.ts src/adapter-expo-contract.test.ts",
+    "test:surface": "npm run build:deps && npm run snapshot:declarations && vitest run --config vitest.config.ts src/declaration-docs.test.ts src/surface-exports.test.ts src/surface-types.test.ts",
+    "test": "npm run build:deps && npm run snapshot:declarations && vitest run --config vitest.config.ts",
+    "test:smoke:electron": "npm run build --workspace syncore-example-electron && playwright test -c playwright.electron.config.ts",
     "test:smoke:expo": "tsx src/expo-smoke.ts",
     "test:smoke:web": "playwright test -c playwright.config.ts",
-    "test:smoke": "bun run test:smoke:web && bun run test:smoke:electron && bun run test:smoke:expo",
+    "test:smoke": "npm run test:smoke:web && npm run test:smoke:electron && npm run test:smoke:expo",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }

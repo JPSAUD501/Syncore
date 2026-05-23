@@ -20,7 +20,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/core": "workspace:*",
+    "@syncore/core": "^0.1.0",
     "react": "^19.0.0"
   },
   "peerDependencies": {

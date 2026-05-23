@@ -30,7 +30,7 @@ import {
   isLocalPortInUse,
   loadProjectConfig,
   loadProjectFunctions,
-  loadProjectResolvedComponents,
+  loadProjectRuntime,
   loadProjectSchema,
   resolveProjectTargetConfig,
   runCodegen,
@@ -232,14 +232,10 @@ export async function resolveProjectTargetDescriptor(
 }
 
 export async function createManagedProjectClient(cwd: string) {
-  const [paths, schema, functions, components] = await Promise.all([
-    requireProjectPaths(cwd),
-    loadProjectSchema(cwd),
-    loadRuntimeProjectFunctions(cwd),
-    loadProjectResolvedComponents(cwd)
-  ]);
+  const paths = await requireProjectPaths(cwd);
+  const { schema, functions, components } = await loadProjectRuntime(cwd);
 
-  return await createManagedNodeSyncoreClient({
+  const managed = await createManagedNodeSyncoreClient({
     databasePath: paths.databasePath,
     storageDirectory: paths.storageDirectory,
     schema,
@@ -248,6 +244,7 @@ export async function createManagedProjectClient(cwd: string) {
     devtools: false,
     platform: "cli"
   });
+  return { ...managed, functions };
 }
 
 export async function listProjectFunctions(
@@ -265,13 +262,14 @@ export async function listProjectFunctions(
 
 export async function resolveProjectFunction(
   cwd: string,
-  requestedName: string
+  requestedName: string,
+  preloadedFunctions?: SyncoreFunctionRegistry
 ): Promise<{
   name: string;
   definition: RegisteredSyncoreFunction;
   reference: FunctionReference;
 }> {
-  const functions = await loadRuntimeProjectFunctions(cwd);
+  const functions = preloadedFunctions ?? (await loadRuntimeProjectFunctions(cwd));
   const normalizedName = normalizeFunctionName(requestedName, functions);
   const definition = functions[normalizedName];
   if (!definition) {

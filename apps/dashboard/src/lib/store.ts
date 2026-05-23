@@ -347,7 +347,7 @@ function getTargetGroupKey(runtime: RuntimeState): string {
     : runtime.storageIdentity ?? `runtime::${runtime.runtimeId}`;
 }
 
-function getTargetLabel(runtime: RuntimeState, _connectedSessions: number): string {
+function getTargetLabel(runtime: RuntimeState): string {
   if (isProjectRuntime(runtime)) {
     return runtime.databaseLabel ?? runtime.appName ?? runtime.platform;
   }
@@ -383,7 +383,7 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
       return {
         id: kind === "project" ? "project" : createPublicTargetId(key, keys),
         kind,
-        label: getTargetLabel(primary, connectedSessions || sorted.length),
+        label: getTargetLabel(primary),
         platform: primary.platform,
         runtimeIds: sorted.map((runtime) => runtime.runtimeId),
         runtimes: sorted,
@@ -1325,7 +1325,7 @@ export async function request<
 ): Promise<Extract<SyncoreDevtoolsCommandResultPayload, { kind: K }>> {
   const response = await sendRequest(payload, options);
   if (response.kind === "error") {
-    throw new Error((response as { kind: "error"; message: string }).message);
+    throw new Error(response.message);
   }
   return response as Extract<SyncoreDevtoolsCommandResultPayload, { kind: K }>;
 }

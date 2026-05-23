@@ -17,22 +17,22 @@ Package builds use `tsdown`. Static type-checking stays explicit via
 ## Workspace Commands
 
 ```bash
-bun install
-bun run api:check
-bun run lint
-bun run typecheck
-bun run test
-bun run build
-bun run test:smoke
+npm install
+npm run api:check
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run test:smoke
 ```
 
 Companion commands:
 
-- `bun run api:update`
-- `bun run changeset`
-- `bun run changeset:beta:enter`
-- `bun run changeset:beta:exit`
-- `bun run clean`
+- `npm run api:update`
+- `npm run changeset`
+- `npm run changeset:beta:enter`
+- `npm run changeset:beta:exit`
+- `npm run clean`
 
 ## Validation Habits
 
@@ -51,9 +51,9 @@ together.
 
 When exported API changes are intentional:
 
-1. run `bun run api:update`
+1. run `npm run api:update`
 2. review the `packages/*/etc/*.api.md` diff
-3. run `bun run api:check`
+3. run `npm run api:check`
 
 Do not commit generated `src/**/*.d.ts` artifacts inside source trees.
 
@@ -72,9 +72,9 @@ dev loop.
 
 Smoke coverage is split by target:
 
-- Next static or PWA: `bun run --filter @syncore/testing test:smoke:web`
-- Electron: `bun run --filter @syncore/testing test:smoke:electron`
-- Expo Android: `bun run --filter @syncore/testing test:smoke:expo`
+- Next static or PWA: `npm run test:smoke:web --workspace @syncore/testing`
+- Electron: `npm run test:smoke:electron --workspace @syncore/testing`
+- Expo Android: `npm run test:smoke:expo --workspace @syncore/testing`
 
 Expo smoke is environment-aware. If `adb` or an Android device or emulator is
 missing, the runner should skip cleanly instead of failing the workspace.
@@ -83,12 +83,12 @@ missing, the runner should skip cleanly instead of failing the workspace.
 
 Repository CI runs:
 
-- `bun run api:check`
-- `bun run lint`
-- `bun run typecheck`
-- `bun run test`
-- `bun run build`
-- `bun run test:smoke`
+- `npm run api:check`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test`
+- `npm run build`
+- `npm run test:smoke`
 
 ## Release Channels
 

@@ -14,8 +14,10 @@ export function action<TContext = unknown, TArgsShape extends ValidatorMap = Val
     args: TArgsShape;
 }): SyncoreFunctionDefinition<"action", TContext, InferArgs<TArgsShape>, TResult>;
 
+// Warning: (ae-forgotten-export) The symbol "SyncoreDataModel" needs to be exported by the entry point index.d.ts
+//
 // @public
-export interface ActionCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends QueryCtx<TSchema> {
+export interface ActionCtx<TSchema extends SyncoreDataModel = SyncoreDataModel> extends QueryCtx<TSchema> {
     // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
@@ -96,7 +98,7 @@ export function composeProjectFunctionRegistry(rootFunctions: SyncoreFunctionReg
 // Warning: (ae-forgotten-export) The symbol "TablesOfSchema" needs to be exported by the entry point index.d.ts
 //
 // @public (undocumented)
-export function composeProjectSchema<TRootSchema extends SyncoreSchema<any>>(rootSchema: TRootSchema, manifest?: SyncoreComponentsManifest): SyncoreSchema<TablesOfSchema<TRootSchema> & Record<string, AnyTableDefinition>>;
+export function composeProjectSchema<TRootSchema extends SyncoreDataModel>(rootSchema: TRootSchema, manifest?: SyncoreComponentsManifest): SyncoreSchema<TablesOfSchema<TRootSchema> & Record<string, AnyTableDefinition>>;
 
 // @public (undocumented)
 export function createBindingFunctionReference<TKind extends SyncoreFunctionKind, TArgs = JsonObject, TResult = unknown>(kind: TKind, bindingName: string, functionName: string): FunctionReference<TKind, TArgs, TResult>;
@@ -136,7 +138,7 @@ export class CronJobs {
 export function cronJobs(): CronJobs;
 
 // @public (undocumented)
-export function defineComponent<TConfig = unknown, TSchema extends SyncoreSchema<any> | undefined = SyncoreSchema<any> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined>(component: Omit<SyncoreComponent<TConfig, TSchema, TPublic, TInternal>, "kind">): SyncoreComponent<TConfig, TSchema, TPublic, TInternal>;
+export function defineComponent<TConfig = unknown, TSchema extends SyncoreDataModel | undefined = SyncoreDataModel | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined>(component: Omit<SyncoreComponent<TConfig, TSchema, TPublic, TInternal>, "kind">): SyncoreComponent<TConfig, TSchema, TPublic, TInternal>;
 
 // @public (undocumented)
 export function defineComponents<TManifest extends SyncoreComponentsManifest>(components: TManifest): TManifest;
@@ -159,7 +161,7 @@ export function deserializeValue<TValue, TStorage, TFieldPaths extends string>(v
 // @public (undocumented)
 export interface DevtoolsSink {
     // (undocumented)
-    attachRuntime?(runtime: SyncoreRuntime<SyncoreSchema<any>>): void;
+    attachRuntime?(runtime: SyncoreRuntime<SyncoreDataModel>): void;
     // Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsEvent" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
@@ -170,7 +172,7 @@ export interface DevtoolsSink {
 export function diffSchemaSnapshots(previousSnapshot: SchemaSnapshot | null | undefined, nextSnapshot: SchemaSnapshot): SchemaMigrationPlan;
 
 // @public (undocumented)
-export type DocumentForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = InferDocument<TSchema["tables"][TTableName]>;
+export type DocumentForTable<TSchema extends SyncoreDataModel, TTableName extends TableNames<TSchema>> = InferDocument<TSchema["tables"][TTableName]>;
 
 // @public (undocumented)
 export type EmptyArgs = Record<never, never>;
@@ -328,7 +330,7 @@ export type InferStorage<TValidator> = TValidator extends Validator<unknown, inf
 export type InferTableInput<TTable extends AnyTableDefinition> = Infer<TTable["validator"]>;
 
 // @public (undocumented)
-export type InsertValueForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = InferTableInput<TSchema["tables"][TTableName]>;
+export type InsertValueForTable<TSchema extends SyncoreDataModel, TTableName extends TableNames<TSchema>> = InferTableInput<TSchema["tables"][TTableName]>;
 
 // @public (undocumented)
 export function installComponent<TComponent extends SyncoreComponent, TChildren extends SyncoreComponentsManifest = {}>(install: {
@@ -391,7 +393,7 @@ export function mutation<TContext = unknown, TArgsShape extends ValidatorMap = V
 }): SyncoreFunctionDefinition<"mutation", TContext, InferArgs<TArgsShape>, TResult>;
 
 // @public
-export interface MutationCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends QueryCtx<TSchema> {
+export interface MutationCtx<TSchema extends SyncoreDataModel = SyncoreDataModel> extends QueryCtx<TSchema> {
     // (undocumented)
     db: SyncoreDatabaseWriter<TSchema>;
     // (undocumented)
@@ -521,7 +523,7 @@ export type QueryCondition = {
 };
 
 // @public
-export interface QueryCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
+export interface QueryCtx<TSchema extends SyncoreDataModel = SyncoreDataModel> {
     // (undocumented)
     capabilities?: Readonly<SyncoreCapabilities>;
     // Warning: (ae-forgotten-export) The symbol "CapabilityDescriptor" needs to be exported by the entry point index.d.ts
@@ -704,7 +706,7 @@ export interface ResolvedSyncoreComponent {
     // (undocumented)
     requestedCapabilities: readonly SyncoreRequestedCapability[];
     // (undocumented)
-    schema: SyncoreSchema<any> | undefined;
+    schema: SyncoreDataModel | undefined;
     // (undocumented)
     source: string;
     // (undocumented)
@@ -863,7 +865,7 @@ export interface SyncoreClient {
 }
 
 // @public (undocumented)
-export interface SyncoreComponent<TConfig = unknown, TSchema extends SyncoreSchema<any> | undefined = SyncoreSchema<any> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined> {
+export interface SyncoreComponent<TConfig = unknown, TSchema extends SyncoreDataModel | undefined = SyncoreDataModel | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined> {
     // (undocumented)
     readonly config?: Validator<TConfig>;
     // (undocumented)
@@ -953,7 +955,7 @@ export type SyncoreComponentsManifest = Record<string, SyncoreComponentInstall>;
 export type SyncoreCoreCapability = "storage" | "scheduler" | "devtools" | "ownTables" | "publicExports" | "internalActions";
 
 // @public (undocumented)
-export interface SyncoreDatabaseReader<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
+export interface SyncoreDatabaseReader<TSchema extends SyncoreDataModel = SyncoreDataModel> {
     // (undocumented)
     get<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<DocumentForTable<TSchema, TTableName> | null>;
     // (undocumented)
@@ -963,7 +965,7 @@ export interface SyncoreDatabaseReader<TSchema extends SyncoreSchema<any> = Sync
 }
 
 // @public (undocumented)
-export interface SyncoreDatabaseWriter<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends SyncoreDatabaseReader<TSchema> {
+export interface SyncoreDatabaseWriter<TSchema extends SyncoreDataModel = SyncoreDataModel> extends SyncoreDatabaseReader<TSchema> {
     // (undocumented)
     delete<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<void>;
     // (undocumented)
@@ -1012,7 +1014,7 @@ export type SyncoreRequestedCapability = SyncoreCoreCapability | `host:${Syncore
 export type SyncoreResolvedComponents = readonly ResolvedSyncoreComponent[];
 
 // @public
-export class SyncoreRuntime<TSchema extends SyncoreSchema<any>> {
+export class SyncoreRuntime<TSchema extends SyncoreDataModel> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
     // (undocumented)
     createClient(): SyncoreClient;
@@ -1039,7 +1041,7 @@ export class SyncoreRuntime<TSchema extends SyncoreSchema<any>> {
 }
 
 // @public (undocumented)
-export interface SyncoreRuntimeOptions<TSchema extends SyncoreSchema<any>> {
+export interface SyncoreRuntimeOptions<TSchema extends SyncoreDataModel> {
     // (undocumented)
     capabilities?: SyncoreCapabilities;
     // (undocumented)
@@ -1239,7 +1241,7 @@ export type TableIndexFields<TTable, TIndexName extends TableIndexNames<TTable>>
 export type TableIndexNames<TTable> = Extract<keyof TableIndexes<TTable>, string>;
 
 // @public (undocumented)
-export type TableNames<TSchema extends SyncoreSchema<any>> = Extract<keyof TSchema["tables"], string>;
+export type TableNames<TSchema extends SyncoreDataModel> = Extract<keyof TSchema["tables"], string>;
 
 // @public (undocumented)
 export type TableSearchIndexConfig<TTable, TIndexName extends TableSearchIndexNames<TTable>> = TableSearchIndexes<TTable>[TIndexName];

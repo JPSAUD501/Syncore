@@ -4,7 +4,7 @@ import {
   useRuntimeList,
   useDevtoolsStore
 } from "@/lib/store";
-import { cn, formatTime, formatDuration } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {

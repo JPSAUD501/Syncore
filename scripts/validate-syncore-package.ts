@@ -17,8 +17,8 @@ async function main(): Promise<void> {
 
   try {
     await execCommand(
-      "bun",
-      ["run", "--filter", syncorePublishedPackageName, "build:standalone"],
+      "npm",
+      ["run", "build:standalone", "--workspace", syncorePublishedPackageName],
       workspaceRoot
     );
 
@@ -94,22 +94,6 @@ async function main(): Promise<void> {
     if (!npxResult.stdout.includes(syncorePublishedBinName)) {
       throw new Error(
         `Expected npx ${syncorePublishedBinName} --help to mention the CLI name.`
-      );
-    }
-
-    const bunResult = await execCommand(
-      "bun",
-      ["x", syncorePublishedBinName, "--help"],
-      fixtureDir
-    );
-    if (!bunResult.stdout.includes(syncorePublishedBinName)) {
-      throw new Error(
-        `Expected bun x ${syncorePublishedBinName} --help to mention the CLI name.`
-      );
-    }
-    if (/Detected unsettled top-level await/i.test(bunResult.stderr)) {
-      throw new Error(
-        `bun x ${syncorePublishedBinName} --help emitted an unsettled top-level await warning:\n${bunResult.stderr}`
       );
     }
 

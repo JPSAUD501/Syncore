@@ -18,9 +18,9 @@
 
 ## Tests To Run
 
-- `bun run --filter @syncore/platform-node test`
-- `bun run --filter @syncore/platform-node typecheck`
-- `bun run --filter syncore-example-electron typecheck`
+- `npm run test --workspace @syncore/platform-node`
+- `npm run typecheck --workspace @syncore/platform-node`
+- `npm run typecheck --workspace syncore-example-electron`
 
 ## Common Failure Modes
 

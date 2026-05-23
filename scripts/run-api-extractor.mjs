@@ -45,9 +45,10 @@ const projectFolders = [
 
 try {
   await runCommand(
-    "bun",
+    "npm",
     [
-      "run",
+      "exec",
+      "--",
       "turbo",
       "run",
       "build",

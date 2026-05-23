@@ -12,13 +12,13 @@
 
 ## Example Integration
 
-- Examples run codegen from CLI source via `bun run --cwd ../../packages/cli tsx src/index.ts codegen`.
+- Examples run codegen from CLI source via `tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen`.
 - Avoid changes that require the built CLI `dist` to exist during parallel lint/typecheck tasks.
 
 ## Tests To Run
 
-- `bun run --filter @syncore/cli test`
-- `bun run --filter @syncore/cli typecheck`
+- `npm run test --workspace @syncore/cli`
+- `npm run typecheck --workspace @syncore/cli`
 
 ## Common Failure Modes
 

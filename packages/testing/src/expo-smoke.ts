@@ -46,13 +46,13 @@ async function main(): Promise<void> {
     }
 
     await runStreaming(
-      "bun",
-      ["run", "turbo", "run", "build", "--filter=syncore-example-expo..."],
+      "npm",
+      ["exec", "--", "turbo", "run", "build", "--filter=syncore-example-expo..."],
       workspaceRoot
     );
     await runStreaming(
-      "bun",
-      ["run", "--filter", "syncore-example-expo", "android:smoke"],
+      "npm",
+      ["run", "android:smoke", "--workspace", "syncore-example-expo"],
       workspaceRoot
     );
 

@@ -4,8 +4,8 @@
 
 ```ts
 
+import * as _$react_jsx_runtime0 from 'react/jsx-runtime';
 import { ManagedWebWorkerClient } from '@syncore/platform-web';
-import * as react_jsx_runtime0 from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 
 // @public
@@ -41,7 +41,7 @@ export function SyncoreNextProvider(input: {
     serviceWorkerUrl?: string; /** Optional explicit module URL for an already-public worker asset. */
     workerUrl?: URL | string; /** Optional public worker asset path for production builds. */
     workerAssetUrl?: string;
-}): react_jsx_runtime0.JSX.Element;
+}): _$react_jsx_runtime0.JSX.Element;
 
 // @public
 export function SyncoreServiceWorker(input: {

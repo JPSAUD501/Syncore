@@ -30,9 +30,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/core": "workspace:*",
-    "@syncore/devtools-protocol": "workspace:*",
-    "@syncore/schema": "workspace:*",
+    "@syncore/core": "^0.1.0",
+    "@syncore/devtools-protocol": "^0.1.0",
+    "@syncore/schema": "^0.1.0",
     "node-sql-parser": "^5.4.0",
     "ws": "^8.18.0"
   },

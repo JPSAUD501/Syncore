@@ -100,9 +100,9 @@
     }
   },
   "scripts": {
-    "build": "bun run build:deps && tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
-    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/schema build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/cli build && bun run --filter @syncore/react build && bun run --filter @syncore/platform-web build && bun run --filter @syncore/platform-node build && bun run --filter @syncore/platform-expo build && bun run --filter @syncore/next build && bun run --filter @syncore/svelte build",
-    "build:standalone": "bun run build",
+    "build": "npm run build:deps && tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
+    "build:deps": "npm run build --workspace @syncore/core && npm run build --workspace @syncore/schema && npm run build --workspace @syncore/devtools-protocol && npm run build --workspace @syncore/cli && npm run build --workspace @syncore/react && npm run build --workspace @syncore/platform-web && npm run build --workspace @syncore/platform-node && npm run build --workspace @syncore/platform-expo && npm run build --workspace @syncore/next && npm run build --workspace @syncore/svelte",
+    "build:standalone": "npm run build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run --passWithNoTests",
@@ -146,15 +146,15 @@
     }
   },
   "devDependencies": {
-    "@syncore/cli": "workspace:*",
-    "@syncore/core": "workspace:*",
-    "@syncore/devtools-protocol": "workspace:*",
-    "@syncore/next": "workspace:*",
-    "@syncore/platform-expo": "workspace:*",
-    "@syncore/platform-node": "workspace:*",
-    "@syncore/platform-web": "workspace:*",
-    "@syncore/react": "workspace:*",
-    "@syncore/schema": "workspace:*",
-    "@syncore/svelte": "workspace:*"
+    "@syncore/cli": "^0.1.0",
+    "@syncore/core": "^0.1.0",
+    "@syncore/devtools-protocol": "^0.1.0",
+    "@syncore/next": "^0.1.0",
+    "@syncore/platform-expo": "^0.1.0",
+    "@syncore/platform-node": "^0.1.0",
+    "@syncore/platform-web": "^0.1.0",
+    "@syncore/react": "^0.1.0",
+    "@syncore/schema": "^0.1.0",
+    "@syncore/svelte": "^0.1.0"
   }
 }

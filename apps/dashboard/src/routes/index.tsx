@@ -29,7 +29,6 @@ import {
   useConnection,
   useDevtools
 } from "@/hooks";
-import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useMemo, useRef, useEffect } from "react";
 import {
   EVENT_BADGE_VARIANTS,
@@ -217,10 +216,6 @@ export function OverviewPage() {
     runtimeConnected && runtimeId ? { kind: "runtime.activeQueries" } : null,
     { enabled: runtimeConnected && !!runtimeId }
   );
-  const summary =
-    summarySubscription.data?.kind === "runtime.summary.result"
-      ? summarySubscription.data.summary
-      : (activeRuntime?.summary ?? null);
   const activeQueries =
     activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
       ? activeQueriesSubscription.data.activeQueries

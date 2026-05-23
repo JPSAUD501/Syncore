@@ -25,9 +25,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/core": "workspace:*",
-    "@syncore/platform-web": "workspace:*",
-    "@syncore/schema": "workspace:*",
+    "@syncore/core": "^0.1.0",
+    "@syncore/platform-web": "^0.1.0",
+    "@syncore/schema": "^0.1.0",
     "expo-file-system": "^55.0.10",
     "expo-sqlite": "^55.0.10"
   },

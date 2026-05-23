@@ -1,22 +1,23 @@
 {
   "name": "syncore-example-sveltekit",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "syncorejs": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
-    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
-    "syncorejs:codegen": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
-    "build:deps": "bun run --filter syncorejs build:standalone",
+    "syncorejs": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
+    "syncorejs:dev": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
+    "syncorejs:codegen": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
+    "build:deps": "npm run build:standalone --workspace syncorejs",
     "dev": "turbo run dev:app --filter=syncore-example-sveltekit",
     "dev:app": "vite dev",
-    "dev:syncore": "bun run syncorejs:dev",
-    "build": "bun run syncorejs:codegen && vite build",
-    "typecheck": "bun run syncorejs:codegen && tsc -p tsconfig.json --noEmit"
+    "dev:syncore": "npm run syncorejs:dev",
+    "build": "npm run syncorejs:codegen && vite build",
+    "typecheck": "npm run syncorejs:codegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "sql.js": "^1.13.0",
     "svelte": "^5.0.0",
-    "syncorejs": "workspace:*"
+    "syncorejs": "^0.2.2"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

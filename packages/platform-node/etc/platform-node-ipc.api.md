@@ -9,7 +9,7 @@ import { AttachRuntimeBridgeOptions } from '@syncore/core';
 import { BridgeQueryWatch } from '@syncore/core';
 import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
-import { SyncoreSchema } from '@syncore/core';
+import { SyncoreDataModel } from '@syncore/core';
 
 // @public (undocumented)
 export type AttachedNodeIpcRuntime = AttachedRuntimeBridge;
@@ -18,7 +18,7 @@ export type AttachedNodeIpcRuntime = AttachedRuntimeBridge;
 export function attachNodeIpcRuntime(options: AttachNodeIpcRuntimeOptions): AttachedNodeIpcRuntime;
 
 // @public (undocumented)
-export type AttachNodeIpcRuntimeOptions = AttachRuntimeBridgeOptions<NodeIpcSyncoreSchema>;
+export type AttachNodeIpcRuntimeOptions<TSchema extends NodeIpcSyncoreSchema = NodeIpcSyncoreSchema> = AttachRuntimeBridgeOptions<TSchema>;
 
 // @public (undocumented)
 export function createNodeIpcMessageEndpoint(bridge: SyncoreMainProcessBridge): SyncoreIpcMessageEndpoint & {
@@ -40,7 +40,7 @@ export function installSyncoreWindowBridge(options?: {
 }): string;
 
 // @public (undocumented)
-export type NodeIpcSyncoreSchema = SyncoreSchema<any>;
+export type NodeIpcSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
 // @public (undocumented)
 export type RendererQueryWatch<TValue> = BridgeQueryWatch<TValue>;

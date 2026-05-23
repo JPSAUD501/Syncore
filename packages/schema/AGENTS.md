@@ -18,9 +18,9 @@
 
 ## Tests To Run
 
-- `bun run --filter @syncore/schema lint`
-- `bun run --filter @syncore/schema typecheck`
-- `bun run --filter syncore test`
+- `npm run lint --workspace @syncore/schema`
+- `npm run typecheck --workspace @syncore/schema`
+- `npm run test --workspace @syncore/core`
 
 ## Common Failure Modes
 

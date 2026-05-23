@@ -4,47 +4,47 @@
 
 ```ts
 
+import * as _$_syncore_core0 from '@syncore/core';
 import { DevtoolsSink } from '@syncore/core';
 import { SchedulerOptions } from '@syncore/core';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
-import * as _syncore_core0 from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreDataModel } from '@syncore/core';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
-import { SyncoreSchema } from '@syncore/core';
 import { SyncoreSqlDriver } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 
 // @public
-export interface CreateExpoRuntimeOptions {
+export interface CreateExpoRuntimeOptions<TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema> {
     capabilities?: SyncoreCapabilities;
-    components?: SyncoreRuntimeOptions<ExpoSyncoreSchema>["components"];
+    components?: SyncoreRuntimeOptions<TSchema>["components"];
     databaseDirectory?: string;
     databaseName?: string;
     devtools?: DevtoolsSink;
     driver?: SyncoreSqlDriver;
     externalChangeApplier?: SyncoreExternalChangeApplier;
     externalChangeSignal?: SyncoreExternalChangeSignal;
-    functions: SyncoreRuntimeOptions<ExpoSyncoreSchema>["functions"];
+    functions: SyncoreRuntimeOptions<TSchema>["functions"];
     platform?: string;
     scheduler?: SchedulerOptions;
-    schema: ExpoSyncoreSchema;
+    schema: TSchema;
     storage?: SyncoreStorageAdapter;
     storageDirectoryName?: string;
 }
 
 // @public
-export function createExpoSyncoreBootstrap(options: CreateExpoRuntimeOptions): ExpoSyncoreBootstrap;
+export function createExpoSyncoreBootstrap<TSchema extends ExpoSyncoreSchema>(options: CreateExpoRuntimeOptions<TSchema>): ExpoSyncoreBootstrap<TSchema>;
 
 // @public
-export function createExpoSyncoreClient(runtime: SyncoreRuntime<ExpoSyncoreSchema>): _syncore_core0.SyncoreClient;
+export function createExpoSyncoreClient<TSchema extends ExpoSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): _$_syncore_core0.SyncoreClient;
 
 // @public
-export function createExpoSyncoreRuntime(options: CreateExpoRuntimeOptions): SyncoreRuntime<ExpoSyncoreSchema>;
+export function createExpoSyncoreRuntime<TSchema extends ExpoSyncoreSchema>(options: CreateExpoRuntimeOptions<TSchema>): SyncoreRuntime<TSchema>;
 
 // @public
 export class ExpoFileStorageAdapter implements SyncoreStorageAdapter {
@@ -87,15 +87,15 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
 }
 
 // @public
-export interface ExpoSyncoreBootstrap {
-    getClient(): Promise<ReturnType<SyncoreRuntime<ExpoSyncoreSchema>["createClient"]>>;
+export interface ExpoSyncoreBootstrap<TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema> {
+    getClient(): Promise<ReturnType<SyncoreRuntime<TSchema>["createClient"]>>;
     getRuntime(): never;
     reset(): Promise<void>;
     stop(): Promise<void>;
 }
 
 // @public (undocumented)
-export type ExpoSyncoreSchema = SyncoreSchema<any>;
+export type ExpoSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
 // (No @packageDocumentation comment for this package)
 

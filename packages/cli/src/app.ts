@@ -701,12 +701,7 @@ function addRunCommand(program: Command): void {
         if (options.runtime && !options.target) {
           ctx.fail("`syncorejs run --runtime` requires --target.");
         }
-        const resolved = await resolveProjectFunction(ctx.cwd, functionName);
         const args = parseJsonObject(argsText, "Function arguments");
-
-        if (options.watch && resolved.definition.kind !== "query") {
-          ctx.fail("`syncorejs run --watch` only supports query functions.");
-        }
 
         const target = await resolveOperationalTarget(ctx, options.target, {
           command: "run",
@@ -715,14 +710,22 @@ function addRunCommand(program: Command): void {
         const runtime = resolveClientRuntime(target, options.runtime, {
           command: "run"
         });
-        ctx.info(
-          options.watch
-            ? `Watching ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
-            : `Running ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
-        );
         if (target.kind === "project") {
           const managed = await createManagedProjectClient(ctx.cwd);
           try {
+            const resolved = await resolveProjectFunction(
+              ctx.cwd,
+              functionName,
+              managed.functions
+            );
+            if (options.watch && resolved.definition.kind !== "query") {
+              ctx.fail("`syncorejs run --watch` only supports query functions.");
+            }
+            ctx.info(
+              options.watch
+                ? `Watching ${resolved.name} on ${target.id}.`
+                : `Running ${resolved.name} on ${target.id}.`
+            );
             if (options.watch) {
               const watch = managed.client.watchQuery(
                 resolved.reference as never,
@@ -761,6 +764,15 @@ function addRunCommand(program: Command): void {
           }
         }
 
+        const resolved = await resolveProjectFunction(ctx.cwd, functionName);
+        if (options.watch && resolved.definition.kind !== "query") {
+          ctx.fail("`syncorejs run --watch` only supports query functions.");
+        }
+        ctx.info(
+          options.watch
+            ? `Watching ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
+            : `Running ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
+        );
         const hub = await requireHubConnection(ctx);
         try {
           if (options.watch) {

@@ -262,7 +262,7 @@ export class EnumValidator<
         `${path} must be one of ${this.values.map((item) => JSON.stringify(item)).join(", ")}.`
       );
     }
-    return value as TValues[number];
+    return value;
   }
 
   describe(): ValidatorDescription {
@@ -498,7 +498,7 @@ export class RecordValidator<
       const parsedKey = this.keyValidator.parse(key, `${path}.{key}`);
       parsed[parsedKey] = this.valueValidator.parse(item, `${path}.${key}`);
     }
-    return parsed as Record<TKey, TValue>;
+    return parsed;
   }
 
   override serialize(
@@ -510,7 +510,7 @@ export class RecordValidator<
     for (const [key, item] of Object.entries(parsed)) {
       serialized[key] = serializeValue(this.valueValidator, item, `${path}.${key}`);
     }
-    return serialized as Record<TKey, TStorage>;
+    return serialized;
   }
 
   override deserialize(
@@ -530,7 +530,7 @@ export class RecordValidator<
         `${path}.${key}`
       );
     }
-    return parsed as Record<TKey, TValue>;
+    return parsed;
   }
 
   describe(): ValidatorDescription {

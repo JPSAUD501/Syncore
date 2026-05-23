@@ -115,7 +115,7 @@ function FunctionsPage() {
         args?: Record<string, unknown>;
       } = {
         name: fn.name,
-        type: fn.type as FunctionType,
+        type: fn.type,
         file: fn.file,
         invocations: 0,
         avgDuration: 0,
