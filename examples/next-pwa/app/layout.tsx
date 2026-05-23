@@ -28,7 +28,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/planner-icon.svg" type="image/svg+xml" />
         <meta name="theme-color" content="#2a1f16" />
