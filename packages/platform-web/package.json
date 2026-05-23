@@ -31,9 +31,9 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@types/react": "^19.0.10",
-    "@types/sql.js": "^1.4.9",
+    "@types/react": "^19.2.15",
+    "@types/sql.js": "^1.4.11",
     "fake-indexeddb": "^6.2.5",
-    "react": "^19.0.0"
+    "react": "^19.2.6"
   }
 }

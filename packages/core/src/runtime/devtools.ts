@@ -586,15 +586,10 @@ async function getSchemaTables(
         { name: "_creationTime", type: "number", optional: false }
       );
 
-      let documentCount = 0;
-      try {
-        const countRow = await driver.get<{ count: number }>(
-          `SELECT COUNT(*) as count FROM "${name}"`
-        );
-        documentCount = countRow?.count ?? 0;
-      } catch {
-        documentCount = 0;
-      }
+      const documentCount = await driver
+        .get<{ count: number }>(`SELECT COUNT(*) as count FROM "${name}"`)
+        .then((countRow) => countRow?.count ?? 0)
+        .catch(() => 0);
 
       return {
         name,

@@ -24,17 +24,17 @@
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "syncorejs": "^0.2.2"
   },
   "devDependencies": {
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^36.3.2",
-    "typescript": "^5.8.2",
-    "vite": "^6.4.1"
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.2.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
   },
   "trustedDependencies": [
     "electron"

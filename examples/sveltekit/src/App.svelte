@@ -179,6 +179,7 @@
               class="color-btn {draftColor === color ? 'color-btn--active' : ''}"
               style="background: {color}"
               on:click={() => (draftColor = color)}
+              aria-label="Use color {color}"
             ></button>
           {/each}
         </div>

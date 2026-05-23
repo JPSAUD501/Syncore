@@ -615,15 +615,15 @@ export async function findWorkspaceSyncoreProjects(
     return [];
   }
 
-  let workspaces: string[] = [];
+  let packageJson: { workspaces?: string[] };
   try {
-    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
+    packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
       workspaces?: string[];
     };
-    workspaces = packageJson.workspaces ?? [];
   } catch {
     return [];
   }
+  const workspaces = packageJson.workspaces ?? [];
 
   const directories = new Set<string>();
   for (const workspace of workspaces) {

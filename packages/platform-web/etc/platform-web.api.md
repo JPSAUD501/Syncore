@@ -4,7 +4,6 @@
 
 ```ts
 
-import * as _$_syncore_core0 from '@syncore/core';
 import { AttachedRuntimeBridge } from '@syncore/core';
 import { AttachRuntimeBridgeOptions } from '@syncore/core';
 import { BridgeQueryWatch } from '@syncore/core';
@@ -19,6 +18,7 @@ import { StorageWriteInput } from '@syncore/core';
 import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreClient } from '@syncore/core';
 import { SyncoreDataModel } from '@syncore/core';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeEvent } from '@syncore/core';
@@ -109,7 +109,7 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
 export type CreateBrowserRuntimeOptions<TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema> = CreateWebRuntimeOptions<TSchema>;
 
 // @public
-export function createBrowserSyncoreClient<TSchema extends BrowserSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): _$_syncore_core0.SyncoreClient;
+export function createBrowserSyncoreClient<TSchema extends BrowserSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): SyncoreClient;
 
 // @public
 export function createBrowserSyncoreRuntime<TSchema extends BrowserSyncoreSchema>(options: CreateBrowserRuntimeOptions<TSchema>): Promise<SyncoreRuntime<TSchema>>;
@@ -118,7 +118,7 @@ export function createBrowserSyncoreRuntime<TSchema extends BrowserSyncoreSchema
 export function createBrowserWebSocketDevtoolsSink(options: BrowserWebSocketDevtoolsSinkOptions): BrowserWebSocketDevtoolsSink;
 
 // @public
-export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOptions): _$_syncore_core0.AttachedRuntimeBridge;
+export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOptions): AttachedRuntimeBridge;
 
 // @public
 export type CreateBrowserWorkerRuntimeOptions<TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema> = CreateWebWorkerRuntimeOptions<TSchema>;
@@ -186,7 +186,7 @@ export interface CreateWebRuntimeOptions<TSchema extends WebSyncoreSchema = WebS
 }
 
 // @public
-export function createWebSyncoreClient<TSchema extends WebSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): _$_syncore_core0.SyncoreClient;
+export function createWebSyncoreClient<TSchema extends WebSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): SyncoreClient;
 
 // @public
 export function createWebSyncoreRuntime<TSchema extends WebSyncoreSchema>(options: CreateWebRuntimeOptions<TSchema>): Promise<SyncoreRuntime<TSchema>>;
@@ -202,7 +202,7 @@ export interface CreateWebWorkerClientProviderOptions {
 }
 
 // @public
-export function createWebWorkerRuntime<TSchema extends WebSyncoreSchema>(options: CreateWebWorkerRuntimeOptions<TSchema>): _$_syncore_core0.AttachedRuntimeBridge;
+export function createWebWorkerRuntime<TSchema extends WebSyncoreSchema>(options: CreateWebWorkerRuntimeOptions<TSchema>): AttachedRuntimeBridge;
 
 // @public
 export interface CreateWebWorkerRuntimeOptions<TSchema extends WebSyncoreSchema = WebSyncoreSchema> extends CreateWebRuntimeOptions<TSchema> {

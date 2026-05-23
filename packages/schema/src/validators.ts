@@ -571,7 +571,6 @@ export class UnionValidator<
     for (const member of this.members) {
       try {
         const parsed = member.parse(value, path);
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         return serializeValue(
           member as Validator<
             Infer<TMembers[number]>,
@@ -755,7 +754,6 @@ export const s: ValidatorBuilderApi = {
   >(
     itemValidator: TValidator
   ) =>
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     new ArrayValidator(itemValidator) as ArrayValidator<TItem, TItemStorage, TValidator>,
   object: <TShape extends ObjectValidatorShape>(shape: TShape) =>
     new ObjectValidator(shape),
@@ -774,7 +772,6 @@ export const s: ValidatorBuilderApi = {
     keyValidator: TKeyValidator,
     valueValidator: TValueValidator
   ) =>
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     new RecordValidator(keyValidator, valueValidator) as RecordValidator<
       TKey,
       TValue,
@@ -801,7 +798,6 @@ export const s: ValidatorBuilderApi = {
       deserialize(value: TStored): TValue;
     }
   ) =>
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     new CodecValidator(valueValidator, config.storage, {
       serialize: (value) => config.serialize(value),
       deserialize: (value) => config.deserialize(value)

@@ -299,15 +299,12 @@ export class SchemaEngine<
         { name: "_creationTime", type: "number", optional: false }
       );
 
-      let documentCount = 0;
-      try {
-        const countRow = await this.deps.driver.get<{ count: number }>(
+      const documentCount = await this.deps.driver
+        .get<{ count: number }>(
           `SELECT COUNT(*) as count FROM ${quoteIdentifier(name)}`
-        );
-        documentCount = countRow?.count ?? 0;
-      } catch {
-        documentCount = 0;
-      }
+        )
+        .then((countRow) => countRow?.count ?? 0)
+        .catch(() => 0);
 
       tables.push({
         name,

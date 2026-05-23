@@ -29,9 +29,9 @@
     "@syncore/core": "^0.1.0",
     "@syncore/devtools-protocol": "^0.1.0",
     "@syncore/platform-node": "^0.1.0",
-    "adm-zip": "^0.5.16",
-    "commander": "^13.1.0",
-    "tsx": "^4.19.3",
-    "ws": "^8.18.0"
+    "adm-zip": "^0.5.17",
+    "commander": "^14.0.3",
+    "tsx": "^4.22.3",
+    "ws": "^8.21.0"
   }
 }

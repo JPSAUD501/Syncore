@@ -17,7 +17,7 @@
   "devDependencies": {
     "fake-indexeddb": "^6.2.5",
     "sql.js": "^1.14.1",
-    "vitest": "^3.0.8"
+    "vitest": "^4.1.7"
   },
   "scripts": {
     "build:deps": "npm run build --workspace @syncore/devtools-protocol && npm run build --workspace @syncore/schema && npm run build --workspace @syncore/core && npm run build --workspace @syncore/react && npm run build --workspace @syncore/svelte && npm run build --workspace @syncore/platform-web && npm run build --workspace @syncore/platform-node && npm run build --workspace @syncore/platform-expo && npm run build --workspace @syncore/next",

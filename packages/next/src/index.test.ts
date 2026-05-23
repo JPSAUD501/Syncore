@@ -13,14 +13,31 @@ describe("@syncore/next", () => {
   });
 
   it("adds async webassembly and wasm caching headers", async () => {
-    const wrapped = withSyncoreNext({});
+    const wrapped = withSyncoreNext({ transpilePackages: ["custom-package"] });
     const webpack = (
-      wrapped as {
+      wrapped as unknown as {
         webpack: (config: Record<string, unknown>) => Record<string, unknown>;
       }
     ).webpack;
+    expect(wrapped.transpilePackages).toEqual(
+      expect.arrayContaining([
+        "custom-package",
+        "syncorejs",
+        "@syncore/core",
+        "@syncore/schema",
+        "@syncore/react",
+        "@syncore/platform-web",
+        "@syncore/next"
+      ])
+    );
     const nextConfig = webpack({ experiments: {} });
     expect(nextConfig.experiments).toMatchObject({ asyncWebAssembly: true });
+    expect(nextConfig.resolve).toMatchObject({
+      extensionAlias: {
+        ".js": [".ts", ".tsx", ".js"],
+        ".mjs": [".mts", ".mjs"]
+      }
+    });
 
     const headers = await (
       wrapped as unknown as {

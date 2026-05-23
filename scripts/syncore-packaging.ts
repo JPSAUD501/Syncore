@@ -230,11 +230,11 @@ export function replaceModuleSpecifier(
       `export * from '${replacement}'`
     )
     .replace(
-      new RegExp(`import("${escaped}")`, "g"),
+      new RegExp(`import\\("${escaped}"\\)`, "g"),
       `import("${replacement}")`
     )
     .replace(
-      new RegExp(`import('${escaped}')`, "g"),
+      new RegExp(`import\\('${escaped}'\\)`, "g"),
       `import('${replacement}')`
     );
 }

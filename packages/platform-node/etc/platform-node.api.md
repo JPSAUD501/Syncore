@@ -4,7 +4,6 @@
 
 ```ts
 
-import * as _$_syncore_core0 from '@syncore/core';
 import { AttachedRuntimeBridge } from '@syncore/core';
 import { AttachRuntimeBridgeOptions } from '@syncore/core';
 import { BridgeQueryWatch } from '@syncore/core';
@@ -18,6 +17,7 @@ import { SyncoreActiveQueryInfo } from '@syncore/devtools-protocol';
 import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreClient } from '@syncore/core';
 import { SyncoreDataModel } from '@syncore/core';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
 import { SyncoreRuntime } from '@syncore/core';
@@ -52,7 +52,7 @@ export function bindElectronWindowToSyncoreRuntime(options: {
 }): SyncoreElectronIpcBinding;
 
 // @public
-export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): _$_syncore_core0.SyncoreBridgeMessageEndpoint & {
+export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): SyncoreBridgeMessageEndpoint & {
     dispose(): void;
 };
 
@@ -105,7 +105,7 @@ export interface CreateNodeRuntimeOptions<TSchema extends NodeSyncoreSchema = No
 }
 
 // @public
-export function createNodeSyncoreClient<TSchema extends NodeSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): _$_syncore_core0.SyncoreClient;
+export function createNodeSyncoreClient<TSchema extends NodeSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): SyncoreClient;
 
 // @public
 export function createNodeSyncoreRuntime<TSchema extends NodeSyncoreSchema>(options: CreateNodeRuntimeOptions<TSchema>): SyncoreRuntime<TSchema>;

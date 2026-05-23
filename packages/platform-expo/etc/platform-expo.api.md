@@ -4,13 +4,13 @@
 
 ```ts
 
-import * as _$_syncore_core0 from '@syncore/core';
 import { DevtoolsSink } from '@syncore/core';
 import { SchedulerOptions } from '@syncore/core';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreClient } from '@syncore/core';
 import { SyncoreDataModel } from '@syncore/core';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
@@ -41,7 +41,7 @@ export interface CreateExpoRuntimeOptions<TSchema extends ExpoSyncoreSchema = Ex
 export function createExpoSyncoreBootstrap<TSchema extends ExpoSyncoreSchema>(options: CreateExpoRuntimeOptions<TSchema>): ExpoSyncoreBootstrap<TSchema>;
 
 // @public
-export function createExpoSyncoreClient<TSchema extends ExpoSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): _$_syncore_core0.SyncoreClient;
+export function createExpoSyncoreClient<TSchema extends ExpoSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): SyncoreClient;
 
 // @public
 export function createExpoSyncoreRuntime<TSchema extends ExpoSyncoreSchema>(options: CreateExpoRuntimeOptions<TSchema>): SyncoreRuntime<TSchema>;

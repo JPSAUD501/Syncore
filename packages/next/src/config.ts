@@ -39,9 +39,24 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
       }
     ]
   };
+  const userTranspilePackages = Array.isArray(baseConfig.transpilePackages)
+    ? baseConfig.transpilePackages
+    : [];
+  const internalScope = `${String.fromCharCode(64)}syncore/`;
+  const syncoreTranspilePackages = [
+    "syncorejs",
+    `${internalScope}core`,
+    `${internalScope}schema`,
+    `${internalScope}react`,
+    `${internalScope}platform-web`,
+    `${internalScope}next`
+  ];
 
   const nextConfig: Record<string, unknown> = {
     ...config,
+    transpilePackages: Array.from(
+      new Set([...userTranspilePackages, ...syncoreTranspilePackages])
+    ),
     webpack(currentConfig: Record<string, unknown>, context: unknown) {
       const nextConfig = { ...currentConfig };
       const experiments = (nextConfig.experiments ?? {}) as Record<
@@ -51,6 +66,15 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
       nextConfig.experiments = {
         ...experiments,
         asyncWebAssembly: true
+      };
+      const resolve = (nextConfig.resolve ?? {}) as Record<string, unknown>;
+      nextConfig.resolve = {
+        ...resolve,
+        extensionAlias: {
+          ...((resolve.extensionAlias ?? {}) as Record<string, unknown>),
+          ".js": [".ts", ".tsx", ".js"],
+          ".mjs": [".mts", ".mjs"]
+        }
       };
 
       type WebpackContext = {

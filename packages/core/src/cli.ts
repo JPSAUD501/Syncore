@@ -1184,7 +1184,8 @@ export async function importJsonlIntoProject(
         parsed = JSON.parse(line);
       } catch (error) {
         throw new Error(
-          `Invalid JSON on line ${lineNumber} of ${sourcePath}: ${formatError(error)}`
+          `Invalid JSON on line ${lineNumber} of ${sourcePath}: ${formatError(error)}`,
+          { cause: error }
         );
       }
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {

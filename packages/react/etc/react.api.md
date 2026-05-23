@@ -4,10 +4,10 @@
 
 ```ts
 
-import * as _$react_jsx_runtime0 from 'react/jsx-runtime';
 import { FunctionArgs } from '@syncore/core';
 import { FunctionReference } from '@syncore/core';
 import { FunctionResult } from '@syncore/core';
+import { JSX } from 'react/jsx-runtime';
 import { PaginationOptions } from '@syncore/core';
 import { PaginationResult } from '@syncore/core';
 import { ReactNode } from 'react';
@@ -23,7 +23,7 @@ export const skip: "skip";
 export function SyncoreProvider(input: {
     client: SyncoreClient;
     children: ReactNode;
-}): _$react_jsx_runtime0.JSX.Element;
+}): JSX.Element;
 
 // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.ts
 //

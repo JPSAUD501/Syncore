@@ -2313,7 +2313,9 @@ function parseJsonObject(input: string, label: string): Record<string, unknown> 
   try {
     parsed = JSON.parse(input);
   } catch (error) {
-    throw new Error(`${label} must be valid JSON: ${formatError(error)}`);
+    throw new Error(`${label} must be valid JSON: ${formatError(error)}`, {
+      cause: error
+    });
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(`${label} must be a JSON object.`);

@@ -232,7 +232,7 @@ function createTestClient(options?: {
 type TestWatch<TResult> = SyncoreWatch<TResult> & {
   setResult(value: TResult): void;
   setError(error: Error): void;
-  dispose: ReturnType<typeof vi.fn>;
+  dispose: () => void;
 };
 
 function createTestWatch<TResult>(initialValue?: TResult): TestWatch<TResult> {
