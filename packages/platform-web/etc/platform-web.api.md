@@ -20,6 +20,7 @@ import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
 import { SyncoreClient } from '@syncore/core';
 import { SyncoreDataModel } from '@syncore/core';
+import { SyncoreDevtoolsCapabilities } from '@syncore/devtools-protocol';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeEvent } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
@@ -87,6 +88,8 @@ export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
 export interface BrowserWebSocketDevtoolsSinkOptions {
     // (undocumented)
     appName?: string;
+    // (undocumented)
+    capabilities?: SyncoreDevtoolsCapabilities;
     // (undocumented)
     databaseLabel?: string;
     // (undocumented)

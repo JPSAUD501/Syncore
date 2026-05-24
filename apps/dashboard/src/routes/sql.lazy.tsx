@@ -17,6 +17,12 @@ import { EditorView } from "@codemirror/view";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared";
 import { useConnection } from "@/hooks";
 import { usePreferredTarget } from "@/hooks/usePreferredTarget";
@@ -75,6 +81,16 @@ const PRAGMA_SHORTCUTS: Array<{ label: string; query: string }> = [
   { label: "Foreign Keys", query: "PRAGMA foreign_keys;" },
   { label: "Integrity Check", query: "PRAGMA integrity_check;" }
 ];
+
+function getModeUnavailableReason(mode: SqlMode, fallback: string): string {
+  if (mode === "live") {
+    return "SQL Live is not available for this data source.";
+  }
+  if (mode === "write") {
+    return "SQL Write is not available for this data source.";
+  }
+  return fallback;
+}
 
 /* ------------------------------------------------------------------ */
 /*  CodeMirror Substrate theme                                         */
@@ -158,11 +174,17 @@ const substrateHighlight = EditorView.baseTheme({
 
 function SqlPage() {
   const { isReady } = useConnection();
-  const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
+  const {
+    targetRuntimeId,
+    usingProjectTarget,
+    selectedTarget,
+    runtimeFilter
+  } = usePreferredTarget();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SqlMode>("read");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -173,6 +195,19 @@ function SqlPage() {
     }
   });
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const sqlCapabilities = selectedTarget?.capabilities.sql;
+  const allRuntimesSelected =
+    selectedTarget?.kind === "client" &&
+    selectedTarget.runtimes.length > 1 &&
+    runtimeFilter === "all";
+  const sqlUnavailableReason = allRuntimesSelected
+    ? "Select a single runtime to use SQL Console."
+    : (sqlCapabilities?.reason ??
+      "SQL Console is not available for this data source.");
+  const canReadSql =
+    selectedTarget?.sqlAvailable === true && !allRuntimesSelected;
+  const canWriteSql = canReadSql && sqlCapabilities?.write === true;
+  const canLiveSql = canReadSql && sqlCapabilities?.live === true;
 
   /* ---------------------------------------------------------------- */
   /*  Persist history                                                  */
@@ -189,13 +224,13 @@ function SqlPage() {
   const liveStartedAtRef = useRef<number | null>(null);
 
   const liveSubscription = useDevtoolsSubscription(
-    isReady && !usingProjectTarget && mode === "live" && query.trim()
+    isReady && canLiveSql && mode === "live" && query.trim()
       ? { kind: "sql.watch", query: query.trim() }
       : null,
     {
       enabled:
         isReady &&
-        !usingProjectTarget &&
+        canLiveSql &&
         mode === "live" &&
         query.trim().length > 0,
       targetRuntimeId
@@ -225,16 +260,36 @@ function SqlPage() {
     async (sql?: string) => {
       const queryText = sql ?? query.trim();
       if (!queryText || !targetRuntimeId) return;
+      if (!canReadSql) {
+        setResult({
+          columns: [],
+          rows: [],
+          durationMs: 0,
+          mode,
+          error: sqlUnavailableReason
+        });
+        return;
+      }
       if (mode === "live") {
-        if (usingProjectTarget) {
+        if (!canLiveSql) {
           setResult({
             columns: [],
             rows: [],
             durationMs: 0,
             mode: "live",
-            error: "SQL Live requires an active runtime."
+            error: "SQL Live is not available for this data source."
           });
         }
+        return;
+      }
+      if (mode === "write" && !canWriteSql) {
+        setResult({
+          columns: [],
+          rows: [],
+          durationMs: 0,
+          mode: "write",
+          error: "SQL Write is not available for this data source."
+        });
         return;
       }
 
@@ -306,7 +361,15 @@ function SqlPage() {
         setLoading(false);
       }
     },
-    [mode, query, targetRuntimeId, usingProjectTarget]
+    [
+      canLiveSql,
+      canReadSql,
+      canWriteSql,
+      mode,
+      query,
+      sqlUnavailableReason,
+      targetRuntimeId
+    ]
   );
 
   useEffect(() => {
@@ -316,7 +379,7 @@ function SqlPage() {
       return;
     }
     const queryText = query.trim();
-    if (!isReady || !queryText || usingProjectTarget) {
+    if (!isReady || !queryText || !canLiveSql) {
       liveStartedAtRef.current = null;
       setResult(null);
       return;
@@ -362,9 +425,9 @@ function SqlPage() {
     isReady,
     liveSubscription.data,
     liveSubscription.loading,
+    canLiveSql,
     mode,
-    query,
-    usingProjectTarget
+    query
   ]);
 
   /* ---------------------------------------------------------------- */
@@ -403,6 +466,18 @@ function SqlPage() {
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
+
+  if (selectedTarget && !canReadSql) {
+    return (
+      <div className="flex h-[calc(100vh-7rem)] items-center justify-center rounded-md border border-border bg-bg-surface">
+        <EmptyState
+          icon={Terminal}
+          title="SQL Console unavailable"
+          description={sqlUnavailableReason}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-3">
@@ -454,7 +529,12 @@ function SqlPage() {
             {mode !== "live" && (
               <Button
                 onClick={() => void executeQuery()}
-                disabled={!targetRuntimeId || loading || !query.trim()}
+                disabled={
+                  !targetRuntimeId ||
+                  loading ||
+                  !query.trim() ||
+                  (mode === "write" ? !canWriteSql : !canReadSql)
+                }
                 size="sm"
                 className="gap-1.5 px-4"
               >
@@ -472,12 +552,20 @@ function SqlPage() {
                 <button
                   key={nextMode}
                   type="button"
+                  disabled={
+                    nextMode === "live"
+                      ? !canLiveSql
+                      : nextMode === "write"
+                        ? !canWriteSql
+                        : !canReadSql
+                  }
                   onClick={() => setMode(nextMode)}
                   className={cn(
                     "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
                     mode === nextMode
                       ? "bg-accent text-bg-deep"
-                      : "text-text-tertiary hover:text-text-primary"
+                      : "text-text-tertiary hover:text-text-primary",
+                    "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-tertiary"
                   )}
                 >
                   {nextMode[0]!.toUpperCase() + nextMode.slice(1)}
@@ -485,9 +573,19 @@ function SqlPage() {
               ))}
             </div>
 
-            <span className="text-[11px] text-text-tertiary">
+            <span className="text-[11px] text-text-tertiary hidden sm:block">
               {mode === "live" ? "Live updates enabled" : "Ctrl+Enter to run"}
             </span>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 lg:hidden"
+              onClick={() => setMobileHistoryOpen(true)}
+            >
+              <History size={12} />
+              History
+            </Button>
 
             {result && !result.error && (
               <div className="ml-auto flex items-center gap-3 text-[11px] text-text-tertiary animate-fade-in">
@@ -506,9 +604,9 @@ function SqlPage() {
 
         {/* Results area */}
         <div className="flex min-h-0 flex-1 flex-col bg-bg-base">
-          {mode === "live" && usingProjectTarget ? (
+          {mode === "live" && !canLiveSql ? (
             <div className="p-4 text-[12px] text-text-tertiary">
-              SQL Live is only available while a runtime is active.
+              {getModeUnavailableReason("live", sqlUnavailableReason)}
             </div>
           ) : mode === "live" && liveSubscription.loading && !result ? (
             <div className="p-4 text-[12px] text-text-tertiary">
@@ -641,6 +739,79 @@ function SqlPage() {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Mobile: shortcuts + history dialog */}
+      <Dialog open={mobileHistoryOpen} onOpenChange={setMobileHistoryOpen}>
+        <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-sm">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="text-[14px]">Quick Actions & History</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[70vh]">
+            <div className="p-3">
+              {/* Quick actions */}
+              <p className="mb-2 text-[11px] font-semibold text-text-primary">Quick Actions</p>
+              <div className="mb-4 space-y-0.5">
+                {PRAGMA_SHORTCUTS.map((shortcut) => (
+                  <button
+                    key={shortcut.label}
+                    type="button"
+                    onClick={() => {
+                      setQuery(shortcut.query);
+                      setMobileHistoryOpen(false);
+                      void executeQuery(shortcut.query);
+                    }}
+                    disabled={!targetRuntimeId || mode === "live"}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded px-2 py-2 text-[12px] text-text-secondary transition-colors",
+                      "hover:bg-bg-base hover:text-text-primary",
+                      "disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
+                  >
+                    <ChevronRight size={10} className="text-text-tertiary" />
+                    {shortcut.label}
+                  </button>
+                ))}
+              </div>
+              {/* History */}
+              <p className="mb-2 text-[11px] font-semibold text-text-primary">History</p>
+              {history.length === 0 ? (
+                <p className="py-4 text-center text-[11px] text-text-tertiary">No query history</p>
+              ) : (
+                <div className="space-y-0.5">
+                  {history.map((entry, i) => (
+                    <button
+                      key={`${entry.timestamp}-${i}`}
+                      type="button"
+                      onClick={() => {
+                        setQuery(entry.query);
+                        setMobileHistoryOpen(false);
+                      }}
+                      className="group w-full rounded px-2 py-2 text-left transition-colors hover:bg-bg-base"
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        {entry.error ? (
+                          <AlertCircle size={9} className="text-error shrink-0" />
+                        ) : (
+                          <Terminal size={9} className="text-text-tertiary shrink-0" />
+                        )}
+                        <span className="text-[10px] text-text-tertiary">
+                          {new Date(entry.timestamp).toLocaleTimeString()}
+                        </span>
+                        <span className="text-[9px] text-text-tertiary ml-auto">
+                          {entry.rowCount}r / {formatDuration(entry.durationMs)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-text-secondary font-mono truncate group-hover:text-text-primary">
+                        {entry.query}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -741,7 +912,7 @@ function ResultsTable({ result }: { result: QueryResult }) {
           {result.columns.map((col) => (
             <div
               key={col}
-              className="flex-shrink-0 min-w-[120px] max-w-[300px] w-auto border-r border-border px-3 py-2 text-[10px] font-semibold text-text-tertiary last:border-r-0"
+              className="shrink-0 min-w-30 max-w-75 w-auto border-r border-border px-3 py-2 text-[10px] font-semibold text-text-tertiary last:border-r-0"
             >
               {col}
             </div>
@@ -764,7 +935,7 @@ function ResultsTable({ result }: { result: QueryResult }) {
                 <div
                   key={cellIdx}
                   className={cn(
-                    "flex-shrink-0 min-w-[120px] max-w-[300px] w-auto px-3 py-1.5 text-[11px] font-mono border-r border-border last:border-r-0 truncate",
+                    "shrink-0 min-w-30 max-w-75 w-auto px-3 py-1.5 text-[11px] font-mono border-r border-border last:border-r-0 truncate",
                     pulse !== undefined &&
                       (pulse % 2 === 0
                         ? "animate-highlight-a"

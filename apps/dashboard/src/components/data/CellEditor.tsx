@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Calendar, Check, Search } from "lucide-react";
+import { Calendar, Check, Pipette, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ReferenceFieldOptions, ReferenceOption } from "@/lib/dataReferences";
@@ -22,11 +22,12 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
   const colorInfo = inferColorValue(field, value);
   const dateInfo = inferDateValue(field, value);
   const isNumericToggleable = typeof value === "number" && !colorInfo && !reference;
-
+  const isColorToggleable = colorInfo !== null;
   const [asDatetime, setAsDatetime] = useState(() => !!dateInfo);
+  const [asColor, setAsColor] = useState(() => !!colorInfo);
 
   const isMultiline =
-    !colorInfo &&
+    !(colorInfo && asColor) &&
     !asDatetime &&
     (typeof value === "object" || text.includes("\n") || text.length > 80);
 
@@ -50,6 +51,8 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
     }
     setAsDatetime((prev) => !prev);
   }, [asDatetime, text, value]);
+
+  const handleToggleColor = useCallback(() => setAsColor((prev) => !prev), []);
 
   const handleSave = useCallback(() => {
     if (reference) {
@@ -94,7 +97,7 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
     [handleSave, isMultiline, onCancel]
   );
 
-  const typeLabel = colorInfo
+  const typeLabel = colorInfo && asColor
     ? "color"
     : reference
       ? `id -> ${reference.tableName}`
@@ -105,11 +108,26 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
           : typeof value;
 
   return (
-    <div className={cn("overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xl shadow-black/40", reference ? "w-120" : "w-72")}>
+    <div className={cn("overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xl shadow-black/40 max-w-[calc(100vw-1rem)]", reference ? "w-120" : "w-72")}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="font-mono text-[11px] font-medium text-text-primary">{field}</span>
         <div className="flex items-center gap-1.5">
+          {isColorToggleable && (
+            <button
+              type="button"
+              title={asColor ? "Edit as plain text" : "Edit as color"}
+              onClick={handleToggleColor}
+              className={cn(
+                "rounded p-0.5 transition-colors",
+                asColor
+                  ? "text-accent hover:text-accent/80"
+                  : "text-text-tertiary hover:text-text-secondary"
+              )}
+            >
+              <Pipette size={11} />
+            </button>
+          )}
           {isNumericToggleable && (
             <button
               type="button"
@@ -140,7 +158,7 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
             onChange={setReferenceValue}
             onKeyDown={handleKeyDown}
           />
-        ) : colorInfo ? (
+        ) : colorInfo && asColor ? (
           <ColorEditor text={text} onTextChange={setText} onKeyDown={handleKeyDown} />
         ) : asDatetime ? (
           <DateEditor text={text} onTextChange={setText} />
@@ -208,9 +226,9 @@ function ReferenceEditor({
     null;
 
   return (
-    <div className="flex h-60 divide-x divide-border">
+    <div className="flex h-60 divide-x divide-border overflow-hidden">
       {/* Left: search + options */}
-      <div className="flex w-50 shrink-0 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col sm:w-50 sm:flex-none sm:shrink-0">
         {hasCurrentValue && (
           <div className="shrink-0 border-b border-error/20 bg-error/5 px-3 py-2">
             <p className="text-[11px] text-error">
@@ -288,7 +306,7 @@ function ReferenceEditor({
       </div>
 
       {/* Right: document detail */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="hidden min-w-0 flex-1 flex-col overflow-hidden sm:flex">
         {detailOption != null ? (
           <ReferenceDocumentDetail option={detailOption} />
         ) : (

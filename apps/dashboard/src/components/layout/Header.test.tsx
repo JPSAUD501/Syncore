@@ -28,7 +28,7 @@ describe("Header", () => {
     resetStore();
   });
 
-  it("shows only the selected session when the target has a single connected session", () => {
+  it("shows the data source and selected runtime separately for one runtime", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-a-12345678",
@@ -46,15 +46,18 @@ describe("Header", () => {
     const targetSelect = screen.getAllByRole("combobox")[0];
     const sessionSelect = screen.getAllByRole("combobox")[1];
     expect(screen.getAllByRole("combobox")).toHaveLength(2);
-    expect(targetSelect?.textContent).toContain("Solo Session");
-    expect(targetSelect?.textContent).toContain("Chrome");
-    expect(targetSelect?.textContent).toMatch(/Solo Session.*\d{5}.*Chrome.*1/);
+    expect(targetSelect?.textContent).toContain("localhost:3000 · syncore");
+    expect(targetSelect?.textContent).toContain("OPFS");
+    expect(targetSelect?.textContent).toMatch(/T\d{5}/);
+    expect(targetSelect?.textContent).not.toContain("Solo Session");
+    expect(targetSelect?.textContent).not.toContain("Chrome");
     expect(sessionSelect?.textContent).toContain("Solo Session");
-    expect(sessionSelect?.textContent).not.toContain("All sessions");
-    expect(sessionSelect?.textContent).not.toContain("Chrome");
+    expect(sessionSelect?.textContent).toContain("Chrome");
+    expect(sessionSelect?.textContent).toMatch(/[A-Z]\d{3}/);
+    expect(sessionSelect?.textContent).not.toContain("All runtimes");
   });
 
-  it("shows all sessions by default when a second session joins the target", () => {
+  it("shows all runtimes by default when a second runtime joins the target", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-a-12345678",
@@ -82,12 +85,13 @@ describe("Header", () => {
 
     const targetSelect = screen.getAllByRole("combobox")[0];
     const sessionSelect = screen.getAllByRole("combobox")[1];
-    expect(targetSelect?.textContent).toContain("Solo Session");
-    expect(targetSelect?.textContent).toContain("Chrome");
-    expect(sessionSelect?.textContent).toContain("All sessions");
+    expect(targetSelect?.textContent).toContain("localhost:3000 · syncore");
+    expect(targetSelect?.textContent).not.toContain("Solo Session");
+    expect(targetSelect?.textContent).not.toContain("Chrome");
+    expect(sessionSelect?.textContent).toContain("All runtimes");
   });
 
-  it("shows the chosen session instead of all sessions after an explicit selection", () => {
+  it("shows the chosen runtime instead of all runtimes after an explicit selection", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-a-12345678",
@@ -127,10 +131,11 @@ describe("Header", () => {
 
     const targetSelect = screen.getAllByRole("combobox")[0];
     const sessionSelect = screen.getAllByRole("combobox")[1];
-    expect(targetSelect?.textContent).toContain("First Session");
-    expect(targetSelect?.textContent).toContain("Chrome");
+    expect(targetSelect?.textContent).toContain("localhost:3000 · syncore");
+    expect(targetSelect?.textContent).not.toContain("First Session");
+    expect(targetSelect?.textContent).not.toContain("Chrome");
     expect(sessionSelect?.textContent).toContain("Chosen Session");
-    expect(sessionSelect?.textContent).not.toContain("All sessions");
-    expect(sessionSelect?.textContent).not.toContain("Edge");
+    expect(sessionSelect?.textContent).toContain("Edge");
+    expect(sessionSelect?.textContent).not.toContain("All runtimes");
   });
 });

@@ -257,6 +257,28 @@ export interface SyncoreActiveQueryInfo {
 }
 
 // @public (undocumented)
+export interface SyncoreDevtoolsCapabilities {
+    // (undocumented)
+    data?: {
+        browse: boolean;
+        mutate: boolean;
+        importExport: boolean;
+    };
+    // (undocumented)
+    scheduler?: {
+        read: boolean;
+        edit: boolean;
+    };
+    // (undocumented)
+    sql?: {
+        read: boolean;
+        write: boolean;
+        live: boolean;
+        reason?: string;
+    };
+}
+
+// @public (undocumented)
 export type SyncoreDevtoolsClientMessage = {
     type: "ping";
 } | SyncoreDevtoolsCommand | SyncoreDevtoolsSubscribe | SyncoreDevtoolsUnsubscribe;
@@ -479,6 +501,7 @@ export type SyncoreDevtoolsMessage = {
     storageProtocol?: string;
     databaseLabel?: string;
     storageIdentity?: string;
+    capabilities?: SyncoreDevtoolsCapabilities;
 } | {
     type: "event";
     event: SyncoreDevtoolsEvent;
@@ -594,6 +617,8 @@ export interface SyncoreRuntimeSummary {
     activeQueryCount: number;
     // (undocumented)
     appName?: string;
+    // (undocumented)
+    capabilities?: SyncoreDevtoolsCapabilities;
     // (undocumented)
     connectedAt: number;
     // (undocumented)

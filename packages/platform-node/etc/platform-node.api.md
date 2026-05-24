@@ -19,6 +19,7 @@ import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
 import { SyncoreClient } from '@syncore/core';
 import { SyncoreDataModel } from '@syncore/core';
+import { SyncoreDevtoolsCapabilities } from '@syncore/devtools-protocol';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
@@ -202,6 +203,8 @@ export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
 export interface NodeWebSocketDevtoolsSinkOptions {
     // (undocumented)
     appName?: string;
+    // (undocumented)
+    capabilities?: SyncoreDevtoolsCapabilities;
     // (undocumented)
     databaseLabel?: string;
     // (undocumented)

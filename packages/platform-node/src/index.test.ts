@@ -172,6 +172,20 @@ describe("Node Syncore runtime", () => {
     expect(messages.some((message) => message.includes('"type":"hello"'))).toBe(
       true
     );
+    const helloPayload = messages.find((message) =>
+      message.includes('"type":"hello"')
+    );
+    expect(helloPayload).toBeDefined();
+    const hello = JSON.parse(helloPayload ?? "{}") as {
+      capabilities?: {
+        sql?: { read: boolean; write: boolean; live: boolean };
+      };
+    };
+    expect(hello.capabilities?.sql).toMatchObject({
+      read: true,
+      write: true,
+      live: true
+    });
     expect(messages.some((message) => message.includes('"type":"event"'))).toBe(
       true
     );

@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Activity,
   ArrowDown,
+  ArrowLeft,
   Pause,
   Play,
   Filter,
@@ -114,13 +115,13 @@ function LogEntry({
       <Icon size={12} className={cn(color, "shrink-0")} />
       <Badge
         variant={EVENT_BADGE_VARIANTS[event.type]}
-        className="w-[72px] justify-center text-[10px] shrink-0"
+        className="w-18 justify-center text-[10px] shrink-0"
       >
         {EVENT_LABELS[event.type]}
       </Badge>
       <Badge
         variant="outline"
-        className="hidden w-[120px] justify-center text-[10px] shrink-0 xl:inline-flex"
+        className="hidden w-30 justify-center text-[10px] shrink-0 xl:inline-flex"
       >
         {runtimeTag}
       </Badge>
@@ -447,7 +448,7 @@ export function LogsPage() {
         {/* Event list */}
         <ScrollArea
           ref={listRef}
-          className={cn("flex-1", selectedEvent && "max-w-[60%]")}
+          className={cn("flex-1", selectedEvent && "md:max-w-3/5")}
         >
           {filteredEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-text-tertiary">
@@ -490,34 +491,51 @@ export function LogsPage() {
 
         {/* Detail panel */}
         {selectedEvent && (
-          <div className="w-[40%] shrink-0 border-l border-border bg-bg-base overflow-y-auto hidden md:block">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-surface">
-              <span className="text-[11px] font-semibold text-text-primary">
+          <div className={cn(
+            "flex flex-col overflow-hidden bg-bg-base",
+            // Mobile: fixed full-screen overlay
+            "fixed inset-0 z-50",
+            // Desktop: side panel
+            "md:static md:inset-auto md:z-auto md:w-2/5 md:shrink-0 md:overflow-y-auto md:border-l md:border-border"
+          )}>
+            <div className="flex shrink-0 items-center gap-2 border-b border-border bg-bg-surface px-4 py-2.5 md:py-2">
+              <button
+                type="button"
+                onClick={() => setSelectedIndex(null)}
+                className="flex items-center gap-1.5 text-[12px] text-text-secondary hover:text-text-primary md:hidden"
+              >
+                <ArrowLeft size={14} />
+                Back
+              </button>
+              <span className="flex-1 text-[11px] font-semibold text-text-primary md:flex-none">
                 Event Detail
               </span>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => setSelectedIndex(null)}
+                className="hidden md:flex"
               >
                 <X size={14} />
               </Button>
             </div>
-            <TraceDetailPanel
-              event={selectedEvent}
-              trace={selectedTrace}
-              invalidations={selectedInvalidations}
-              invalidatedBy={selectedInvalidatedBy}
-              causingTrace={causingTrace}
-              onOpenExecution={selectExecution}
-              onOpenFunction={(functionName) =>
-                void navigate({
-                  to: "/functions",
-                  search: buildFunctionSearch(functionName, selectedTrace)
-                })
-              }
-              onOpenTable={() => void navigate({ to: "/data" })}
-            />
+            <div className="flex-1 overflow-y-auto">
+              <TraceDetailPanel
+                event={selectedEvent}
+                trace={selectedTrace}
+                invalidations={selectedInvalidations}
+                invalidatedBy={selectedInvalidatedBy}
+                causingTrace={causingTrace}
+                onOpenExecution={selectExecution}
+                onOpenFunction={(functionName) =>
+                  void navigate({
+                    to: "/functions",
+                    search: buildFunctionSearch(functionName, selectedTrace)
+                  })
+                }
+                onOpenTable={() => void navigate({ to: "/data" })}
+              />
+            </div>
           </div>
         )}
       </div>

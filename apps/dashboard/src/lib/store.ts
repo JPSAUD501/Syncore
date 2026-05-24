@@ -7,6 +7,7 @@ import type {
   SyncoreDevtoolsMessage,
   SyncoreDevtoolsSubscriptionPayload,
   SyncoreDevtoolsSubscriptionResultPayload,
+  SyncoreDevtoolsCapabilities,
   SyncoreRuntimeSummary,
   SyncoreDevtoolsCommandResultPayload
 } from "@syncore/devtools-protocol";
@@ -139,6 +140,7 @@ interface RuntimeMeta {
   storageProtocol?: string;
   databaseLabel?: string;
   storageIdentity?: string;
+  capabilities?: SyncoreDevtoolsCapabilities;
 }
 
 interface RuntimeState extends RuntimeMeta {
@@ -238,12 +240,15 @@ export interface TargetState {
   runtimeIds: string[];
   runtimes: RuntimeState[];
   connected: boolean;
-  connectedSessions: number;
+  connectedRuntimes: number;
   appName?: string;
   origin?: string;
   storageProtocol?: string;
   databaseLabel?: string;
   storageIdentity?: string;
+  capabilities: SyncoreDevtoolsCapabilities;
+  sqlAvailable: boolean;
+  sqlUnavailableReason?: string;
 }
 
 function createRuntimeState(meta: RuntimeMeta): RuntimeState {
@@ -290,7 +295,8 @@ function ensureRuntime(
     ...(meta.databaseLabel ? { databaseLabel: meta.databaseLabel } : {}),
     ...(meta.storageIdentity
       ? { storageIdentity: meta.storageIdentity }
-      : {})
+      : {}),
+    ...(meta.capabilities ? { capabilities: meta.capabilities } : {})
   };
 }
 
@@ -343,6 +349,10 @@ function createPublicTargetId(
   return createSharedPublicTargetId(key, keys);
 }
 
+export function getPublicTargetDisplayId(targetId: string): string {
+  return targetId === "project" ? "Project" : `T${targetId}`;
+}
+
 function getTargetGroupKey(runtime: RuntimeState): string {
   return isProjectRuntime(runtime)
     ? "project"
@@ -351,16 +361,75 @@ function getTargetGroupKey(runtime: RuntimeState): string {
 
 function getTargetLabel(runtime: RuntimeState): string {
   if (isProjectRuntime(runtime)) {
-    return runtime.databaseLabel ?? runtime.appName ?? runtime.platform;
+    return "Project database";
   }
-  const parsed = parseSessionLabel(runtime.sessionLabel);
-  const base =
-    parsed?.name ??
-    runtime.appName ??
-    runtime.databaseLabel ??
-    runtime.origin ??
-    `${runtime.platform} client`;
-  return parsed?.browser ? `${base} (${parsed.browser})` : base;
+  if (runtime.storageProtocol === "file") {
+    return runtime.databaseLabel ?? "File database";
+  }
+  if (
+    runtime.storageProtocol === "opfs" ||
+    runtime.storageProtocol === "indexeddb"
+  ) {
+    const databaseLabel = runtime.databaseLabel ?? "syncore";
+    const originHost = getOriginHost(runtime.origin);
+    return originHost
+      ? `${originHost} \u00b7 ${databaseLabel}`
+      : `Browser storage \u00b7 ${databaseLabel}`;
+  }
+  return "Unnamed data source";
+}
+
+export function getStorageProtocolLabel(protocol: string | undefined): string {
+  switch (protocol) {
+    case "file":
+      return "File";
+    case "opfs":
+      return "OPFS";
+    case "indexeddb":
+      return "IndexedDB";
+    default:
+      return "Storage metadata unavailable";
+  }
+}
+
+function getOriginHost(origin: string | undefined): string | null {
+  if (!origin) {
+    return null;
+  }
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
+  }
+}
+
+function mergeDevtoolsCapabilities(
+  runtimes: RuntimeState[]
+): SyncoreDevtoolsCapabilities {
+  const selected = runtimes.filter((runtime) => runtime.connected);
+  const candidates = selected.length > 0 ? selected : runtimes;
+  return {
+    sql: {
+      read: candidates.some((runtime) => runtime.capabilities?.sql?.read === true),
+      write: candidates.some((runtime) => runtime.capabilities?.sql?.write === true),
+      live: candidates.some((runtime) => runtime.capabilities?.sql?.live === true),
+      reason:
+        candidates.find((runtime) => runtime.capabilities?.sql?.reason)
+          ?.capabilities?.sql?.reason ??
+        "SQL Console is not available for this data source."
+    },
+    data: {
+      browse: candidates.some((runtime) => runtime.capabilities?.data?.browse !== false),
+      mutate: candidates.some((runtime) => runtime.capabilities?.data?.mutate !== false),
+      importExport: candidates.some(
+        (runtime) => runtime.capabilities?.data?.importExport !== false
+      )
+    },
+    scheduler: {
+      read: candidates.some((runtime) => runtime.capabilities?.scheduler?.read !== false),
+      edit: candidates.some((runtime) => runtime.capabilities?.scheduler?.edit !== false)
+    }
+  };
 }
 
 function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
@@ -378,10 +447,12 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
       const sorted = [...group];
       const primary =
         sorted.find((runtime) => runtime.connected) ?? sorted[0]!;
-      const connectedSessions = sorted.filter((runtime) => runtime.connected).length;
+      const connectedRuntimes = sorted.filter((runtime) => runtime.connected).length;
       const kind: TargetState["kind"] = isProjectRuntime(primary)
         ? "project"
         : "client";
+      const capabilities = mergeDevtoolsCapabilities(sorted);
+      const sqlAvailable = capabilities.sql?.read === true;
       return {
         id: kind === "project" ? "project" : createPublicTargetId(key, keys),
         kind,
@@ -390,7 +461,7 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
         runtimeIds: sorted.map((runtime) => runtime.runtimeId),
         runtimes: sorted,
         connected: sorted.some((runtime) => runtime.connected),
-        connectedSessions,
+        connectedRuntimes,
         ...(primary.appName ? { appName: primary.appName } : {}),
         ...(primary.origin ? { origin: primary.origin } : {}),
         ...(primary.storageProtocol
@@ -399,6 +470,11 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
         ...(primary.databaseLabel ? { databaseLabel: primary.databaseLabel } : {}),
         ...(primary.storageIdentity
           ? { storageIdentity: primary.storageIdentity }
+          : {}),
+        capabilities,
+        sqlAvailable,
+        ...(capabilities.sql?.reason
+          ? { sqlUnavailableReason: capabilities.sql.reason }
           : {})
       };
     })
@@ -514,11 +590,19 @@ function compareEventsForTimeline(
   left: SyncoreDevtoolsEvent,
   right: SyncoreDevtoolsEvent
 ): number {
-  if (left.sequence !== undefined && right.sequence !== undefined) {
+  if (left.timestamp !== right.timestamp) {
+    return right.timestamp - left.timestamp;
+  }
+
+  if (
+    left.runtimeId === right.runtimeId &&
+    left.sequence !== undefined &&
+    right.sequence !== undefined
+  ) {
     return right.sequence - left.sequence;
   }
 
-  return right.timestamp - left.timestamp;
+  return 0;
 }
 
 function prependUniqueEvents(
@@ -883,7 +967,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
                   : {}),
                 ...(msg.storageIdentity
                   ? { storageIdentity: msg.storageIdentity }
-                  : {})
+                  : {}),
+                ...(msg.capabilities ? { capabilities: msg.capabilities } : {})
               }),
               connected: compatibilityError ? false : true,
               lastSubscriptionError: compatibilityError
@@ -1061,6 +1146,9 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               }
               if (msg.payload.summary.storageIdentity) {
                 nextRuntime.storageIdentity = msg.payload.summary.storageIdentity;
+              }
+              if (msg.payload.summary.capabilities) {
+                nextRuntime.capabilities = msg.payload.summary.capabilities;
               }
               break;
             case "runtime.activeQueries.result":

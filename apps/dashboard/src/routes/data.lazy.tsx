@@ -76,6 +76,7 @@ function DataPage() {
   const [filters, setFilters] = useState<DataFilter[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [pendingSelectedRowId, setPendingSelectedRowId] = useState<string | null>(null);
+  const [panelDocId, setPanelDocId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<
     "insert" | "patch" | "duplicate"
@@ -493,36 +494,30 @@ function DataPage() {
   /*  Derived                                                          */
   /* ---------------------------------------------------------------- */
 
-  const selectedDocId = useMemo(
-    () => (selectedRowIds.length === 1 ? selectedRowIds[0] ?? null : null),
-    [selectedRowIds]
-  );
+  const selectedDocId = panelDocId;
 
   const liveSelectedDoc = useMemo(() => {
-    if (!selectedDocId) return null;
-    return rows.find((row) => getDocumentId(row) === selectedDocId) ?? null;
-  }, [rows, selectedDocId]);
+    if (!panelDocId) return null;
+    return rows.find((row) => getDocumentId(row) === panelDocId) ?? null;
+  }, [rows, panelDocId]);
 
   useEffect(() => {
-    if (selectedDocId && !liveSelectedDoc) {
-      setSelectedRowIds((current) => current.filter((id) => id !== selectedDocId));
+    if (panelDocId && !liveSelectedDoc) {
+      setPanelDocId(null);
     }
-  }, [liveSelectedDoc, selectedDocId]);
+  }, [liveSelectedDoc, panelDocId]);
 
   useEffect(() => {
     const liveIds = new Set(rows.map((row) => getDocumentId(row)));
     setSelectedRowIds((current) => current.filter((id) => liveIds.has(id)));
   }, [rows]);
 
+  // When a pending reference-navigation row appears, open it in the panel
   useEffect(() => {
-    if (!pendingSelectedRowId) {
-      return;
-    }
+    if (!pendingSelectedRowId) return;
     const found = rows.some((row) => getDocumentId(row) === pendingSelectedRowId);
-    if (!found) {
-      return;
-    }
-    setSelectedRowIds([pendingSelectedRowId]);
+    if (!found) return;
+    setPanelDocId(pendingSelectedRowId);
     setPendingSelectedRowId(null);
   }, [pendingSelectedRowId, rows]);
 
@@ -671,6 +666,7 @@ function DataPage() {
           onSelectTable={(tableName) => {
             setSelectedTable(tableName);
             setSelectedRowIds([]);
+            setPanelDocId(null);
             setPendingSelectedRowId(null);
             setFilters([]);
             setMobileTablesOpen(false);
@@ -705,7 +701,8 @@ function DataPage() {
           <>
             {/* Toolbar */}
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              {/* Table name — hidden on mobile since the row above already shows it */}
+              <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
                 <h3 className="truncate font-mono text-[13px] font-semibold text-text-primary">
                   {selectedTable}
                 </h3>
@@ -719,7 +716,7 @@ function DataPage() {
                   />
                 )}
                 {dataError && (
-                  <Badge variant="destructive" className="max-w-[22rem]">
+                  <Badge variant="destructive" className="max-w-88">
                     <span className="truncate">{dataError}</span>
                   </Badge>
                 )}
@@ -733,7 +730,24 @@ function DataPage() {
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-1 overflow-x-auto">
+              {/* Mobile: compact status — table name shown in the row above */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:hidden">
+                <Badge variant="outline" className="text-[10px]">
+                  {totalCount} rows
+                </Badge>
+                {loading && (
+                  <Loader2
+                    size={12}
+                    className="animate-spin text-text-tertiary"
+                  />
+                )}
+                {dataError && (
+                  <Badge variant="destructive" className="max-w-36">
+                    <span className="truncate">{dataError}</span>
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
                   size="xs"
@@ -783,7 +797,7 @@ function DataPage() {
                 >
                   <Database size={11} />
                   <Download size={11} />
-                  Import DB
+                  <span className="hidden md:inline">Import DB</span>
                 </Button>
                 <Button
                   variant="ghost"
@@ -804,7 +818,7 @@ function DataPage() {
                 >
                   <Database size={11} />
                   <Upload size={11} />
-                  Export DB
+                  <span className="hidden md:inline">Export DB</span>
                 </Button>
 
                 <div className="mx-1 h-4 w-px bg-border" />
@@ -1000,9 +1014,11 @@ function DataPage() {
                             setSelectedTable(tableName);
                             setFilters([{ field: "_id", operator: "eq", value: id }]);
                             setSelectedRowIds([]);
+                            setPanelDocId(null);
                             setPendingSelectedRowId(id);
                             setShowMissingReferencesOnly(false);
                           }}
+                          onRowClick={(rowId) => setPanelDocId(rowId)}
                           referenceFields={referenceFields}
                           className="h-full rounded-md border border-border bg-bg-base"
                         />
@@ -1010,23 +1026,26 @@ function DataPage() {
                     </div>
 
                     {liveSelectedDoc && (
-                      <DocumentPanel
-                        document={liveSelectedDoc}
-                        onClose={() => setSelectedRowIds([])}
-                        onEditField={(id, field, value) =>
-                          setFieldEditState({ id, field, value })
-                        }
-                        onEditDocument={() => {
-                          setEditorMode("patch");
-                          setEditorOpen(true);
-                        }}
-                        onDuplicate={() => {
-                          setEditorMode("duplicate");
-                          setEditorOpen(true);
-                        }}
-                        onDelete={(id) => setConfirmDeleteId(id)}
-                        referenceFields={referenceFields}
-                      />
+                      <div className="fixed inset-0 z-50 overflow-y-auto md:contents">
+                        <DocumentPanel
+                          document={liveSelectedDoc}
+                          onClose={() => setPanelDocId(null)}
+                          onEditField={(id, field, value) =>
+                            setFieldEditState({ id, field, value })
+                          }
+                          onEditDocument={() => {
+                            setEditorMode("patch");
+                            setEditorOpen(true);
+                          }}
+                          onDuplicate={() => {
+                            setEditorMode("duplicate");
+                            setEditorOpen(true);
+                          }}
+                          onDelete={(id) => setConfirmDeleteId(id)}
+                          referenceFields={referenceFields}
+                          className="w-full border-l-0 md:w-96 md:border-l"
+                        />
+                      </div>
                     )}
                   </div>
                 </TabsContent>
@@ -1240,6 +1259,7 @@ function DataPage() {
             onSelectTable={(tableName) => {
               setSelectedTable(tableName);
               setSelectedRowIds([]);
+              setPanelDocId(null);
               setFilters([]);
               setMobileTablesOpen(false);
             }}

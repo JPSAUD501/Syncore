@@ -27,6 +27,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import {
   FunctionBadge,
   inferFunctionType,
   JsonViewer,
@@ -83,6 +89,7 @@ function FunctionsPage() {
   const appliedSearchRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [mobileFunctionsOpen, setMobileFunctionsOpen] = useState(false);
   const [runResult, setRunResult] = useState<FunctionRunResult>({
     status: "idle"
   });
@@ -429,6 +436,29 @@ function FunctionsPage() {
 
       {/* ---- Right content: function details ---- */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
+        {/* Mobile: function selector button */}
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setMobileFunctionsOpen(true)}
+          >
+            <Code2 size={13} />
+            Functions
+          </Button>
+          {selectedFunction && (
+            <Badge variant="secondary" className="max-w-[60vw] truncate font-mono">
+              <span className="truncate">{selectedFunction.name}</span>
+            </Badge>
+          )}
+          {allFunctions.length > 0 && (
+            <span className="ml-auto text-[11px] text-text-tertiary">
+              {allFunctions.length} fns
+            </span>
+          )}
+        </div>
+
         {selectedFunction ? (
           <>
             {/* Header */}
@@ -564,6 +594,56 @@ function FunctionsPage() {
           />
         )}
       </div>
+
+      {/* Mobile: function list dialog */}
+      <Dialog open={mobileFunctionsOpen} onOpenChange={setMobileFunctionsOpen}>
+        <DialogContent className="max-h-[80vh] overflow-hidden p-0 sm:max-w-sm">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="text-[14px]">Functions</DialogTitle>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="relative border-b border-border px-3 py-2">
+              <Search
+                size={13}
+                className="pointer-events-none absolute left-5.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+              />
+              <Input
+                placeholder="Search functions..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 border-border bg-bg-base pl-8 text-[12px]"
+              />
+            </div>
+            <ScrollArea className="max-h-[55vh]">
+              <div className="p-2">
+                {fileTree.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <Code2 size={20} className="mx-auto mb-2 text-text-tertiary" />
+                    <p className="text-[11px] text-text-tertiary">
+                      {targetRuntimeId
+                        ? "No functions available"
+                        : "Connect a runtime first"}
+                    </p>
+                  </div>
+                ) : (
+                  fileTree.map(([group, fns]) => (
+                    <FileGroup
+                      key={group}
+                      group={group}
+                      functions={fns}
+                      selectedFn={selectedFn}
+                      onSelect={(name) => {
+                        selectFunction(name, { clearRouteSearch: true });
+                        setMobileFunctionsOpen(false);
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

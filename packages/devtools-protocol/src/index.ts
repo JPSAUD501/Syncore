@@ -195,9 +195,28 @@ export interface SyncoreRuntimeSummary {
   storageProtocol?: string;
   databaseLabel?: string;
   storageIdentity?: string;
+  capabilities?: SyncoreDevtoolsCapabilities;
   connectedAt: number;
   activeQueryCount: number;
   recentEventCount: number;
+}
+
+export interface SyncoreDevtoolsCapabilities {
+  sql?: {
+    read: boolean;
+    write: boolean;
+    live: boolean;
+    reason?: string;
+  };
+  data?: {
+    browse: boolean;
+    mutate: boolean;
+    importExport: boolean;
+  };
+  scheduler?: {
+    read: boolean;
+    edit: boolean;
+  };
 }
 
 export function createBasePublicId(input: string): string {
@@ -292,6 +311,7 @@ export type SyncoreDevtoolsMessage =
       storageProtocol?: string;
       databaseLabel?: string;
       storageIdentity?: string;
+      capabilities?: SyncoreDevtoolsCapabilities;
     }
   | { type: "event"; event: SyncoreDevtoolsEvent }
   | {

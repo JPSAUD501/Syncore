@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock,
+  Info,
   Loader2,
   Timer,
   XCircle
@@ -13,8 +14,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
 import { usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
@@ -195,13 +202,14 @@ function SchedulerPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] gap-3">
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
+    <div className="flex flex-col gap-3 lg:h-[calc(100vh-7rem)] lg:flex-row">
+      <div className="flex min-w-0 flex-col overflow-hidden rounded-md border border-border bg-bg-surface lg:flex-1">
         <div className="flex items-center gap-3 border-b border-border p-4">
           <Clock size={16} className="text-accent" />
-          <h2 className="flex-1 text-[14px] font-bold text-text-primary">
-            Scheduler
-          </h2>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[14px] font-bold text-text-primary">Scheduler</h2>
+            <p className="text-[11px] text-text-tertiary">Manage and edit scheduled function calls</p>
+          </div>
           {usingProjectTarget && (
             <Badge variant="outline" className="text-[9px]">
               Project Offline
@@ -212,7 +220,7 @@ function SchedulerPage() {
           )}
         </div>
 
-        <Tabs defaultValue="pending" className="flex min-h-0 flex-1 flex-col">
+        <Tabs defaultValue="pending" className="flex flex-col lg:min-h-0 lg:flex-1">
           <div className="border-b border-border px-4">
             <TabsList variant="line" className="h-9">
               <TabsTrigger value="pending" className="gap-1">
@@ -240,7 +248,7 @@ function SchedulerPage() {
             </TabsList>
           </div>
 
-          <TabsContent value="pending" className="min-h-0 flex-1">
+          <TabsContent value="pending" className="lg:min-h-0 lg:flex-1">
             <JobList
               jobs={pendingJobs}
               selectedJobId={selectedJob?.id ?? null}
@@ -253,7 +261,7 @@ function SchedulerPage() {
             />
           </TabsContent>
 
-          <TabsContent value="recurring" className="min-h-0 flex-1">
+          <TabsContent value="recurring" className="lg:min-h-0 lg:flex-1">
             <JobList
               jobs={recurringJobs}
               selectedJobId={selectedJob?.id ?? null}
@@ -266,7 +274,7 @@ function SchedulerPage() {
             />
           </TabsContent>
 
-          <TabsContent value="history" className="min-h-0 flex-1">
+          <TabsContent value="history" className="lg:min-h-0 lg:flex-1">
             <JobList
               jobs={historyJobs}
               selectedJobId={selectedJob?.id ?? null}
@@ -279,21 +287,23 @@ function SchedulerPage() {
       </div>
 
       {selectedJob && (
-        <JobDetailPanel
-          job={selectedJob}
-          editorState={editorState}
-          saving={saving}
-          error={actionError}
-          usingProjectTarget={usingProjectTarget}
-          onClose={() => setSelectedJob(null)}
-          onCancel={(jobId) => {
-            void cancelJob(jobId);
-          }}
-          onEditorChange={setEditorState}
-          onSave={() => {
-            void saveScheduledJob();
-          }}
-        />
+        <div key={selectedJob.id} className="fixed inset-0 z-50 flex flex-col bg-bg-surface lg:contents">
+          <JobDetailPanel
+            job={selectedJob}
+            editorState={editorState}
+            saving={saving}
+            error={actionError}
+            usingProjectTarget={usingProjectTarget}
+            onClose={() => setSelectedJob(null)}
+            onCancel={(jobId) => {
+              void cancelJob(jobId);
+            }}
+            onEditorChange={setEditorState}
+            onSave={() => {
+              void saveScheduledJob();
+            }}
+          />
+        </div>
       )}
     </div>
   );
@@ -326,7 +336,7 @@ function JobList({
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="max-h-[60vh] lg:h-full lg:max-h-none">
       <div className="space-y-1 p-2">
         {jobs.map((job) => (
           <div
@@ -342,9 +352,9 @@ function JobList({
             <div className="flex items-start gap-3">
               <JobStatusIcon status={job.status} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-mono text-[12px] text-text-primary">
-                    {job.functionName}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="font-mono text-[12px] text-text-primary">
+                    {job.functionName.replaceAll("/", ":")}
                   </span>
                   {job.scheduleLabel && (
                     <Badge variant="outline" className="px-1 py-0 text-[8px]">
@@ -352,25 +362,29 @@ function JobList({
                     </Badge>
                   )}
                 </div>
-                <div className="mt-0.5 flex items-center gap-2 text-[10px] text-text-tertiary">
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-text-tertiary">
                   <span>{formatRelativeTime(job.runAt)}</span>
-                  {job.recurringName && <span>{job.recurringName}</span>}
+                  {job.recurringName && (
+                    <span className="font-medium text-text-secondary">{job.recurringName}</span>
+                  )}
                 </div>
               </div>
-              <JobStatusBadge status={job.status} />
-              {onCancel && job.status === "pending" && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void onCancel(job.id);
-                  }}
-                  title="Cancel job"
-                >
-                  <XCircle size={12} className="text-error" />
-                </Button>
-              )}
+              <div className="flex shrink-0 items-center gap-1">
+                <JobStatusBadge status={job.status} />
+                {onCancel && job.status === "pending" && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void onCancel(job.id);
+                    }}
+                    title="Cancel job"
+                  >
+                    <XCircle size={12} className="text-error" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -402,102 +416,121 @@ function JobDetailPanel({
 }) {
   const canEdit = job.status === "pending" && editorState;
   const isRecurring = isRecurringJob(job);
-  const previewRunAt = editorState
-    ? previewNextRunAt(editorState, isRecurring)
-    : null;
 
   return (
-    <div className="hidden w-96 flex-col overflow-hidden rounded-md border border-border bg-bg-surface lg:flex">
-      <div className="flex items-center justify-between border-b border-border p-3">
-        <div className="flex items-center gap-2">
-          <JobStatusIcon status={job.status} />
-          <span className="text-[12px] font-bold text-text-primary">
-            Job Details
-          </span>
+    <div className="flex flex-1 flex-col overflow-hidden lg:h-auto lg:flex-none lg:rounded-md lg:border lg:border-border lg:w-96 lg:shrink-0">
+      {/* Header */}
+      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <JobStatusIcon status={job.status} />
+            <code className="min-w-0 flex-1 truncate font-mono text-[13px] font-semibold text-text-primary">
+              {job.functionName.replaceAll("/", ":")}
+            </code>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <JobStatusBadge status={job.status} />
+            <Badge variant="outline" className="text-[9px]">
+              {isRecurring ? "Recurring" : "One-shot"}
+            </Badge>
+            {job.recurringName && (
+              <span className="truncate text-[10px] text-text-tertiary">
+                {job.recurringName}
+              </span>
+            )}
+          </div>
         </div>
         <Button variant="ghost" size="icon-xs" onClick={onClose}>
           <XCircle size={12} />
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="space-y-4 p-4">
-          <DetailField label="Job ID">
-            <code className="block rounded bg-bg-base px-2 py-1 text-[11px] text-text-code">
-              {job.id}
-            </code>
-          </DetailField>
+      {/* Tabs */}
+      <Tabs
+        defaultValue={canEdit ? "edit" : "info"}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <div className="shrink-0 border-b border-border px-4">
+          <TabsList variant="line" className="h-9">
+            <TabsTrigger value="info" className="text-[12px]">
+              Info
+            </TabsTrigger>
+            {canEdit && (
+              <TabsTrigger value="edit" className="text-[12px]">
+                Edit
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
-          <DetailField label="Function">
-            <code className="text-[11px] text-text-primary">{job.functionName}</code>
-          </DetailField>
-
-          {job.recurringName && (
-            <DetailField label="Recurring Name">
-              <span className="text-[12px] text-text-primary">{job.recurringName}</span>
-            </DetailField>
-          )}
-
-          <DetailField label="Status">
-            <div className="flex items-center gap-2">
-              <JobStatusBadge status={job.status} />
-              <Badge variant="outline" className="text-[9px]">
-                {isRecurring ? "Recurring" : "One-shot"}
-              </Badge>
+        {/* Info tab */}
+        <TabsContent value="info" className="overflow-y-auto">
+          <div className="space-y-4 p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <DetailField label="Scheduled At">
+                <TimestampCell timestamp={job.scheduledAt} format="both" />
+              </DetailField>
+              <DetailField label="Run At">
+                <TimestampCell timestamp={job.runAt} format="both" />
+              </DetailField>
+              {job.lastRunAt && (
+                <DetailField label="Last Run">
+                  <TimestampCell timestamp={job.lastRunAt} format="both" />
+                </DetailField>
+              )}
+              {job.updatedAt && (
+                <DetailField label="Updated At">
+                  <TimestampCell timestamp={job.updatedAt} format="both" />
+                </DetailField>
+              )}
             </div>
-          </DetailField>
 
-          <div className="grid grid-cols-2 gap-3">
-            <DetailField label="Scheduled At">
-              <TimestampCell timestamp={job.scheduledAt} format="both" />
-            </DetailField>
-            <DetailField label="Run At">
-              <TimestampCell timestamp={job.runAt} format="both" />
-            </DetailField>
-            {job.lastRunAt && (
-              <DetailField label="Last Run">
-                <TimestampCell timestamp={job.lastRunAt} format="both" />
+            {job.scheduleLabel && (
+              <DetailField label="Schedule">
+                <code className="block rounded bg-bg-base px-2 py-1 text-[11px] text-text-code">
+                  {job.scheduleLabel}
+                </code>
               </DetailField>
             )}
-            {job.updatedAt && (
-              <DetailField label="Updated At">
-                <TimestampCell timestamp={job.updatedAt} format="both" />
-              </DetailField>
-            )}
-          </div>
 
-          {job.scheduleLabel && (
-            <DetailField label="Schedule">
-              <code className="block rounded bg-bg-base px-2 py-1 text-[11px] text-text-code">
-                {job.scheduleLabel}
+            <DetailField label="Arguments">
+              <JsonViewer data={job.args} defaultExpanded maxDepth={4} />
+            </DetailField>
+
+            <DetailField label="Job ID">
+              <code className="block break-all rounded bg-bg-base px-2 py-1 text-[10px] text-text-code opacity-60">
+                {job.id}
               </code>
             </DetailField>
-          )}
 
-          <Separator />
+            {job.status !== "pending" && (
+              <div className="flex items-start gap-2 rounded-md border border-border bg-bg-base px-3 py-2.5 text-[11px] text-text-tertiary">
+                <Info size={12} className="mt-0.5 shrink-0" />
+                <span>
+                  {job.status === "running"
+                    ? "This job is currently running."
+                    : `This job has already ${job.status}.`}
+                </span>
+              </div>
+            )}
+          </div>
+        </TabsContent>
 
-          <DetailField label="Arguments">
-            <JsonViewer data={job.args} defaultExpanded maxDepth={4} />
-          </DetailField>
-
-          {canEdit && editorState ? (
-            <>
-              <Separator />
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-[12px] font-semibold text-text-primary">
-                    Job Editor
-                  </span>
-                  {usingProjectTarget && (
-                    <Badge variant="outline" className="text-[9px]">
-                      Project Offline
-                    </Badge>
-                  )}
-                </div>
+        {/* Edit tab */}
+        {canEdit && editorState && (
+          <TabsContent value="edit" className="flex min-h-0 flex-col">
+            <div className="flex-1 overflow-y-auto">
+              <div className="space-y-5 p-4">
+                {isRecurring && editorState.schedule && (
+                  <ScheduleEditor
+                    state={{ ...editorState, schedule: editorState.schedule }}
+                    onChange={onEditorChange}
+                  />
+                )}
 
                 <div className="space-y-2">
                   <label className="block text-[11px] font-medium text-text-tertiary">
-                    Run At
+                    {isRecurring ? "Next Run (override)" : "Run At"}
                   </label>
                   <input
                     type="datetime-local"
@@ -512,25 +545,14 @@ function JobDetailPanel({
                   />
                 </div>
 
-                {isRecurring && editorState.schedule && (
-                  <ScheduleEditor
-                    state={{ ...editorState, schedule: editorState.schedule }}
-                    onChange={onEditorChange}
-                  />
-                )}
-
-                {previewRunAt && (
-                  <div className="rounded-md border border-border bg-bg-base px-3 py-2 text-[11px] text-text-secondary">
-                    Next run after save:{" "}
-                    <span className="font-mono text-text-primary">
-                      {new Date(previewRunAt).toLocaleString()}
-                    </span>
-                  </div>
-                )}
+                <NextRunPreview state={editorState} isRecurring={isRecurring} />
 
                 <div className="space-y-2">
                   <label className="block text-[11px] font-medium text-text-tertiary">
-                    Arguments JSON
+                    Arguments
+                    <span className="ml-1.5 rounded bg-bg-elevated px-1 py-0.5 text-[9px] font-normal text-text-tertiary">
+                      JSON
+                    </span>
                   </label>
                   <textarea
                     value={editorState.argsText}
@@ -540,8 +562,9 @@ function JobDetailPanel({
                         argsText: event.target.value
                       })
                     }
-                    className="min-h-28 w-full rounded-md border border-border bg-bg-base px-3 py-2 text-[12px] text-text-primary outline-none transition-colors focus:border-border-active"
+                    className="min-h-28 w-full rounded-md border border-border bg-bg-base px-3 py-2 font-mono text-[12px] text-text-primary outline-none transition-colors focus:border-border-active"
                     spellCheck={false}
+                    placeholder="[]"
                   />
                 </div>
 
@@ -550,21 +573,25 @@ function JobDetailPanel({
                     <label className="block text-[11px] font-medium text-text-tertiary">
                       Misfire Policy
                     </label>
-                    <select
+                    <Select
                       value={editorState.misfireType}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         onEditorChange({
                           ...editorState,
-                          misfireType: event.target.value as SchedulerMisfirePolicy["type"]
+                          misfireType: value as SchedulerMisfirePolicy["type"]
                         })
                       }
-                      className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
                     >
-                      <option value="catch_up">Catch up</option>
-                      <option value="skip">Skip</option>
-                      <option value="run_once_if_missed">Run once if missed</option>
-                      <option value="windowed">Windowed</option>
-                    </select>
+                      <SelectTrigger className="h-9 w-full text-[12px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="catch_up">Catch up — run all missed</SelectItem>
+                        <SelectItem value="skip">Skip — ignore if missed</SelectItem>
+                        <SelectItem value="run_once_if_missed">Run once if missed</SelectItem>
+                        <SelectItem value="windowed">Windowed — within a time window</SelectItem>
+                      </SelectContent>
+                    </Select>
                     {editorState.misfireType === "windowed" && (
                       <Input
                         type="number"
@@ -576,7 +603,7 @@ function JobDetailPanel({
                             windowMs: event.target.value
                           })
                         }
-                        placeholder="Window in ms"
+                        placeholder="Window in milliseconds"
                       />
                     )}
                   </div>
@@ -587,37 +614,39 @@ function JobDetailPanel({
                     {error}
                   </div>
                 )}
+              </div>
+            </div>
 
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => void onSave()}
-                    disabled={saving}
-                  >
-                    {saving && <Loader2 size={12} className="animate-spin" />}
-                    Save Job
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void onCancel(job.id)}
-                  >
-                    Cancel Job
-                  </Button>
-                </div>
+            {/* Sticky action footer */}
+            <div className="shrink-0 border-t border-border bg-bg-surface p-3">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={() => void onSave()}
+                  disabled={saving}
+                >
+                  {saving && <Loader2 size={12} className="animate-spin" />}
+                  Save Changes
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onCancel(job.id)}
+                  disabled={saving}
+                >
+                  Cancel Job
+                </Button>
               </div>
-            </>
-          ) : (
-            <>
-              <Separator />
-              <div className="rounded-md border border-border bg-bg-base px-3 py-2 text-[11px] text-text-tertiary">
-                Only pending jobs can be edited.
-              </div>
-            </>
-          )}
-        </div>
-      </ScrollArea>
+              {usingProjectTarget && (
+                <p className="mt-1.5 text-center text-[10px] text-text-tertiary">
+                  Running in project offline mode
+                </p>
+              )}
+            </div>
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }
@@ -637,22 +666,26 @@ function ScheduleEditor({
         <label className="block text-[11px] font-medium text-text-tertiary">
           Schedule Type
         </label>
-        <select
+        <Select
           value={schedule.type}
-          onChange={(event) =>
+          onValueChange={(value) =>
             onChange({
               ...state,
               schedule: createScheduleForType(
-                event.target.value as SchedulerRecurringSchedule["type"]
+                value as SchedulerRecurringSchedule["type"]
               )
             })
           }
-          className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
         >
-          <option value="interval">Interval</option>
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-        </select>
+          <SelectTrigger className="h-9 w-full text-[12px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="interval">Interval — repeat every N hours/min/sec</SelectItem>
+            <SelectItem value="daily">Daily — at a specific time each day</SelectItem>
+            <SelectItem value="weekly">Weekly — on a specific day and time</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {schedule.type === "interval" && (
@@ -728,26 +761,37 @@ function ScheduleEditor({
       )}
 
       {schedule.type === "weekly" && (
-        <div className="space-y-2">
-          <select
-            value={schedule.dayOfWeek}
-            onChange={(event) =>
-              onChange({
-                ...state,
-                schedule: {
-                  ...schedule,
-                  dayOfWeek: event.target.value as (typeof WEEK_DAYS)[number]
-                }
-              })
-            }
-            className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
-          >
-            {WEEK_DAYS.map((day) => (
-              <option key={day} value={day}>
-                {day}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="block text-[11px] font-medium text-text-tertiary">
+              Day of Week
+            </label>
+            <div className="flex flex-wrap gap-1">
+              {WEEK_DAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...state,
+                      schedule: {
+                        ...schedule,
+                        dayOfWeek: day
+                      }
+                    })
+                  }
+                  className={cn(
+                    "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
+                    schedule.dayOfWeek === day
+                      ? "bg-accent text-bg-deep"
+                      : "border border-border bg-bg-base text-text-secondary hover:text-text-primary"
+                  )}
+                >
+                  {day.slice(0, 3).charAt(0).toUpperCase() + day.slice(1, 3)}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <NumberField
               label="Hour"
@@ -782,6 +826,58 @@ function ScheduleEditor({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function NextRunPreview({
+  state,
+  isRecurring
+}: {
+  state: SchedulerEditorState;
+  isRecurring: boolean;
+}) {
+  const runs = useMemo(() => {
+    try {
+      if (!isRecurring || !state.schedule) {
+        const ts = parseLocalDateTimeInput(state.runAtText);
+        return [ts];
+      }
+      const result: number[] = [];
+      let from = Date.now();
+      for (let i = 0; i < 3; i++) {
+        from = computeSchedulePreview(state.schedule, from);
+        result.push(from);
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  }, [state, isRecurring]);
+
+  if (runs.length === 0) return null;
+
+  return (
+    <div className="rounded-md border border-border bg-bg-base px-3 py-2.5">
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+        <CalendarClock size={11} />
+        {isRecurring ? "Next runs" : "Scheduled for"}
+      </div>
+      <div className="space-y-1.5">
+        {runs.map((ts, i) => (
+          <div key={i} className="flex items-center justify-between gap-2">
+            {isRecurring && (
+              <span className="w-4 shrink-0 text-[10px] text-text-tertiary tabular-nums">
+                #{i + 1}
+              </span>
+            )}
+            <TimestampCell timestamp={ts} format="both" className="flex-1 text-[11px]" />
+            <span className="shrink-0 text-[10px] text-text-tertiary">
+              {formatRelativeTime(ts)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

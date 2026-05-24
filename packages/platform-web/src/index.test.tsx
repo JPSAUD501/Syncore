@@ -230,6 +230,21 @@ describe("platform-web sql.js runtime", () => {
       expect(
         sentMessages.some((payload) => payload.includes('"type":"hello"'))
       ).toBe(true);
+      const helloPayload = sentMessages.find((payload) =>
+        payload.includes('"type":"hello"')
+      );
+      expect(helloPayload).toBeDefined();
+      const hello = JSON.parse(helloPayload ?? "{}") as {
+        capabilities?: {
+          sql?: { read: boolean; write: boolean; live: boolean; reason?: string };
+        };
+      };
+      expect(hello.capabilities?.sql).toMatchObject({
+        read: false,
+        write: false,
+        live: false,
+        reason: "SQL Console is not available for browser runtimes."
+      });
       expect(
         sentMessages.some((payload) => payload.includes('"type":"event"'))
       ).toBe(true);

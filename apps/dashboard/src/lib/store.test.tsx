@@ -321,6 +321,69 @@ describe("devtools store runtime selection", () => {
     ]);
   });
 
+  it("orders selected target events by timestamp across runtimes", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-a",
+        platform: "browser-worker",
+        targetKind: "client",
+        appName: "localhost",
+        origin: "http://localhost:3000",
+        storageIdentity: "idb://workspace"
+      })
+    );
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-b",
+        platform: "browser-worker",
+        targetKind: "client",
+        appName: "localhost",
+        origin: "http://localhost:3000",
+        storageIdentity: "idb://workspace"
+      })
+    );
+
+    useDevtoolsStore.getState()._handleMessage({
+      type: "event.batch",
+      runtimeId: "runtime-a",
+      events: [
+        {
+          type: "query.executed",
+          runtimeId: "runtime-a",
+          queryId: "a-old",
+          functionName: "tasks:list",
+          dependencies: [],
+          durationMs: 1,
+          timestamp: 100,
+          sequence: 200
+        }
+      ]
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "event.batch",
+      runtimeId: "runtime-b",
+      events: [
+        {
+          type: "mutation.committed",
+          runtimeId: "runtime-b",
+          mutationId: "b-new",
+          functionName: "tasks:update",
+          changedTables: ["tasks"],
+          durationMs: 3,
+          timestamp: 200,
+          sequence: 1
+        }
+      ]
+    });
+
+    const { result } = renderHook(() => useSelectedTargetEvents());
+
+    expect(result.current.map((event) => event.runtimeId)).toEqual([
+      "runtime-b",
+      "runtime-a"
+    ]);
+  });
+
   it("ignores duplicate live events for the same runtime", () => {
     useDevtoolsStore.setState((state) => ({
       ...state,
@@ -357,7 +420,7 @@ describe("devtools store runtime selection", () => {
     expect(runtime?.mutationCount).toBe(1);
   });
 
-  it("selects the only session directly when a client target has a single session", () => {
+  it("selects the only runtime directly when a client data source has one runtime", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-a-12345678",
@@ -380,9 +443,106 @@ describe("devtools store runtime selection", () => {
     expect(result.current.targets).toHaveLength(1);
     expect(result.current.targets[0]?.runtimeIds).toHaveLength(1);
     expect(result.current.selectedTarget?.kind).toBe("client");
-    expect(result.current.selectedTarget?.label).toBe("Solo Session (Chrome)");
+    expect(result.current.selectedTarget?.label).toBe(
+      "localhost:3000 · syncore"
+    );
     expect(result.current.runtimeFilter).toBe("runtime-a-12345678");
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
+  });
+
+  it("labels data sources without using the runtime session label", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-node",
+        platform: "node",
+        targetKind: "client",
+        databaseLabel: "tasks.db",
+        storageProtocol: "file",
+        storageIdentity: "file://tasks.db",
+        sessionLabel: "Random Runtime"
+      })
+    );
+
+    const { result } = renderHook(() => useSelectedTarget());
+
+    expect(result.current?.label).toBe("tasks.db");
+    expect(result.current?.label).not.toContain("Random Runtime");
+  });
+
+  it("uses an explicit incomplete label when data source metadata is missing", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-incomplete",
+        platform: "browser-worker",
+        targetKind: "client",
+        sessionLabel: "Visible Runtime"
+      })
+    );
+
+    const { result } = renderHook(() => useSelectedTarget());
+
+    expect(result.current?.label).toBe("Unnamed data source");
+  });
+
+  it("derives SQL support from announced capabilities", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-web",
+        platform: "browser-worker",
+        targetKind: "client",
+        origin: "http://localhost:3000",
+        storageProtocol: "opfs",
+        storageIdentity: "opfs://workspace",
+        capabilities: {
+          sql: {
+            read: false,
+            write: false,
+            live: false,
+            reason: "SQL Console is not available for browser runtimes."
+          }
+        }
+      })
+    );
+
+    const { result } = renderHook(() => ({
+      selectedTarget: useSelectedTarget(),
+      targets: useConnectedTargets()
+    }));
+    expect(result.current.selectedTarget?.sqlAvailable).toBe(false);
+    expect(result.current.selectedTarget?.sqlUnavailableReason).toBe(
+      "SQL Console is not available for browser runtimes."
+    );
+
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-node",
+        platform: "browser-worker",
+        targetKind: "client",
+        databaseLabel: "app.db",
+        storageProtocol: "file",
+        storageIdentity: "file://app.db",
+        capabilities: {
+          sql: {
+            read: true,
+            write: true,
+            live: true
+          }
+        }
+      })
+    );
+    const { result: targetsAfterFileRuntime } = renderHook(() =>
+      useConnectedTargets()
+    );
+    const fileTarget = targetsAfterFileRuntime.current.find(
+      (target) => target.label === "app.db"
+    );
+    expect(fileTarget).toBeDefined();
+    useDevtoolsStore.getState().selectTarget(fileTarget?.id ?? null);
+
+    const { result: selectedFileTarget } = renderHook(() =>
+      useSelectedTarget()
+    );
+    expect(selectedFileTarget.current?.sqlAvailable).toBe(true);
   });
 
   it("marks runtimes with incompatible devtools protocol as disconnected", () => {
@@ -615,7 +775,7 @@ describe("devtools store runtime selection", () => {
     }));
 
     expect(result.current.targets).toHaveLength(1);
-    expect(result.current.selectedTarget?.connectedSessions).toBe(1);
+    expect(result.current.selectedTarget?.connectedRuntimes).toBe(1);
     expect(result.current.runtimes.map((runtime) => runtime.runtimeId)).toEqual([
       "runtime-a-12345678"
     ]);

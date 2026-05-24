@@ -13,6 +13,7 @@ import type {
   SyncoreDevtoolsClientMessage,
   SyncoreDevtoolsCommandPayload,
   SyncoreDevtoolsCommandResultPayload,
+  SyncoreDevtoolsCapabilities,
   SyncoreDevtoolsMessage,
   SyncoreDevtoolsSubscriptionPayload,
   SyncoreDevtoolsSubscriptionResultPayload,
@@ -2156,7 +2157,8 @@ async function createProjectTargetBackend(
       targetKind: "project",
       storageProtocol: "file",
       databaseLabel: path.basename(databasePath),
-      storageIdentity: `file::${databasePath}`
+      storageIdentity: `file::${databasePath}`,
+      capabilities: createProjectDevtoolsCapabilities()
     },
     handleCommand: commandHandler,
     subscribe(subscriptionId, payload, listener) {
@@ -2168,6 +2170,25 @@ async function createProjectTargetBackend(
     async dispose() {
       subscriptionHost.dispose();
       await runtime.stop();
+    }
+  };
+}
+
+function createProjectDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
+  return {
+    sql: {
+      read: true,
+      write: true,
+      live: true
+    },
+    data: {
+      browse: true,
+      mutate: true,
+      importExport: true
+    },
+    scheduler: {
+      read: true,
+      edit: true
     }
   };
 }

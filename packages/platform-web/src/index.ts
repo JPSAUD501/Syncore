@@ -19,6 +19,7 @@ import {
   SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
   SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
   type SyncoreDevtoolsClientMessage,
+  type SyncoreDevtoolsCapabilities,
   type SyncoreDevtoolsMessage,
   type SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
@@ -204,7 +205,8 @@ export async function createWebSyncoreRuntime<
             targetKind: "client",
             storageProtocol: persistence.storageProtocol,
             databaseLabel,
-            storageIdentity
+            storageIdentity,
+            capabilities: createBrowserDevtoolsCapabilities()
           };
           if (appName) {
             sinkOptions.appName = appName;
@@ -386,6 +388,7 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
   storageProtocol?: string;
   databaseLabel?: string;
   storageIdentity?: string;
+  capabilities?: SyncoreDevtoolsCapabilities;
 }
 
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
@@ -440,7 +443,8 @@ export function createBrowserWebSocketDevtoolsSink(
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
         });
       }
       flushPendingMessages();
@@ -576,7 +580,8 @@ export function createBrowserWebSocketDevtoolsSink(
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
         });
       }
       send({ type: "event", event });
@@ -618,7 +623,28 @@ function withRuntimeSummaryMeta(
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
-      : {})
+      : {}),
+    capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
+  };
+}
+
+function createBrowserDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
+  return {
+    sql: {
+      read: false,
+      write: false,
+      live: false,
+      reason: "SQL Console is not available for browser runtimes."
+    },
+    data: {
+      browse: true,
+      mutate: true,
+      importExport: true
+    },
+    scheduler: {
+      read: true,
+      edit: true
+    }
   };
 }
 

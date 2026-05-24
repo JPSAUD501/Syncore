@@ -14,6 +14,7 @@ interface DataTableProps {
   selectedRowIds?: string[];
   onToggleRowSelection?: (rowId: string) => void;
   onToggleAllRows?: (rowIds: string[], checked: boolean) => void;
+  onRowClick?: (rowId: string) => void;
   onCellEdit?: (rowId: string, field: string, value: unknown) => void;
   onOpenReference?: ((tableName: string, id: string) => void) | undefined;
   referenceFields?: Record<string, ReferenceFieldOptions>;
@@ -27,6 +28,7 @@ export function DataTable({
   selectedRowIds = [],
   onToggleRowSelection,
   onToggleAllRows,
+  onRowClick,
   onCellEdit,
   onOpenReference,
   referenceFields,
@@ -92,6 +94,7 @@ export function DataTable({
             return (
               <div
                 key={rowId}
+                onClick={() => onRowClick?.(rowId)}
                 className={cn(
                   "flex border-b border-border/80 bg-bg-base transition-colors",
                   isSelected

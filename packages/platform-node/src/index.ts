@@ -17,6 +17,7 @@ import {
 } from "@syncore/devtools-protocol";
 import type {
   SyncoreDevtoolsClientMessage,
+  SyncoreDevtoolsCapabilities,
   SyncoreDevtoolsMessage,
   SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
@@ -461,7 +462,8 @@ export function createNodeSyncoreRuntime<
           targetKind: "client",
           storageProtocol: "file",
           databaseLabel: path.basename(options.databasePath),
-          storageIdentity: `file::${path.resolve(options.databasePath)}`
+          storageIdentity: `file::${path.resolve(options.databasePath)}`,
+          capabilities: createNodeDevtoolsCapabilities()
         })
       : undefined;
   const runtimeOptions: SyncoreRuntimeOptions<TSchema> = {
@@ -686,6 +688,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
   storageProtocol?: string;
   databaseLabel?: string;
   storageIdentity?: string;
+  capabilities?: SyncoreDevtoolsCapabilities;
 }
 
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
@@ -740,7 +743,8 @@ export function createNodeWebSocketDevtoolsSink(
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createNodeDevtoolsCapabilities()
         });
       }
       flushPendingMessages();
@@ -889,7 +893,8 @@ export function createNodeWebSocketDevtoolsSink(
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createNodeDevtoolsCapabilities()
         });
       }
       send({
@@ -934,7 +939,27 @@ function withRuntimeSummaryMeta(
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
-      : {})
+      : {}),
+    capabilities: options.capabilities ?? createNodeDevtoolsCapabilities()
+  };
+}
+
+function createNodeDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
+  return {
+    sql: {
+      read: true,
+      write: true,
+      live: true
+    },
+    data: {
+      browse: true,
+      mutate: true,
+      importExport: true
+    },
+    scheduler: {
+      read: true,
+      edit: true
+    }
   };
 }
 

@@ -1624,6 +1624,10 @@ export interface SyncoreRuntimeSummary {
     activeQueryCount: number;
     // (undocumented)
     appName?: string;
+    // Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsCapabilities" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
+    capabilities?: SyncoreDevtoolsCapabilities;
     // (undocumented)
     connectedAt: number;
     // (undocumented)

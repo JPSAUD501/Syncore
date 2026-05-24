@@ -6,7 +6,8 @@ import {
   FileCode,
   Loader2,
   Search,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -155,7 +156,7 @@ function ActiveQueriesPage() {
       </div>
 
       {selectedQuery && (
-        <div className="hidden w-[420px] flex-col overflow-hidden rounded-md border border-border bg-bg-surface xl:flex">
+        <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-bg-surface xl:static xl:inset-auto xl:z-auto xl:w-105 xl:shrink-0 xl:overflow-visible xl:rounded-md xl:border xl:border-border">
           <div className="flex items-center justify-between border-b border-border p-3">
             <div className="min-w-0">
               <div className="truncate font-mono text-[12px] font-semibold text-text-primary">
@@ -167,23 +168,33 @@ function ActiveQueriesPage() {
                 {selectedQuery.dependencyKeys.length} dependencies
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="xs"
-              className="gap-1.5"
-              onClick={() =>
-                void navigate({
-                  to: "/functions",
-                  search: {
-                    fn: selectedQuery.functionName,
-                    args: JSON.stringify(selectedQuery.args ?? {})
-                  }
-                })
-              }
-            >
-              <FileCode size={11} />
-              Function
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="xs"
+                className="gap-1.5"
+                onClick={() =>
+                  void navigate({
+                    to: "/functions",
+                    search: {
+                      fn: selectedQuery.functionName,
+                      args: JSON.stringify(selectedQuery.args ?? {})
+                    }
+                  })
+                }
+              >
+                <FileCode size={11} />
+                <span className="hidden sm:inline">Function</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setSelectedId(null)}
+                className="xl:hidden"
+              >
+                <X size={14} />
+              </Button>
+            </div>
           </div>
 
           <ScrollArea className="flex-1">
