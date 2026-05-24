@@ -53,6 +53,7 @@ export type BrowserSyncoreSchema<
 
 const DEVTOOLS_META_NAMESPACE = "__syncore_devtools_meta__";
 const STORAGE_SCOPE_ID_PREFIX = "storage-scope";
+const DATA_SOURCE_ALIAS_PREFIX = "data-source-alias";
 
 /**
  * Options for constructing a browser Syncore runtime.
@@ -191,6 +192,10 @@ export async function createWebSyncoreRuntime<
     persistence,
     databaseLabel
   );
+  const dataSourceAlias = await resolvePersistedDataSourceAlias(
+    persistence,
+    databaseLabel
+  );
   const storageIdentity = [
     origin ?? "unknown-origin",
     persistence.storageProtocol,
@@ -205,6 +210,7 @@ export async function createWebSyncoreRuntime<
             targetKind: "client",
             storageProtocol: persistence.storageProtocol,
             databaseLabel,
+            dataSourceAlias,
             storageIdentity,
             capabilities: createBrowserDevtoolsCapabilities()
           };
@@ -387,6 +393,7 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
   targetKind?: "client";
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
   capabilities?: SyncoreDevtoolsCapabilities;
 }
@@ -441,6 +448,9 @@ export function createBrowserWebSocketDevtoolsSink(
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
             : {}),
@@ -578,6 +588,9 @@ export function createBrowserWebSocketDevtoolsSink(
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
             : {}),
@@ -621,6 +634,7 @@ function withRuntimeSummaryMeta(
       ? { storageProtocol: options.storageProtocol }
       : {}),
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+    ...(options.dataSourceAlias ? { dataSourceAlias: options.dataSourceAlias } : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
       : {}),
@@ -862,6 +876,30 @@ async function resolvePersistedStorageScopeId(
   }
 
   const nextValue = generateId();
+  await persistence.putFile(
+    DEVTOOLS_META_NAMESPACE,
+    id,
+    new TextEncoder().encode(nextValue),
+    "text/plain"
+  );
+  return nextValue;
+}
+
+async function resolvePersistedDataSourceAlias(
+  persistence: SyncoreWebPersistence,
+  databaseLabel: string
+): Promise<string> {
+  const id = `${DATA_SOURCE_ALIAS_PREFIX}:${databaseLabel}`;
+  const existing = await persistence.getFile(DEVTOOLS_META_NAMESPACE, id);
+
+  if (existing) {
+    const value = new TextDecoder().decode(existing.bytes).trim();
+    if (value.length > 0) {
+      return value;
+    }
+  }
+
+  const nextValue = generateUniqueSessionName();
   await persistence.putFile(
     DEVTOOLS_META_NAMESPACE,
     id,

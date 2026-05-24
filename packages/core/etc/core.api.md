@@ -1633,6 +1633,8 @@ export interface SyncoreRuntimeSummary {
     // (undocumented)
     databaseLabel?: string;
     // (undocumented)
+    dataSourceAlias?: string;
+    // (undocumented)
     origin?: string;
     // (undocumented)
     platform: string;

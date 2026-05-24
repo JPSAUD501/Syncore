@@ -1,7 +1,7 @@
 import { useRouterState } from "@tanstack/react-router";
 import {
-  getPublicTargetDisplayId,
   getPublicRuntimeId,
+  getPublicTargetDisplayId,
   getRuntimeBrowser,
   getRuntimeLabel,
   getStorageProtocolLabel,
@@ -14,8 +14,27 @@ import {
   useSelectedTarget,
   useSelectedTargetRuntimes
 } from "@/lib/store";
-import { Wifi, WifiOff, Menu, Settings } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  Menu,
+  Settings,
+  Wifi,
+  WifiOff
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -24,15 +43,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -45,12 +55,27 @@ const ROUTE_TITLES: Record<string, string> = {
   "/sql": "SQL Console"
 };
 
-function getTargetDisplayParts(target: NonNullable<ReturnType<typeof useSelectedTarget>>) {
+type SelectedTarget = NonNullable<ReturnType<typeof useSelectedTarget>>;
+type SelectedRuntime = ReturnType<typeof useActiveRuntime>;
+
+function getTargetDisplayParts(target: SelectedTarget) {
   return {
     name: target.label,
     protocol: getStorageProtocolLabel(target.storageProtocol),
-    publicId: getPublicTargetDisplayId(target.id)
+    publicId: getPublicTargetDisplayId(target.id),
+    technicalLabel: target.technicalLabel
   };
+}
+
+function getContextRuntimeLabel(
+  runtime: SelectedRuntime,
+  runtimeFilter: string | null,
+  runtimes: ReturnType<typeof useSelectedTargetRuntimes>
+): string {
+  if (runtimeFilter === "all" && runtimes.length > 1) {
+    return "All runtimes";
+  }
+  return runtime ? getRuntimeLabel(runtime) : "No runtime";
 }
 
 export function Header({
@@ -76,18 +101,56 @@ export function Header({
   const runtimeConnected = useSelectedRuntimeConnected();
   const targets = useConnectedTargets();
   const projectTarget = useProjectTargetRuntime();
+  const [contextOpen, setContextOpen] = useState(false);
 
   const title = ROUTE_TITLES[pathname] ?? "Dashboard";
-  const platform = activeRuntime?.platform ?? null;
-  const supportsProjectFallback = ["/data", "/functions", "/queries", "/scheduler", "/sql"].includes(
-    pathname
-  );
+  const supportsProjectFallback = [
+    "/data",
+    "/functions",
+    "/queries",
+    "/scheduler",
+    "/sql"
+  ].includes(pathname);
   const projectOffline =
     supportsProjectFallback && !runtimeConnected && projectTarget?.connected;
+  const contextRuntimeLabel = getContextRuntimeLabel(
+    activeRuntime,
+    selectedRuntimeFilter,
+    selectedTargetRuntimes
+  );
+  const searchableTargets = useMemo(
+    () =>
+      targets.map((target) => {
+        const parts = getTargetDisplayParts(target);
+        return {
+          target,
+          parts,
+          search: [
+            target.label,
+            target.technicalLabel,
+            target.databaseLabel,
+            target.dataSourceAlias,
+            parts.protocol,
+            parts.publicId,
+            ...target.runtimes.flatMap((runtime) => [
+              getRuntimeLabel(runtime),
+              getRuntimeBrowser(runtime),
+              getPublicRuntimeId(
+                runtime.runtimeId,
+                target.runtimes.map((entry) => entry.runtimeId)
+              )
+            ])
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join(" ")
+        };
+      }),
+    [targets]
+  );
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-bg-base px-4 md:px-6">
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         {onToggleSidebar && (
           <Button
             variant="ghost"
@@ -98,167 +161,44 @@ export function Header({
             <Menu size={16} />
           </Button>
         )}
-        <h1 className="text-sm font-semibold text-text-primary">{title}</h1>
+        <h1 className="truncate text-sm font-semibold text-text-primary">
+          {title}
+        </h1>
       </div>
 
       <div className="flex shrink-0 items-center gap-2 md:gap-3">
-        {/* Data source selector */}
-        <div className="flex items-center gap-1.5">
-          <span className="hidden shrink-0 select-none text-[11px] text-text-tertiary sm:block">Data Source</span>
-          {targets.length > 0 ? (
-            <Select
-              value={selectedTarget?.id ?? ""}
-              onValueChange={(value) => selectTarget(value)}
-            >
-              <SelectTrigger size="sm" className="max-w-32 sm:min-w-40 sm:max-w-70">
-                <SelectValue placeholder="Select" />
-              </SelectTrigger>
-              <SelectContent position="popper" align="center" className="min-w-64 w-(--radix-select-trigger-width)">
-                {targets.filter((t) => t.kind === "client").map((target) => {
-                  const parts = getTargetDisplayParts(target);
-                  return (
-                    <SelectItem key={target.id} value={target.id}>
-                      <div className="flex min-w-0 w-full items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full transition-colors",
-                            target.connected ? "bg-success" : "bg-text-tertiary/40"
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
-                          {parts.name}
-                        </span>
-                        <span className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] text-text-tertiary whitespace-nowrap">
-                          {parts.protocol}
-                        </span>
-                        <span className="font-mono text-[10px] text-text-tertiary/60 whitespace-nowrap">
-                          {parts.publicId}
-                        </span>
-                        {target.connectedRuntimes > 0 && (
-                          <span className="tabular-nums text-[10px] text-text-tertiary/60 whitespace-nowrap">
-                            {target.connectedRuntimes}
-                          </span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-                {targets.some((t) => t.kind === "client") &&
-                  targets.some((t) => t.kind === "project") && (
-                    <SelectSeparator />
-                  )}
-                {targets.filter((t) => t.kind === "project").map((target) => {
-                  const parts = getTargetDisplayParts(target);
-                  return (
-                    <SelectItem key={target.id} value={target.id}>
-                      <div className="flex min-w-0 w-full items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full transition-colors",
-                            target.connected ? "bg-success" : "bg-text-tertiary/40"
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
-                          {parts.name}
-                        </span>
-                        <span className="rounded border border-accent/30 bg-accent/8 px-1.5 py-0.5 text-[10px] font-medium text-accent whitespace-nowrap">
-                          Project
-                        </span>
-                        <span className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] text-text-tertiary whitespace-nowrap">
-                          {parts.protocol}
-                        </span>
-                        <span className="font-mono text-[10px] text-text-tertiary/60 whitespace-nowrap">
-                          {parts.publicId}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          ) : (
-            <span className="hidden rounded-md border border-dashed border-border px-2.5 py-1 text-[11px] text-text-tertiary sm:flex">
-              {connected ? "Waiting for app…" : "No app connected"}
-            </span>
-          )}
-        </div>
-
-        {/* Runtime selector */}
-        {selectedTarget?.kind === "client" && (
-          <div className="hidden items-center gap-1.5 sm:flex">
-            <span className="shrink-0 select-none text-[11px] text-text-tertiary">Runtime</span>
-            <Select
-              value={selectedRuntimeFilter ?? "all"}
-              onValueChange={(value) =>
-                value === "all"
-                  ? selectRuntimeFilter("all")
-                  : selectRuntime(value)
-              }
-            >
-              <SelectTrigger
-                size="sm"
-                className="min-w-36 max-w-55"
-              >
-                <SelectValue placeholder="Select runtime" />
-              </SelectTrigger>
-              <SelectContent position="popper" align="center" className="min-w-50 w-(--radix-select-trigger-width)">
-                {selectedTargetRuntimes.length > 1 && (
-                  <>
-                    <SelectItem value="all">
-                      <div className="flex w-full items-center gap-1.5">
-                        <span className="size-1.5 shrink-0 rounded-full bg-success" />
-                        <span className="flex-1 font-medium text-text-primary">All</span>
-                        <span className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] tabular-nums text-text-tertiary whitespace-nowrap">
-                          {selectedTarget.connectedRuntimes} connected
-                        </span>
-                      </div>
-                    </SelectItem>
-                    <SelectSeparator />
-                  </>
-                )}
-                {selectedTargetRuntimes.map((runtime) => {
-                  const label = getRuntimeLabel(runtime);
-                  const browser = getRuntimeBrowser(runtime);
-                  const isWorker = browser?.toLowerCase().includes("worker");
-                  return (
-                    <SelectItem key={runtime.runtimeId} value={runtime.runtimeId}>
-                      <div className="flex w-full items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full transition-colors",
-                            runtime.connected ? "bg-success" : "bg-text-tertiary/40"
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
-                          {label}
-                        </span>
-                        {browser && !isWorker && (
-                          <span className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] text-text-tertiary whitespace-nowrap">
-                            {browser}
-                          </span>
-                        )}
-                        <span className="font-mono text-[10px] text-text-tertiary/60 whitespace-nowrap">
-                          {getPublicRuntimeId(
-                            runtime.runtimeId,
-                            selectedTargetRuntimes.map((entry) => entry.runtimeId)
-                          )}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {platform && !platform.toLowerCase().includes("worker") && (
-          <Badge
-            variant="secondary"
-            className="hidden font-mono text-[10px] md:inline-flex"
+        {targets.length > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setContextOpen(true)}
+            className="max-w-[54vw] justify-start gap-2 px-2.5 sm:max-w-96"
           >
-            {platform}
-          </Badge>
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                selectedTarget?.connected ? "bg-success" : "bg-text-tertiary/40"
+              )}
+            />
+            <span className="min-w-0 truncate text-left text-[12px] font-medium text-text-primary">
+              <span>{selectedTarget?.label ?? "Select data source"}</span>
+              {selectedTarget?.kind === "client" && (
+                <span className="text-text-tertiary">
+                  {" / "}
+                  {contextRuntimeLabel}
+                </span>
+              )}
+            </span>
+            {selectedTarget?.metadataIncomplete && (
+              <AlertTriangle size={12} className="shrink-0 text-warning" />
+            )}
+            <ChevronDown size={13} className="shrink-0 text-text-tertiary" />
+          </Button>
+        ) : (
+          <span className="hidden rounded-md border border-dashed border-border px-2.5 py-1 text-[11px] text-text-tertiary sm:flex">
+            {connected ? "Waiting for app..." : "No app connected"}
+          </span>
         )}
 
         {projectOffline && (
@@ -286,86 +226,15 @@ export function Header({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="py-4 space-y-4">
-              {/* Runtime selector — shown in Settings on mobile since header selector is sm+ only */}
-              {selectedTarget?.kind === "client" && (
-                <div className="flex flex-col gap-2 sm:hidden">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium text-text-primary">
-                      Runtime
-                    </span>
-                    <span className="text-[13px] text-text-tertiary">
-                      Select which connected runtime to inspect.
-                    </span>
-                  </div>
-                  <Select
-                    value={selectedRuntimeFilter ?? "all"}
-                    onValueChange={(value) =>
-                      value === "all"
-                        ? selectRuntimeFilter("all")
-                        : selectRuntime(value)
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select runtime" />
-                    </SelectTrigger>
-                    <SelectContent position="popper" align="center" className="min-w-50 w-(--radix-select-trigger-width)">
-                      {selectedTargetRuntimes.length > 1 && (
-                        <>
-                          <SelectItem value="all">
-                            <div className="flex w-full items-center gap-1.5">
-                              <span className="size-1.5 shrink-0 rounded-full bg-success" />
-                              <span className="flex-1 font-medium text-text-primary">All</span>
-                              <span className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] tabular-nums text-text-tertiary whitespace-nowrap">
-                                {selectedTarget.connectedRuntimes} connected
-                              </span>
-                            </div>
-                          </SelectItem>
-                          <SelectSeparator />
-                        </>
-                      )}
-                      {selectedTargetRuntimes.map((runtime) => {
-                        const label = getRuntimeLabel(runtime);
-                        const browser = getRuntimeBrowser(runtime);
-                        const isWorker = browser?.toLowerCase().includes("worker");
-                        return (
-                          <SelectItem key={runtime.runtimeId} value={runtime.runtimeId}>
-                            <div className="flex w-full items-center gap-1.5">
-                              <span
-                                className={cn(
-                                  "size-1.5 shrink-0 rounded-full transition-colors",
-                                  runtime.connected ? "bg-success" : "bg-text-tertiary/40"
-                                )}
-                              />
-                              <span className="min-w-0 flex-1 truncate font-medium text-text-primary">
-                                {label}
-                              </span>
-                              {browser && !isWorker && (
-                                <span className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] text-text-tertiary whitespace-nowrap">
-                                  {browser}
-                                </span>
-                              )}
-                              <span className="font-mono text-[10px] text-text-tertiary/60 whitespace-nowrap">
-                                {getPublicRuntimeId(
-                                  runtime.runtimeId,
-                                  selectedTargetRuntimes.map((entry) => entry.runtimeId)
-                                )}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+            <div className="space-y-4 py-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-text-primary">
                     Hide dashboard events
                   </span>
                   <span className="text-[13px] text-text-tertiary">
-                    Exclude activity originating from this dashboard (like running queries) from the activity feed and metrics.
+                    Exclude activity originating from this dashboard from the
+                    activity feed and metrics.
                   </span>
                 </div>
                 <button
@@ -379,10 +248,14 @@ export function Header({
                   )}
                 >
                   <span
-                    data-state={!includeDashboardActivity ? "checked" : "unchecked"}
+                    data-state={
+                      !includeDashboardActivity ? "checked" : "unchecked"
+                    }
                     className={cn(
                       "pointer-events-none block size-4 rounded-full bg-white ring-0 transition-transform",
-                      !includeDashboardActivity ? "translate-x-4" : "translate-x-0"
+                      !includeDashboardActivity
+                        ? "translate-x-4"
+                        : "translate-x-0"
                     )}
                   />
                 </button>
@@ -401,6 +274,215 @@ export function Header({
           </span>
         </Badge>
       </div>
+
+      <ContextSwitcherDialog
+        open={contextOpen}
+        onOpenChange={setContextOpen}
+        searchableTargets={searchableTargets}
+        selectedTarget={selectedTarget}
+        selectedRuntimeFilter={selectedRuntimeFilter}
+        selectTarget={selectTarget}
+        selectRuntime={selectRuntime}
+        selectRuntimeFilter={selectRuntimeFilter}
+      />
     </header>
+  );
+}
+
+function ContextSwitcherDialog({
+  open,
+  onOpenChange,
+  searchableTargets,
+  selectedTarget,
+  selectedRuntimeFilter,
+  selectTarget,
+  selectRuntime,
+  selectRuntimeFilter
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  searchableTargets: Array<{
+    target: SelectedTarget;
+    parts: ReturnType<typeof getTargetDisplayParts>;
+    search: string;
+  }>;
+  selectedTarget: SelectedTarget | null;
+  selectedRuntimeFilter: string | null;
+  selectTarget: (targetId: string | null) => void;
+  selectRuntime: (runtimeId: string | null) => void;
+  selectRuntimeFilter: (runtimeId: string | null) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="w-[min(860px,calc(100vw-2rem))] overflow-hidden rounded-xl border-border/60 p-0 shadow-2xl shadow-black/50 sm:max-w-none"
+      >
+        <DialogTitle className="sr-only">Switch context</DialogTitle>
+        <DialogDescription className="sr-only">
+          Select a data source and runtime.
+        </DialogDescription>
+        <Command className="h-full w-full overflow-hidden rounded-none bg-bg-surface text-text-primary **:data-[slot=command-input-wrapper]:h-13">
+          <CommandInput placeholder="Search data sources, runtimes, ids..." />
+          <CommandList className="max-h-[65vh] scroll-py-1 p-3">
+            <CommandEmpty>No results found.</CommandEmpty>
+
+            <CommandGroup
+              heading="Data Sources"
+              className="**:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:pb-1.5 **:[[cmdk-group-heading]]:pt-1 **:[[cmdk-group-heading]]:text-[10px] **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-widest **:[[cmdk-group-heading]]:text-text-tertiary/50"
+            >
+              {searchableTargets.map(({ target, parts, search }) => {
+                const selected = target.id === selectedTarget?.id;
+                return (
+                  <CommandItem
+                    key={target.id}
+                    value={`target:${target.id}:${search}`}
+                    onSelect={() => {
+                      selectTarget(target.id);
+                      onOpenChange(false);
+                    }}
+                    className="items-start gap-3 rounded-md px-3 py-3"
+                  >
+                    <span
+                      className={cn(
+                        "mt-1.25 size-2 shrink-0 rounded-full",
+                        target.connected ? "bg-success" : "bg-text-tertiary/25"
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-medium text-text-primary">
+                          {parts.name}
+                        </span>
+                        {target.kind === "project" && (
+                          <span className="whitespace-nowrap rounded border border-accent/30 bg-accent/8 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                            Project
+                          </span>
+                        )}
+                        {target.metadataIncomplete && (
+                          <AlertTriangle size={11} className="shrink-0 text-warning" />
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-text-tertiary">
+                        {parts.technicalLabel && (
+                          <span className="max-w-md truncate">
+                            {parts.technicalLabel}
+                          </span>
+                        )}
+                        <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]">
+                          {parts.protocol}
+                        </span>
+                        <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] font-mono">
+                          {parts.publicId}
+                        </span>
+                        {target.databaseLabel && (
+                          <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]">
+                            db={target.databaseLabel}
+                          </span>
+                        )}
+                      </div>
+                      {target.metadataWarning && (
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-warning">
+                          <AlertTriangle size={10} className="shrink-0" />
+                          {target.metadataWarning}
+                        </div>
+                      )}
+                    </div>
+                    {selected && (
+                      <Check size={14} className="mt-0.75 shrink-0 text-accent" />
+                    )}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+
+            {selectedTarget?.kind === "client" && (
+              <>
+                <CommandSeparator className="my-2" />
+                <CommandGroup
+                  heading="Runtimes"
+                  className="**:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:pb-1.5 **:[[cmdk-group-heading]]:pt-1 **:[[cmdk-group-heading]]:text-[10px] **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-widest **:[[cmdk-group-heading]]:text-text-tertiary/50"
+                >
+                  {selectedTarget.runtimes.length > 1 && (
+                    <CommandItem
+                      value={`runtime:all:${selectedTarget.label}:all runtimes`}
+                      onSelect={() => {
+                        selectRuntimeFilter("all");
+                        onOpenChange(false);
+                      }}
+                      className="gap-3 rounded-md px-3 py-3"
+                    >
+                      <span className="mt-1.25 size-2 shrink-0 rounded-full bg-success" />
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="text-sm font-medium text-text-primary">
+                          All runtimes
+                        </span>
+                        <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] tabular-nums text-text-tertiary">
+                          {selectedTarget.connectedRuntimes} connected
+                        </span>
+                      </div>
+                      {selectedRuntimeFilter === "all" && (
+                        <Check size={14} className="mt-0.75 shrink-0 text-accent" />
+                      )}
+                    </CommandItem>
+                  )}
+                  {selectedTarget.runtimes.map((runtime) => {
+                    const label = getRuntimeLabel(runtime);
+                    const browser = getRuntimeBrowser(runtime);
+                    const runtimePublicId = getPublicRuntimeId(
+                      runtime.runtimeId,
+                      selectedTarget.runtimes.map((entry) => entry.runtimeId)
+                    );
+                    const selected =
+                      selectedRuntimeFilter === runtime.runtimeId ||
+                      (selectedTarget.runtimes.length === 1 &&
+                        selectedRuntimeFilter !== "all");
+                    return (
+                      <CommandItem
+                        key={runtime.runtimeId}
+                        value={`runtime:${runtime.runtimeId}:${label}:${browser ?? ""}:${runtimePublicId}`}
+                        onSelect={() => {
+                          selectRuntime(runtime.runtimeId);
+                          onOpenChange(false);
+                        }}
+                        className="items-start gap-3 rounded-md px-3 py-3"
+                      >
+                        <span
+                          className={cn(
+                            "mt-1.25 size-2 shrink-0 rounded-full",
+                            runtime.connected
+                              ? "bg-success"
+                              : "bg-text-tertiary/25"
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-text-primary">
+                            {label}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-text-tertiary">
+                            {browser && <span>{browser}</span>}
+                            <span className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px] font-mono">
+                              {runtimePublicId}
+                            </span>
+                            {runtime.platform && (
+                              <span className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]">
+                                {runtime.platform}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {selected && (
+                          <Check size={14} className="mt-0.75 shrink-0 text-accent" />
+                        )}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </DialogContent>
+    </Dialog>
   );
 }

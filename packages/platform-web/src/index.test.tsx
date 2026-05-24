@@ -235,10 +235,13 @@ describe("platform-web sql.js runtime", () => {
       );
       expect(helloPayload).toBeDefined();
       const hello = JSON.parse(helloPayload ?? "{}") as {
+        dataSourceAlias?: string;
         capabilities?: {
           sql?: { read: boolean; write: boolean; live: boolean; reason?: string };
         };
       };
+      expect(hello.dataSourceAlias).toEqual(expect.any(String));
+      expect(hello.dataSourceAlias?.length).toBeGreaterThan(0);
       expect(hello.capabilities?.sql).toMatchObject({
         read: false,
         write: false,

@@ -430,6 +430,7 @@ describe("devtools store runtime selection", () => {
       origin: "http://localhost:3000",
       storageProtocol: "opfs",
       storageIdentity: "opfs://workspace",
+      dataSourceAlias: "Quick Sentinel",
       sessionLabel: "Solo Session (Chrome)"
     });
 
@@ -443,8 +444,9 @@ describe("devtools store runtime selection", () => {
     expect(result.current.targets).toHaveLength(1);
     expect(result.current.targets[0]?.runtimeIds).toHaveLength(1);
     expect(result.current.selectedTarget?.kind).toBe("client");
-    expect(result.current.selectedTarget?.label).toBe(
-      "localhost:3000 · syncore"
+    expect(result.current.selectedTarget?.label).toBe("Quick Sentinel");
+    expect(result.current.selectedTarget?.technicalLabel).toContain(
+      "localhost:3000"
     );
     expect(result.current.runtimeFilter).toBe("runtime-a-12345678");
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
@@ -469,7 +471,7 @@ describe("devtools store runtime selection", () => {
     expect(result.current?.label).not.toContain("Random Runtime");
   });
 
-  it("uses an explicit incomplete label when data source metadata is missing", () => {
+  it("uses the public target id as the visible fallback when metadata is missing", () => {
     useDevtoolsStore.getState()._handleMessage(
       helloMessage({
         runtimeId: "runtime-incomplete",
@@ -481,7 +483,32 @@ describe("devtools store runtime selection", () => {
 
     const { result } = renderHook(() => useSelectedTarget());
 
-    expect(result.current?.label).toBe("Unnamed data source");
+    expect(result.current?.label).toMatch(/^Data source T\d{5}$/);
+    expect(result.current?.metadataIncomplete).toBe(true);
+    expect(result.current?.metadataWarning).toBe(
+      "Runtime did not provide storage metadata."
+    );
+  });
+
+  it("normalizes idb storage metadata as IndexedDB", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-idb",
+        platform: "browser-worker",
+        targetKind: "client",
+        origin: "http://localhost:3000",
+        storageProtocol: "idb",
+        storageIdentity: "idb://workspace",
+        databaseLabel: "syncore",
+        dataSourceAlias: "Vivid Dragon"
+      })
+    );
+
+    const { result } = renderHook(() => useSelectedTarget());
+
+    expect(result.current?.label).toBe("Vivid Dragon");
+    expect(result.current?.storageProtocol).toBe("indexeddb");
+    expect(result.current?.technicalLabel).toContain("localhost:3000");
   });
 
   it("derives SQL support from announced capabilities", () => {

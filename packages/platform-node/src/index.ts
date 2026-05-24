@@ -687,6 +687,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
   targetKind?: "client" | "project";
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
   capabilities?: SyncoreDevtoolsCapabilities;
 }
@@ -741,6 +742,9 @@ export function createNodeWebSocketDevtoolsSink(
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
             : {}),
@@ -891,6 +895,9 @@ export function createNodeWebSocketDevtoolsSink(
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
             : {}),
@@ -937,6 +944,7 @@ function withRuntimeSummaryMeta(
       ? { storageProtocol: options.storageProtocol }
       : {}),
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+    ...(options.dataSourceAlias ? { dataSourceAlias: options.dataSourceAlias } : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
       : {}),

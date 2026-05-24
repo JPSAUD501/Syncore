@@ -194,6 +194,7 @@ export interface SyncoreRuntimeSummary {
   targetKind?: "client" | "project";
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
   capabilities?: SyncoreDevtoolsCapabilities;
   connectedAt: number;
@@ -310,6 +311,7 @@ export type SyncoreDevtoolsMessage =
       targetKind?: "client" | "project";
       storageProtocol?: string;
       databaseLabel?: string;
+      dataSourceAlias?: string;
       storageIdentity?: string;
       capabilities?: SyncoreDevtoolsCapabilities;
     }

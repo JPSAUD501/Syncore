@@ -208,6 +208,8 @@ export interface NodeWebSocketDevtoolsSinkOptions {
     // (undocumented)
     databaseLabel?: string;
     // (undocumented)
+    dataSourceAlias?: string;
+    // (undocumented)
     origin?: string;
     // (undocumented)
     reconnectDelayMs?: number;

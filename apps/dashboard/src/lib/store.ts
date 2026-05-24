@@ -139,6 +139,7 @@ interface RuntimeMeta {
   targetKind?: "client" | "project";
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
   capabilities?: SyncoreDevtoolsCapabilities;
 }
@@ -245,7 +246,11 @@ export interface TargetState {
   origin?: string;
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
+  technicalLabel: string;
+  metadataIncomplete: boolean;
+  metadataWarning?: string;
   capabilities: SyncoreDevtoolsCapabilities;
   sqlAvailable: boolean;
   sqlUnavailableReason?: string;
@@ -293,6 +298,7 @@ function ensureRuntime(
       ? { storageProtocol: meta.storageProtocol }
       : {}),
     ...(meta.databaseLabel ? { databaseLabel: meta.databaseLabel } : {}),
+    ...(meta.dataSourceAlias ? { dataSourceAlias: meta.dataSourceAlias } : {}),
     ...(meta.storageIdentity
       ? { storageIdentity: meta.storageIdentity }
       : {}),
@@ -359,16 +365,21 @@ function getTargetGroupKey(runtime: RuntimeState): string {
     : runtime.storageIdentity ?? `runtime::${runtime.runtimeId}`;
 }
 
-function getTargetLabel(runtime: RuntimeState): string {
+function normalizeStorageProtocol(protocol: string | undefined): string | undefined {
+  return protocol === "idb" ? "indexeddb" : protocol;
+}
+
+function getTargetTechnicalLabel(runtime: RuntimeState): string {
+  const storageProtocol = normalizeStorageProtocol(runtime.storageProtocol);
   if (isProjectRuntime(runtime)) {
     return "Project database";
   }
-  if (runtime.storageProtocol === "file") {
+  if (storageProtocol === "file") {
     return runtime.databaseLabel ?? "File database";
   }
   if (
-    runtime.storageProtocol === "opfs" ||
-    runtime.storageProtocol === "indexeddb"
+    storageProtocol === "opfs" ||
+    storageProtocol === "indexeddb"
   ) {
     const databaseLabel = runtime.databaseLabel ?? "syncore";
     const originHost = getOriginHost(runtime.origin);
@@ -376,11 +387,35 @@ function getTargetLabel(runtime: RuntimeState): string {
       ? `${originHost} \u00b7 ${databaseLabel}`
       : `Browser storage \u00b7 ${databaseLabel}`;
   }
-  return "Unnamed data source";
+  return "Unknown storage";
+}
+
+function getTargetLabel(
+  runtime: RuntimeState,
+  publicId: string,
+  technicalLabel: string
+): string {
+  if (runtime.dataSourceAlias) {
+    return runtime.dataSourceAlias;
+  }
+  if (isProjectRuntime(runtime) || normalizeStorageProtocol(runtime.storageProtocol) === "file") {
+    return technicalLabel;
+  }
+  return `Data source ${getPublicTargetDisplayId(publicId)}`;
+}
+
+function getTargetMetadataWarning(runtime: RuntimeState): string | undefined {
+  if (isProjectRuntime(runtime)) {
+    return undefined;
+  }
+  if (!runtime.storageProtocol || !runtime.storageIdentity) {
+    return "Runtime did not provide storage metadata.";
+  }
+  return undefined;
 }
 
 export function getStorageProtocolLabel(protocol: string | undefined): string {
-  switch (protocol) {
+  switch (normalizeStorageProtocol(protocol)) {
     case "file":
       return "File";
     case "opfs":
@@ -453,10 +488,14 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
         : "client";
       const capabilities = mergeDevtoolsCapabilities(sorted);
       const sqlAvailable = capabilities.sql?.read === true;
+      const id = kind === "project" ? "project" : createPublicTargetId(key, keys);
+      const technicalLabel = getTargetTechnicalLabel(primary);
+      const metadataWarning = getTargetMetadataWarning(primary);
+      const storageProtocol = normalizeStorageProtocol(primary.storageProtocol);
       return {
-        id: kind === "project" ? "project" : createPublicTargetId(key, keys),
+        id,
         kind,
-        label: getTargetLabel(primary),
+        label: getTargetLabel(primary, id, technicalLabel),
         platform: primary.platform,
         runtimeIds: sorted.map((runtime) => runtime.runtimeId),
         runtimes: sorted,
@@ -464,13 +503,15 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
         connectedRuntimes,
         ...(primary.appName ? { appName: primary.appName } : {}),
         ...(primary.origin ? { origin: primary.origin } : {}),
-        ...(primary.storageProtocol
-          ? { storageProtocol: primary.storageProtocol }
-          : {}),
+        ...(storageProtocol ? { storageProtocol } : {}),
         ...(primary.databaseLabel ? { databaseLabel: primary.databaseLabel } : {}),
+        ...(primary.dataSourceAlias ? { dataSourceAlias: primary.dataSourceAlias } : {}),
         ...(primary.storageIdentity
           ? { storageIdentity: primary.storageIdentity }
           : {}),
+        technicalLabel,
+        metadataIncomplete: metadataWarning !== undefined,
+        ...(metadataWarning ? { metadataWarning } : {}),
         capabilities,
         sqlAvailable,
         ...(capabilities.sql?.reason
@@ -965,6 +1006,9 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
                 ...(msg.databaseLabel
                   ? { databaseLabel: msg.databaseLabel }
                   : {}),
+                ...(msg.dataSourceAlias
+                  ? { dataSourceAlias: msg.dataSourceAlias }
+                  : {}),
                 ...(msg.storageIdentity
                   ? { storageIdentity: msg.storageIdentity }
                   : {}),
@@ -1143,6 +1187,9 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               }
               if (msg.payload.summary.databaseLabel) {
                 nextRuntime.databaseLabel = msg.payload.summary.databaseLabel;
+              }
+              if (msg.payload.summary.dataSourceAlias) {
+                nextRuntime.dataSourceAlias = msg.payload.summary.dataSourceAlias;
               }
               if (msg.payload.summary.storageIdentity) {
                 nextRuntime.storageIdentity = msg.payload.summary.storageIdentity;

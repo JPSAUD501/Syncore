@@ -500,6 +500,7 @@ export type SyncoreDevtoolsMessage = {
     targetKind?: "client" | "project";
     storageProtocol?: string;
     databaseLabel?: string;
+    dataSourceAlias?: string;
     storageIdentity?: string;
     capabilities?: SyncoreDevtoolsCapabilities;
 } | {
@@ -623,6 +624,8 @@ export interface SyncoreRuntimeSummary {
     connectedAt: number;
     // (undocumented)
     databaseLabel?: string;
+    // (undocumented)
+    dataSourceAlias?: string;
     // (undocumented)
     origin?: string;
     // (undocumented)
