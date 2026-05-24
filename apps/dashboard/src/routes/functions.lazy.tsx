@@ -11,6 +11,7 @@ import {
   Loader2,
   AlertCircle,
   Clock,
+  Radio,
   Activity,
   Search,
   XCircle,
@@ -37,7 +38,7 @@ import { useDevtools, usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
-import type { ExecutionTrace } from "@syncore/devtools-protocol";
+import type { ExecutionTrace, SyncoreActiveQueryInfo } from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/functions")({
   component: FunctionsPage
@@ -79,12 +80,20 @@ function FunctionsPage() {
     targetRuntimeId ? { kind: "functions.catalog" } : null,
     { enabled: Boolean(targetRuntimeId), targetRuntimeId }
   );
+  const activeQueriesSubscription = useDevtoolsSubscription(
+    targetRuntimeId ? { kind: "runtime.activeQueries" } : null,
+    { enabled: Boolean(targetRuntimeId), targetRuntimeId }
+  );
 
   const registeredFunctions =
     functionsSubscription.data?.kind === "functions.catalog.result"
       ? functionsSubscription.data.functions
       : null;
   const loadingFunctions = functionsSubscription.loading;
+  const activeQueries =
+    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
+      ? activeQueriesSubscription.data.activeQueries
+      : [];
 
   const fnList = useMemo(
     () => registeredFunctions ?? [],
@@ -210,6 +219,13 @@ function FunctionsPage() {
   const selectedFnTraces = useMemo(
     () => (selectedFn ? (traceIndex.byFunctionName.get(selectedFn) ?? []) : []),
     [selectedFn, traceIndex]
+  );
+  const selectedFnActiveQueries = useMemo(
+    () =>
+      selectedFn
+        ? activeQueries.filter((query) => query.functionName === selectedFn)
+        : [],
+    [activeQueries, selectedFn]
   );
   const selectFunction = useCallback(
     (name: string, options: { clearRouteSearch?: boolean } = {}) => {
@@ -434,6 +450,12 @@ function FunctionsPage() {
                   <Activity size={11} />
                   {selectedFunction.invocations} invocations
                 </span>
+                {selectedFnActiveQueries.length > 0 && (
+                  <span className="flex items-center gap-1 text-fn-query">
+                    <Radio size={11} />
+                    {selectedFnActiveQueries.length} active
+                  </span>
+                )}
                 <span className="flex items-center gap-1">
                   <Clock size={11} />
                   {formatDuration(selectedFunction.avgDuration)} avg
@@ -466,6 +488,17 @@ function FunctionsPage() {
                       </Badge>
                     )}
                   </TabsTrigger>
+                  <TabsTrigger value="active">
+                    Active
+                    {selectedFnActiveQueries.length > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="ml-1.5 text-[9px] px-1 py-0"
+                      >
+                        {selectedFnActiveQueries.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                   <TabsTrigger value="metrics">Metrics</TabsTrigger>
                 </TabsList>
               </div>
@@ -495,8 +528,19 @@ function FunctionsPage() {
                 />
               </TabsContent>
 
+              <TabsContent value="active" className="flex-1 min-h-0">
+                <FunctionActiveQueries
+                  queries={selectedFnActiveQueries}
+                  onOpenQueries={() => void navigate({ to: "/queries" })}
+                />
+              </TabsContent>
+
               <TabsContent value="metrics" className="flex-1 min-h-0">
-                <FunctionMetricsPanel fn={selectedFunction} />
+                <FunctionMetricsPanel
+                  fn={selectedFunction}
+                  activeQueries={selectedFnActiveQueries}
+                  traces={selectedFnTraces}
+                />
               </TabsContent>
             </Tabs>
           </>
@@ -860,11 +904,80 @@ function FunctionLogs({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Function Active Queries                                            */
+/* ------------------------------------------------------------------ */
+
+function FunctionActiveQueries({
+  queries,
+  onOpenQueries
+}: {
+  queries: SyncoreActiveQueryInfo[];
+  onOpenQueries: () => void;
+}) {
+  if (queries.length === 0) {
+    return (
+      <EmptyState
+        icon={Radio}
+        title="No active query runs"
+        description="This query function is not currently watched by the app."
+        className="h-full"
+      />
+    );
+  }
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="space-y-3 p-4">
+        <div className="flex items-center justify-between rounded-md border border-border bg-bg-base px-3 py-2">
+          <div className="text-[12px] text-text-secondary">
+            {queries.length} active subscription{queries.length === 1 ? "" : "s"} ·{" "}
+            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0)} consumer
+            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0) === 1
+              ? ""
+              : "s"}
+          </div>
+          <Button variant="outline" size="xs" className="gap-1.5" onClick={onOpenQueries}>
+            <Radio size={11} />
+            Open Queries
+          </Button>
+        </div>
+
+        {queries.map((query) => (
+          <div
+            key={query.id}
+            className="rounded-md border border-border bg-bg-base p-3"
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <code className="min-w-0 flex-1 truncate text-[11px] text-text-primary">
+                {query.id}
+              </code>
+              <Badge variant="secondary" className="shrink-0 text-[9px]">
+                {query.consumers ?? 1} consumer
+                {(query.consumers ?? 1) === 1 ? "" : "s"}
+              </Badge>
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] text-text-tertiary">
+              <span>Last run</span>
+              <TimestampCell timestamp={query.lastRunAt} format="relative" />
+              <span>Dependencies</span>
+              <span className="font-mono">{query.dependencyKeys.length}</span>
+            </div>
+            <JsonViewer data={query.args ?? {}} maxDepth={3} />
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Function Metrics Panel                                             */
 /* ------------------------------------------------------------------ */
 
 function FunctionMetricsPanel({
-  fn
+  fn,
+  activeQueries,
+  traces
 }: {
   fn: {
     name: string;
@@ -874,12 +987,21 @@ function FunctionMetricsPanel({
     errorRate: number;
     lastInvoked: number;
   };
+  activeQueries: SyncoreActiveQueryInfo[];
+  traces: ExecutionTrace[];
 }) {
+  const successCount = traces.filter((trace) => !trace.error).length;
+  const errorCount = traces.filter((trace) => trace.error).length;
+  const totalConsumers = activeQueries.reduce(
+    (sum, query) => sum + (query.consumers ?? 1),
+    0
+  );
+
   return (
     <div className="p-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <MetricCard
-          label="Invocations"
+          label={fn.type === "query" ? "Runs" : "Occurrences"}
           value={String(fn.invocations)}
           icon={Activity}
         />
@@ -895,7 +1017,31 @@ function FunctionMetricsPanel({
           variant={fn.errorRate > 0.1 ? "error" : "default"}
         />
         <MetricCard
-          label="Last Invoked"
+          label="Active"
+          value={fn.type === "query" ? String(activeQueries.length) : "-"}
+          icon={Radio}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <MetricCard
+          label="Consumers"
+          value={fn.type === "query" ? String(totalConsumers) : "-"}
+          icon={Radio}
+        />
+        <MetricCard
+          label="Success"
+          value={String(successCount)}
+          icon={CheckCircle2}
+        />
+        <MetricCard
+          label="Errors"
+          value={String(errorCount)}
+          icon={AlertCircle}
+          variant={errorCount > 0 ? "error" : "default"}
+        />
+        <MetricCard
+          label="Last Run"
           value={
             fn.lastInvoked > 0
               ? new Date(fn.lastInvoked).toLocaleTimeString()

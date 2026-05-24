@@ -131,6 +131,7 @@ function getEventConfig(type: string) {
 /* ------------------------------------------------------------------ */
 
 function ActiveQueries() {
+  const navigate = useNavigate();
   const { runtimeConnected } = useConnection();
   const activeRuntime = useActiveRuntime();
   const runtimeId = activeRuntime?.runtimeId ?? null;
@@ -166,9 +167,11 @@ function ActiveQueries() {
   return (
     <div className="flex flex-col gap-1">
       {queries.map((q) => (
-        <div
+        <button
           key={q.id}
-          className="flex items-center justify-between px-3 py-2 rounded-md bg-bg-base text-[12px] border border-border hover:border-border-hover transition-colors animate-fade-in"
+          type="button"
+          onClick={() => void navigate({ to: "/queries", search: { queryId: q.id } })}
+          className="flex items-center justify-between px-3 py-2 rounded-md bg-bg-base text-[12px] border border-border hover:border-border-hover hover:bg-bg-surface transition-colors animate-fade-in text-left w-full"
         >
           <span className="font-mono text-fn-query truncate mr-3">
             {q.functionName.replaceAll("/", ":")}
@@ -176,7 +179,7 @@ function ActiveQueries() {
           <span className="text-text-tertiary shrink-0 tabular-nums">
             {formatRelativeTime(q.lastRunAt)}
           </span>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -351,11 +354,11 @@ export function OverviewPage() {
 
       {/* Two column: activity + active queries — responsive */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
-        {/* Recent Activity */}
+        {/* Logs */}
         <div className="flex flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-[13px] font-semibold text-text-primary">
-              Recent Activity
+              Logs
             </h2>
             <div className="flex items-center gap-2">
               {!includeDashboardActivity && (

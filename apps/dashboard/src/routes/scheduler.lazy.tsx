@@ -32,9 +32,10 @@ export const Route = createLazyFileRoute("/scheduler")({
 
 type SchedulerEditorState = {
   argsText: string;
+  runAtText: string;
   misfireType: SchedulerMisfirePolicy["type"];
   windowMs: string;
-  schedule: SchedulerRecurringSchedule;
+  schedule?: SchedulerRecurringSchedule;
 };
 
 const WEEK_DAYS: Array<Extract<
@@ -84,7 +85,7 @@ function SchedulerPage() {
   }, [jobs, selectedJob, selectedJobId]);
 
   useEffect(() => {
-    if (!selectedJob || !isRecurringJob(selectedJob)) {
+    if (!selectedJob || selectedJob.status !== "pending") {
       setEditorState(null);
       setActionError(null);
       return;
@@ -114,22 +115,27 @@ function SchedulerPage() {
     [targetRuntimeId]
   );
 
-  const saveRecurringJob = useCallback(async () => {
-    if (!targetRuntimeId || !selectedJob || !editorState || !isRecurringJob(selectedJob)) {
+  const saveScheduledJob = useCallback(async () => {
+    if (!targetRuntimeId || !selectedJob || !editorState) {
       return;
     }
     setSaving(true);
     setActionError(null);
     try {
       const args = parseArgsText(editorState.argsText);
-      const misfirePolicy = parseMisfirePolicy(editorState);
+      const runAt = parseLocalDateTimeInput(editorState.runAtText);
+      const schedule = isRecurringJob(selectedJob)
+        ? editorState.schedule
+        : undefined;
+      const misfirePolicy = schedule ? parseMisfirePolicy(editorState) : undefined;
       const result = await sendRequest(
         {
           kind: "scheduler.update",
           jobId: selectedJob.id,
-          schedule: editorState.schedule,
           args,
-          misfirePolicy
+          runAt,
+          ...(schedule ? { schedule } : {}),
+          ...(misfirePolicy ? { misfirePolicy } : {})
         },
         { targetRuntimeId }
       );
@@ -141,7 +147,7 @@ function SchedulerPage() {
         return;
       }
       if (!result.updated) {
-        setActionError("This recurring job is no longer editable.");
+        setActionError("This job is no longer editable.");
         return;
       }
       if (result.job) {
@@ -285,7 +291,7 @@ function SchedulerPage() {
           }}
           onEditorChange={setEditorState}
           onSave={() => {
-            void saveRecurringJob();
+            void saveScheduledJob();
           }}
         />
       )}
@@ -394,7 +400,8 @@ function JobDetailPanel({
   onEditorChange: (state: SchedulerEditorState | null) => void;
   onSave: () => void;
 }) {
-  const canEdit = job.status === "pending" && isRecurringJob(job) && editorState;
+  const canEdit = job.status === "pending" && editorState;
+  const isRecurring = isRecurringJob(job);
 
   return (
     <div className="hidden w-96 flex-col overflow-hidden rounded-md border border-border bg-bg-surface lg:flex">
@@ -471,7 +478,7 @@ function JobDetailPanel({
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] font-semibold text-text-primary">
-                    Recurring Job Editor
+                    Job Editor
                   </span>
                   {usingProjectTarget && (
                     <Badge variant="outline" className="text-[9px]">
@@ -480,10 +487,29 @@ function JobDetailPanel({
                   )}
                 </div>
 
-                <ScheduleEditor
-                  state={editorState}
-                  onChange={onEditorChange}
-                />
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-medium text-text-tertiary">
+                    Run At
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editorState.runAtText}
+                    onChange={(event) =>
+                      onEditorChange({
+                        ...editorState,
+                        runAtText: event.target.value
+                      })
+                    }
+                    className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary outline-none scheme-dark focus:border-border-active"
+                  />
+                </div>
+
+                {isRecurring && editorState.schedule && (
+                  <ScheduleEditor
+                    state={{ ...editorState, schedule: editorState.schedule }}
+                    onChange={onEditorChange}
+                  />
+                )}
 
                 <div className="space-y-2">
                   <label className="block text-[11px] font-medium text-text-tertiary">
@@ -502,40 +528,42 @@ function JobDetailPanel({
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="block text-[11px] font-medium text-text-tertiary">
-                    Misfire Policy
-                  </label>
-                  <select
-                    value={editorState.misfireType}
-                    onChange={(event) =>
-                      onEditorChange({
-                        ...editorState,
-                        misfireType: event.target.value as SchedulerMisfirePolicy["type"]
-                      })
-                    }
-                    className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
-                  >
-                    <option value="catch_up">Catch up</option>
-                    <option value="skip">Skip</option>
-                    <option value="run_once_if_missed">Run once if missed</option>
-                    <option value="windowed">Windowed</option>
-                  </select>
-                  {editorState.misfireType === "windowed" && (
-                    <Input
-                      type="number"
-                      min="0"
-                      value={editorState.windowMs}
+                {isRecurring && (
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-medium text-text-tertiary">
+                      Misfire Policy
+                    </label>
+                    <select
+                      value={editorState.misfireType}
                       onChange={(event) =>
                         onEditorChange({
                           ...editorState,
-                          windowMs: event.target.value
+                          misfireType: event.target.value as SchedulerMisfirePolicy["type"]
                         })
                       }
-                      placeholder="Window in ms"
-                    />
-                  )}
-                </div>
+                      className="h-9 w-full rounded-md border border-border bg-bg-base px-3 text-[12px] text-text-primary"
+                    >
+                      <option value="catch_up">Catch up</option>
+                      <option value="skip">Skip</option>
+                      <option value="run_once_if_missed">Run once if missed</option>
+                      <option value="windowed">Windowed</option>
+                    </select>
+                    {editorState.misfireType === "windowed" && (
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editorState.windowMs}
+                        onChange={(event) =>
+                          onEditorChange({
+                            ...editorState,
+                            windowMs: event.target.value
+                          })
+                        }
+                        placeholder="Window in ms"
+                      />
+                    )}
+                  </div>
+                )}
 
                 {error && (
                   <div className="rounded-md border border-error/20 bg-error/5 px-3 py-2 text-[11px] text-error">
@@ -551,7 +579,7 @@ function JobDetailPanel({
                     disabled={saving}
                   >
                     {saving && <Loader2 size={12} className="animate-spin" />}
-                    Save Recurring Job
+                    Save Job
                   </Button>
                   <Button
                     variant="outline"
@@ -567,9 +595,7 @@ function JobDetailPanel({
             <>
               <Separator />
               <div className="rounded-md border border-border bg-bg-base px-3 py-2 text-[11px] text-text-tertiary">
-                {isRecurringJob(job)
-                  ? "Recurring jobs can only be edited while they are still scheduled."
-                  : "One-shot jobs can only be cancelled before they run."}
+                Only pending jobs can be edited.
               </div>
             </>
           )}
@@ -583,7 +609,7 @@ function ScheduleEditor({
   state,
   onChange
 }: {
-  state: SchedulerEditorState;
+  state: SchedulerEditorState & { schedule: SchedulerRecurringSchedule };
   onChange: (state: SchedulerEditorState) => void;
 }) {
   const schedule = state.schedule;
@@ -818,17 +844,16 @@ function isRecurringJob(
   return Boolean(job.recurringName && job.schedule);
 }
 
-function createEditorState(
-  job: SchedulerJob & { schedule: SchedulerRecurringSchedule; misfirePolicy?: SchedulerMisfirePolicy }
-): SchedulerEditorState {
+function createEditorState(job: SchedulerJob): SchedulerEditorState {
   return {
     argsText: JSON.stringify(job.args, null, 2),
+    runAtText: formatLocalDateTimeInput(job.runAt),
     misfireType: job.misfirePolicy?.type ?? "catch_up",
     windowMs:
       job.misfirePolicy?.type === "windowed"
         ? String(job.misfirePolicy.windowMs)
         : "",
-    schedule: job.schedule
+    ...(job.schedule ? { schedule: job.schedule } : {})
   };
 }
 
@@ -869,6 +894,34 @@ function parseArgsText(text: string): Record<string, unknown> {
     throw new Error("Arguments must be a JSON object.");
   }
   return parsed as Record<string, unknown>;
+}
+
+function formatLocalDateTimeInput(timestamp: number): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    "-",
+    pad(date.getMonth() + 1),
+    "-",
+    pad(date.getDate()),
+    "T",
+    pad(date.getHours()),
+    ":",
+    pad(date.getMinutes())
+  ].join("");
+}
+
+function parseLocalDateTimeInput(value: string): number {
+  const date = new Date(value);
+  const timestamp = date.getTime();
+  if (!value || Number.isNaN(timestamp)) {
+    throw new Error("Run At must be a valid local date and time.");
+  }
+  return timestamp;
 }
 
 function parseMisfirePolicy(

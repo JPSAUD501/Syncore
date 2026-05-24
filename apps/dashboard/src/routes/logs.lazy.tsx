@@ -19,8 +19,7 @@ import {
   Pause,
   Play,
   Filter,
-  X,
-  CornerDownRight
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -84,8 +83,7 @@ function LogEntry({
   onClick,
   isNew,
   runtimeMap,
-  invalidations,
-  isCausalChild
+  invalidations
 }: {
   event: SyncoreDevtoolsEvent;
   isSelected: boolean;
@@ -93,7 +91,6 @@ function LogEntry({
   isNew: boolean;
   runtimeMap: Map<string, { label: string; publicId: string }>;
   invalidations: QueryInvalidationEvent[];
-  isCausalChild: boolean;
 }) {
   const color = EVENT_COLORS[event.type];
   const Icon = EVENT_ICONS[event.type];
@@ -109,19 +106,11 @@ function LogEntry({
       className={cn(
         "flex items-center gap-2.5 w-full px-4 py-2 text-left transition-colors outline-none",
         "hover:bg-bg-elevated/50",
-        isCausalChild && "pl-8 bg-bg-base/40",
         isSelected && "bg-bg-elevated border-l-2 border-l-accent",
         errored && "bg-error/3",
         isNew && "animate-fade-in"
       )}
     >
-      {isCausalChild && (
-        <CornerDownRight
-          size={12}
-          className="shrink-0 text-text-tertiary"
-          aria-hidden="true"
-        />
-      )}
       <Icon size={12} className={cn(color, "shrink-0")} />
       <Badge
         variant={EVENT_BADGE_VARIANTS[event.type]}
@@ -478,7 +467,6 @@ export function LogsPage() {
                     isNew={i >= knownCount}
                     runtimeMap={runtimeMap}
                     invalidations={invalidations}
-                    isCausalChild={invalidations.length > 0}
                     onClick={() =>
                       setSelectedIndex(selectedIndex === i ? null : i)
                     }

@@ -302,9 +302,11 @@ export function createDevtoolsCommandHandler(
         try {
           const updated = await admin.updateScheduledJob({
             id: payload.jobId,
-            schedule: payload.schedule,
             args: payload.args,
-            misfirePolicy: payload.misfirePolicy,
+            ...(payload.schedule ? { schedule: payload.schedule } : {}),
+            ...(payload.misfirePolicy
+              ? { misfirePolicy: payload.misfirePolicy }
+              : {}),
             ...(payload.runAt !== undefined ? { runAt: payload.runAt } : {})
           });
           const jobs = updated ? await listSchedulerJobs(driver) : [];
@@ -598,13 +600,16 @@ async function getSchemaTables(
           ? Object.entries(validatorDesc.shape).map(
               ([fieldName, fieldDesc]) => {
                 const field = fieldDesc as {
-                  validator: { kind: string };
+                  validator: { kind: string; tableName?: string };
                   optional: boolean;
                 };
                 return {
                   name: fieldName,
                   type: field.validator.kind,
-                  optional: field.optional
+                  optional: field.optional,
+                  ...(field.validator.kind === "id" && field.validator.tableName
+                    ? { referenceTable: field.validator.tableName }
+                    : {})
                 };
               }
             )

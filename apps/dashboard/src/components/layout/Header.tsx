@@ -36,6 +36,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/": "Overview",
   "/data": "Data Browser",
   "/functions": "Functions",
+  "/queries": "Active Queries",
   "/logs": "Logs",
   "/scheduler": "Scheduler",
   "/sql": "SQL Console"
@@ -58,7 +59,7 @@ function getTargetDisplayParts(target: NonNullable<ReturnType<typeof useSelected
       primaryRuntime?.databaseLabel ??
       primaryRuntime?.origin ??
       target.label,
-    browser: parsed?.browser ?? null
+    browser: (parsed?.browser && !parsed.browser.toLowerCase().includes("worker")) ? parsed.browser : null
   };
 }
 
@@ -88,7 +89,7 @@ export function Header({
 
   const title = ROUTE_TITLES[pathname] ?? "Dashboard";
   const platform = activeRuntime?.platform ?? null;
-  const supportsProjectFallback = ["/data", "/functions", "/scheduler", "/sql"].includes(
+  const supportsProjectFallback = ["/data", "/functions", "/queries", "/scheduler", "/sql"].includes(
     pathname
   );
   const projectOffline =
@@ -118,7 +119,7 @@ export function Header({
           >
             <SelectTrigger
               size="sm"
-              className="hidden min-w-[180px] max-w-[320px] sm:flex"
+              className="hidden min-w-45 max-w-[320px] sm:flex"
             >
               <SelectValue placeholder="Select target" />
             </SelectTrigger>

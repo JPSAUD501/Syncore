@@ -227,9 +227,9 @@ export type SyncoreResolvedComponents = readonly ResolvedSyncoreComponent[];
 
 export interface UpdateScheduledJobOptions {
   id: string;
-  schedule: RecurringSchedule;
+  schedule?: RecurringSchedule;
   args: JsonObject;
-  misfirePolicy: MisfirePolicy;
+  misfirePolicy?: MisfirePolicy;
   runAt?: number;
 }
 

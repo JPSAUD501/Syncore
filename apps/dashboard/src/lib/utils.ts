@@ -31,6 +31,9 @@ export function formatDuration(ms: number): string {
  * Format a relative time from now (e.g. "2s ago", "5m ago").
  */
 export function formatRelativeTime(ts: number): string {
+  if (!Number.isFinite(ts) || ts <= 0) {
+    return "pending";
+  }
   const diff = Date.now() - ts;
   if (diff < 1000) return "just now";
   if (diff < 60_000) return `${Math.floor(diff / 1000)}s ago`;

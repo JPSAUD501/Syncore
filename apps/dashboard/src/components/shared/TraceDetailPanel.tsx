@@ -1,5 +1,6 @@
 import type {
   DevtoolsPreview,
+  DocumentChangePreview,
   ExecutionTrace,
   SyncoreDevtoolsEvent
 } from "@syncore/devtools-protocol";
@@ -170,19 +171,7 @@ export function TraceDetailPanel({
                     </button>
                     <span className="font-mono text-text-tertiary">{change.id}</span>
                   </div>
-                  {change.fields?.length ? (
-                    <div className="mb-2 text-[11px] text-text-tertiary">
-                      Fields: {change.fields.join(", ")}
-                    </div>
-                  ) : null}
-                  <div className="grid gap-2">
-                    {change.beforePreview && (
-                      <PreviewBlock label="Before" preview={change.beforePreview} />
-                    )}
-                    {change.afterPreview && (
-                      <PreviewBlock label="After" preview={change.afterPreview} />
-                    )}
-                  </div>
+                  <DocumentChangeDiff change={change} />
                 </div>
               ))}
             </div>
@@ -403,4 +392,183 @@ function TraceLinkRow({
 
 function SectionTitle({ children }: { children: string }) {
   return <div className="text-[11px] font-semibold text-text-tertiary">{children}</div>;
+}
+
+function formatPreviewValue(value: unknown): string {
+  if (value === null) return "null";
+  if (value === undefined) return "—";
+  if (typeof value === "string") {
+    const s = value.length > 40 ? `${value.slice(0, 40)}…` : value;
+    return `"${s}"`;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  const s = JSON.stringify(value);
+  return s.length > 60 ? `${s.slice(0, 60)}…` : s;
+}
+
+function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
+  const before =
+    change.beforePreview?.kind === "value" &&
+    typeof change.beforePreview.value === "object" &&
+    change.beforePreview.value !== null
+      ? (change.beforePreview.value as Record<string, unknown>)
+      : null;
+  const after =
+    change.afterPreview?.kind === "value" &&
+    typeof change.afterPreview.value === "object" &&
+    change.afterPreview.value !== null
+      ? (change.afterPreview.value as Record<string, unknown>)
+      : null;
+
+  // INSERT: only after
+  if (after && !before) {
+    return (
+      <div className="rounded border border-success/20 overflow-hidden">
+        {Object.entries(after).map(([key, value]) => (
+          <div
+            key={key}
+            className="flex items-baseline gap-2 border-b border-success/10 bg-success/5 px-3 py-1.5 last:border-b-0"
+          >
+            <span className="w-32 shrink-0 truncate font-mono text-[11px] text-success/80">
+              {key}
+            </span>
+            <span className="min-w-0 truncate font-mono text-[11px] text-success">
+              {formatPreviewValue(value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // DELETE: only before
+  if (before && !after) {
+    return (
+      <div className="rounded border border-error/20 overflow-hidden">
+        {Object.entries(before).map(([key, value]) => (
+          <div
+            key={key}
+            className="flex items-baseline gap-2 border-b border-error/10 bg-error/5 px-3 py-1.5 last:border-b-0"
+          >
+            <span className="w-32 shrink-0 truncate font-mono text-[11px] text-error/80">
+              {key}
+            </span>
+            <span className="min-w-0 truncate font-mono text-[11px] text-error line-through">
+              {formatPreviewValue(value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // PATCH / REPLACE: field-level diff
+  if (before && after) {
+    type DiffEntry =
+      | { key: string; kind: "changed"; before: unknown; after: unknown }
+      | { key: string; kind: "added"; after: unknown }
+      | { key: string; kind: "removed"; before: unknown }
+      | { key: string; kind: "unchanged" };
+
+    const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+    const entries: DiffEntry[] = allKeys.map((key) => {
+      const inBefore = key in before;
+      const inAfter = key in after;
+      if (inBefore && inAfter) {
+        return JSON.stringify(before[key]) !== JSON.stringify(after[key])
+          ? { key, kind: "changed", before: before[key], after: after[key] }
+          : { key, kind: "unchanged" };
+      }
+      return inAfter
+        ? { key, kind: "added", after: after[key] }
+        : { key, kind: "removed", before: before[key] };
+    });
+
+    const changed = entries.filter((e) => e.kind !== "unchanged");
+    const unchangedCount = entries.length - changed.length;
+
+    if (changed.length === 0) {
+      return (
+        <div className="text-[11px] text-text-tertiary">
+          No field-level changes detected.
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-1">
+        <div className="rounded border border-border overflow-hidden">
+          {changed.map((entry) => {
+            if (entry.kind === "changed") {
+              return (
+                <div
+                  key={entry.key}
+                  className="flex items-baseline border-b border-warning/10 bg-warning/5 last:border-b-0"
+                >
+                  <span className="w-32 shrink-0 truncate px-3 py-1.5 font-mono text-[11px] text-text-secondary">
+                    {entry.key}
+                  </span>
+                  <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
+                    <span className="max-w-[35%] truncate font-mono text-[11px] text-error/80 line-through">
+                      {formatPreviewValue(entry.before)}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-text-tertiary">→</span>
+                    <span className="min-w-0 truncate font-mono text-[11px] text-success">
+                      {formatPreviewValue(entry.after)}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+            if (entry.kind === "added") {
+              return (
+                <div
+                  key={entry.key}
+                  className="flex items-baseline border-b border-success/10 bg-success/5 last:border-b-0"
+                >
+                  <span className="w-32 shrink-0 truncate px-3 py-1.5 font-mono text-[11px] text-success/80">
+                    {entry.key}
+                  </span>
+                  <span className="min-w-0 truncate px-3 py-1.5 font-mono text-[11px] text-success">
+                    {formatPreviewValue(entry.after)}
+                  </span>
+                </div>
+              );
+            }
+            // removed
+            return (
+              <div
+                key={entry.key}
+                className="flex items-baseline border-b border-error/10 bg-error/5 last:border-b-0"
+              >
+                <span className="w-32 shrink-0 truncate px-3 py-1.5 font-mono text-[11px] text-error/80">
+                  {entry.key}
+                </span>
+                <span className="min-w-0 truncate px-3 py-1.5 font-mono text-[11px] text-error line-through">
+                  {formatPreviewValue(entry.before)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {unchangedCount > 0 && (
+          <div className="px-1 text-[11px] text-text-tertiary">
+            +{unchangedCount} unchanged {unchangedCount === 1 ? "field" : "fields"}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback for non-object previews (error previews, primitives, etc.)
+  return (
+    <div className="grid gap-2">
+      {change.beforePreview && (
+        <PreviewBlock label="Before" preview={change.beforePreview} />
+      )}
+      {change.afterPreview && (
+        <PreviewBlock label="After" preview={change.afterPreview} />
+      )}
+    </div>
+  );
 }

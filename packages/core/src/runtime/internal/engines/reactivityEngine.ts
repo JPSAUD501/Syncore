@@ -68,6 +68,8 @@ export class ReactivityEngine {
       return {
         id: query.id,
         functionName: query.functionName,
+        args: query.args,
+        consumers: query.consumers,
         ...(componentFunction
           ? {
               owner: "component" as const,
@@ -102,6 +104,7 @@ export class ReactivityEngine {
         lastRunAt: 0
       };
       this.activeQueries.set(key, record);
+      this.notifyActiveQueriesChanged();
       void this.rerunActiveQuery(record);
     }
 
@@ -134,6 +137,7 @@ export class ReactivityEngine {
         activeRecord.consumers = Math.max(0, activeRecord.consumers - 1);
         if (activeRecord.consumers === 0) {
           this.activeQueries.delete(key);
+          this.notifyActiveQueriesChanged();
         }
       }
     };
@@ -257,10 +261,16 @@ export class ReactivityEngine {
       );
     } catch (error) {
       record.lastError = error as Error;
+      record.lastRunAt = Date.now();
     }
     for (const listener of record.listeners) {
       listener();
     }
+    this.notifyActiveQueriesChanged();
+  }
+
+  private notifyActiveQueriesChanged(): void {
+    this.deps.devtools.notifyScopes(["runtime.summary", "runtime.activeQueries"]);
   }
 
   private getInvalidatedQueriesForScopes(scopeSet: Set<ImpactScope>): Array<{

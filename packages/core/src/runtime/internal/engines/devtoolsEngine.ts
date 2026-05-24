@@ -25,6 +25,7 @@ export class DevtoolsEngine {
   private readonly invalidationListeners = new Set<
     (scopes: Set<DevtoolsLiveQueryScope>) => void
   >();
+  private nextSequence = 1;
 
   constructor(private readonly deps: DevtoolsEngineDeps) {}
 
@@ -74,12 +75,16 @@ export class DevtoolsEngine {
   }
 
   emit(event: SyncoreDevtoolsEvent): void {
-    this.recentEvents.unshift(event);
-    this.recentEvents.splice(24);
-    this.deps.sink?.emit(event);
-    this.notifyScopes(devtoolsScopesForEvent(event));
+    const sequencedEvent = {
+      ...event,
+      sequence: event.sequence ?? this.nextSequence++
+    };
+    this.recentEvents.push(sequencedEvent);
+    this.recentEvents.splice(0, Math.max(0, this.recentEvents.length - 24));
+    this.deps.sink?.emit(sequencedEvent);
+    this.notifyScopes(devtoolsScopesForEvent(sequencedEvent));
     for (const listener of this.listeners) {
-      listener(event);
+      listener(sequencedEvent);
     }
   }
 

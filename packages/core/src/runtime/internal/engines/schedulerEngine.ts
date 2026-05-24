@@ -126,30 +126,40 @@ export class SchedulerEngine {
   async updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean> {
     const existing = await this.deps.driver.get<{
       status: string;
+      run_at: number;
       recurring_name: string | null;
+      schedule_json: string | null;
+      misfire_policy: string | null;
+      window_ms: number | null;
     }>(
-      `SELECT status, recurring_name FROM "_scheduled_functions" WHERE id = ?`,
+      `SELECT status, run_at, recurring_name, schedule_json, misfire_policy, window_ms
+       FROM "_scheduled_functions" WHERE id = ?`,
       [options.id]
     );
-    if (!existing || existing.status !== "scheduled" || !existing.recurring_name) {
+    if (!existing || existing.status !== "scheduled") {
       return false;
     }
+    const existingSchedule = existing.schedule_json
+      ? (JSON.parse(existing.schedule_json) as RecurringJobDefinition["schedule"])
+      : undefined;
+    const schedule = options.schedule ?? existingSchedule;
+    const misfirePolicy =
+      options.misfirePolicy ??
+      parseMisfirePolicy(existing.misfire_policy ?? "catch_up", existing.window_ms);
     const now = Date.now();
-    const runAt = options.runAt ?? computeNextRun(options.schedule, now);
+    const runAt = options.runAt ?? (schedule ? computeNextRun(schedule, now) : existing.run_at);
     const result = await this.deps.driver.run(
       `UPDATE "_scheduled_functions"
        SET args_json = ?, run_at = ?, updated_at = ?, schedule_json = ?, timezone = ?, misfire_policy = ?, window_ms = ?
-       WHERE id = ? AND status = 'scheduled' AND recurring_name IS NOT NULL`,
+       WHERE id = ? AND status = 'scheduled'`,
       [
         stableStringify(options.args),
         runAt,
         now,
-        stableStringify(options.schedule),
-        "timezone" in options.schedule ? (options.schedule.timezone ?? null) : null,
-        options.misfirePolicy.type,
-        options.misfirePolicy.type === "windowed"
-          ? options.misfirePolicy.windowMs
-          : null,
+        schedule ? stableStringify(schedule) : null,
+        schedule && "timezone" in schedule ? (schedule.timezone ?? null) : null,
+        misfirePolicy.type,
+        misfirePolicy.type === "windowed" ? misfirePolicy.windowMs : null,
         options.id
       ]
     );

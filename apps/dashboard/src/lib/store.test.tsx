@@ -275,7 +275,7 @@ describe("devtools store runtime selection", () => {
     expect(runtime?.queryCount).toBe(1);
   });
 
-  it("orders causative executions before their query reruns", () => {
+  it("orders events by newest execution order even when a rerun has a causal parent", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-old",
@@ -316,8 +316,8 @@ describe("devtools store runtime selection", () => {
     const { result } = renderHook(() => useSelectedTargetEvents());
 
     expect(result.current.map((event) => event.type)).toEqual([
-      "mutation.committed",
-      "query.executed"
+      "query.executed",
+      "mutation.committed"
     ]);
   });
 

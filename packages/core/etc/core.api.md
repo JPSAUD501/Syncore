@@ -1054,9 +1054,13 @@ export class StringValidator extends BaseValidator<string> {
 // @public (undocumented)
 export interface SyncoreActiveQueryInfo {
     // (undocumented)
+    args?: Record<string, unknown>;
+    // (undocumented)
     componentName?: string;
     // (undocumented)
     componentPath?: string;
+    // (undocumented)
+    consumers?: number;
     // (undocumented)
     dependencyKeys: string[];
     // (undocumented)
@@ -1876,11 +1880,11 @@ export interface UpdateScheduledJobOptions {
     // (undocumented)
     id: string;
     // (undocumented)
-    misfirePolicy: MisfirePolicy;
+    misfirePolicy?: MisfirePolicy;
     // (undocumented)
     runAt?: number;
     // (undocumented)
-    schedule: RecurringSchedule;
+    schedule?: RecurringSchedule;
 }
 
 // @public (undocumented)
@@ -2014,7 +2018,7 @@ export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
 
 // Warnings were encountered during analysis:
 //
-// D:/GitHub/Syncore/packages/devtools-protocol/src/index.ts:99:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
+// D:/GitHub/Syncore/packages/devtools-protocol/src/index.ts:100:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
 
 // (No @packageDocumentation comment for this package)
 

@@ -606,6 +606,7 @@ export function attachRuntimeBridge<
               return;
             }
             subscription.unsubscribe();
+            subscription.watch.dispose?.();
             subscriptions.delete(message.subscriptionId);
           }
         }
@@ -654,6 +655,7 @@ export function attachRuntimeBridge<
       options.endpoint.removeEventListener("message", handleMessage);
       for (const subscription of subscriptions.values()) {
         subscription.unsubscribe();
+        subscription.watch.dispose?.();
       }
       subscriptions.clear();
       const runtime = await runtimePromise;

@@ -148,6 +148,8 @@ interface RuntimeState extends RuntimeMeta {
   activeQueries: Array<{
     id: string;
     functionName: string;
+    args?: Record<string, unknown>;
+    consumers?: number;
     dependencyKeys: string[];
     lastRunAt: number;
   }>;
@@ -508,43 +510,12 @@ function getEventDedupKey(event: SyncoreDevtoolsEvent): string {
   }
 }
 
-function getExecutionIdForOrdering(event: SyncoreDevtoolsEvent): string | null {
-  if ("executionId" in event && event.executionId) {
-    return event.executionId;
-  }
-  if (event.type === "mutation.committed") {
-    return event.mutationId;
-  }
-  if (event.type === "action.completed") {
-    return event.actionId;
-  }
-  return null;
-}
-
-function getParentExecutionIdForOrdering(event: SyncoreDevtoolsEvent): string | null {
-  if ("parentExecutionId" in event && event.parentExecutionId) {
-    return event.parentExecutionId;
-  }
-  if (event.type === "query.invalidated" && event.causedByExecutionId) {
-    return event.causedByExecutionId;
-  }
-  return null;
-}
-
 function compareEventsForTimeline(
   left: SyncoreDevtoolsEvent,
   right: SyncoreDevtoolsEvent
 ): number {
-  const leftExecutionId = getExecutionIdForOrdering(left);
-  const rightExecutionId = getExecutionIdForOrdering(right);
-  const leftParentExecutionId = getParentExecutionIdForOrdering(left);
-  const rightParentExecutionId = getParentExecutionIdForOrdering(right);
-
-  if (leftExecutionId && rightParentExecutionId === leftExecutionId) {
-    return -1;
-  }
-  if (rightExecutionId && leftParentExecutionId === rightExecutionId) {
-    return 1;
+  if (left.sequence !== undefined && right.sequence !== undefined) {
+    return right.sequence - left.sequence;
   }
 
   return right.timestamp - left.timestamp;

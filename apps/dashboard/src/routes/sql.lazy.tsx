@@ -650,6 +650,58 @@ function SqlPage() {
 /* ------------------------------------------------------------------ */
 
 function ResultsTable({ result }: { result: QueryResult }) {
+  const prevRowsRef = useRef<unknown[][] | null>(null);
+  const cellPulseVersionsRef = useRef<Map<string, number>>(new Map());
+  const [changedCells, setChangedCells] = useState<Map<string, number>>(
+    new Map()
+  );
+
+  useEffect(() => {
+    if (result.mode !== "live") {
+      prevRowsRef.current = null;
+      setChangedCells(new Map());
+      return;
+    }
+
+    const prevRows = prevRowsRef.current;
+    prevRowsRef.current = result.rows;
+
+    if (!prevRows) return;
+
+    const changed = new Map<string, number>();
+    const pulseVersions = cellPulseVersionsRef.current;
+
+    for (let rowIdx = 0; rowIdx < result.rows.length; rowIdx++) {
+      const row = result.rows[rowIdx]!;
+      const prevRow = prevRows[rowIdx];
+      if (!prevRow) {
+        for (let cellIdx = 0; cellIdx < row.length; cellIdx++) {
+          const key = `${rowIdx}:${cellIdx}`;
+          const next = (pulseVersions.get(key) ?? 0) + 1;
+          pulseVersions.set(key, next);
+          changed.set(key, next);
+        }
+      } else {
+        for (let cellIdx = 0; cellIdx < row.length; cellIdx++) {
+          if (
+            JSON.stringify(row[cellIdx]) !== JSON.stringify(prevRow[cellIdx])
+          ) {
+            const key = `${rowIdx}:${cellIdx}`;
+            const next = (pulseVersions.get(key) ?? 0) + 1;
+            pulseVersions.set(key, next);
+            changed.set(key, next);
+          }
+        }
+      }
+    }
+
+    if (changed.size > 0) {
+      setChangedCells(changed);
+      const timer = setTimeout(() => setChangedCells(new Map()), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [result.rows, result.mode]);
+
   if (result.columns.length === 0 && result.rows.length === 0) {
     return (
       <div className="p-4 text-center animate-fade-in">
@@ -705,14 +757,24 @@ function ResultsTable({ result }: { result: QueryResult }) {
             <div className="w-12 shrink-0 px-2 py-1.5 text-[10px] text-text-tertiary border-r border-border text-center font-mono">
               {rowIdx + 1}
             </div>
-            {row.map((cell, cellIdx) => (
-              <div
-                key={cellIdx}
-                className="flex-shrink-0 min-w-[120px] max-w-[300px] w-auto px-3 py-1.5 text-[11px] font-mono border-r border-border last:border-r-0 truncate"
-              >
-                <SqlCellValue value={cell} />
-              </div>
-            ))}
+            {row.map((cell, cellIdx) => {
+              const cellKey = `${rowIdx}:${cellIdx}`;
+              const pulse = changedCells.get(cellKey);
+              return (
+                <div
+                  key={cellIdx}
+                  className={cn(
+                    "flex-shrink-0 min-w-[120px] max-w-[300px] w-auto px-3 py-1.5 text-[11px] font-mono border-r border-border last:border-r-0 truncate",
+                    pulse !== undefined &&
+                      (pulse % 2 === 0
+                        ? "animate-highlight-a"
+                        : "animate-highlight-b")
+                  )}
+                >
+                  <SqlCellValue value={cell} />
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>

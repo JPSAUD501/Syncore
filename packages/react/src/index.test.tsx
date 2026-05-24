@@ -57,6 +57,38 @@ describe("@syncore/react", () => {
     expect(queryWatch.dispose).toHaveBeenCalledTimes(1);
   });
 
+  it("disposes a query watch when the hook becomes skipped", async () => {
+    const queryWatch = createTestWatch<Array<{ title: string }>>();
+    const client = createTestClient({
+      queryWatches: [queryWatch]
+    });
+    const reference = createFunctionReference<
+      "query",
+      { id: string },
+      Array<{ title: string }>
+    >("query", "todos/get");
+
+    const view = render(
+      <SyncoreProvider client={client}>
+        <OptionalTodoProbe reference={reference} id="todo-1" />
+      </SyncoreProvider>
+    );
+
+    await act(async () => {
+      queryWatch.setResult([{ title: "Selected" }]);
+    });
+    expect(screen.getByText("Selected")).toBeDefined();
+
+    view.rerender(
+      <SyncoreProvider client={client}>
+        <OptionalTodoProbe reference={reference} id={null} />
+      </SyncoreProvider>
+    );
+
+    expect(queryWatch.dispose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("empty")).toBeDefined();
+  });
+
   it("exposes runtime status and query state without throwing", async () => {
     const queryWatch = createTestWatch<Array<{ title: string }>>();
     const statusWatch = createTestWatch<SyncoreRuntimeStatus>({
@@ -321,6 +353,22 @@ function TodosProbe({
   >;
 }) {
   const todos = useQuery(reference) ?? [];
+
+  if (todos.length === 0) {
+    return <div>empty</div>;
+  }
+
+  return <div>{todos[0]?.title}</div>;
+}
+
+function OptionalTodoProbe({
+  reference,
+  id
+}: {
+  reference: FunctionReference<"query", { id: string }, Array<{ title: string }>>;
+  id: string | null;
+}) {
+  const todos = useQuery(reference, id ? { id } : skip) ?? [];
 
   if (todos.length === 0) {
     return <div>empty</div>;

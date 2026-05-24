@@ -282,13 +282,16 @@ export class SchemaEngine<
           ? Object.entries(validatorDesc.shape).map(
               ([fieldName, fieldDesc]) => {
                 const field = fieldDesc as {
-                  validator: { kind: string };
+                  validator: { kind: string; tableName?: string };
                   optional: boolean;
                 };
                 return {
                   name: fieldName,
                   type: field.validator.kind,
-                  optional: field.optional
+                  optional: field.optional,
+                  ...(field.validator.kind === "id" && field.validator.tableName
+                    ? { referenceTable: field.validator.tableName }
+                    : {})
                 };
               }
             )

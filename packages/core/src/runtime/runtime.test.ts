@@ -856,6 +856,12 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
     await runtime.start();
     const client = runtime.createClient();
+    const devtoolsInvalidationScopes: string[][] = [];
+    const unsubscribeDevtoolsInvalidations = runtime
+      .getAdmin()
+      .subscribeToDevtoolsInvalidations((scopes) => {
+        devtoolsInvalidationScopes.push([...scopes]);
+      });
     const watch = client.watchQuery(
       createFunctionReference<"query", Record<never, never>, unknown[]>(
         "query",
@@ -930,8 +936,20 @@ describe("SyncoreRuntime schema + scheduler", () => {
     expect(events.indexOf(mutationEvent!)).toBeLessThan(
       events.indexOf(rerunEvent!)
     );
+    expect(mutationEvent?.sequence).toEqual(expect.any(Number));
+    expect(invalidationEvent?.sequence).toBeGreaterThan(
+      mutationEvent?.sequence ?? 0
+    );
+    expect(rerunEvent?.sequence).toBeGreaterThan(
+      mutationEvent?.sequence ?? 0
+    );
 
     watch.dispose?.();
+    expect(runtime.getAdmin().getActiveQueryInfos()).toHaveLength(0);
+    expect(devtoolsInvalidationScopes).toContainEqual(
+      expect.arrayContaining(["runtime.activeQueries"])
+    );
+    unsubscribeDevtoolsInvalidations();
     await runtime.stop();
   });
 
@@ -1095,6 +1113,19 @@ describe("SyncoreRuntime schema + scheduler", () => {
             text: (args as { text: string }).text,
             done: false
           })
+      }),
+      "tasks/scheduleCreate": mutation({
+        args: { text: s.string(), delayMs: s.number() },
+        returns: s.null(),
+        handler: async (ctx, args) => {
+          const typedArgs = args as { text: string; delayMs: number };
+          await (ctx as MutationCtx).scheduler.runAfter(
+            typedArgs.delayMs,
+            createFunctionReference("mutation", "tasks/create"),
+            { text: typedArgs.text }
+          );
+          return null;
+        }
       })
     };
 
@@ -1137,6 +1168,10 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
 
     await runtime.start();
+    await runtime.createClient().mutation(
+      createFunctionReference("mutation", "tasks/scheduleCreate"),
+      { text: "one-shot", delayMs: 60_000 }
+    );
     const hostDriver = new TestSqliteDriver(databasePath);
     const handler = createDevtoolsCommandHandler({
       driver: hostDriver,
@@ -1161,12 +1196,19 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
 
     const initialJobs = schedulerSnapshots.at(-1) ?? [];
-    expect(initialJobs).toHaveLength(3);
-    expect(initialJobs.map((job) => job.recurringName).sort()).toEqual([
+    expect(initialJobs).toHaveLength(4);
+    expect(
+      initialJobs
+        .filter((job) => job.recurringName)
+        .map((job) => job.recurringName)
+        .sort()
+    ).toEqual([
       "cleanup",
       "digest",
       "report"
     ]);
+    const oneShotJob = initialJobs.find((job) => !job.recurringName);
+    expect(oneShotJob?.functionName).toBe("tasks/create");
     expect(initialJobs.find((job) => job.recurringName === "cleanup")?.schedule).toEqual({
       type: "interval",
       minutes: 5
@@ -1210,6 +1252,24 @@ describe("SyncoreRuntime schema + scheduler", () => {
         )?.args.text === "cleanup-updated",
       "scheduler subscription should refresh after update"
     );
+
+    expect(oneShotJob).toBeDefined();
+    const oneShotUpdateResult = await handler({
+      kind: "scheduler.update",
+      jobId: oneShotJob!.id,
+      args: { text: "one-shot-updated" },
+      runAt: oneShotJob!.runAt + 30_000
+    });
+    expect(oneShotUpdateResult.kind).toBe("scheduler.update.result");
+    if (oneShotUpdateResult.kind === "scheduler.update.result") {
+      expect(oneShotUpdateResult.success).toBe(true);
+      expect(oneShotUpdateResult.updated).toBe(true);
+      expect(oneShotUpdateResult.job?.args).toEqual({
+        text: "one-shot-updated"
+      });
+      expect(oneShotUpdateResult.job?.runAt).toBe(oneShotJob!.runAt + 30_000);
+      expect(oneShotUpdateResult.job?.schedule).toBeUndefined();
+    }
 
     const cancelResult = await handler({
       kind: "scheduler.cancel",

@@ -30,6 +30,7 @@ export function isCompatibleVersionHandshake(
 type SyncoreDevtoolsEventBase = {
   runtimeId: string;
   timestamp: number;
+  sequence?: number;
   origin?: SyncoreDevtoolsEventOrigin;
 };
 
@@ -175,6 +176,8 @@ export type SyncoreDevtoolsEvent =
 export interface SyncoreActiveQueryInfo {
   id: string;
   functionName: string;
+  args?: Record<string, unknown>;
+  consumers?: number;
   owner?: "root" | "component";
   componentPath?: string;
   componentName?: string;
@@ -372,9 +375,9 @@ export type SyncoreDevtoolsCommandPayload =
   | {
       kind: "scheduler.update";
       jobId: string;
-      schedule: SchedulerRecurringSchedule;
+      schedule?: SchedulerRecurringSchedule;
       args: Record<string, unknown>;
-      misfirePolicy: SchedulerMisfirePolicy;
+      misfirePolicy?: SchedulerMisfirePolicy;
       runAt?: number;
     };
 
@@ -527,6 +530,7 @@ export interface TableField {
   name: string;
   type: string;
   optional: boolean;
+  referenceTable?: string;
 }
 
 export interface TableIndex {

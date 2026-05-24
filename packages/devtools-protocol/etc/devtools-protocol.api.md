@@ -231,9 +231,13 @@ export const SYNCORE_DEVTOOLS_PROTOCOL_VERSION = 1;
 // @public (undocumented)
 export interface SyncoreActiveQueryInfo {
     // (undocumented)
+    args?: Record<string, unknown>;
+    // (undocumented)
     componentName?: string;
     // (undocumented)
     componentPath?: string;
+    // (undocumented)
+    consumers?: number;
     // (undocumented)
     dependencyKeys: string[];
     // (undocumented)
@@ -297,9 +301,9 @@ export type SyncoreDevtoolsCommandPayload = {
 } | {
     kind: "scheduler.update";
     jobId: string;
-    schedule: SchedulerRecurringSchedule;
+    schedule?: SchedulerRecurringSchedule;
     args: Record<string, unknown>;
-    misfirePolicy: SchedulerMisfirePolicy;
+    misfirePolicy?: SchedulerMisfirePolicy;
     runAt?: number;
 };
 
@@ -598,6 +602,8 @@ export interface TableField {
     name: string;
     // (undocumented)
     optional: boolean;
+    // (undocumented)
+    referenceTable?: string;
     // (undocumented)
     type: string;
 }

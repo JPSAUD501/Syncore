@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { JsonViewer } from "@/components/shared";
 import { X, Copy, Check, Trash2, Edit, CopyPlus } from "lucide-react";
 import { useState, useCallback } from "react";
-import { formatCellPreview } from "@/lib/dataValue";
+import { getReferenceDisplay, type ReferenceFieldOptions } from "@/lib/dataReferences";
+import { formatCellPreview, inferColorValue, formatReadableDate, getDocumentId } from "@/lib/dataValue";
 
 interface DocumentPanelProps {
   document: Record<string, unknown> | null;
@@ -15,6 +16,7 @@ interface DocumentPanelProps {
   onEditField?: (id: string, field: string, value: unknown) => void;
   onEditDocument?: (document: Record<string, unknown>) => void;
   onDuplicate?: (document: Record<string, unknown>) => void;
+  referenceFields?: Record<string, ReferenceFieldOptions>;
   className?: string;
 }
 
@@ -25,6 +27,7 @@ export function DocumentPanel({
   onEditField,
   onEditDocument,
   onDuplicate,
+  referenceFields,
   className
 }: DocumentPanelProps) {
   const [copied, setCopied] = useState(false);
@@ -133,7 +136,20 @@ export function DocumentPanel({
             Fields
           </h4>
           <div className="space-y-1.5">
-            {Object.entries(document).map(([key, value]) => (
+            {Object.entries(document).map(([key, value]) => {
+              const colorInfo = inferColorValue(key, value);
+              const preview = formatCellPreview(key, value);
+              const reference = referenceFields?.[key];
+              const referenceDisplay = reference
+                ? getReferenceDisplay(reference, value)
+                : null;
+              const displayText =
+                referenceDisplay
+                  ? referenceDisplay.id
+                  : preview.kind === "date"
+                  ? formatReadableDate(preview.text)
+                  : preview.text;
+              return (
               <div
                 key={key}
                 className="group flex items-start justify-between gap-3 rounded-md border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-bg-surface"
@@ -142,13 +158,27 @@ export function DocumentPanel({
                   <span className="font-mono text-[11px] text-accent">
                     {key}
                   </span>
-                  <div className="mt-1 truncate text-[10px] text-text-secondary">
-                    {formatCellPreview(key, value).text}
+                  <div className="mt-1 flex items-center gap-1.5 truncate text-[10px] text-text-secondary">
+                    {colorInfo && (
+                      <span
+                        className="inline-block size-3 shrink-0 rounded-sm border border-white/20"
+                        style={{ backgroundColor: colorInfo.hex }}
+                      />
+                    )}
+                    {reference && (
+                      <Badge
+                        variant={referenceDisplay?.missing ? "destructive" : "outline"}
+                        className="h-4 px-1 py-0 text-[8px]"
+                      >
+                        {referenceDisplay?.missing ? "missing" : reference.tableName}
+                      </Badge>
+                    )}
+                    {displayText}
                   </div>
                 </div>
                 <div className="ml-3 flex items-center gap-2">
                   <span className="text-[10px] text-text-tertiary">
-                    {inferType(value)}
+                    {preview.kind === "empty" ? "—" : preview.kind}
                   </span>
                   <Button
                     variant="ghost"
@@ -162,29 +192,11 @@ export function DocumentPanel({
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </ScrollArea>
     </div>
   );
-}
-
-function inferType(value: unknown): string {
-  if (value === null) return "null";
-  if (value === undefined) return "undefined";
-  if (Array.isArray(value)) return `array(${value.length})`;
-  return typeof value;
-}
-
-function getDocumentId(document: Record<string, unknown>): string {
-  const candidate = document._id ?? document.id;
-  if (
-    typeof candidate === "string" ||
-    typeof candidate === "number" ||
-    typeof candidate === "bigint"
-  ) {
-    return String(candidate);
-  }
-  return "unknown";
 }
