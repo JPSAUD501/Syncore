@@ -15,6 +15,7 @@ interface DataTableProps {
   onToggleRowSelection?: (rowId: string) => void;
   onToggleAllRows?: (rowIds: string[], checked: boolean) => void;
   onCellEdit?: (rowId: string, field: string, value: unknown) => void;
+  onOpenReference?: ((tableName: string, id: string) => void) | undefined;
   referenceFields?: Record<string, ReferenceFieldOptions>;
   className?: string;
 }
@@ -27,6 +28,7 @@ export function DataTable({
   onToggleRowSelection,
   onToggleAllRows,
   onCellEdit,
+  onOpenReference,
   referenceFields,
   className
 }: DataTableProps) {
@@ -146,6 +148,7 @@ export function DataTable({
                               field={col}
                               value={row[col]}
                               reference={referenceFields?.[col]}
+                              onOpenReference={onOpenReference}
                             />
                           </div>
                         </div>
@@ -187,11 +190,13 @@ export function DataTable({
 function CellValue({
   field,
   value,
-  reference
+  reference,
+  onOpenReference
 }: {
   field: string;
   value: unknown;
   reference?: ReferenceFieldOptions | undefined;
+  onOpenReference?: ((tableName: string, id: string) => void) | undefined;
 }) {
   if (reference) {
     const display = getReferenceDisplay(reference, value);
@@ -203,12 +208,19 @@ function CellValue({
       );
     }
     return (
-      <span
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          if (!display.missing) {
+            onOpenReference?.(reference.tableName, display.id);
+          }
+        }}
         className={cn(
-          "inline-flex max-w-full items-center gap-1.5 rounded border px-1.5 py-0.5 text-[11px]",
+          "inline-flex max-w-full items-center gap-1.5 rounded border px-1.5 py-0.5 text-[11px] transition-colors",
           display.missing
             ? "border-error/30 bg-error/5 text-error"
-            : "border-accent/20 bg-accent/5 text-text-secondary"
+            : "border-accent/20 bg-accent/5 text-text-secondary hover:border-accent/40 hover:bg-accent/10"
         )}
         title={`${field} -> ${reference.tableName}\n${display.id}`}
       >
@@ -216,7 +228,7 @@ function CellValue({
         <span className="shrink-0 text-text-tertiary">
           {display.missing ? "missing" : reference.tableName}
         </span>
-      </span>
+      </button>
     );
   }
 

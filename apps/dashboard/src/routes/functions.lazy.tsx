@@ -55,6 +55,22 @@ interface FunctionRunResult {
   durationMs?: number;
 }
 
+type FunctionListEntry = {
+  name: string;
+  type: FunctionType;
+  file?: string;
+  modulePath?: string;
+  namespace: string;
+  metadataAvailable: boolean;
+  invocations: number;
+  avgDuration: number;
+  errorRate: number;
+  lastInvoked: number;
+  registered: boolean;
+  activeCount: number;
+  args?: Record<string, unknown>;
+};
+
 /* ------------------------------------------------------------------ */
 /*  Main page                                                          */
 /* ------------------------------------------------------------------ */
@@ -105,42 +121,23 @@ function FunctionsPage() {
   /* ---------------------------------------------------------------- */
 
   const allFunctions = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        type: FunctionType;
-        file: string;
-        invocations: number;
-        avgDuration: number;
-        errorRate: number;
-        lastInvoked: number;
-        registered: boolean;
-        args?: Record<string, unknown>;
-      }
-    >();
+    const map = new Map<string, FunctionListEntry>();
 
     // Seed from registered functions
     for (const fn of fnList) {
-      const entry: {
-        name: string;
-        type: FunctionType;
-        file: string;
-        invocations: number;
-        avgDuration: number;
-        errorRate: number;
-        lastInvoked: number;
-        registered: boolean;
-        args?: Record<string, unknown>;
-      } = {
+      const entry: FunctionListEntry = {
         name: fn.name,
         type: fn.type,
-        file: fn.file,
+        ...(fn.file ? { file: fn.file } : {}),
+        ...(fn.modulePath ? { modulePath: fn.modulePath } : {}),
+        namespace: fn.namespace ?? inferFunctionNamespace(fn.name),
+        metadataAvailable: fn.metadataAvailable ?? Boolean(fn.file),
         invocations: 0,
         avgDuration: 0,
         errorRate: 0,
         lastInvoked: 0,
-        registered: true
+        registered: true,
+        activeCount: activeQueries.filter((query) => query.functionName === fn.name).length
       };
       if (fn.args) entry.args = fn.args;
       map.set(fn.name, entry);
@@ -152,56 +149,57 @@ function FunctionsPage() {
       const fnType =
         existing?.type ?? inferFunctionType(metric.type) ?? "query";
 
-      const entry: {
-        name: string;
-        type: FunctionType;
-        file: string;
-        invocations: number;
-        avgDuration: number;
-        errorRate: number;
-        lastInvoked: number;
-        registered: boolean;
-        args?: Record<string, unknown>;
-      } = {
+      const entry: FunctionListEntry = {
         name: metric.functionName,
         type: fnType,
-        file: existing?.file ?? inferFileFromName(metric.functionName),
+        ...(existing?.file ? { file: existing.file } : {}),
+        ...(existing?.modulePath ? { modulePath: existing.modulePath } : {}),
+        namespace: existing?.namespace ?? inferFunctionNamespace(metric.functionName),
+        metadataAvailable: existing?.metadataAvailable ?? false,
         invocations: metric.invocations,
         avgDuration: metric.avgDuration,
         errorRate: metric.errorRate,
         lastInvoked: metric.lastInvoked,
-        registered: existing?.registered ?? false
+        registered: existing?.registered ?? false,
+        activeCount: activeQueries.filter(
+          (query) => query.functionName === metric.functionName
+        ).length
       };
       if (existing?.args) entry.args = existing.args;
       map.set(metric.functionName, entry);
     }
 
     return Array.from(map.values());
-  }, [fnList, functionMetrics]);
+  }, [activeQueries, fnList, functionMetrics]);
 
   /* ---------------------------------------------------------------- */
   /*  Group by file for tree view                                      */
   /* ---------------------------------------------------------------- */
 
   const fileTree = useMemo(() => {
-    const filtered = search
+    const normalizedSearch = search.trim().toLowerCase();
+    const tracesByFunction = traceIndex.byFunctionName;
+    const filtered = normalizedSearch
       ? allFunctions.filter(
-          (fn) =>
-            fn.name.toLowerCase().includes(search.toLowerCase()) ||
-            fn.file.toLowerCase().includes(search.toLowerCase())
+          (fn) => getFunctionSearchText(fn, tracesByFunction).includes(normalizedSearch)
         )
       : allFunctions;
 
     const groups = new Map<string, typeof filtered>();
     for (const fn of filtered) {
-      const file = fn.file;
-      const existing = groups.get(file) ?? [];
+      const group = getFunctionGroupLabel(fn);
+      const existing = groups.get(group) ?? [];
       existing.push(fn);
-      groups.set(file, existing);
+      groups.set(group, existing);
     }
 
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [allFunctions, search]);
+    return Array.from(groups.entries())
+      .map(([group, functions]) => [
+        group,
+        [...functions].sort(compareFunctionEntries)
+      ] as const)
+      .sort(([a], [b]) => a.localeCompare(b));
+  }, [allFunctions, search, traceIndex.byFunctionName]);
 
   /* ---------------------------------------------------------------- */
   /*  Selected function details                                        */
@@ -396,10 +394,10 @@ function FunctionsPage() {
                 </p>
               </div>
             ) : (
-              fileTree.map(([file, fns]) => (
+              fileTree.map(([group, fns]) => (
                 <FileGroup
-                  key={file}
-                  file={file}
+                  key={group}
+                  group={group}
                   functions={fns}
                   selectedFn={selectedFn}
                   onSelect={(name) =>
@@ -444,8 +442,21 @@ function FunctionsPage() {
               <div className="flex items-center gap-4 text-[11px] text-text-tertiary flex-wrap">
                 <span className="flex items-center gap-1">
                   <FileCode size={11} />
-                  {selectedFunction.file}
+                  {selectedFunction.file ??
+                    "file unavailable from runtime metadata"}
                 </span>
+                <span className="flex items-center gap-1">
+                  <Code2 size={11} />
+                  {selectedFunction.namespace}
+                </span>
+                <Badge variant={selectedFunction.registered ? "secondary" : "outline"}>
+                  {selectedFunction.registered ? "registered" : "observed only"}
+                </Badge>
+                {!selectedFunction.metadataAvailable && (
+                  <Badge variant="outline">
+                    file metadata unavailable
+                  </Badge>
+                )}
                 <span className="flex items-center gap-1">
                   <Activity size={11} />
                   {selectedFunction.invocations} invocations
@@ -562,17 +573,13 @@ function FunctionsPage() {
 /* ------------------------------------------------------------------ */
 
 function FileGroup({
-  file,
+  group,
   functions,
   selectedFn,
   onSelect
 }: {
-  file: string;
-  functions: Array<{
-    name: string;
-    type: FunctionType;
-    invocations: number;
-  }>;
+  group: string;
+  functions: FunctionListEntry[];
   selectedFn: string | null;
   onSelect: (name: string) => void;
 }) {
@@ -593,7 +600,7 @@ function FileGroup({
           )}
         />
         <FileCode size={11} className="text-text-tertiary shrink-0" />
-        <span className="truncate font-medium">{file}</span>
+        <span className="truncate font-medium">{group}</span>
         <span className="ml-auto text-text-tertiary text-[10px]">
           {functions.length}
         </span>
@@ -621,11 +628,23 @@ function FileGroup({
               <span className="truncate font-mono text-[11px]">
                 {extractFnName(fn.name)}
               </span>
-              {fn.invocations > 0 && (
-                <span className="ml-auto text-[10px] text-text-tertiary">
-                  {fn.invocations}x
-                </span>
-              )}
+              <span className="ml-auto flex shrink-0 items-center gap-1">
+                {fn.invocations > 0 && (
+                  <span className="text-[10px] text-text-tertiary">
+                    {fn.invocations}x
+                  </span>
+                )}
+                {fn.activeCount > 0 && (
+                  <Badge variant="secondary" className="px-1 py-0 text-[8px]">
+                    active
+                  </Badge>
+                )}
+                {!fn.registered && (
+                  <Badge variant="outline" className="px-1 py-0 text-[8px]">
+                    observed
+                  </Badge>
+                )}
+              </span>
             </button>
           ))}
         </div>
@@ -1108,11 +1127,60 @@ function extractFnName(fullName: string): string {
   return parts.length > 1 ? parts[parts.length - 1]! : fullName;
 }
 
-/** Infer a file path from a function name like "api/users:list" */
-function inferFileFromName(name: string): string {
-  const parts = name.split(":");
-  if (parts.length > 1) {
-    return parts[0]! + ".ts";
+function inferFunctionNamespace(name: string): string {
+  if (name.includes(":")) {
+    return name.split(":")[0] ?? "root";
   }
-  return "unknown";
+  if (name.includes("/")) {
+    return name.split("/")[0] ?? "root";
+  }
+  return "root";
+}
+
+function getFunctionGroupLabel(fn: FunctionListEntry): string {
+  if (fn.namespace && fn.namespace !== "root") {
+    return `${fn.namespace}/`;
+  }
+  return "Root functions";
+}
+
+function compareFunctionEntries(left: FunctionListEntry, right: FunctionListEntry) {
+  if (left.activeCount !== right.activeCount) {
+    return right.activeCount - left.activeCount;
+  }
+  if (left.lastInvoked !== right.lastInvoked) {
+    return right.lastInvoked - left.lastInvoked;
+  }
+  if (left.registered !== right.registered) {
+    return left.registered ? -1 : 1;
+  }
+  return left.name.localeCompare(right.name);
+}
+
+function getFunctionSearchText(
+  fn: FunctionListEntry,
+  tracesByFunction: Map<string, ExecutionTrace[]>
+): string {
+  const traces = tracesByFunction.get(fn.name) ?? [];
+  return [
+    fn.name,
+    fn.type,
+    fn.file ?? "",
+    fn.modulePath ?? "",
+    fn.namespace,
+    fn.registered ? "registered" : "observed only",
+    JSON.stringify(fn.args ?? {}),
+    traces
+      .slice(0, 5)
+      .map((trace) =>
+        JSON.stringify({
+          args: trace.argsPreview,
+          result: trace.resultPreview,
+          error: trace.error
+        })
+      )
+      .join(" ")
+  ]
+    .join(" ")
+    .toLowerCase();
 }

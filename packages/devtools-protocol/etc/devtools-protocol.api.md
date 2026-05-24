@@ -92,11 +92,17 @@ export interface FunctionDefinition {
     // (undocumented)
     componentPath?: string;
     // (undocumented)
-    file: string;
+    file?: string;
     // (undocumented)
     localName?: string;
     // (undocumented)
+    metadataAvailable?: boolean;
+    // (undocumented)
+    modulePath?: string;
+    // (undocumented)
     name: string;
+    // (undocumented)
+    namespace?: string;
     // (undocumented)
     owner?: "root" | "component";
     returns?: Record<string, unknown>;
@@ -290,6 +296,12 @@ export type SyncoreDevtoolsCommandPayload = {
     kind: "data.export";
     tables?: string[];
 } | {
+    kind: "data.referenceOptions";
+    table: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+} | {
     kind: "sql.read";
     query: string;
 } | {
@@ -325,6 +337,14 @@ export type SyncoreDevtoolsCommandResultPayload = {
         rows: Record<string, unknown>[];
         totalCount: number;
     }>;
+    error?: string;
+} | {
+    kind: "data.referenceOptions.result";
+    table: string;
+    rows: Record<string, unknown>[];
+    totalCount: number;
+    offset: number;
+    hasMore: boolean;
     error?: string;
 } | {
     kind: "sql.read.result";

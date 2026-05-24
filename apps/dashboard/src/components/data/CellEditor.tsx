@@ -198,6 +198,7 @@ function ReferenceEditor({
   const filteredOptions = normalizedQuery
     ? reference.options.filter((o) => o.searchText.includes(normalizedQuery))
     : reference.options;
+  const visibleOptions = filteredOptions.slice(0, 100);
 
   // Right-panel shows: hovered → selected → first in list
   const detailOption =
@@ -252,7 +253,7 @@ function ReferenceEditor({
             </button>
           )}
           {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => (
+            visibleOptions.map((option) => (
               <button
                 key={option.id}
                 type="button"
@@ -276,6 +277,11 @@ function ReferenceEditor({
           ) : (
             <div className="px-3 py-6 text-center text-[11px] text-text-tertiary">
               No matches
+            </div>
+          )}
+          {filteredOptions.length > visibleOptions.length && (
+            <div className="border-t border-border px-3 py-2 text-[10px] text-text-tertiary">
+              Showing first {visibleOptions.length} of {filteredOptions.length}. Refine search to narrow results.
             </div>
           )}
         </div>

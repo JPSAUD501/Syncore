@@ -75,6 +75,7 @@ function DataPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState<DataFilter[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [pendingSelectedRowId, setPendingSelectedRowId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<
     "insert" | "patch" | "duplicate"
@@ -94,6 +95,7 @@ function DataPage() {
   const [mobileTablesOpen, setMobileTablesOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
+  const [showMissingReferencesOnly, setShowMissingReferencesOnly] = useState(false);
   const [referenceRowsByTable, setReferenceRowsByTable] = useState<
     Record<string, Record<string, unknown>[]>
   >({});
@@ -167,19 +169,28 @@ function DataPage() {
     }
 
     let cancelled = false;
-    void sendRequest(
-      { kind: "data.export", tables: referenceTableNames },
-      { targetRuntimeId }
+    void Promise.all(
+      referenceTableNames.map(async (tableName) => {
+        const result = await sendRequest(
+          {
+            kind: "data.referenceOptions",
+            table: tableName,
+            limit: 100,
+            offset: 0
+          },
+          { targetRuntimeId }
+        );
+        if (result.kind !== "data.referenceOptions.result" || result.error) {
+          return [tableName, []] as const;
+        }
+        return [tableName, result.rows] as const;
+      })
     )
-      .then((result) => {
-        if (cancelled || result.kind !== "data.export.result" || result.error) {
+      .then((entries) => {
+        if (cancelled) {
           return;
         }
-        setReferenceRowsByTable(
-          Object.fromEntries(
-            result.tables.map((table) => [table.name, table.rows])
-          )
-        );
+        setReferenceRowsByTable(Object.fromEntries(entries));
       })
       .catch(() => {
         if (!cancelled) {
@@ -297,6 +308,7 @@ function DataPage() {
       options?: { silent?: boolean }
     ) => {
       if (!targetRuntimeId || !selectedTable) return;
+      validateDocumentReferences(referenceFields, document);
       const res = await sendRequest({
         kind: "data.insert",
         table: selectedTable,
@@ -313,12 +325,13 @@ function DataPage() {
         });
       }
     },
-    [pushToast, selectedTable, targetRuntimeId]
+    [pushToast, referenceFields, selectedTable, targetRuntimeId]
   );
 
   const handlePatch = useCallback(
     async (id: string, fields: Record<string, unknown>) => {
       if (!targetRuntimeId || !selectedTable) return;
+      validateDocumentReferences(referenceFields, fields);
       const res = await sendRequest({
         kind: "data.patch",
         table: selectedTable,
@@ -334,7 +347,7 @@ function DataPage() {
         description: `${id} was updated.`
       });
     },
-    [pushToast, selectedTable, targetRuntimeId]
+    [pushToast, referenceFields, selectedTable, targetRuntimeId]
   );
 
   const handleFieldEdit = useCallback(
@@ -349,6 +362,7 @@ function DataPage() {
   const handleImport = useCallback(
     async (documents: Record<string, unknown>[]) => {
       for (const document of documents) {
+        validateDocumentReferences(referenceFields, document);
         await handleInsert(document, { silent: true });
       }
       pushToast({
@@ -357,7 +371,7 @@ function DataPage() {
         description: `${documents.length} document${documents.length === 1 ? "" : "s"} imported into ${selectedTable}.`
       });
     },
-    [handleInsert, pushToast, selectedTable]
+    [handleInsert, pushToast, referenceFields, selectedTable]
   );
 
   const handleExport = useCallback(() => {
@@ -501,6 +515,18 @@ function DataPage() {
   }, [rows]);
 
   useEffect(() => {
+    if (!pendingSelectedRowId) {
+      return;
+    }
+    const found = rows.some((row) => getDocumentId(row) === pendingSelectedRowId);
+    if (!found) {
+      return;
+    }
+    setSelectedRowIds([pendingSelectedRowId]);
+    setPendingSelectedRowId(null);
+  }, [pendingSelectedRowId, rows]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const isEditableTarget =
@@ -598,6 +624,15 @@ function DataPage() {
     return [];
   }, [currentSchema, rows]);
 
+  const rowsWithMissingReferences = useMemo(
+    () =>
+      rows.filter((row) => hasMissingReference(row, referenceFields)),
+    [referenceFields, rows]
+  );
+  const visibleRows = showMissingReferencesOnly
+    ? rowsWithMissingReferences
+    : rows;
+
   const filteredTables = useMemo(
     () =>
       tableSearch
@@ -636,6 +671,7 @@ function DataPage() {
           onSelectTable={(tableName) => {
             setSelectedTable(tableName);
             setSelectedRowIds([]);
+            setPendingSelectedRowId(null);
             setFilters([]);
             setMobileTablesOpen(false);
           }}
@@ -863,6 +899,25 @@ function DataPage() {
                 filters={filters}
                 onFiltersChange={setFilters}
               />
+              {Object.keys(referenceFields).length > 0 && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Button
+                    variant={showMissingReferencesOnly ? "secondary" : "ghost"}
+                    size="xs"
+                    onClick={() =>
+                      setShowMissingReferencesOnly((current) => !current)
+                    }
+                    disabled={rowsWithMissingReferences.length === 0}
+                  >
+                    Missing refs
+                    {rowsWithMissingReferences.length > 0 && (
+                      <Badge variant="destructive" className="ml-1 px-1 py-0 text-[9px]">
+                        {rowsWithMissingReferences.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="mx-3 mb-3 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-base">
@@ -900,12 +955,14 @@ function DataPage() {
                 >
                   <div className="flex h-full">
                     <div className="min-w-0 flex-1 p-2">
-                      {rows.length === 0 ? (
+                      {visibleRows.length === 0 ? (
                         <EmptyState
                           icon={Database}
                           title="No data"
                           description={
-                            filters.length > 0
+                            showMissingReferencesOnly
+                              ? "No rows have missing references."
+                              : filters.length > 0
                               ? "No rows match the current filters."
                               : "This table is empty."
                           }
@@ -913,9 +970,9 @@ function DataPage() {
                         />
                       ) : (
                         <DataTable
-                          key={`${selectedTable}:${rows.length}`}
+                          key={selectedTable}
                           columns={columns}
-                          rows={rows}
+                          rows={visibleRows}
                           selectedRowId={selectedDocId}
                           selectedRowIds={selectedRowIds}
                           onToggleRowSelection={(rowId) => {
@@ -938,6 +995,13 @@ function DataPage() {
                           }}
                           onCellEdit={(rowId, field, value) => {
                             void handleFieldEdit(rowId, field, value);
+                          }}
+                          onOpenReference={(tableName, id) => {
+                            setSelectedTable(tableName);
+                            setFilters([{ field: "_id", operator: "eq", value: id }]);
+                            setSelectedRowIds([]);
+                            setPendingSelectedRowId(id);
+                            setShowMissingReferencesOnly(false);
                           }}
                           referenceFields={referenceFields}
                           className="h-full rounded-md border border-border bg-bg-base"
@@ -1538,4 +1602,34 @@ function validateReferenceValue(
       `${value} does not exist in referenced table ${reference.tableName}.`
     );
   }
+}
+
+function validateDocumentReferences(
+  references: Record<string, ReferenceFieldOptions>,
+  document: Record<string, unknown>
+): void {
+  for (const [field, reference] of Object.entries(references)) {
+    if (field in document) {
+      validateReferenceValue(reference, document[field]);
+    }
+  }
+}
+
+function hasMissingReference(
+  row: Record<string, unknown>,
+  references: Record<string, ReferenceFieldOptions>
+): boolean {
+  return Object.entries(references).some(([field, reference]) => {
+    const value = row[field];
+    if (
+      (value === undefined || value === null || value === "") &&
+      reference.field.optional
+    ) {
+      return false;
+    }
+    return (
+      typeof value === "string" &&
+      !reference.options.some((option) => option.id === value)
+    );
+  });
 }

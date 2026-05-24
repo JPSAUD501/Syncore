@@ -402,6 +402,9 @@ function JobDetailPanel({
 }) {
   const canEdit = job.status === "pending" && editorState;
   const isRecurring = isRecurringJob(job);
+  const previewRunAt = editorState
+    ? previewNextRunAt(editorState, isRecurring)
+    : null;
 
   return (
     <div className="hidden w-96 flex-col overflow-hidden rounded-md border border-border bg-bg-surface lg:flex">
@@ -436,7 +439,12 @@ function JobDetailPanel({
           )}
 
           <DetailField label="Status">
-            <JobStatusBadge status={job.status} />
+            <div className="flex items-center gap-2">
+              <JobStatusBadge status={job.status} />
+              <Badge variant="outline" className="text-[9px]">
+                {isRecurring ? "Recurring" : "One-shot"}
+              </Badge>
+            </div>
           </DetailField>
 
           <div className="grid grid-cols-2 gap-3">
@@ -509,6 +517,15 @@ function JobDetailPanel({
                     state={{ ...editorState, schedule: editorState.schedule }}
                     onChange={onEditorChange}
                   />
+                )}
+
+                {previewRunAt && (
+                  <div className="rounded-md border border-border bg-bg-base px-3 py-2 text-[11px] text-text-secondary">
+                    Next run after save:{" "}
+                    <span className="font-mono text-text-primary">
+                      {new Date(previewRunAt).toLocaleString()}
+                    </span>
+                  </div>
                 )}
 
                 <div className="space-y-2">
@@ -922,6 +939,47 @@ function parseLocalDateTimeInput(value: string): number {
     throw new Error("Run At must be a valid local date and time.");
   }
   return timestamp;
+}
+
+function previewNextRunAt(
+  state: SchedulerEditorState,
+  recurring: boolean
+): number | null {
+  if (!recurring || !state.schedule) {
+    try {
+      return parseLocalDateTimeInput(state.runAtText);
+    } catch {
+      return null;
+    }
+  }
+  return computeSchedulePreview(state.schedule, Date.now());
+}
+
+function computeSchedulePreview(
+  schedule: SchedulerRecurringSchedule,
+  from: number
+): number {
+  if (schedule.type === "interval") {
+    const delayMs =
+      ((schedule.hours ?? 0) * 60 * 60 +
+        (schedule.minutes ?? 0) * 60 +
+        (schedule.seconds ?? 0)) *
+      1000;
+    return from + Math.max(delayMs, 1000);
+  }
+  const next = new Date(from);
+  next.setSeconds(0, 0);
+  next.setHours(schedule.hour, schedule.minute, 0, 0);
+  if (schedule.type === "weekly") {
+    const targetDay = WEEK_DAYS.indexOf(schedule.dayOfWeek);
+    const currentDay = next.getDay();
+    const dayDelta = (targetDay - currentDay + 7) % 7;
+    next.setDate(next.getDate() + dayDelta);
+  }
+  if (next.getTime() <= from) {
+    next.setDate(next.getDate() + (schedule.type === "weekly" ? 7 : 1));
+  }
+  return next.getTime();
 }
 
 function parseMisfirePolicy(

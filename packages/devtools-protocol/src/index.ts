@@ -367,6 +367,13 @@ export type SyncoreDevtoolsCommandPayload =
     }
   | { kind: "data.delete"; table: string; id: string }
   | { kind: "data.export"; tables?: string[] }
+  | {
+      kind: "data.referenceOptions";
+      table: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    }
   /* SQL */
   | { kind: "sql.read"; query: string }
   | { kind: "sql.write"; query: string }
@@ -443,6 +450,15 @@ export type SyncoreDevtoolsCommandResultPayload =
       error?: string;
     }
   | {
+      kind: "data.referenceOptions.result";
+      table: string;
+      rows: Record<string, unknown>[];
+      totalCount: number;
+      offset: number;
+      hasMore: boolean;
+      error?: string;
+    }
+  | {
       kind: "sql.read.result";
       columns: string[];
       rows: unknown[][];
@@ -503,7 +519,10 @@ export type SyncoreDevtoolsSubscriptionResultPayload =
 export interface FunctionDefinition {
   name: string;
   type: "query" | "mutation" | "action";
-  file: string;
+  file?: string;
+  modulePath?: string;
+  namespace?: string;
+  metadataAvailable?: boolean;
   owner?: "root" | "component";
   componentPath?: string;
   componentName?: string;

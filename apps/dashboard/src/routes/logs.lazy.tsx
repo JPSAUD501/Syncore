@@ -19,7 +19,8 @@ import {
   Pause,
   Play,
   Filter,
-  X
+  X,
+  GitBranch
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +45,6 @@ import type { ExecutionTrace } from "@syncore/devtools-protocol";
 import type { TraceIndex } from "@/lib/traces";
 import {
   buildInvalidationsByQueryId,
-  formatInvalidationTitle,
   getInvalidationsForQuery,
   isVisibleActivityEvent,
   type QueryInvalidationEvent
@@ -83,14 +83,14 @@ function LogEntry({
   onClick,
   isNew,
   runtimeMap,
-  invalidations
+  causalBadges
 }: {
   event: SyncoreDevtoolsEvent;
   isSelected: boolean;
   onClick: () => void;
   isNew: boolean;
   runtimeMap: Map<string, { label: string; publicId: string }>;
-  invalidations: QueryInvalidationEvent[];
+  causalBadges: string[];
 }) {
   const color = EVENT_COLORS[event.type];
   const Icon = EVENT_ICONS[event.type];
@@ -127,14 +127,20 @@ function LogEntry({
       <span className="text-[12px] text-text-secondary font-mono truncate flex-1">
         {summary}
       </span>
-      {invalidations.length > 0 && (
-        <Badge
-          variant="secondary"
-          className="shrink-0 text-[10px]"
-          title={formatInvalidationTitle(invalidations)}
-        >
-          Rerun
-        </Badge>
+      {causalBadges.length > 0 && (
+        <div className="hidden shrink-0 items-center gap-1 lg:flex">
+          {causalBadges.slice(0, 2).map((badge) => (
+            <Badge
+              key={badge}
+              variant="secondary"
+              className="gap-1 text-[10px]"
+              title={badge}
+            >
+              <GitBranch size={10} />
+              {badge}
+            </Badge>
+          ))}
+        </div>
       )}
       {duration && (
         <span className="text-[11px] text-text-tertiary font-mono shrink-0 tabular-nums">
@@ -459,6 +465,11 @@ export function LogsPage() {
                   event.type === "query.executed"
                     ? getInvalidationsForQuery(event, invalidationsByQueryId)
                     : [];
+                const causalBadges = getCausalBadges(
+                  event,
+                  traceIndex,
+                  invalidations
+                );
                 return (
                   <LogEntry
                     key={`${event.type}-${event.timestamp}-${i}`}
@@ -466,7 +477,7 @@ export function LogsPage() {
                     isSelected={selectedIndex === i}
                     isNew={i >= knownCount}
                     runtimeMap={runtimeMap}
-                    invalidations={invalidations}
+                    causalBadges={causalBadges}
                     onClick={() =>
                       setSelectedIndex(selectedIndex === i ? null : i)
                     }
@@ -562,4 +573,32 @@ function getExecutionIdForEvent(event: SyncoreDevtoolsEvent): string | null {
     return event.actionId;
   }
   return null;
+}
+
+function getCausalBadges(
+  event: SyncoreDevtoolsEvent,
+  traceIndex: TraceIndex,
+  invalidations: QueryInvalidationEvent[]
+): string[] {
+  if (event.type === "query.executed" && invalidations.length > 0) {
+    return invalidations.map((invalidation) =>
+      invalidation.causedByExecutionId
+        ? `Rerun by ${invalidation.causedByExecutionId.slice(0, 8)}`
+        : "Rerun"
+    );
+  }
+
+  const executionId = getExecutionIdForEvent(event);
+  const caused = executionId
+    ? (traceIndex.invalidationsByCause.get(executionId) ?? [])
+    : [];
+  if (caused.length === 0) {
+    return [];
+  }
+  const reruns = caused.filter((invalidation) => invalidation.rerunExecutionId);
+  return [
+    reruns.length > 0
+      ? `caused ${reruns.length} rerun${reruns.length === 1 ? "" : "s"}`
+      : `invalidated ${caused.length}`
+  ];
 }
