@@ -33,6 +33,51 @@ type SyncoreDevtoolsEventBase = {
   origin?: SyncoreDevtoolsEventOrigin;
 };
 
+export type DevtoolsPreview =
+  | {
+      kind: "value";
+      value: unknown;
+      truncated?: boolean;
+      note?: string;
+    }
+  | {
+      kind: "error";
+      message: string;
+      truncated?: boolean;
+    };
+
+export interface DocumentChangePreview {
+  table: string;
+  id: string;
+  operation: "insert" | "patch" | "replace" | "delete";
+  fields?: string[];
+  beforePreview?: DevtoolsPreview;
+  afterPreview?: DevtoolsPreview;
+}
+
+export interface InvalidationCause {
+  executionId?: string;
+  reason: string;
+  changedScopes: string[];
+  matchedScopes: string[];
+}
+
+export interface ExecutionTrace {
+  executionId: string;
+  parentExecutionId?: string;
+  kind: "query" | "mutation" | "action" | "scheduler" | "dashboard";
+  functionName?: string;
+  argsPreview?: DevtoolsPreview;
+  resultPreview?: DevtoolsPreview;
+  error?: string;
+  readScopes?: string[];
+  writeScopes?: string[];
+  changedScopes?: string[];
+  changedDocumentsPreview?: DocumentChangePreview[];
+  invalidatedQueryIds?: string[];
+  schedulerJobId?: string;
+}
+
 export type SyncoreDevtoolsEvent =
   | (SyncoreDevtoolsEventBase & {
       type: "runtime.connected";
@@ -49,6 +94,11 @@ export type SyncoreDevtoolsEvent =
       componentName?: string;
       dependencies: string[];
       durationMs: number;
+      executionId?: string;
+      parentExecutionId?: string;
+      argsPreview?: DevtoolsPreview;
+      resultPreview?: DevtoolsPreview;
+      readScopes?: string[];
     })
   | (SyncoreDevtoolsEventBase & {
       type: "query.invalidated";
@@ -56,6 +106,10 @@ export type SyncoreDevtoolsEvent =
       componentPath?: string;
       componentName?: string;
       reason: string;
+      causedByExecutionId?: string;
+      changedScopes?: string[];
+      matchedScopes?: string[];
+      rerunExecutionId?: string;
     })
   | (SyncoreDevtoolsEventBase & {
       type: "mutation.committed";
@@ -65,6 +119,14 @@ export type SyncoreDevtoolsEvent =
       componentName?: string;
       changedTables: string[];
       durationMs: number;
+      executionId?: string;
+      parentExecutionId?: string;
+      argsPreview?: DevtoolsPreview;
+      resultPreview?: DevtoolsPreview;
+      writeScopes?: string[];
+      changedScopes?: string[];
+      changedDocumentsPreview?: DocumentChangePreview[];
+      invalidatedQueryIds?: string[];
     })
   | (SyncoreDevtoolsEventBase & {
       type: "action.completed";
@@ -74,10 +136,29 @@ export type SyncoreDevtoolsEvent =
       componentName?: string;
       durationMs: number;
       error?: string;
+      executionId?: string;
+      parentExecutionId?: string;
+      argsPreview?: DevtoolsPreview;
+      resultPreview?: DevtoolsPreview;
+      writeScopes?: string[];
+      changedScopes?: string[];
+      changedDocumentsPreview?: DocumentChangePreview[];
+      invalidatedQueryIds?: string[];
     })
   | (SyncoreDevtoolsEventBase & {
       type: "scheduler.tick";
       executedJobIds: string[];
+      executionId?: string;
+      jobExecutions?: Array<{
+        jobId: string;
+        executionId?: string;
+        functionName: string;
+        functionType: "mutation" | "action";
+        argsPreview?: DevtoolsPreview;
+        resultPreview?: DevtoolsPreview;
+        error?: string;
+        durationMs?: number;
+      }>;
     })
   | (SyncoreDevtoolsEventBase & {
       type: "storage.updated";
@@ -282,6 +363,7 @@ export type SyncoreDevtoolsCommandPayload =
       fields: Record<string, unknown>;
     }
   | { kind: "data.delete"; table: string; id: string }
+  | { kind: "data.export"; tables?: string[] }
   /* SQL */
   | { kind: "sql.read"; query: string }
   | { kind: "sql.write"; query: string }
@@ -346,6 +428,15 @@ export type SyncoreDevtoolsCommandResultPayload =
       kind: "data.mutate.result";
       success: boolean;
       id?: string;
+      error?: string;
+    }
+  | {
+      kind: "data.export.result";
+      tables: Array<{
+        name: string;
+        rows: Record<string, unknown>[];
+        totalCount: number;
+      }>;
       error?: string;
     }
   | {

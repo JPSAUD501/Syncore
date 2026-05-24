@@ -192,6 +192,35 @@ export function createDevtoolsCommandHandler(
         }
       }
 
+      case "data.export": {
+        try {
+          const requestedTables =
+            payload.tables && payload.tables.length > 0
+              ? payload.tables
+              : deps.schema.tableNames();
+          const tables = await Promise.all(
+            requestedTables.map(async (name) => {
+              const result = await queryTable(driver, name);
+              return {
+                name,
+                rows: result.rows,
+                totalCount: result.totalCount
+              };
+            })
+          );
+          return {
+            kind: "data.export.result",
+            tables
+          };
+        } catch (error) {
+          return {
+            kind: "data.export.result",
+            tables: [],
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
       case "sql.read": {
         try {
           const sqlSupport = requireDevtoolsSqlSupport(sql);

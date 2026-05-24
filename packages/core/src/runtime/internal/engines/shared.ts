@@ -1,5 +1,7 @@
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import type {
+  DevtoolsPreview,
+  DocumentChangePreview,
   SyncoreDevtoolsEvent,
   SyncoreDevtoolsEventOrigin
 } from "@syncore/devtools-protocol";
@@ -46,6 +48,10 @@ export type ActiveQueryRecord = {
 
 export type DevtoolsEventMeta = {
   origin?: SyncoreDevtoolsEventOrigin;
+  executionId?: string;
+  parentExecutionId?: string;
+  schedulerJobId?: string;
+  schedulerRun?: boolean;
 };
 
 export type ScheduledJobRow = {
@@ -97,8 +103,10 @@ export type ExecuteQueryBuilderOptions = {
 };
 
 export type RuntimeExecutionState = {
+  executionId?: string;
   mutationDepth: number;
   changedTables: Set<string>;
+  documentChanges: DocumentChangePreview[];
   storageChanges: Array<{
     storageId: string;
     reason: Extract<
@@ -109,6 +117,107 @@ export type RuntimeExecutionState = {
   dependencyCollector?: Set<DependencyKey>;
   componentMetadata?: SyncoreComponentFunctionMetadata | undefined;
 };
+
+const PREVIEW_MAX_DEPTH = 5;
+const PREVIEW_MAX_ARRAY_ITEMS = 50;
+const PREVIEW_MAX_OBJECT_KEYS = 80;
+const PREVIEW_MAX_STRING_LENGTH = 4000;
+
+export function createDevtoolsPreview(value: unknown): DevtoolsPreview {
+  const seen = new WeakSet<object>();
+  let truncated = false;
+
+  const preview = (input: unknown, depth: number): unknown => {
+    if (typeof input === "string") {
+      if (input.length > PREVIEW_MAX_STRING_LENGTH) {
+        truncated = true;
+        return `${input.slice(0, PREVIEW_MAX_STRING_LENGTH)}...`;
+      }
+      return input;
+    }
+    if (
+      input === null ||
+      typeof input === "number" ||
+      typeof input === "boolean"
+    ) {
+      return input;
+    }
+    if (typeof input === "bigint") {
+      return `${input.toString()}n`;
+    }
+    if (input === undefined) {
+      return "[undefined]";
+    }
+    if (typeof input === "function") {
+      truncated = true;
+      return "[function]";
+    }
+    if (typeof input === "symbol") {
+      truncated = true;
+      return input.toString();
+    }
+    if (input instanceof Error) {
+      return {
+        name: input.name,
+        message: input.message,
+        ...(input.stack ? { stack: input.stack } : {})
+      };
+    }
+    if (input instanceof Date) {
+      return input.toISOString();
+    }
+    if (typeof input !== "object") {
+      return String(input);
+    }
+    if (seen.has(input)) {
+      truncated = true;
+      return "[circular]";
+    }
+    if (depth >= PREVIEW_MAX_DEPTH) {
+      truncated = true;
+      return Array.isArray(input) ? "[array]" : "[object]";
+    }
+
+    seen.add(input);
+    if (Array.isArray(input)) {
+      const items = input
+        .slice(0, PREVIEW_MAX_ARRAY_ITEMS)
+        .map((item) => preview(item, depth + 1));
+      if (input.length > PREVIEW_MAX_ARRAY_ITEMS) {
+        truncated = true;
+        items.push(`[${input.length - PREVIEW_MAX_ARRAY_ITEMS} more items]`);
+      }
+      seen.delete(input);
+      return items;
+    }
+
+    const entries = Object.entries(input as Record<string, unknown>);
+    const result: Record<string, unknown> = {};
+    for (const [key, nested] of entries.slice(0, PREVIEW_MAX_OBJECT_KEYS)) {
+      result[key] = preview(nested, depth + 1);
+    }
+    if (entries.length > PREVIEW_MAX_OBJECT_KEYS) {
+      truncated = true;
+      result.__truncatedKeys = entries.length - PREVIEW_MAX_OBJECT_KEYS;
+    }
+    seen.delete(input);
+    return result;
+  };
+
+  try {
+    return {
+      kind: "value",
+      value: preview(value, 0),
+      ...(truncated ? { truncated: true } : {})
+    };
+  } catch (error) {
+    return {
+      kind: "error",
+      message: error instanceof Error ? error.message : String(error),
+      truncated: true
+    };
+  }
+}
 
 export function fieldExpression(tableAlias: string, field: string): string {
   const prefix = tableAlias ? `${tableAlias}.` : "";

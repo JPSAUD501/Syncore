@@ -463,19 +463,33 @@ function countRuntimeEvents(events: SyncoreDevtoolsEvent[]) {
 function getEventDedupKey(event: SyncoreDevtoolsEvent): string {
   switch (event.type) {
     case "mutation.committed":
-      return `${event.type}:${event.runtimeId}:${event.mutationId}`;
+      return `${event.type}:${event.runtimeId}:${event.executionId ?? event.mutationId}`;
     case "action.completed":
-      return `${event.type}:${event.runtimeId}:${event.actionId}`;
+      return `${event.type}:${event.runtimeId}:${event.executionId ?? event.actionId}`;
     case "query.executed":
+      return event.executionId
+        ? `${event.type}:${event.runtimeId}:${event.executionId}`
+        : [
+            event.type,
+            event.runtimeId,
+            event.functionName,
+            event.timestamp,
+            event.durationMs,
+            JSON.stringify(event.dependencies),
+            event.origin ?? "app"
+          ].join(":");
+    case "query.invalidated":
       return [
         event.type,
         event.runtimeId,
-        event.functionName,
-        event.timestamp,
-        event.durationMs,
-        JSON.stringify(event.dependencies),
-        event.origin ?? "app"
+        event.queryId,
+        event.causedByExecutionId ?? event.reason,
+        event.rerunExecutionId ?? event.timestamp
       ].join(":");
+    case "scheduler.tick":
+      return event.executionId
+        ? `${event.type}:${event.runtimeId}:${event.executionId}`
+        : `${event.type}:${event.runtimeId}:${event.timestamp}:${event.executedJobIds.join(",")}`;
     case "log":
       return [
         event.type,
@@ -492,6 +506,48 @@ function getEventDedupKey(event: SyncoreDevtoolsEvent): string {
     default:
       return JSON.stringify(event);
   }
+}
+
+function getExecutionIdForOrdering(event: SyncoreDevtoolsEvent): string | null {
+  if ("executionId" in event && event.executionId) {
+    return event.executionId;
+  }
+  if (event.type === "mutation.committed") {
+    return event.mutationId;
+  }
+  if (event.type === "action.completed") {
+    return event.actionId;
+  }
+  return null;
+}
+
+function getParentExecutionIdForOrdering(event: SyncoreDevtoolsEvent): string | null {
+  if ("parentExecutionId" in event && event.parentExecutionId) {
+    return event.parentExecutionId;
+  }
+  if (event.type === "query.invalidated" && event.causedByExecutionId) {
+    return event.causedByExecutionId;
+  }
+  return null;
+}
+
+function compareEventsForTimeline(
+  left: SyncoreDevtoolsEvent,
+  right: SyncoreDevtoolsEvent
+): number {
+  const leftExecutionId = getExecutionIdForOrdering(left);
+  const rightExecutionId = getExecutionIdForOrdering(right);
+  const leftParentExecutionId = getParentExecutionIdForOrdering(left);
+  const rightParentExecutionId = getParentExecutionIdForOrdering(right);
+
+  if (leftExecutionId && rightParentExecutionId === leftExecutionId) {
+    return -1;
+  }
+  if (rightExecutionId && leftParentExecutionId === rightExecutionId) {
+    return 1;
+  }
+
+  return right.timestamp - left.timestamp;
 }
 
 function prependUniqueEvents(
@@ -1213,7 +1269,7 @@ export function useSelectedTargetEvents(): SyncoreDevtoolsEvent[] {
         .flatMap((runtime) =>
           runtimeIds.has(runtime.runtimeId) ? runtime.events : []
         )
-        .sort((left, right) => right.timestamp - left.timestamp)
+        .sort(compareEventsForTimeline)
         .slice(0, MAX_EVENTS);
     })
   );

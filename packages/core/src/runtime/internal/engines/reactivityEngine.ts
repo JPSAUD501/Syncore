@@ -12,6 +12,7 @@ import type {
   SyncoreWatch
 } from "../../runtime.js";
 import { DevtoolsEngine } from "./devtoolsEngine.js";
+import { generateId } from "../../id.js";
 import type {
   ActiveQueryRecord,
   DependencyKey
@@ -26,7 +27,8 @@ type ReactivityEngineDeps = {
   devtools: DevtoolsEngine;
   runQuery: <TResult>(
     reference: FunctionReference<"query", unknown, TResult>,
-    args: JsonObject
+    args: JsonObject,
+    meta?: { executionId?: string; parentExecutionId?: string }
   ) => Promise<TResult>;
   collectQueryDependencies: (
     functionName: string,
@@ -152,19 +154,18 @@ export class ReactivityEngine {
 
   async refreshQueriesForScopes(
     scopes: Iterable<ImpactScope>,
-    reason: string
-  ): Promise<void> {
+    reason: string,
+    cause?: { executionId?: string }
+  ): Promise<string[]> {
     const scopeSet = new Set(scopes);
     if (scopeSet.size === 0) {
-      return;
+      return [];
     }
-    for (const query of this.activeQueries.values()) {
-      const needsRefresh = [...scopeSet].some((scope) =>
-        query.dependencyKeys.has(scope)
-      );
-      if (!needsRefresh) {
-        continue;
-      }
+    const invalidatedQueryIds: string[] = [];
+    for (const { query, matchedScopes } of this.getInvalidatedQueriesForScopes(
+      scopeSet
+    )) {
+      const rerunExecutionId = generateReactivityExecutionId();
       this.deps.devtools.emit({
         type: "query.invalidated",
         runtimeId: this.deps.runtimeId,
@@ -176,10 +177,25 @@ export class ReactivityEngine {
             }
           : {}),
         reason,
+        ...(cause?.executionId ? { causedByExecutionId: cause.executionId } : {}),
+        changedScopes: [...scopeSet],
+        matchedScopes,
+        rerunExecutionId,
         timestamp: Date.now()
       });
-      await this.rerunActiveQuery(query);
+      invalidatedQueryIds.push(query.id);
+      await this.rerunActiveQuery(query, {
+        executionId: rerunExecutionId,
+        ...(cause?.executionId ? { parentExecutionId: cause.executionId } : {})
+      });
     }
+    return invalidatedQueryIds;
+  }
+
+  getInvalidatedQueryIdsForScopes(scopes: Iterable<ImpactScope>): string[] {
+    return this.getInvalidatedQueriesForScopes(new Set(scopes)).map(
+      ({ query }) => query.id
+    );
   }
 
   async publishExternalChange(
@@ -221,12 +237,16 @@ export class ReactivityEngine {
     );
   }
 
-  private async rerunActiveQuery(record: ActiveQueryRecord): Promise<void> {
+  private async rerunActiveQuery(
+    record: ActiveQueryRecord,
+    meta?: { executionId?: string; parentExecutionId?: string }
+  ): Promise<void> {
     record.dependencyKeys.clear();
     try {
       const result = await this.deps.runQuery(
         { kind: "query", name: record.functionName },
-        record.args
+        record.args,
+        meta
       );
       record.lastResult = result;
       record.lastError = undefined;
@@ -241,6 +261,20 @@ export class ReactivityEngine {
     for (const listener of record.listeners) {
       listener();
     }
+  }
+
+  private getInvalidatedQueriesForScopes(scopeSet: Set<ImpactScope>): Array<{
+    query: ActiveQueryRecord;
+    matchedScopes: ImpactScope[];
+  }> {
+    return [...this.activeQueries.values()]
+      .map((query) => ({
+        query,
+        matchedScopes: [...scopeSet].filter((scope) =>
+          query.dependencyKeys.has(scope)
+        )
+      }))
+      .filter(({ matchedScopes }) => matchedScopes.length > 0);
   }
 
   private async handleExternalChangeEvent(
@@ -300,6 +334,10 @@ export class ReactivityEngine {
   private createActiveQueryKey(name: string, args: JsonObject): string {
     return `${name}:${stableStringify(args)}`;
   }
+}
+
+function generateReactivityExecutionId(): string {
+  return generateId();
 }
 
 function resolveChangedScopes(

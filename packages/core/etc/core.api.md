@@ -363,6 +363,10 @@ export interface ExecutionResult<TResult = unknown> {
     changedTables: Set<string>;
     // (undocumented)
     devtoolsEvents: SyncoreDevtoolsEvent[];
+    // Warning: (ae-forgotten-export) The symbol "DocumentChangePreview" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
+    documentChanges: DocumentChangePreview[];
     // (undocumented)
     externalChangeRequests: Array<{
         scope: SyncoreExternalChangeScope;
@@ -1312,12 +1316,21 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     dependencies: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    readScopes?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "query.invalidated";
     queryId: string;
     componentPath?: string;
     componentName?: string;
     reason: string;
+    causedByExecutionId?: string;
+    changedScopes?: string[];
+    matchedScopes?: string[];
+    rerunExecutionId?: string;
 }) | (SyncoreDevtoolsEventBase & {
     type: "mutation.committed";
     mutationId: string;
@@ -1326,6 +1339,14 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     changedTables: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "action.completed";
     actionId: string;
@@ -1334,9 +1355,28 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     durationMs: number;
     error?: string;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "scheduler.tick";
     executedJobIds: string[];
+    executionId?: string;
+    jobExecutions?: Array<{
+        jobId: string;
+        executionId?: string;
+        functionName: string;
+        functionType: "mutation" | "action";
+        argsPreview?: DevtoolsPreview;
+        resultPreview?: DevtoolsPreview;
+        error?: string;
+        durationMs?: number;
+    }>;
 }) | (SyncoreDevtoolsEventBase & {
     type: "storage.updated";
     storageId: string;
@@ -1971,6 +2011,10 @@ export type ValidatorKind = "string" | "number" | "boolean" | "literal" | "enum"
 
 // @public (undocumented)
 export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
+
+// Warnings were encountered during analysis:
+//
+// D:/GitHub/Syncore/packages/devtools-protocol/src/index.ts:99:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
 
 // (No @packageDocumentation comment for this package)
 

@@ -27,6 +27,64 @@ export interface DataFilter {
 }
 
 // @public (undocumented)
+export type DevtoolsPreview = {
+    kind: "value";
+    value: unknown;
+    truncated?: boolean;
+    note?: string;
+} | {
+    kind: "error";
+    message: string;
+    truncated?: boolean;
+};
+
+// @public (undocumented)
+export interface DocumentChangePreview {
+    // (undocumented)
+    afterPreview?: DevtoolsPreview;
+    // (undocumented)
+    beforePreview?: DevtoolsPreview;
+    // (undocumented)
+    fields?: string[];
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    operation: "insert" | "patch" | "replace" | "delete";
+    // (undocumented)
+    table: string;
+}
+
+// @public (undocumented)
+export interface ExecutionTrace {
+    // (undocumented)
+    argsPreview?: DevtoolsPreview;
+    // (undocumented)
+    changedDocumentsPreview?: DocumentChangePreview[];
+    // (undocumented)
+    changedScopes?: string[];
+    // (undocumented)
+    error?: string;
+    // (undocumented)
+    executionId: string;
+    // (undocumented)
+    functionName?: string;
+    // (undocumented)
+    invalidatedQueryIds?: string[];
+    // (undocumented)
+    kind: "query" | "mutation" | "action" | "scheduler" | "dashboard";
+    // (undocumented)
+    parentExecutionId?: string;
+    // (undocumented)
+    readScopes?: string[];
+    // (undocumented)
+    resultPreview?: DevtoolsPreview;
+    // (undocumented)
+    schedulerJobId?: string;
+    // (undocumented)
+    writeScopes?: string[];
+}
+
+// @public (undocumented)
 export interface FunctionDefinition {
     args?: Record<string, unknown>;
     // (undocumented)
@@ -46,6 +104,18 @@ export interface FunctionDefinition {
     type: "query" | "mutation" | "action";
     // (undocumented)
     visibility?: "public" | "internal";
+}
+
+// @public (undocumented)
+export interface InvalidationCause {
+    // (undocumented)
+    changedScopes: string[];
+    // (undocumented)
+    executionId?: string;
+    // (undocumented)
+    matchedScopes: string[];
+    // (undocumented)
+    reason: string;
 }
 
 // @public (undocumented)
@@ -213,6 +283,9 @@ export type SyncoreDevtoolsCommandPayload = {
     table: string;
     id: string;
 } | {
+    kind: "data.export";
+    tables?: string[];
+} | {
     kind: "sql.read";
     query: string;
 } | {
@@ -240,6 +313,14 @@ export type SyncoreDevtoolsCommandResultPayload = {
     kind: "data.mutate.result";
     success: boolean;
     id?: string;
+    error?: string;
+} | {
+    kind: "data.export.result";
+    tables: Array<{
+        name: string;
+        rows: Record<string, unknown>[];
+        totalCount: number;
+    }>;
     error?: string;
 } | {
     kind: "sql.read.result";
@@ -283,12 +364,21 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     dependencies: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    readScopes?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "query.invalidated";
     queryId: string;
     componentPath?: string;
     componentName?: string;
     reason: string;
+    causedByExecutionId?: string;
+    changedScopes?: string[];
+    matchedScopes?: string[];
+    rerunExecutionId?: string;
 }) | (SyncoreDevtoolsEventBase & {
     type: "mutation.committed";
     mutationId: string;
@@ -297,6 +387,14 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     changedTables: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "action.completed";
     actionId: string;
@@ -305,9 +403,28 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     durationMs: number;
     error?: string;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "scheduler.tick";
     executedJobIds: string[];
+    executionId?: string;
+    jobExecutions?: Array<{
+        jobId: string;
+        executionId?: string;
+        functionName: string;
+        functionType: "mutation" | "action";
+        argsPreview?: DevtoolsPreview;
+        resultPreview?: DevtoolsPreview;
+        error?: string;
+        durationMs?: number;
+    }>;
 }) | (SyncoreDevtoolsEventBase & {
     type: "storage.updated";
     storageId: string;

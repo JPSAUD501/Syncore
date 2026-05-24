@@ -32,12 +32,13 @@ import {
 import { EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { usePreferredTarget } from "@/hooks";
+import { useDevtools, usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { getPublicRuntimeId, useActiveRuntime } from "@/lib/store";
 import { sendRequest } from "@/lib/store";
 import { parseEditableCellValue, toEditableCellText } from "@/lib/dataValue";
 import { cn } from "@/lib/utils";
+import { documentTraceKey } from "@/lib/traces";
 import type { DataFilter } from "@syncore/devtools-protocol";
 import {
   Download,
@@ -56,6 +57,7 @@ export const Route = createLazyFileRoute("/data")({
 
 function DataPage() {
   const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
+  const { traceIndex } = useDevtools();
   const activeRuntime = useActiveRuntime();
   const { pushToast } = useToast();
 
@@ -82,12 +84,30 @@ function DataPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteManyOpen, setConfirmDeleteManyOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [databaseImportOpen, setDatabaseImportOpen] = useState(false);
   const [importSeedText, setImportSeedText] = useState<string | undefined>(
     undefined
   );
   const [mobileTablesOpen, setMobileTablesOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
+  const rowTraceLabels = useMemo(() => {
+    if (!selectedTable) {
+      return {};
+    }
+    const labels: Record<string, string> = {};
+    for (const row of rows) {
+      const id = getDocumentId(row);
+      if (!id) {
+        continue;
+      }
+      const trace = traceIndex.byDocument.get(documentTraceKey(selectedTable, id))?.[0];
+      if (trace) {
+        labels[id] = trace.functionName ?? trace.kind;
+      }
+    }
+    return labels;
+  }, [rows, selectedTable, traceIndex]);
 
   /* ---------------------------------------------------------------- */
   /*  Reactive schema fetch                                            */
@@ -325,6 +345,70 @@ function DataPage() {
       description: `${selectedRows.length} selected row${selectedRows.length === 1 ? "" : "s"} exported.`
     });
   }, [pushToast, rows, selectedRowIds, selectedTable]);
+
+  const handleExportDatabase = useCallback(async () => {
+    if (!targetRuntimeId || tableList.length === 0) return;
+    const res = await sendRequest(
+      {
+        kind: "data.export",
+        tables: tableList.map((table) => table.name)
+      },
+      { targetRuntimeId }
+    );
+    if (res.kind !== "data.export.result") {
+      throw new Error("Unexpected export response.");
+    }
+    if (res.error) {
+      throw new Error(res.error);
+    }
+
+    const payload = {
+      format: "syncore.devtools.export.v1",
+      exportedAt: new Date().toISOString(),
+      tables: res.tables
+    };
+    downloadJson(payload, "syncore-database-export.json");
+    const totalRows = res.tables.reduce(
+      (total, table) => total + table.rows.length,
+      0
+    );
+    pushToast({
+      tone: "info",
+      title: "Database export ready",
+      description: `${res.tables.length} table${res.tables.length === 1 ? "" : "s"} and ${totalRows} row${totalRows === 1 ? "" : "s"} exported.`
+    });
+  }, [pushToast, tableList, targetRuntimeId]);
+
+  const handleImportDatabase = useCallback(
+    async (tables: Array<{ name: string; rows: Record<string, unknown>[] }>) => {
+      if (!targetRuntimeId) return;
+      let importedRows = 0;
+      for (const table of tables) {
+        for (const row of table.rows) {
+          const res = await sendRequest(
+            {
+              kind: "data.insert",
+              table: table.name,
+              document: stripSystemFields(row)
+            },
+            { targetRuntimeId }
+          );
+          if (res.kind === "data.mutate.result" && !res.success) {
+            throw new Error(
+              res.error ?? `Failed to import into ${table.name}.`
+            );
+          }
+          importedRows += 1;
+        }
+      }
+      pushToast({
+        tone: "success",
+        title: "Database import complete",
+        description: `${importedRows} row${importedRows === 1 ? "" : "s"} imported into ${tables.length} table${tables.length === 1 ? "" : "s"}.`
+      });
+    },
+    [pushToast, targetRuntimeId]
+  );
 
   const handleDuplicateMany = useCallback(async () => {
     const selectedSet = new Set(selectedRowIds);
@@ -620,6 +704,37 @@ function DataPage() {
                 <Button
                   variant="ghost"
                   size="xs"
+                  className="gap-1"
+                  onClick={() => setDatabaseImportOpen(true)}
+                  disabled={!targetRuntimeId}
+                  title="Import multiple tables"
+                >
+                  <Upload size={11} />
+                  Import DB
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="gap-1"
+                  onClick={() => {
+                    void handleExportDatabase().catch((err) => {
+                      pushToast({
+                        tone: "error",
+                        title: "Database export failed",
+                        description:
+                          err instanceof Error ? err.message : "Unknown error"
+                      });
+                    });
+                  }}
+                  disabled={!targetRuntimeId || tableList.length === 0}
+                  title="Export all tables"
+                >
+                  <Download size={11} />
+                  Export DB
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
                   className="gap-1 hidden sm:inline-flex"
                   onClick={() => setShortcutsOpen(true)}
                 >
@@ -784,6 +899,7 @@ function DataPage() {
                           onCellEdit={(rowId, field, value) => {
                             void handleFieldEdit(rowId, field, value);
                           }}
+                          rowTraceLabels={rowTraceLabels}
                           className="h-full rounded-md border border-border bg-bg-base"
                         />
                       )}
@@ -895,6 +1011,12 @@ function DataPage() {
         tableName={selectedTable}
         initialText={importSeedText}
         onImport={handleImport}
+      />
+
+      <ImportDatabaseDialog
+        open={databaseImportOpen}
+        onOpenChange={setDatabaseImportOpen}
+        onImport={handleImportDatabase}
       />
 
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
@@ -1143,11 +1265,187 @@ function TableDirectory({
   );
 }
 
+function ImportDatabaseDialog({
+  open,
+  onOpenChange,
+  onImport
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onImport: (
+    tables: Array<{ name: string; rows: Record<string, unknown>[] }>
+  ) => Promise<void>;
+}) {
+  const [text, setText] = useState(
+    '{\n  "format": "syncore.devtools.export.v1",\n  "tables": []\n}'
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setText('{\n  "format": "syncore.devtools.export.v1",\n  "tables": []\n}');
+      setError(null);
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const handleImport = async () => {
+    setError(null);
+    let tables: Array<{ name: string; rows: Record<string, unknown>[] }>;
+    try {
+      tables = parseDatabaseImportText(text);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid import payload.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await onImport(tables);
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Import Database</DialogTitle>
+          <DialogDescription>
+            Paste a Syncore database export or a JSON object whose keys are table
+            names and values are document arrays.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="rounded-md border border-border bg-bg-base/70 p-2">
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              spellCheck={false}
+              className="min-h-[320px] w-full resize-y bg-transparent px-2 py-1 font-mono text-[12px] leading-6 text-text-code outline-none placeholder:text-text-tertiary"
+              placeholder='{
+  "tasks": [{ "text": "Ship" }],
+  "projects": [{ "name": "Syncore" }]
+}'
+            />
+          </div>
+
+          <div className="rounded-md border border-accent/15 bg-accent/5 px-3 py-2 text-[11px] text-text-secondary">
+            System fields like{" "}
+            <span className="font-mono text-text-primary">_id</span> and{" "}
+            <span className="font-mono text-text-primary">_creationTime</span>{" "}
+            are ignored on import, matching single-table imports.
+          </div>
+
+          {error && (
+            <div className="rounded-md border border-error/20 bg-error/5 px-3 py-2 text-[11px] text-error">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button onClick={() => void handleImport()} disabled={submitting}>
+            {submitting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Upload size={14} />
+            )}
+            Import database
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function parseDatabaseImportText(
+  text: string
+): Array<{ name: string; rows: Record<string, unknown>[] }> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("Paste a database export or table map to import.");
+  }
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Database import payload must be a JSON object.");
+  }
+  const payload = parsed as Record<string, unknown>;
+
+  if (Array.isArray(payload.tables)) {
+    return payload.tables.map((entry, index) => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        throw new Error(`tables[${index}] must be an object.`);
+      }
+      const table = entry as Record<string, unknown>;
+      if (typeof table.name !== "string" || !table.name.trim()) {
+        throw new Error(`tables[${index}].name must be a table name.`);
+      }
+      if (!Array.isArray(table.rows)) {
+        throw new Error(`tables[${index}].rows must be an array.`);
+      }
+      return {
+        name: table.name,
+        rows: table.rows.map((row, rowIndex) =>
+          assertImportDocument(row, `${table.name}[${rowIndex}]`)
+        )
+      };
+    });
+  }
+
+  return Object.entries(payload).map(([name, value]) => {
+    if (!Array.isArray(value)) {
+      throw new Error(`${name} must be an array of documents.`);
+    }
+    return {
+      name,
+      rows: value.map((row, rowIndex) =>
+        assertImportDocument(row, `${name}[${rowIndex}]`)
+      )
+    };
+  });
+}
+
+function assertImportDocument(
+  value: unknown,
+  label: string
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+  return value as Record<string, unknown>;
+}
+
 function stripSystemFields(document: Record<string, unknown>) {
   const next = { ...document };
   delete next._id;
   delete next._creationTime;
   return next;
+}
+
+function downloadJson(value: unknown, filename: string): void {
+  const blob = new Blob([JSON.stringify(value, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function getDocumentId(document: Record<string, unknown>): string {

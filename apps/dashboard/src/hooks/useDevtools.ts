@@ -14,6 +14,7 @@ import {
   filterActivityEvents,
   summarizeActivityEvents
 } from "@/lib/activity";
+import { buildTraceIndex, type TraceIndex } from "@/lib/traces";
 
 interface DevtoolsStateSnapshot {
   connected: boolean;
@@ -40,6 +41,7 @@ interface DevtoolsStateSnapshot {
     errorRate: number;
   }>;
   eventSparkline: number[];
+  traceIndex: TraceIndex;
 }
 
 /**
@@ -63,6 +65,7 @@ export function useDevtools(): DevtoolsStateSnapshot {
     [targetEvents, includeDashboardActivity]
   );
   const counts = useMemo(() => summarizeActivityEvents(events), [events]);
+  const traceIndex = useMemo(() => buildTraceIndex(events), [events]);
   const clearEvents = useDevtoolsStore((s) => s.clearEvents);
 
   const functionEvents = useMemo(() => {
@@ -154,6 +157,7 @@ export function useDevtools(): DevtoolsStateSnapshot {
     clearEvents,
     functionEvents,
     functionMetrics,
-    eventSparkline
+    eventSparkline,
+    traceIndex
   };
 }

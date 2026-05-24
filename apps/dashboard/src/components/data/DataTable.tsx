@@ -13,6 +13,7 @@ interface DataTableProps {
   onToggleRowSelection?: (rowId: string) => void;
   onToggleAllRows?: (rowIds: string[], checked: boolean) => void;
   onCellEdit?: (rowId: string, field: string, value: unknown) => void;
+  rowTraceLabels?: Record<string, string>;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ export function DataTable({
   onToggleRowSelection,
   onToggleAllRows,
   onCellEdit,
+  rowTraceLabels = {},
   className
 }: DataTableProps) {
   const [editingCell, setEditingCell] = useState<{
@@ -84,6 +86,7 @@ export function DataTable({
             const isChecked = selectedIds.has(rowId);
             const rowChanged = isChanged(rowId);
             const rowNew = isNew(rowId);
+            const traceLabel = rowTraceLabels[rowId];
             const changePulse = getChangePulse(rowId);
             const newPulse = getNewPulse(rowId);
 
@@ -104,7 +107,8 @@ export function DataTable({
                   rowNew &&
                     (newPulse % 2 === 0
                       ? "animate-fade-in-a"
-                      : "animate-fade-in-b")
+                      : "animate-fade-in-b"),
+                  traceLabel && "shadow-[inset_2px_0_0_0_var(--color-info)]"
                 )}
               >
                 <div
@@ -119,7 +123,7 @@ export function DataTable({
                     aria-label={`Select row ${rowId}`}
                   />
                 </div>
-                {columns.map((col) => (
+                {columns.map((col, columnIndex) => (
                   <div
                     key={col}
                     onDoubleClick={(e) => {
@@ -150,7 +154,14 @@ export function DataTable({
                         }}
                       />
                     ) : (
-                      <CellValue field={col} value={row[col]} />
+                      <div className="min-w-0">
+                        <CellValue field={col} value={row[col]} />
+                        {columnIndex === 0 && traceLabel && (
+                          <div className="mt-1 truncate text-[10px] text-info">
+                            Last changed by {traceLabel}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}

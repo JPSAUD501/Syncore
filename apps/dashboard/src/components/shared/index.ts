@@ -8,3 +8,4 @@ export { JsonViewer } from "./JsonViewer";
 export { EmptyState } from "./EmptyState";
 export { Sparkline } from "./Sparkline";
 export { TimestampCell } from "./TimestampCell";
+export { TraceDetailPanel } from "./TraceDetailPanel";

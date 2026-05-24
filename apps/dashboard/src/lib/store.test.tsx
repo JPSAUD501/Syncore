@@ -17,6 +17,7 @@ import {
   useSelectedRuntimeFilter,
   useSelectedTarget,
   useSelectedTargetRuntimes,
+  useSelectedTargetEvents,
   useSelectedRuntimeConnected
 } from "./store";
 import { useConnection } from "@/hooks/useConnection";
@@ -272,6 +273,52 @@ describe("devtools store runtime selection", () => {
     expect(runtime?.events[1]?.type).toBe("query.executed");
     expect(runtime?.mutationCount).toBe(1);
     expect(runtime?.queryCount).toBe(1);
+  });
+
+  it("orders causative executions before their query reruns", () => {
+    useDevtoolsStore.getState()._handleMessage({
+      type: "hello",
+      runtimeId: "runtime-old",
+      platform: "browser-worker",
+      targetKind: "client",
+      appName: "localhost",
+      origin: "http://localhost:3000",
+      storageIdentity: "idb://workspace"
+    });
+    useDevtoolsStore.getState()._handleMessage({
+      type: "event.batch",
+      runtimeId: "runtime-old",
+      events: [
+        {
+          type: "query.executed",
+          runtimeId: "runtime-old",
+          queryId: "tasks/list",
+          functionName: "tasks/list",
+          executionId: "query-rerun",
+          parentExecutionId: "mutation-1",
+          dependencies: [],
+          durationMs: 1,
+          timestamp: 12
+        },
+        {
+          type: "mutation.committed",
+          runtimeId: "runtime-old",
+          mutationId: "mutation-1",
+          functionName: "tasks:update",
+          executionId: "mutation-1",
+          changedTables: ["tasks"],
+          durationMs: 4,
+          timestamp: 10
+        }
+      ]
+    });
+
+    const { result } = renderHook(() => useSelectedTargetEvents());
+
+    expect(result.current.map((event) => event.type)).toEqual([
+      "mutation.committed",
+      "query.executed"
+    ]);
   });
 
   it("ignores duplicate live events for the same runtime", () => {

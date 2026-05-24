@@ -1,4 +1,8 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import {
+  createLazyFileRoute,
+  useNavigate,
+  useSearch
+} from "@tanstack/react-router";
 import {
   getRuntimeLabel,
   useRuntimeList,
@@ -15,7 +19,8 @@ import {
   Pause,
   Play,
   Filter,
-  X
+  X,
+  CornerDownRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,11 +36,20 @@ import {
   EVENT_ICONS,
   EVENT_LABELS,
   type EventType,
-  getEventDetailRows,
   getEventDuration,
   getEventRuntimeTag,
   getEventSummary
 } from "@/lib/eventPresentation";
+import { TraceDetailPanel } from "@/components/shared";
+import type { ExecutionTrace } from "@syncore/devtools-protocol";
+import type { TraceIndex } from "@/lib/traces";
+import {
+  buildInvalidationsByQueryId,
+  formatInvalidationTitle,
+  getInvalidationsForQuery,
+  isVisibleActivityEvent,
+  type QueryInvalidationEvent
+} from "@/lib/queryInvalidations";
 
 export const Route = createLazyFileRoute("/logs")({
   component: LogsPage
@@ -69,13 +83,17 @@ function LogEntry({
   isSelected,
   onClick,
   isNew,
-  runtimeMap
+  runtimeMap,
+  invalidations,
+  isCausalChild
 }: {
   event: SyncoreDevtoolsEvent;
   isSelected: boolean;
   onClick: () => void;
   isNew: boolean;
   runtimeMap: Map<string, { label: string; publicId: string }>;
+  invalidations: QueryInvalidationEvent[];
+  isCausalChild: boolean;
 }) {
   const color = EVENT_COLORS[event.type];
   const Icon = EVENT_ICONS[event.type];
@@ -91,11 +109,19 @@ function LogEntry({
       className={cn(
         "flex items-center gap-2.5 w-full px-4 py-2 text-left transition-colors outline-none",
         "hover:bg-bg-elevated/50",
+        isCausalChild && "pl-8 bg-bg-base/40",
         isSelected && "bg-bg-elevated border-l-2 border-l-accent",
         errored && "bg-error/3",
         isNew && "animate-fade-in"
       )}
     >
+      {isCausalChild && (
+        <CornerDownRight
+          size={12}
+          className="shrink-0 text-text-tertiary"
+          aria-hidden="true"
+        />
+      )}
       <Icon size={12} className={cn(color, "shrink-0")} />
       <Badge
         variant={EVENT_BADGE_VARIANTS[event.type]}
@@ -112,6 +138,15 @@ function LogEntry({
       <span className="text-[12px] text-text-secondary font-mono truncate flex-1">
         {summary}
       </span>
+      {invalidations.length > 0 && (
+        <Badge
+          variant="secondary"
+          className="shrink-0 text-[10px]"
+          title={formatInvalidationTitle(invalidations)}
+        >
+          Rerun
+        </Badge>
+      )}
       {duration && (
         <span className="text-[11px] text-text-tertiary font-mono shrink-0 tabular-nums">
           {duration}
@@ -129,100 +164,14 @@ function LogEntry({
 /*  Detail panel                                                       */
 /* ------------------------------------------------------------------ */
 
-function LogDetail({
-  event,
-  runtimeMap
-}: {
-  event: SyncoreDevtoolsEvent;
-  runtimeMap: Map<string, { label: string; publicId: string }>;
-}) {
-  return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-center gap-2">
-        <Badge variant={EVENT_BADGE_VARIANTS[event.type]}>
-          {EVENT_LABELS[event.type]}
-        </Badge>
-        <Badge variant="outline">{getEventRuntimeTag(event, runtimeMap)}</Badge>
-        <span className="text-[11px] text-text-tertiary">
-          {new Date(event.timestamp).toLocaleString()}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-2 text-[12px]">
-        {getEventDetailRows(event).map((row) => (
-          <DetailRow
-            key={`${event.type}-${row.label}`}
-            label={row.label}
-            value={row.value}
-            {...(row.mono ? { mono: true } : {})}
-            {...(row.error ? { error: true } : {})}
-          />
-        ))}
-        {event.type === "runtime.connected" && (
-          <>
-            <DetailRow
-              label="Runtime ID"
-              value={getEventRuntimeTag(event, runtimeMap)}
-              mono
-            />
-            <DetailRow label="Platform" value={event.platform} />
-          </>
-        )}
-        {event.type === "runtime.disconnected" && (
-          <DetailRow
-            label="Runtime ID"
-            value={getEventRuntimeTag(event, runtimeMap)}
-            mono
-          />
-        )}
-        {event.type === "log" && (
-          <>
-            <DetailRow label="Level" value={event.level} />
-            <div className="mt-2 p-3 rounded-md bg-bg-base border border-border">
-              <pre className="font-mono text-[12px] text-text-primary whitespace-pre-wrap break-all">
-                {event.message}
-              </pre>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  mono,
-  error
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  error?: boolean;
-}) {
-  return (
-    <div className="flex gap-3">
-      <span className="text-text-tertiary w-28 shrink-0">{label}</span>
-      <span
-        className={cn(
-          "text-text-secondary break-all",
-          mono && "font-mono",
-          error && "text-error"
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
 export function LogsPage() {
-  const { events } = useDevtools();
+  const { events, traceIndex } = useDevtools();
+  const navigate = useNavigate();
+  const logSearch = useSearch({ from: "/logs" });
   const runtimes = useRuntimeList();
   const includeDashboardActivity = useDevtoolsStore(
     (state) => state.includeDashboardActivity
@@ -259,11 +208,21 @@ export function LogsPage() {
 
   // When paused, buffer events
   const displayEvents = paused ? pausedEvents : filteredActivityEvents;
+  const visibleDisplayEvents = useMemo(
+    () => displayEvents.filter(isVisibleActivityEvent),
+    [displayEvents]
+  );
+  const invalidationsByQueryId = useMemo(
+    () => buildInvalidationsByQueryId(displayEvents),
+    [displayEvents]
+  );
 
   useEffect(() => {
     if (!paused) {
       setPausedEvents(filteredActivityEvents);
-      prevCountRef.current = filteredActivityEvents.length;
+      prevCountRef.current = filteredActivityEvents.filter(
+        isVisibleActivityEvent
+      ).length;
     }
   }, [paused, filteredActivityEvents]);
 
@@ -274,7 +233,7 @@ export function LogsPage() {
 
   // Filter events
   const filteredEvents = useMemo(() => {
-    let result = displayEvents;
+    let result = visibleDisplayEvents;
 
     if (activeFilters.size > 0) {
       result = result.filter((e: SyncoreDevtoolsEvent) =>
@@ -291,7 +250,7 @@ export function LogsPage() {
     }
 
     return result;
-  }, [displayEvents, activeFilters, searchText]);
+  }, [visibleDisplayEvents, activeFilters, searchText]);
 
   const toggleFilter = useCallback((type: EventType) => {
     setActiveFilters((prev) => {
@@ -307,12 +266,64 @@ export function LogsPage() {
 
   const selectedEvent =
     selectedIndex !== null ? (filteredEvents[selectedIndex] ?? null) : null;
+  const selectedTrace = selectedEvent
+    ? getTraceForEvent(selectedEvent, traceIndex)
+    : null;
+  const selectedInvalidations = selectedTrace?.executionId
+    ? (traceIndex.invalidationsByCause.get(selectedTrace.executionId) ?? [])
+    : [];
+  const selectedInvalidatedBy =
+    selectedEvent?.type === "query.executed"
+      ? getInvalidationsForQuery(selectedEvent, invalidationsByQueryId).map(
+          (invalidation) => ({
+            invalidation,
+            trace: invalidation.causedByExecutionId
+              ? (traceIndex.byExecutionId.get(invalidation.causedByExecutionId) ??
+                null)
+              : null
+          })
+        )
+      : [];
+  const causingTrace =
+    selectedEvent?.type === "query.invalidated" && selectedEvent.causedByExecutionId
+      ? (traceIndex.byExecutionId.get(selectedEvent.causedByExecutionId) ?? null)
+      : null;
 
   const scrollToBottom = useCallback(() => {
     if (listRef.current) {
       listRef.current.scrollTop = 0;
     }
   }, []);
+
+  const selectExecution = useCallback(
+    (executionId: string) => {
+      const index = filteredEvents.findIndex(
+        (event) => getExecutionIdForEvent(event) === executionId
+      );
+      if (index >= 0) {
+        setSelectedIndex(index);
+      }
+    },
+    [filteredEvents]
+  );
+
+  useEffect(() => {
+    if (!logSearch.executionId) {
+      return;
+    }
+
+    setPaused(false);
+    setSearchText("");
+    setActiveFilters(new Set());
+  }, [logSearch.executionId]);
+
+  useEffect(() => {
+    if (!logSearch.executionId) {
+      return;
+    }
+
+    selectExecution(logSearch.executionId);
+  }, [logSearch.executionId, selectExecution]);
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
@@ -454,18 +465,26 @@ export function LogsPage() {
             </div>
           ) : (
             <div className="divide-y divide-border/50">
-              {filteredEvents.map((event: SyncoreDevtoolsEvent, i: number) => (
-                <LogEntry
-                  key={`${event.type}-${event.timestamp}-${i}`}
-                  event={event}
-                  isSelected={selectedIndex === i}
-                  isNew={i >= knownCount}
-                  runtimeMap={runtimeMap}
-                  onClick={() =>
-                    setSelectedIndex(selectedIndex === i ? null : i)
-                  }
-                />
-              ))}
+              {filteredEvents.map((event: SyncoreDevtoolsEvent, i: number) => {
+                const invalidations =
+                  event.type === "query.executed"
+                    ? getInvalidationsForQuery(event, invalidationsByQueryId)
+                    : [];
+                return (
+                  <LogEntry
+                    key={`${event.type}-${event.timestamp}-${i}`}
+                    event={event}
+                    isSelected={selectedIndex === i}
+                    isNew={i >= knownCount}
+                    runtimeMap={runtimeMap}
+                    invalidations={invalidations}
+                    isCausalChild={invalidations.length > 0}
+                    onClick={() =>
+                      setSelectedIndex(selectedIndex === i ? null : i)
+                    }
+                  />
+                );
+              })}
             </div>
           )}
         </ScrollArea>
@@ -485,10 +504,74 @@ export function LogsPage() {
                 <X size={14} />
               </Button>
             </div>
-            <LogDetail event={selectedEvent} runtimeMap={runtimeMap} />
+            <TraceDetailPanel
+              event={selectedEvent}
+              trace={selectedTrace}
+              invalidations={selectedInvalidations}
+              invalidatedBy={selectedInvalidatedBy}
+              causingTrace={causingTrace}
+              onOpenExecution={selectExecution}
+              onOpenFunction={(functionName) =>
+                void navigate({
+                  to: "/functions",
+                  search: buildFunctionSearch(functionName, selectedTrace)
+                })
+              }
+              onOpenTable={() => void navigate({ to: "/data" })}
+            />
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function buildFunctionSearch(
+  functionName: string,
+  trace: ExecutionTrace | null
+): { fn: string; args?: string } {
+  const args = getTraceArgs(trace);
+  return {
+    fn: functionName,
+    ...(args ? { args: JSON.stringify(args) } : {})
+  };
+}
+
+function getTraceArgs(trace: ExecutionTrace | null): Record<string, unknown> | null {
+  if (
+    trace?.argsPreview?.kind === "value" &&
+    trace.argsPreview.value &&
+    typeof trace.argsPreview.value === "object" &&
+    !Array.isArray(trace.argsPreview.value)
+  ) {
+    return trace.argsPreview.value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function getTraceForEvent(
+  event: SyncoreDevtoolsEvent,
+  traceIndex: TraceIndex
+) {
+  const executionId = getExecutionIdForEvent(event);
+  if (executionId) {
+    return traceIndex.byExecutionId.get(executionId) ?? null;
+  }
+  if (event.type === "query.invalidated" && event.rerunExecutionId) {
+    return traceIndex.byExecutionId.get(event.rerunExecutionId) ?? null;
+  }
+  return null;
+}
+
+function getExecutionIdForEvent(event: SyncoreDevtoolsEvent): string | null {
+  if ("executionId" in event && event.executionId) {
+    return event.executionId;
+  }
+  if (event.type === "mutation.committed") {
+    return event.mutationId;
+  }
+  if (event.type === "action.completed") {
+    return event.actionId;
+  }
+  return null;
 }

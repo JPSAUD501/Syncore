@@ -1,4 +1,5 @@
 import type {
+  DocumentChangePreview,
   SyncoreActiveQueryInfo,
   SyncoreDevtoolsEvent,
   SyncoreDevtoolsEventOrigin,
@@ -96,6 +97,7 @@ export type ImpactSet = ReadonlySet<ImpactScope>;
 export interface ExecutionResult<TResult = unknown> {
   result: TResult;
   changedTables: Set<string>;
+  documentChanges: DocumentChangePreview[];
   storageChanges: Array<{
     storageId: string;
     reason: Extract<SyncoreExternalChangeReason, "storage-put" | "storage-delete">;
@@ -618,6 +620,10 @@ export interface SyncoreRuntimeAdmin<
 
 type DevtoolsEventMeta = {
   origin?: SyncoreDevtoolsEventOrigin;
+  executionId?: string;
+  parentExecutionId?: string;
+  schedulerJobId?: string;
+  schedulerRun?: boolean;
 };
 
 /**

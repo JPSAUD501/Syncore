@@ -2821,8 +2821,8 @@ export async function startDevHub(options: {
       }
       if (message.type === "event" && message.event.runtimeId !== "syncore-dev-hub") {
         const history = runtimeEvents.get(message.event.runtimeId) ?? [];
-        history.unshift(message.event);
-        runtimeEvents.set(message.event.runtimeId, history.slice(0, 200));
+        history.push(message.event);
+        runtimeEvents.set(message.event.runtimeId, history.slice(-200));
         if (message.event.type === "runtime.disconnected") {
           runtimeEvents.delete(message.event.runtimeId);
         }

@@ -1,4 +1,8 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import {
+  createLazyFileRoute,
+  useNavigate,
+  useSearch
+} from "@tanstack/react-router";
 import {
   Code2,
   ChevronRight,
@@ -10,9 +14,11 @@ import {
   Activity,
   Search,
   XCircle,
-  CheckCircle2
+  CheckCircle2,
+  Copy,
+  ExternalLink
 } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -31,6 +37,7 @@ import { useDevtools, usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
+import type { ExecutionTrace } from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/functions")({
   component: FunctionsPage
@@ -52,8 +59,11 @@ interface FunctionRunResult {
 /* ------------------------------------------------------------------ */
 
 function FunctionsPage() {
-  const { functionMetrics, functionEvents } = useDevtools();
+  const { functionMetrics, functionEvents, traceIndex } = useDevtools();
   const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
+  const functionSearch = useSearch({ from: "/functions" });
+  const navigate = useNavigate();
+  const appliedSearchRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<FunctionRunResult>({
@@ -197,11 +207,33 @@ function FunctionsPage() {
     if (!selectedFn) return [];
     return functionEvents.filter((e) => e.functionName === selectedFn);
   }, [functionEvents, selectedFn]);
+  const selectedFnTraces = useMemo(
+    () => (selectedFn ? (traceIndex.byFunctionName.get(selectedFn) ?? []) : []),
+    [selectedFn, traceIndex]
+  );
+  const selectFunction = useCallback(
+    (name: string, options: { clearRouteSearch?: boolean } = {}) => {
+      setSelectedFn(name);
+      setArgsText("{}");
+      setRunResult({ status: "idle" });
+      if (options.clearRouteSearch) {
+        appliedSearchRef.current = null;
+        void navigate({ to: "/functions", search: {}, replace: true });
+      }
+    },
+    [navigate]
+  );
 
   useEffect(() => {
+    if (functionSearch.fn) {
+      return;
+    }
+
     if (allFunctions.length === 0) {
       if (selectedFn !== null) {
         setSelectedFn(null);
+        setArgsText("{}");
+        setRunResult({ status: "idle" });
       }
       return;
     }
@@ -210,33 +242,61 @@ function FunctionsPage() {
       return;
     }
 
-    setSelectedFn(allFunctions[0]!.name);
-  }, [allFunctions, selectedFn]);
+    selectFunction(allFunctions[0]!.name);
+  }, [allFunctions, functionSearch.fn, selectFunction, selectedFn]);
+
+  useEffect(() => {
+    if (!functionSearch.fn) {
+      return;
+    }
+
+    const searchKey = `${functionSearch.fn}\u0000${functionSearch.args ?? ""}`;
+    if (appliedSearchRef.current === searchKey) {
+      return;
+    }
+
+    setSelectedFn(functionSearch.fn);
+    setRunResult({ status: "idle" });
+    if (functionSearch.args) {
+      try {
+        setArgsText(JSON.stringify(JSON.parse(functionSearch.args), null, 2));
+      } catch {
+        setArgsText(functionSearch.args);
+      }
+    } else {
+      setArgsText("{}");
+    }
+    appliedSearchRef.current = searchKey;
+  }, [functionSearch.args, functionSearch.fn]);
 
   /* ---------------------------------------------------------------- */
   /*  Run function                                                     */
   /* ---------------------------------------------------------------- */
 
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async (overrideArgs?: Record<string, unknown>) => {
     if (!selectedFunction || !targetRuntimeId) return;
 
     let args: Record<string, unknown>;
-    try {
-      const parsed = JSON.parse(argsText) as unknown;
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (overrideArgs) {
+      args = overrideArgs;
+    } else {
+      try {
+        const parsed = JSON.parse(argsText) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          setRunResult({
+            status: "error",
+            error: "Arguments must be a JSON object"
+          });
+          return;
+        }
+        args = parsed as Record<string, unknown>;
+      } catch {
         setRunResult({
           status: "error",
-          error: "Arguments must be a JSON object"
+          error: "Invalid JSON in arguments"
         });
         return;
       }
-      args = parsed as Record<string, unknown>;
-    } catch {
-      setRunResult({
-        status: "error",
-        error: "Invalid JSON in arguments"
-      });
-      return;
     }
 
     setRunResult({ status: "running" });
@@ -326,7 +386,9 @@ function FunctionsPage() {
                   file={file}
                   functions={fns}
                   selectedFn={selectedFn}
-                  onSelect={setSelectedFn}
+                  onSelect={(name) =>
+                    selectFunction(name, { clearRouteSearch: true })
+                  }
                 />
               ))
             )}
@@ -420,7 +482,17 @@ function FunctionsPage() {
               </TabsContent>
 
               <TabsContent value="logs" className="flex-1 min-h-0">
-                <FunctionLogs events={selectedFnEvents} />
+                <FunctionLogs
+                  events={selectedFnEvents}
+                  traces={selectedFnTraces}
+                  onUseArgs={(args) => setArgsText(JSON.stringify(args, null, 2))}
+                  onOpenExecution={(executionId) =>
+                    void navigate({
+                      to: "/logs",
+                      search: { executionId }
+                    })
+                  }
+                />
               </TabsContent>
 
               <TabsContent value="metrics" className="flex-1 min-h-0">
@@ -650,7 +722,10 @@ function FunctionRunner({
 /* ------------------------------------------------------------------ */
 
 function FunctionLogs({
-  events
+  events,
+  traces,
+  onUseArgs,
+  onOpenExecution
 }: {
   events: Array<{
     type: string;
@@ -659,8 +734,11 @@ function FunctionLogs({
     durationMs?: number;
     error?: string;
   }>;
+  traces: ExecutionTrace[];
+  onUseArgs: (args: Record<string, unknown>) => void;
+  onOpenExecution: (executionId: string) => void;
 }) {
-  if (events.length === 0) {
+  if (events.length === 0 && traces.length === 0) {
     return (
       <EmptyState
         icon={Activity}
@@ -674,7 +752,78 @@ function FunctionLogs({
   return (
     <ScrollArea className="h-full">
       <div className="p-4 space-y-1">
-        {events.map((event, i) => {
+        {traces.length > 0 ? traces.map((trace, i) => {
+          const event = events[i];
+          const eventType =
+            trace.kind === "query"
+              ? "query.executed"
+              : trace.kind === "mutation" || trace.kind === "dashboard"
+                ? "mutation.committed"
+                : "action.completed";
+          const fnType = inferFunctionType(eventType);
+          const args =
+            trace.argsPreview?.kind === "value" &&
+            trace.argsPreview.value &&
+            typeof trace.argsPreview.value === "object" &&
+            !Array.isArray(trace.argsPreview.value)
+              ? (trace.argsPreview.value as Record<string, unknown>)
+              : null;
+          return (
+            <div
+              key={`${trace.executionId}-${i}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenExecution(trace.executionId)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenExecution(trace.executionId);
+                }
+              }}
+              title="Open execution in Logs"
+              className="group flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors animate-fade-in hover:bg-bg-surface/50 focus:outline-none focus:ring-2 focus:ring-accent/30"
+            >
+              {fnType && (
+                <FunctionBadge
+                  type={fnType}
+                  showIcon={false}
+                  className="text-[8px] px-1 py-0 w-14 justify-center"
+                />
+              )}
+              <TimestampCell timestamp={event?.timestamp ?? Date.now()} format="time" />
+              {event && "durationMs" in event && event.durationMs !== undefined && (
+                <span className="text-[11px] text-text-tertiary font-mono">
+                  {formatDuration(event.durationMs)}
+                </span>
+              )}
+              {((event && "error" in event && event.error) || trace?.error) && (
+                <Badge variant="destructive" className="text-[9px]">
+                  Error
+                </Badge>
+              )}
+              <span className="ml-auto text-[10px] text-text-tertiary font-mono truncate max-w-48">
+                {trace.executionId}
+              </span>
+              <ExternalLink
+                size={12}
+                className="shrink-0 text-text-tertiary opacity-60 transition-colors group-hover:text-accent group-hover:opacity-100"
+              />
+              {args && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Use args"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onUseArgs(args);
+                  }}
+                >
+                  <Copy size={12} />
+                </Button>
+              )}
+            </div>
+          );
+        }) : events.map((event, i) => {
           const fnType = inferFunctionType(event.type);
           return (
             <div
@@ -689,12 +838,12 @@ function FunctionLogs({
                 />
               )}
               <TimestampCell timestamp={event.timestamp} format="time" />
-              {"durationMs" in event && event.durationMs !== undefined && (
+              {event.durationMs !== undefined && (
                 <span className="text-[11px] text-text-tertiary font-mono">
                   {formatDuration(event.durationMs)}
                 </span>
               )}
-              {"error" in event && event.error && (
+              {event.error && (
                 <Badge variant="destructive" className="text-[9px]">
                   Error
                 </Badge>

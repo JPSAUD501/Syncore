@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   getRuntimeLabel,
   useActiveRuntime,
@@ -39,6 +39,13 @@ import {
   getEventRuntimeTag,
   getEventSummary
 } from "@/lib/eventPresentation";
+import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
+import {
+  buildInvalidationsByQueryId,
+  formatInvalidationTitle,
+  getInvalidationsForQuery,
+  isVisibleActivityEvent
+} from "@/lib/queryInvalidations";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage
@@ -53,15 +60,17 @@ function StatCard({
   value,
   icon: Icon,
   color,
-  subtitle
+  subtitle,
+  resetKey
 }: {
   label: string;
   value: string | number;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   color: string;
   subtitle?: string;
+  resetKey?: unknown;
 }) {
-  const { didChange, pulse } = useDidJustChange(value);
+  const { didChange, pulse } = useDidJustChange(value, { resetKey });
 
   return (
     <div
@@ -178,6 +187,7 @@ function ActiveQueries() {
 /* ------------------------------------------------------------------ */
 
 export function OverviewPage() {
+  const navigate = useNavigate();
   const connected = useDevtoolsStore((s) => s.connected);
   const activeRuntime = useActiveRuntime();
   const { runtimeConnected } = useConnection();
@@ -235,32 +245,41 @@ export function OverviewPage() {
     }
     return defaultText;
   };
+  const statAnimationResetKey = `${runtimeId ?? "none"}:${runtimeSnapshotPending ? "pending" : "ready"}`;
+  const invalidationsByQueryId = useMemo(
+    () => buildInvalidationsByQueryId(events),
+    [events]
+  );
+  const visibleEvents = useMemo(
+    () => events.filter(isVisibleActivityEvent),
+    [events]
+  );
 
   // Only animate events that arrive after the first batch for a runtime.
   const previousRuntimeIdRef = useRef<string | null>(runtimeId);
-  const previousEventCountRef = useRef(events.length);
-  const hasHydratedInitialEventsRef = useRef(events.length > 0);
+  const previousEventCountRef = useRef(visibleEvents.length);
+  const hasHydratedInitialEventsRef = useRef(visibleEvents.length > 0);
   let newEventCount = 0;
   if (previousRuntimeIdRef.current !== runtimeId) {
     previousRuntimeIdRef.current = runtimeId;
-    previousEventCountRef.current = events.length;
-    hasHydratedInitialEventsRef.current = events.length > 0;
+    previousEventCountRef.current = visibleEvents.length;
+    hasHydratedInitialEventsRef.current = visibleEvents.length > 0;
   } else if (!hasHydratedInitialEventsRef.current) {
-    if (events.length > 0) {
+    if (visibleEvents.length > 0) {
       hasHydratedInitialEventsRef.current = true;
     }
-    previousEventCountRef.current = events.length;
-  } else if (events.length > previousEventCountRef.current) {
-    newEventCount = events.length - previousEventCountRef.current;
+    previousEventCountRef.current = visibleEvents.length;
+  } else if (visibleEvents.length > previousEventCountRef.current) {
+    newEventCount = visibleEvents.length - previousEventCountRef.current;
   }
 
   useEffect(() => {
     if (previousRuntimeIdRef.current !== runtimeId) {
       previousRuntimeIdRef.current = runtimeId;
-      hasHydratedInitialEventsRef.current = events.length > 0;
+      hasHydratedInitialEventsRef.current = visibleEvents.length > 0;
     }
-    previousEventCountRef.current = events.length;
-  }, [events.length, runtimeId]);
+    previousEventCountRef.current = visibleEvents.length;
+  }, [visibleEvents.length, runtimeId]);
 
   return (
     <div className="space-y-4">
@@ -302,6 +321,7 @@ export function OverviewPage() {
           icon={Search}
           color="text-fn-query"
           subtitle={statSubtitle("Total executed")}
+          resetKey={statAnimationResetKey}
         />
         <StatCard
           label="Mutations"
@@ -309,6 +329,7 @@ export function OverviewPage() {
           icon={Database}
           color="text-fn-mutation"
           subtitle={statSubtitle("Total committed")}
+          resetKey={statAnimationResetKey}
         />
         <StatCard
           label="Actions"
@@ -316,6 +337,7 @@ export function OverviewPage() {
           icon={Zap}
           color="text-fn-action"
           subtitle={statSubtitle("Total completed")}
+          resetKey={statAnimationResetKey}
         />
         <StatCard
           label="Errors"
@@ -323,6 +345,7 @@ export function OverviewPage() {
           icon={AlertTriangle}
           color="text-error"
           subtitle={statSubtitle("Total errors")}
+          resetKey={statAnimationResetKey}
         />
       </div>
 
@@ -341,9 +364,9 @@ export function OverviewPage() {
                 </Badge>
               )}
               <span className="text-[11px] text-text-tertiary tabular-nums">
-                {events.length} events
+                {visibleEvents.length} events
               </span>
-              {events.length > 0 && (
+              {visibleEvents.length > 0 && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -357,27 +380,44 @@ export function OverviewPage() {
             </div>
           </div>
           <ScrollArea className="max-h-[420px] bg-bg-base/30">
-            {runtimeSnapshotPending && events.length === 0 ? (
+            {runtimeSnapshotPending && visibleEvents.length === 0 ? (
               <div className="flex h-28 items-center justify-center gap-2 px-4 text-[12px] text-text-tertiary">
                 <Activity size={13} className="animate-pulse" />
                 Waiting for runtime data.
               </div>
-            ) : events.length === 0 ? (
+            ) : visibleEvents.length === 0 ? (
               <div className="flex h-28 items-center justify-center px-4 text-[12px] text-text-tertiary">
                 Waiting for runtime activity.
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {events.slice(0, 50).map((event, i) => {
+                {visibleEvents.slice(0, 50).map((event, i) => {
                   const config = getEventConfig(event.type);
                   const summary = getEventSummary(event);
                   const duration = getEventDuration(event);
                   const isNew = i < newEventCount;
+                  const executionId = getExecutionIdForEvent(event);
+                  const invalidations =
+                    event.type === "query.executed"
+                      ? getInvalidationsForQuery(event, invalidationsByQueryId)
+                      : [];
+                  const Component = executionId ? "button" : "div";
                   return (
-                    <div
+                    <Component
                       key={`${event.type}-${event.timestamp}-${i}`}
+                      type={executionId ? "button" : undefined}
+                      onClick={
+                        executionId
+                          ? () =>
+                              void navigate({
+                                to: "/logs",
+                                search: { executionId }
+                              })
+                          : undefined
+                      }
                       className={cn(
-                        "flex items-center gap-3 px-4 py-2.5 hover:bg-bg-elevated/50 transition-colors",
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-bg-elevated/50 transition-colors",
+                        executionId && "cursor-pointer",
                         isNew && "animate-fade-in-fast"
                       )}
                     >
@@ -397,6 +437,15 @@ export function OverviewPage() {
                       <span className="flex-1 truncate font-mono text-[12px] text-text-secondary">
                         {summary}
                       </span>
+                      {invalidations.length > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="shrink-0 text-[10px]"
+                          title={formatInvalidationTitle(invalidations)}
+                        >
+                          Rerun
+                        </Badge>
+                      )}
                       {duration && (
                         <span className="shrink-0 font-mono text-[11px] text-text-tertiary tabular-nums">
                           {duration}
@@ -405,7 +454,7 @@ export function OverviewPage() {
                       <span className="shrink-0 font-mono text-[11px] text-text-tertiary tabular-nums">
                         {formatTime(event.timestamp)}
                       </span>
-                    </div>
+                    </Component>
                   );
                 })}
               </div>
@@ -430,4 +479,17 @@ export function OverviewPage() {
       </div>
     </div>
   );
+}
+
+function getExecutionIdForEvent(event: SyncoreDevtoolsEvent): string | null {
+  if ("executionId" in event && event.executionId) {
+    return event.executionId;
+  }
+  if (event.type === "mutation.committed") {
+    return event.mutationId;
+  }
+  if (event.type === "action.completed") {
+    return event.actionId;
+  }
+  return null;
 }

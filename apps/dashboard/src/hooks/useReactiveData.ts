@@ -62,16 +62,32 @@ export function useTrackChanges<T>(
   };
 }
 
-export function useDidJustChange(value: unknown): {
+export function useDidJustChange(
+  value: unknown,
+  options?: { enabled?: boolean; resetKey?: unknown }
+): {
   didChange: boolean;
   pulse: number;
 } {
   const [pulse, setPulse] = useState(0);
   const previousValueRef = useRef<string | null>(null);
+  const previousResetKeyRef = useRef<string | null>(null);
   const latestPulseRef = useRef(0);
 
   useEffect(() => {
     const serialized = JSON.stringify(value);
+    const resetKey = JSON.stringify(options?.resetKey ?? null);
+    if (previousResetKeyRef.current !== resetKey) {
+      previousResetKeyRef.current = resetKey;
+      previousValueRef.current = serialized;
+      setPulse(0);
+      return;
+    }
+    if (options?.enabled === false) {
+      previousValueRef.current = serialized;
+      setPulse(0);
+      return;
+    }
     const previousValue = previousValueRef.current;
     if (previousValue !== null && previousValue !== serialized) {
       const nextPulse = latestPulseRef.current + 1;
@@ -82,7 +98,7 @@ export function useDidJustChange(value: unknown): {
       return () => clearTimeout(timer);
     }
     previousValueRef.current = serialized;
-  }, [value]);
+  }, [options?.enabled, options?.resetKey, value]);
 
   return {
     didChange: pulse > 0,

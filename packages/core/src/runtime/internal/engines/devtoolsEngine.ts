@@ -89,7 +89,7 @@ export class DevtoolsEngine {
       refreshQueriesForScopes: (
         scopes: Set<ImpactScope>,
         reason: string
-      ) => Promise<void>;
+      ) => Promise<unknown>;
     },
     meta: DevtoolsEventMeta = {},
     scopes: Iterable<ImpactScope> = []
