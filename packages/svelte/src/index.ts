@@ -75,11 +75,38 @@ type PaginatedQueryInternalState = {
 };
 
 /**
- * The reactive query state shape exposed by Syncore's Svelte stores.
+ * The reactive query state shape emitted by Syncore's Svelte store factories.
+ *
+ * Extends {@link SyncoreQueryState} with the same fields (`data`, `error`,
+ * `status`, `runtimeStatus`, `isLoading`, `isError`, `isReady`). Returned as
+ * the value of stores created by {@link createQueryStore} and
+ * {@link createClientQueryStore}.
  */
 export interface SyncoreQueryStoreState<TResult>
   extends SyncoreQueryState<TResult> {}
 
+/**
+ * A sentinel value that tells Syncore store factories to skip the query.
+ *
+ * Use `skip` in place of a query’s `args` argument to avoid firing the query
+ * while some required data is not yet available (e.g. a user ID that loads
+ * asynchronously). The store will remain in a `"loading"` / skipped state
+ * until a non-skip value is provided.
+ *
+ * ```svelte
+ * <script>
+ *   import { createQueryValueStore, skip } from "syncorejs/svelte";
+ *   import { api } from "../syncore/_generated/api";
+ *
+ *   export let userId: string | undefined;
+ *
+ *   $: profile = createQueryValueStore(
+ *     api.users.get,
+ *     userId ? { id: userId } : skip
+ *   );
+ * </script>
+ * ```
+ */
 export const skip = "skip" as const;
 type Skip = typeof skip;
 
@@ -91,7 +118,25 @@ const defaultRuntimeStatus: SyncoreRuntimeStatus = {
 const SYNCORE_CLIENT_CONTEXT = Symbol("syncore.client");
 
 /**
- * Stores a Syncore client in Svelte component context and returns it.
+ * Store the Syncore client in Svelte’s component context.
+ *
+ * Call this once at the root of your component tree (e.g. in a layout or
+ * root `+layout.svelte`) so that the context-aware store factories
+ * (`createQueryStore`, `createQueriesStore`, etc.) can retrieve it
+ * automatically without prop-drilling.
+ *
+ * ```svelte
+ * <!-- +layout.svelte -->
+ * <script>
+ *   import { setSyncoreClient } from "syncorejs/svelte";
+ *   export let data; // { client } from +layout.ts
+ *   setSyncoreClient(data.client);
+ * </script>
+ * <slot />
+ * ```
+ *
+ * @param client - The ready Syncore client to store in context.
+ * @returns The same `client` for convenience.
  */
 export function setSyncoreClient(client: SyncoreClient): SyncoreClient {
   setContext(SYNCORE_CLIENT_CONTEXT, client);
@@ -99,7 +144,13 @@ export function setSyncoreClient(client: SyncoreClient): SyncoreClient {
 }
 
 /**
- * Reads the Syncore client previously stored in Svelte component context.
+ * Retrieve the Syncore client from Svelte’s component context.
+ *
+ * Throws if {@link setSyncoreClient} has not been called by an ancestor
+ * component. Only use this inside Svelte components; for standalone scripts
+ * keep an explicit reference to the client instead.
+ *
+ * @throws `Error` when no client is found in the component context.
  */
 export function getSyncoreClient(): SyncoreClient {
   const client = getContext<SyncoreClient | undefined>(SYNCORE_CLIENT_CONTEXT);
@@ -111,10 +162,39 @@ export function getSyncoreClient(): SyncoreClient {
   return client;
 }
 
+/**
+ * Create a reactive Svelte store that tracks the Syncore runtime status.
+ *
+ * Uses the client from Svelte context (set via {@link setSyncoreClient}).
+ * Subscribe to gate your UI on `"ready"` before rendering data-dependent
+ * components.
+ *
+ * ```svelte
+ * <script>
+ *   import { createSyncoreStatusStore } from "syncorejs/svelte";
+ *   const status = createSyncoreStatusStore();
+ * </script>
+ *
+ * {#if $status.kind === "ready"}
+ *   <App />
+ * {:else}
+ *   <Loading />
+ * {/if}
+ * ```
+ */
 export function createSyncoreStatusStore(): Readable<SyncoreRuntimeStatus> {
   return createClientSyncoreStatusStore(getSyncoreClient());
 }
 
+/**
+ * Create a reactive Svelte store that tracks the Syncore runtime status.
+ *
+ * Accepts an explicit `client` rather than reading from Svelte context,
+ * making it usable outside component trees (e.g. in module-level code or
+ * SvelteKit `load` functions).
+ *
+ * @param client - The Syncore client to observe.
+ */
 export function createClientSyncoreStatusStore(
   client: SyncoreClient
 ): Readable<SyncoreRuntimeStatus> {
@@ -125,7 +205,24 @@ export function createClientSyncoreStatusStore(
 }
 
 /**
- * Creates a reactive store for a Syncore query result using the contextual client.
+ * Create a reactive Svelte store that emits the current value of a Syncore
+ * query, or `undefined` while loading.
+ *
+ * Uses the client from Svelte context (set via {@link setSyncoreClient}).
+ * Pass `skip` as `args` to pause the query.
+ *
+ * ```svelte
+ * <script>
+ *   import { createQueryValueStore } from "syncorejs/svelte";
+ *   import { api } from "../syncore/_generated/api";
+ *
+ *   const todos = createQueryValueStore(api.todos.list);
+ * </script>
+ *
+ * {#each $todos ?? [] as todo}
+ *   <p>{todo.text}</p>
+ * {/each}
+ * ```
  */
 export function createQueryValueStore<
   TReference extends FunctionReference<"query">
@@ -137,7 +234,12 @@ export function createQueryValueStore<
 }
 
 /**
- * Creates a reactive store for a Syncore query result using an explicit client.
+ * Create a reactive Svelte store that emits the current value of a Syncore
+ * query, or `undefined` while loading.
+ *
+ * Accepts an explicit `client` instead of reading from Svelte context.
+ *
+ * @param client - The Syncore client to query against.
  */
 export function createClientQueryValueStore<
   TReference extends FunctionReference<"query">
@@ -155,7 +257,27 @@ export function createClientQueryValueStore<
 }
 
 /**
- * Creates a reactive store with the full Syncore query state.
+ * Create a reactive Svelte store that emits the full {@link SyncoreQueryState}
+ * for a query, including `data`, `error`, `status`, and `isPending`.
+ *
+ * Uses the client from Svelte context (set via {@link setSyncoreClient}).
+ *
+ * ```svelte
+ * <script>
+ *   import { createQueryStore } from "syncorejs/svelte";
+ *   import { api } from "../syncore/_generated/api";
+ *
+ *   const state = createQueryStore(api.todos.list);
+ * </script>
+ *
+ * {#if $state.isPending}
+ *   <Spinner />
+ * {:else if $state.error}
+ *   <Error message={$state.error.message} />
+ * {:else}
+ *   {#each $state.data as todo}<p>{todo.text}</p>{/each}
+ * {/if}
+ * ```
  */
 export function createQueryStore<TReference extends FunctionReference<"query">>(
   reference: TReference,
@@ -165,7 +287,12 @@ export function createQueryStore<TReference extends FunctionReference<"query">>(
 }
 
 /**
- * Creates a reactive store with the full Syncore query state for an explicit client.
+ * Create a reactive Svelte store that emits the full {@link SyncoreQueryState}
+ * for a query, including `data`, `error`, `status`, and `isPending`.
+ *
+ * Accepts an explicit `client` instead of reading from Svelte context.
+ *
+ * @param client - The Syncore client to query against.
  */
 export function createClientQueryStore<
   TReference extends FunctionReference<"query">
@@ -191,12 +318,41 @@ export function createClientQueryStore<
   );
 }
 
+/**
+ * Create a reactive Svelte store that simultaneously observes multiple
+ * Syncore queries.
+ *
+ * Uses the client from Svelte context (set via {@link setSyncoreClient}).
+ * Each key in `entries` corresponds to a key in the emitted result object.
+ *
+ * ```svelte
+ * <script>
+ *   import { createQueriesStore } from "syncorejs/svelte";
+ *   import { api } from "../syncore/_generated/api";
+ *
+ *   const stores = createQueriesStore({
+ *     todos: { query: api.todos.list },
+ *     user: { query: api.users.me },
+ *   });
+ * </script>
+ *
+ * <p>{$stores.user.data?.name} has {$stores.todos.data?.length} todos</p>
+ * ```
+ */
 export function createQueriesStore<TEntries extends QueriesRequestInput>(
   entries: TEntries
 ): Readable<CreateQueriesStoreResult<TEntries>> {
   return createClientQueriesStore(getSyncoreClient(), entries);
 }
 
+/**
+ * Create a reactive Svelte store that simultaneously observes multiple
+ * Syncore queries.
+ *
+ * Accepts an explicit `client` instead of reading from Svelte context.
+ *
+ * @param client - The Syncore client to query against.
+ */
 export function createClientQueriesStore<TEntries extends QueriesRequestInput>(
   client: SyncoreClient,
   entries: TEntries
@@ -268,6 +424,38 @@ export function createClientQueriesStore<TEntries extends QueriesRequestInput>(
   );
 }
 
+/**
+ * Create a reactive Svelte store for cursor-based paginated Syncore queries.
+ *
+ * Uses the client from Svelte context (set via {@link setSyncoreClient}).
+ * The store handles page tracking and exposes a `loadMore()` function so you
+ * can implement “Load More” UIs without manual cursor management.
+ *
+ * The query referenced by `reference` must accept a `paginationOpts`
+ * argument and return a {@link PaginationResult}.
+ *
+ * ```svelte
+ * <script>
+ *   import { createPaginatedQueryStore } from "syncorejs/svelte";
+ *   import { api } from "../syncore/_generated/api";
+ *
+ *   const result = createPaginatedQueryStore(
+ *     api.todos.listPaginated,
+ *     {},
+ *     { initialNumItems: 10 }
+ *   );
+ * </script>
+ *
+ * {#each $result.results as todo}<p>{todo.text}</p>{/each}
+ * {#if $result.canLoadMore}
+ *   <button on:click={() => $result.loadMore(10)}>Load more</button>
+ * {/if}
+ * ```
+ *
+ * @param reference - A paginated query function reference.
+ * @param args - Query arguments excluding `paginationOpts`, or `skip`.
+ * @param options.initialNumItems - Number of items to fetch on the first page.
+ */
 export function createPaginatedQueryStore<
   TReference extends PaginatedQueryReference
 >(
@@ -285,6 +473,16 @@ export function createPaginatedQueryStore<
   );
 }
 
+/**
+ * Create a reactive Svelte store for cursor-based paginated Syncore queries.
+ *
+ * Accepts an explicit `client` instead of reading from Svelte context.
+ *
+ * @param client - The Syncore client to query against.
+ * @param reference - A paginated query function reference.
+ * @param args - Query arguments excluding `paginationOpts`, or `skip`.
+ * @param options.initialNumItems - Number of items to fetch on the first page.
+ */
 export function createClientPaginatedQueryStore<
   TReference extends PaginatedQueryReference
 >(

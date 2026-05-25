@@ -9,10 +9,24 @@ import type { SyncoreWebPersistence } from "./persistence.js";
 
 type SqlJsDatabase = initSqlJs.Database;
 
+/** Options for constructing a {@link BroadcastChannelExternalChangeSignal}. */
 export interface BroadcastChannelExternalChangeSignalOptions {
+  /** Name of the `BroadcastChannel`, shared by all tabs with the same database. */
   channelName: string;
 }
 
+/**
+ * A `BroadcastChannel`-based {@link SyncoreExternalChangeSignal} that
+ * propagates database-mutation events across all browser tabs sharing the same
+ * Syncore database.
+ *
+ * When a Syncore mutation commits, the runtime publishes a change event on this
+ * channel. Other tabs subscribed to the same channel reload their queries
+ * automatically, keeping all open tabs in sync without a server round-trip.
+ *
+ * Constructed automatically by `createWebSyncoreRuntime`. Exposed for
+ * advanced setups that build the persistence layer independently.
+ */
 export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChangeSignal {
   private readonly channel: BroadcastChannel | undefined;
   private readonly listeners = new Set<
@@ -52,13 +66,33 @@ export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChan
   };
 }
 
+/** Options for constructing a {@link SqlJsExternalChangeApplier}. */
 export interface SqlJsExternalChangeApplierOptions {
+  /** Logical name of the Syncore database, used to load the latest snapshot from persistence. */
   databaseName: string;
+  /** The web persistence layer to read the updated database bytes from. */
   persistence: SyncoreWebPersistence;
+  /**
+   * Factory that creates a new sql.js `Database` instance from optional
+   * initial bytes. Called whenever the database needs to be swapped after an
+   * external change.
+   */
   createDatabase: (bytes?: Uint8Array) => SqlJsDatabase;
+  /** Callback invoked with the newly created database so the runtime can swap its reference. */
   replaceDatabase(database: SqlJsDatabase): void;
 }
 
+/**
+ * A {@link SyncoreExternalChangeApplier} for sql.js (in-memory) databases.
+ *
+ * When another tab commits a mutation and broadcasts the change event, this
+ * applier loads the latest database snapshot from web persistence (OPFS or
+ * IndexedDB) and swaps the in-memory `sql.js` database instance so the current
+ * tab reflects the new state.
+ *
+ * Constructed automatically by `createWebSyncoreRuntime` when using sql.js
+ * persistence. Exposed for advanced setups.
+ */
 export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier {
   private readonly databaseName: string;
   private readonly persistence: SyncoreWebPersistence;
@@ -93,6 +127,13 @@ export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier 
   }
 }
 
+/**
+ * Derive the canonical `BroadcastChannel` name for cross-tab sync from a
+ * logical database name.
+ *
+ * All Syncore runtimes sharing the same `databaseName` will use the same
+ * channel, ensuring mutations in one tab are visible to all others.
+ */
 export function createDefaultSyncChannelName(databaseName: string): string {
   return `syncore:external:${databaseName}`;
 }

@@ -70,6 +70,19 @@ function toSqlParameters(params: unknown[]): SQLInputValue[] {
   return params as SQLInputValue[];
 }
 
+/**
+ * SQLite driver backed by Node.js’s built-in `node:sqlite` module (Node 22+).
+ *
+ * Opens the database at `databasePath` with `WAL` journal mode and foreign-key
+ * enforcement enabled. The file is created if it does not exist.
+ *
+ * ```ts
+ * const driver = new NodeSqliteDriver("./data/app.db");
+ * ```
+ *
+ * In most cases you should use {@link createNodeSyncoreRuntime} which
+ * instantiates this driver automatically from your `databasePath` option.
+ */
 export class NodeSqliteDriver implements SyncoreSqlDriver {
   private readonly database: DatabaseSync;
   private transactionDepth = 0;
@@ -147,6 +160,19 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
   }
 }
 
+/**
+ * Blob storage adapter that reads and writes files in a local directory.
+ *
+ * Each stored object is saved as a flat file named by its ID inside
+ * `directory`. The directory is created automatically on first write.
+ *
+ * ```ts
+ * const storage = new NodeFileStorageAdapter("./data/storage");
+ * ```
+ *
+ * In most cases you should use {@link createNodeSyncoreRuntime} which
+ * instantiates this adapter automatically from your `storageDirectory` option.
+ */
 export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
   constructor(private readonly directory: string) {}
 
@@ -341,26 +367,85 @@ function resolvePersistedDataSourceAlias(
   return nextValue;
 }
 
+/**
+ * Options for {@link createNodeSyncoreRuntime}.
+ *
+ * At minimum supply `databasePath`, `storageDirectory`, `schema`, and
+ * `functions`. Everything else has sensible defaults (auto-devtools connect in
+ * development, Node SQLite driver, local file storage).
+ *
+ * ```ts
+ * createNodeSyncoreRuntime({
+ *   databasePath: path.join(dataDir, "app.db"),
+ *   storageDirectory: path.join(dataDir, "storage"),
+ *   schema,
+ *   functions,
+ * });
+ * ```
+ */
 export interface CreateNodeRuntimeOptions<
   TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
 > {
+  /**
+   * Absolute or relative path to the SQLite database file.
+   *
+   * The file is created if it does not exist. Use an absolute path in
+   * production to avoid ambiguity about the current working directory.
+   */
   databasePath: string;
+  /**
+   * Directory where blob storage objects (images, files, etc.) are persisted.
+   *
+   * The directory is created automatically if it does not exist.
+   */
   storageDirectory: string;
+  /** The data model that defines the available tables and indexes. */
   schema: TSchema;
+  /**
+   * The registered function map. Use the `functions` export from
+   * `syncore/_generated/functions.ts`.
+   */
   functions: SyncoreRuntimeOptions<TSchema>["functions"];
+  /**
+   * Resolved Syncore component instances. Only required when your app
+   * installs Syncore component packages.
+   */
   components?: SyncoreRuntimeOptions<TSchema>["components"];
+  /**
+   * Platform capabilities injected into `ctx.capabilities` inside function
+   * handlers.
+   */
   capabilities?: SyncoreCapabilities;
+  /** Human-readable app name shown in the devtools dashboard. */
   appName?: string;
+  /** Origin label (e.g. process name) shown in devtools. */
   origin?: string;
+  /** Devtools session label. Auto-generated when omitted. */
   sessionLabel?: string;
+  /**
+   * Platform label reported to devtools. Defaults to `"node"`, or
+   * `"electron-main"` when the runtime is used inside Electron's main process.
+   */
   platform?: string;
+  /**
+   * Devtools event sink. Pass `false` to disable devtools entirely (recommended
+   * for production). Omit to auto-connect to the local devtools server when
+   * running in development.
+   */
   devtools?: DevtoolsSink | false;
+  /**
+   * Explicit devtools WebSocket server URL. Defaults to
+   * `ws://localhost:3099` (the Syncore devtools default port).
+   */
   devtoolsUrl?: string;
+  /** Scheduler configuration for background and recurring jobs. */
   scheduler?: SchedulerOptions;
 }
 
 /**
- * Options for creating a managed Node Syncore client.
+ * Alias of {@link CreateNodeRuntimeOptions} exposed for the managed-client
+ * helper.
+ * @see CreateNodeRuntimeOptions
  */
 export type WithNodeSyncoreClientOptions<
   TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
@@ -368,20 +453,40 @@ export type WithNodeSyncoreClientOptions<
 
 /**
  * A started local Node runtime paired with its client and a dispose helper.
+ *
+ * Returned by `withNodeSyncoreClient()`. Call `dispose()` when you are
+ * finished (e.g. in tests or short-lived scripts) to stop the runtime and
+ * close the database.
  */
 export interface ManagedNodeSyncoreClient<
   TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
 > {
+  /** The underlying runtime instance. */
   runtime: SyncoreRuntime<TSchema>;
+  /** A ready-to-use client for calling Syncore functions. */
   client: ReturnType<SyncoreRuntime<TSchema>["createClient"]>;
+  /** Stop the runtime, flush pending jobs, and close the database. */
   dispose(): Promise<void>;
 }
 
+/**
+ * Opaque handle returned by Syncore’s Electron IPC bridge setup.
+ *
+ * - `ready`: resolves when the bridge is connected and the renderer is ready to
+ *   receive messages.
+ * - `dispose()`: tears down the bridge and removes IPC listeners.
+ */
 export interface SyncoreElectronIpcBinding {
   ready: Promise<void>;
   dispose(): Promise<void>;
 }
 
+/**
+ * Minimal interface that Syncore requires from an Electron `BrowserWindow`
+ * instance.
+ *
+ * Scoped to avoid importing Electron at the type level.
+ */
 export interface SyncoreElectronBridgeWindow {
   isDestroyed(): boolean;
   webContents: {
@@ -389,14 +494,38 @@ export interface SyncoreElectronBridgeWindow {
   };
 }
 
+/**
+ * Options for setting up Syncore’s Electron main-process IPC bridge.
+ *
+ * The bridge forwards database change events from the main-process runtime to
+ * the renderer window over a named IPC channel.
+ *
+ * ```ts
+ * createElectronSyncoreBridge(runtime, {
+ *   window: mainWindow,
+ *   onRendererMessage: (listener) => {
+ *     ipcMain.on("syncore", (_e, msg) => listener(msg));
+ *     return () => ipcMain.removeAllListeners("syncore");
+ *   },
+ * });
+ * ```
+ */
 export interface CreateElectronSyncoreBridgeOptions {
+  /** The renderer window that will receive push messages. */
   window: SyncoreElectronBridgeWindow;
+  /**
+   * Register a listener for messages sent from the renderer. Must return an
+   * unsubscribe function.
+   */
   onRendererMessage(listener: (message: unknown) => void): () => void;
+  /** IPC channel name. Defaults to `"syncore"`. */
   channel?: string;
 }
 
 /**
- * The subset of Electron's `ipcMain` used by Syncore's main-process helper.
+ * The subset of Electron’s `ipcMain` used by Syncore’s main-process helper.
+ *
+ * Using this narrowed interface avoids a hard runtime dependency on Electron.
  */
 export interface SyncoreElectronIpcMain {
   on(
@@ -409,12 +538,43 @@ export interface SyncoreElectronIpcMain {
   ): void;
 }
 
+/**
+ * Options for creating a client inside an Electron renderer process via the
+ * preload IPC bridge.
+ */
 export interface CreateSyncoreRendererWindowClientOptions {
+  /** Name of the bridge registered in the preload script. Defaults to `"syncore"`. */
   bridgeName?: string;
 }
 
 /**
- * Create a Node or Electron runtime backed by SQLite and local file storage.
+ * Create a Syncore runtime for Node.js (or Electron’s main process) backed by
+ * the built-in `node:sqlite` driver and local file storage.
+ *
+ * This is the recommended entry point for Node and Electron apps. It wires up
+ * the SQL driver, storage adapter, devtools WebSocket connection, and
+ * cross-process change signals automatically.
+ *
+ * ```ts
+ * import path from "node:path";
+ * import { createNodeSyncoreRuntime } from "syncorejs/node";
+ * import schema from "./syncore/schema";
+ * import { functions } from "./syncore/_generated/functions";
+ *
+ * const runtime = createNodeSyncoreRuntime({
+ *   databasePath: path.join(app.getPath("userData"), "db.sqlite"),
+ *   storageDirectory: path.join(app.getPath("userData"), "storage"),
+ *   schema,
+ *   functions,
+ * });
+ *
+ * await runtime.start();
+ * const client = runtime.createClient();
+ * ```
+ *
+ * @param options - Configuration object. See {@link CreateNodeRuntimeOptions}.
+ * @returns A configured (but not yet started) {@link SyncoreRuntime}. Call
+ *   `await runtime.start()` before using the client.
  */
 export function createNodeSyncoreRuntime<
   TSchema extends NodeSyncoreSchema

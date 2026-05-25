@@ -1,0 +1,136 @@
+{
+  "formatVersion": 3,
+  "plannerVersion": 2,
+  "tables": [
+    {
+      "name": "contacts",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "name": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "email": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "company": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "color": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "favorite": {
+            "validator": {
+              "kind": "boolean"
+            },
+            "optional": true
+          },
+          "createdAt": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "name",
+        "email",
+        "company",
+        "color",
+        "favorite",
+        "createdAt"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "company",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "email",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "favorite",
+          "validator": {
+            "kind": "boolean"
+          },
+          "storage": {
+            "kind": "boolean"
+          },
+          "optional": true
+        },
+        {
+          "name": "name",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_created",
+          "fields": [
+            "createdAt"
+          ]
+        }
+      ],
+      "searchIndexes": [
+        {
+          "name": "search_name",
+          "searchField": "name",
+          "filterFields": []
+        }
+      ]
+    }
+  ],
+  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"name\",\"email\",\"company\",\"color\",\"favorite\",\"createdAt\"],\"fields\":[{\"name\":\"color\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"company\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"email\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"favorite\",\"optional\":true,\"storage\":{\"kind\":\"boolean\"},\"validator\":{\"kind\":\"boolean\"}},{\"name\":\"name\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"createdAt\"],\"name\":\"by_created\"}],\"name\":\"contacts\",\"searchIndexes\":[{\"filterFields\":[],\"name\":\"search_name\",\"searchField\":\"name\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"color\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"company\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"email\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"favorite\":{\"optional\":true,\"validator\":{\"kind\":\"boolean\"}},\"name\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}}]}"
+}

@@ -32,86 +32,174 @@ export type ExpoSyncoreSchema<
 > = TSchema;
 
 /**
- * Options for constructing an Expo Syncore runtime.
+ * Options for {@link createExpoSyncoreRuntime}.
  *
- * Use this when you want Syncore to persist locally with `expo-sqlite` and the
- * Expo file system.
+ * On native (iOS/Android) Syncore uses `expo-sqlite` and `expo-file-system`
+ * automatically. When the same app is served on web (via `expo-router` or
+ * Metro’s web bundler) it falls back to the SQL.js + OPFS web stack instead.
+ *
+ * At minimum supply `schema` and `functions`. Everything else has platform
+ * defaults.
+ *
+ * ```ts
+ * const runtime = createExpoSyncoreRuntime({
+ *   schema,
+ *   functions,
+ *   databaseName: "app.db",
+ *   storageDirectoryName: "app-storage",
+ * });
+ * await runtime.start();
+ * ```
  */
 export interface CreateExpoRuntimeOptions<
   TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema
 > {
-  /** The schema for the local Syncore app. */
+  /** The data model that defines the available tables and indexes. */
   schema: TSchema;
 
-  /** The generated function registry for the local Syncore app. */
+  /**
+   * The registered function map. Use the `functions` export from
+   * `syncore/_generated/functions.ts`.
+   */
   functions: SyncoreRuntimeOptions<TSchema>["functions"];
 
-  /** Optional resolved installed components for the local Syncore app. */
+  /**
+   * Resolved Syncore component instances. Only required when your app
+   * installs Syncore component packages.
+   */
   components?: SyncoreRuntimeOptions<TSchema>["components"];
 
-  /** Optional platform capabilities exposed to function handlers. */
+  /**
+   * Platform capabilities injected into `ctx.capabilities` inside function
+   * handlers.
+   */
   capabilities?: SyncoreCapabilities;
 
-  /** Optional custom SQL driver. Defaults to `expo-sqlite`. */
+  /**
+   * Custom SQL driver. Defaults to an `ExpoSqliteDriver` backed by
+   * `expo-sqlite`.
+   */
   driver?: SyncoreSqlDriver;
 
-  /** Optional custom file/blob storage adapter. */
+  /** Custom file/blob storage adapter. Defaults to `ExpoFileStorageAdapter`. */
   storage?: SyncoreStorageAdapter;
 
-  /** The SQLite database filename to open locally. */
+  /**
+   * SQLite database filename (e.g. `"app.db"`). Defaults to `"syncore.db"`.
+   * The file is created inside the app-local documents directory on device.
+   */
   databaseName?: string;
 
-  /** Optional directory for the SQLite database file. */
+  /**
+   * Absolute path to the directory where the SQLite file is stored.
+   * Defaults to `expo-sqlite`’s `defaultDatabaseDirectory`.
+   */
   databaseDirectory?: string;
 
-  /** Directory name used for local file/blob storage. */
+  /**
+   * Name of the sub-directory inside the app’s documents folder used for
+   * blob/file storage. Defaults to `"syncore-storage"`.
+   */
   storageDirectoryName?: string;
 
-  /** Optional runtime platform label shown in devtools snapshots. */
+  /**
+   * Platform label reported to devtools. Defaults to `"expo"`. Override to
+   * `"expo-web"` when running on web.
+   */
   platform?: string;
 
-  /** Optional devtools sink used during development. */
+  /**
+   * Devtools event sink. Omit to disable devtools. On-device devtools
+   * connections require pointing to your development machine’s IP address.
+   */
   devtools?: DevtoolsSink;
 
-  /** Optional scheduler configuration for jobs and recurring work. */
+  /** Scheduler configuration for background and recurring jobs. */
   scheduler?: SchedulerOptions;
 
-  /** Optional shared signal used to synchronize browser instances. */
+  /**
+   * External change signal used to keep multiple in-process instances in sync.
+   * On web, defaults to a `BroadcastChannel`-based signal automatically.
+   */
   externalChangeSignal?: SyncoreExternalChangeSignal;
 
-  /** Optional applier used to reconcile browser-side external changes. */
+  /**
+   * External change applier used when change events arrive from other tabs or
+   * processes. On web with `ExpoSqliteDriver`, defaults to
+   * `ExpoWebExternalChangeApplier` automatically.
+   */
   externalChangeApplier?: SyncoreExternalChangeApplier;
 
-  /** Optional direct SQL.js wasm URL used when the Expo app runs on web. */
+  /**
+   * Direct URL to the SQL.js `.wasm` binary. Only needed when the app runs on
+   * web and the default CDN URL is unreachable.
+   */
   wasmUrl?: string;
 
-  /** Optional SQL.js support file resolver used when the Expo app runs on web. */
+  /**
+   * Resolver for SQL.js support files (`.wasm`, `.worker.js`). Equivalent to
+   * the `locateFile` option in `initSqlJs()`. Only used on web.
+   */
   locateFile?: (fileName: string) => string;
 }
 
 /**
- * A reusable bootstrap that lazily creates, starts, and stops an Expo Syncore runtime.
+ * A reusable, lazily-started Expo Syncore runtime handle.
+ *
+ * Created by {@link createExpoSyncoreBootstrap}. The bootstrap defers actual
+ * runtime startup until the first call to `getClient()` and keeps a single
+ * instance alive across React Navigation reloads.
+ *
+ * ```ts
+ * const bootstrap = createExpoSyncoreBootstrap({ schema, functions });
+ *
+ * // In your root component:
+ * const client = await bootstrap.getClient();
+ * ```
  */
 export interface ExpoSyncoreBootstrap<
   TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema
 > {
-  /** Synchronous access is unavailable; use `getClient()` instead. */
+  /** @deprecated Access the runtime via `getClient()` instead. */
   getRuntime(): never;
 
-  /** Start the runtime if needed and return a ready client. */
+  /**
+   * Start the runtime on first call, then return the same client on subsequent
+   * calls. Safe to call from multiple places concurrently.
+   */
   getClient(): Promise<
     ReturnType<SyncoreRuntime<TSchema>["createClient"]>
   >;
 
-  /** Stop the current runtime instance if one exists. */
+  /** Stop the running runtime instance if one is active. */
   stop(): Promise<void>;
 
-  /** Fully discard the runtime so the next call recreates it. */
+  /**
+   * Stop and discard the current runtime so the next `getClient()` call
+   * creates a fresh one. Useful after a full app reset or database migration.
+   */
   reset(): Promise<void>;
 }
 
 /**
- * Create an Expo Syncore runtime backed by `expo-sqlite` and local file storage.
+ * Create a Syncore runtime for Expo (React Native and Expo web) backed by
+ * `expo-sqlite` on native platforms and SQL.js on web.
+ *
+ * Returns an unstarted {@link SyncoreRuntime}. Call `await runtime.start()`
+ * before using the client:
+ *
+ * ```ts
+ * import { createExpoSyncoreRuntime } from "syncorejs/expo";
+ * import schema from "./syncore/schema";
+ * import { functions } from "./syncore/_generated/functions";
+ *
+ * const runtime = createExpoSyncoreRuntime({ schema, functions });
+ * await runtime.start();
+ * const client = runtime.createClient();
+ * ```
+ *
+ * For managed lifecycle in React components, prefer
+ * {@link createExpoSyncoreBootstrap} instead.
  */
 export function createExpoSyncoreRuntime<
   TSchema extends ExpoSyncoreSchema
@@ -182,7 +270,16 @@ export function createExpoSyncoreRuntime<
 }
 
 /**
- * Create a same-process Syncore client from a started Expo runtime.
+ * Create a same-process Syncore client directly from a started Expo runtime.
+ *
+ * Prefer this in scripts or non-component code. For React component trees,
+ * use {@link createExpoSyncoreBootstrap} instead to get automatic lifecycle
+ * management.
+ *
+ * ```ts
+ * const client = createExpoSyncoreClient(runtime);
+ * await client.mutation(api.todos.create, { text: "Buy milk" });
+ * ```
  */
 export function createExpoSyncoreClient<
   TSchema extends ExpoSyncoreSchema
@@ -191,7 +288,26 @@ export function createExpoSyncoreClient<
 }
 
 /**
- * Create a reusable Expo bootstrap that lazily starts the local runtime.
+ * Create a reusable Expo bootstrap that lazily starts the local runtime the
+ * first time a client is requested.
+ *
+ * The bootstrap keeps a single runtime instance alive across component
+ * remounts and safely handles concurrent `getClient()` calls.
+ *
+ * ```ts
+ * // app/_layout.tsx
+ * import { createExpoSyncoreBootstrap } from "syncorejs/expo";
+ * import schema from "../syncore/schema";
+ * import { functions } from "../syncore/_generated/functions";
+ *
+ * export const syncoreBootstrap = createExpoSyncoreBootstrap({
+ *   schema,
+ *   functions,
+ * });
+ *
+ * // Later in SyncoreProvider:
+ * const client = await syncoreBootstrap.getClient();
+ * ```
  */
 export function createExpoSyncoreBootstrap<
   TSchema extends ExpoSyncoreSchema

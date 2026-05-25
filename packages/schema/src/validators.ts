@@ -17,8 +17,25 @@ export type ValidatorKind =
   | "codec";
 
 /**
- * A schema field definition that combines validation, serialization, and
- * field-path metadata for Syncore's data model.
+ * A schema field definition that combines validation, serialisation, and
+ * field-path metadata for Syncore’s data model.
+ *
+ * Every type in the `s.*` builder namespace produces a `Validator`. You attach
+ * validators to table definitions via {@link defineTable} and to function
+ * arguments via the `args` field of {@link query}, {@link mutation}, and
+ * {@link action}.
+ *
+ * ```ts
+ * const titleValidator = s.string();       // Validator<string>
+ * const tagsValidator  = s.array(s.string()); // Validator<string[]>
+ * ```
+ *
+ * Validators carry three type parameters:
+ * - `TValue` — the TypeScript type after parsing (used in application code).
+ * - `TStorage` — the serialised representation stored in SQLite (may differ
+ *   for codec validators).
+ * - `TFieldPaths` — dotted paths to nested fields, used by the query builder
+ *   for type-safe index and search-index references.
  */
 export interface Validator<
   TValue = unknown,
@@ -669,32 +686,135 @@ export class CodecValidator<
 }
 
 /**
- * Public builder namespace for declaring Syncore schema fields and codecs.
+ * Describes every method available on the `s` schema builder.
+ *
+ * You interact with this through the singleton {@link s} object rather than
+ * implementing this interface yourself.
  */
 export interface ValidatorBuilderApi {
+  /**
+   * Validates that the value is a `string`.
+   *
+   * ```ts
+   * const v = s.string(); // Validator<string>
+   * ```
+   */
   string(): StringValidator;
+  /**
+   * Validates that the value is a finite `number` (rejects `NaN`).
+   *
+   * ```ts
+   * const v = s.number(); // Validator<number>
+   * ```
+   */
   number(): NumberValidator;
+  /**
+   * Validates that the value is a `boolean`.
+   *
+   * ```ts
+   * const v = s.boolean(); // Validator<boolean>
+   * ```
+   */
   boolean(): BooleanValidator;
+  /**
+   * Validates that the value is exactly `null`.
+   *
+   * Usually combined with `s.union` — or use the convenience `s.nullable`
+   * helper instead.
+   */
   null(): NullValidator;
+  /**
+   * Accepts any value without validation.
+   *
+   * Use sparingly. Prefer typed validators wherever possible to preserve
+   * type safety and devtools introspection.
+   */
   any(): AnyValidator;
+  /**
+   * Validates that the value is exactly equal to `literalValue`.
+   *
+   * ```ts
+   * const v = s.literal("active"); // Validator<"active">
+   * ```
+   */
   literal<TValue extends string | number | boolean | null>(
     literalValue: TValue
   ): LiteralValidator<TValue>;
+  /**
+   * Validates that the value is one of the provided string literals.
+   *
+   * Prefer this over `s.union(s.literal(…), …)` for string-enum fields
+   * because it generates a cleaner schema description.
+   *
+   * ```ts
+   * const v = s.enum(["todo", "in-progress", "done"] as const);
+   * // Validator<"todo" | "in-progress" | "done">
+   * ```
+   */
   enum<TValues extends readonly [string, ...string[]]>(
     values: TValues
   ): EnumValidator<TValues>;
+  /**
+   * Validates that the value is an array where every item passes
+   * `itemValidator`.
+   *
+   * ```ts
+   * const v = s.array(s.string()); // Validator<string[]>
+   * ```
+   */
   array<
     TItem,
     TItemStorage,
     TValidator extends Validator<TItem, TItemStorage, string>
   >(itemValidator: TValidator): ArrayValidator<TItem, TItemStorage, TValidator>;
+  /**
+   * Validates that the value is a plain object matching `shape`.
+   *
+   * Keys whose validators are `s.optional(...)` become optional properties in
+   * the inferred type.
+   *
+   * ```ts
+   * const v = s.object({ x: s.number(), y: s.number() });
+   * // Validator<{ x: number; y: number }>
+   * ```
+   */
   object<TShape extends ObjectValidatorShape>(
     shape: TShape
   ): ObjectValidator<TShape>;
+  /**
+   * Validates that the value is a non-empty string that represents a document
+   * `_id` in `tableName`.
+   *
+   * Using `s.id` instead of `s.string` for foreign-key fields enables devtools
+   * to show relationships between tables.
+   *
+   * ```ts
+   * const v = s.id("projects"); // Validator<string> (typed as a projects ID)
+   * ```
+   */
   id<TTableName extends string>(tableName: TTableName): IdValidator<TTableName>;
+  /**
+   * Makes a field optional (the value can be `undefined` / absent).
+   *
+   * Only use inside `s.object()` shapes or as a top-level table field. Nesting
+   * `s.optional` inside a non-object validator has no practical effect.
+   *
+   * ```ts
+   * const v = s.object({ name: s.string(), bio: s.optional(s.string()) });
+   * // Validator<{ name: string; bio?: string }>
+   * ```
+   */
   optional<TValue, TStorage, TFieldPaths extends string>(
     inner: Validator<TValue, TStorage, TFieldPaths>
   ): OptionalValidator<TValue, TStorage, TFieldPaths>;
+  /**
+   * Validates that the value is a `Record<TKey, TValue>` (an object with
+   * dynamic keys of a specific type).
+   *
+   * ```ts
+   * const v = s.record(s.string(), s.number()); // Validator<Record<string, number>>
+   * ```
+   */
   record<
     TKey extends string,
     TValue,
@@ -705,14 +825,49 @@ export interface ValidatorBuilderApi {
     keyValidator: TKeyValidator,
     valueValidator: TValueValidator
   ): RecordValidator<TKey, TValue, TStorage, TKeyValidator, TValueValidator>;
+  /**
+   * Validates that the value matches **one** of the provided validators
+   * (discriminated union).
+   *
+   * Validators are tried in order; the first one that parses without throwing
+   * wins.
+   *
+   * ```ts
+   * const v = s.union(s.string(), s.number()); // Validator<string | number>
+   * ```
+   */
   union<
     TMembers extends readonly Validator<unknown, unknown, string>[]
   >(...members: TMembers): UnionValidator<TMembers>;
+  /**
+   * Convenience wrapper for `s.union(inner, s.null())` that types the field
+   * as `TValue | null`.
+   *
+   * ```ts
+   * const v = s.nullable(s.id("projects")); // Validator<string | null>
+   * ```
+   */
   nullable<TValue, TStorage, TFieldPaths extends string>(
     inner: Validator<TValue, TStorage, TFieldPaths>
   ): UnionValidator<
     readonly [Validator<TValue, TStorage, TFieldPaths>, NullValidator]
   >;
+  /**
+   * Creates a custom codec that stores a field as one type but exposes it as
+   * another.
+   *
+   * Useful for types that are not natively serialisable to JSON (e.g. `Date`,
+   * `Map`, binary IDs). The codec’s `serialize` / `deserialize` functions
+   * convert between the runtime value and the stored representation.
+   *
+   * ```ts
+   * const dateValidator = s.codec(s.string(), {
+   *   storage: s.number(),
+   *   serialize: (date: string) => new Date(date).getTime(),
+   *   deserialize: (ts: number)  => new Date(ts).toISOString(),
+   * });
+   * ```
+   */
   codec<
     TValue,
     TStored,
@@ -734,7 +889,28 @@ export interface ValidatorBuilderApi {
 }
 
 /**
- * Primary schema builder namespace for Syncore's data-model DSL.
+ * Primary schema builder for Syncore’s data-model DSL.
+ *
+ * `s` is a namespace of factory functions for creating typed field validators.
+ * Use it when defining table schemas with {@link defineTable} and when
+ * declaring function argument shapes with {@link query}, {@link mutation}, or
+ * {@link action}.
+ *
+ * ```ts
+ * import { defineTable, defineSchema, s } from "syncorejs";
+ *
+ * export default defineSchema({
+ *   tasks: defineTable({
+ *     title:     s.string(),
+ *     status:    s.enum(["todo", "done"] as const),
+ *     projectId: s.nullable(s.id("projects")),
+ *     tags:      s.optional(s.array(s.string())),
+ *     metadata:  s.optional(s.object({ priority: s.number() })),
+ *   })
+ *   .index("by_status", ["status"])
+ *   .searchIndex("search_title", { searchField: "title", filterFields: ["status"] }),
+ * });
+ * ```
  */
 export const s: ValidatorBuilderApi = {
   string: () => new StringValidator(),

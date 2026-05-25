@@ -11,6 +11,7 @@ import {
 } from "@syncore/core";
 import { defineSchema, defineTable, s } from "@syncore/schema";
 import {
+  createBrowserWebSocketDevtoolsSink,
   createWebSyncoreRuntime,
   createWebWorkerRuntime,
   BrowserFileStorageAdapter,
@@ -459,6 +460,96 @@ describe("platform-web sql.js runtime", () => {
       expect(
         sentMessages.some((payload) => payload.includes('"type":"event"'))
       ).toBe(true);
+
+      await runtime.stop();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("attaches command handlers for explicit browser devtools sinks", async () => {
+    const sentMessages: string[] = [];
+    let latestSocket:
+      | {
+          onopen: (() => void) | null;
+          onmessage: ((event: MessageEvent<unknown>) => void) | null;
+        }
+      | undefined;
+
+    class MockWebSocket {
+      static OPEN = 1;
+      readyState = MockWebSocket.OPEN;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(public readonly url: string) {
+        expect(url).toBe("ws://127.0.0.1:4311");
+        latestSocket = this;
+        queueMicrotask(() => this.onopen?.());
+      }
+
+      send(payload: string) {
+        sentMessages.push(payload);
+      }
+
+      close() {}
+    }
+
+    vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
+
+    const schema = defineSchema({
+      todos: defineTable({
+        title: s.string()
+      })
+    });
+    const functions = {
+      "todos/list": query({
+        args: {},
+        returns: s.array(s.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
+      })
+    };
+
+    try {
+      const runtime = await createWebSyncoreRuntime({
+        databaseName: "todos-explicit-devtools",
+        persistenceDatabaseName: "syncore-web-test",
+        schema,
+        functions,
+        locateFile: () => wasmFilePath,
+        devtools: createBrowserWebSocketDevtoolsSink({
+          url: "ws://127.0.0.1:4311"
+        })
+      });
+
+      await runtime.start();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const helloPayload = sentMessages.find((payload) =>
+        payload.includes('"type":"hello"')
+      );
+      const hello = JSON.parse(helloPayload ?? "{}") as { runtimeId: string };
+      expect(hello.runtimeId).toEqual(expect.any(String));
+
+      latestSocket?.onmessage?.({
+        data: JSON.stringify({
+          type: "command",
+          commandId: "export-1",
+          targetRuntimeId: hello.runtimeId,
+          payload: { kind: "data.export" }
+        })
+      } as MessageEvent<string>);
+
+      await vi.waitFor(() => {
+        expect(
+          sentMessages.some(
+            (payload) =>
+              payload.includes('"type":"command.result"') &&
+              payload.includes('"kind":"data.export.result"')
+          )
+        ).toBe(true);
+      });
 
       await runtime.stop();
     } finally {

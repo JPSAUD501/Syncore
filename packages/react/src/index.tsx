@@ -97,8 +97,20 @@ type QueryObserverRecord = {
 };
 
 /**
- * Pass `"skip"` as the args argument to `useQuery`, `useQueryState`,
- * `useQueries`, or `usePaginatedQuery` to suppress the subscription entirely.
+ * Pass `skip` as the `args` argument to any Syncore React hook to suppress
+ * that subscription entirely.
+ *
+ * Useful when the query arguments depend on state that is not yet available
+ * (e.g. a selected item ID) — instead of conditionally calling the hook
+ * (which violates the Rules of Hooks), pass `skip` to deactivate it:
+ *
+ * ```tsx
+ * const task = useQuery(api.tasks.get, selectedId ? { id: selectedId } : skip);
+ * // task is `undefined` while selectedId is null/undefined
+ * ```
+ *
+ * Skipped queries return `undefined` for `data`, `"skipped"` for `status`,
+ * and `false` for `isLoading`.
  */
 export const skip = "skip" as const;
 type Skip = typeof skip;
@@ -111,7 +123,28 @@ const defaultRuntimeStatus: SyncoreRuntimeStatus = {
 const SyncoreContext = createContext<SyncoreClient | null>(null);
 
 /**
- * Provide a Syncore client to React descendants.
+ * Provides a Syncore client to all React descendants via context.
+ *
+ * Wrap your app (or any subtree that uses Syncore hooks) with
+ * `SyncoreProvider`. All `useQuery`, `useMutation`, `useAction`, and
+ * `useQueries` calls inside the tree will automatically use the client you
+ * supply.
+ *
+ * ```tsx
+ * // For a browser worker setup
+ * const client = createBrowserWorkerClient();
+ *
+ * function App() {
+ *   return (
+ *     <SyncoreProvider client={client}>
+ *       <TaskList />
+ *     </SyncoreProvider>
+ *   );
+ * }
+ * ```
+ *
+ * For Next.js apps use `SyncoreNextProvider` which also handles service worker
+ * and worker URL configuration.
  */
 export function SyncoreProvider({
   client,
@@ -126,7 +159,17 @@ export function SyncoreProvider({
 }
 
 /**
- * Read the active Syncore client from React context.
+ * Returns the active `SyncoreClient` from the nearest {@link SyncoreProvider}
+ * in the React tree.
+ *
+ * Throws if called outside of a `SyncoreProvider`. Prefer the higher-level
+ * hooks (`useQuery`, `useMutation`, etc.) for common operations — use
+ * `useSyncore` only when you need direct access to the client object.
+ *
+ * ```ts
+ * const client = useSyncore();
+ * const tasks = await client.query(api.tasks.list);
+ * ```
  */
 export function useSyncore(): SyncoreClient {
   const client = useContext(SyncoreContext);
@@ -137,7 +180,23 @@ export function useSyncore(): SyncoreClient {
 }
 
 /**
- * Subscribe to the active Syncore client's runtime lifecycle status.
+ * Subscribe to the runtime’s lifecycle status.
+ *
+ * Returns a {@link SyncoreRuntimeStatus} that updates whenever the underlying
+ * runtime changes state (e.g. starting, ready, error). Use it to gate your UI
+ * on the runtime being ready or to display an error boundary:
+ *
+ * ```tsx
+ * function TaskList() {
+ *   const status = useSyncoreStatus();
+ *   if (status.kind === "starting") return <Spinner />;
+ *   if (status.kind === "error")    return <ErrorScreen error={status.error} />;
+ *   return <Tasks />;
+ * }
+ * ```
+ *
+ * Most components do not need this — `useQuery` already incorporates runtime
+ * status into the `SyncoreQueryState.runtimeStatus` field.
  */
 export function useSyncoreStatus(): SyncoreRuntimeStatus {
   const client = useSyncore();
@@ -168,7 +227,27 @@ export function useSyncoreStatus(): SyncoreRuntimeStatus {
 }
 
 /**
- * Load a reactive Syncore query and return only the data for the common case.
+ * Subscribe to a reactive Syncore query and return the current data.
+ *
+ * The component re-renders automatically whenever the query result changes.
+ * If the query throws, `useQuery` re-throws the error so a React error
+ * boundary can catch it — use {@link useQueryState} if you need to handle
+ * errors inline.
+ *
+ * ```tsx
+ * // Basic usage
+ * const tasks = useQuery(api.tasks.list);
+ *
+ * // With arguments
+ * const task = useQuery(api.tasks.get, { id: taskId });
+ *
+ * // Conditionally skip when arguments are not yet available
+ * const task = useQuery(api.tasks.get, taskId ? { id: taskId } : skip);
+ * ```
+ *
+ * @param reference - A typed function reference (from the generated `api` object).
+ * @param args      - The query’s arguments, or `skip` to suppress the subscription.
+ * @returns The current query result, or `undefined` while loading.
  */
 export function useQuery<TArgs, TResult>(
   reference: FunctionReference<"query", TArgs, TResult>,
@@ -182,7 +261,21 @@ export function useQuery<TArgs, TResult>(
 }
 
 /**
- * Load a reactive Syncore query and keep the full local state.
+ * Subscribe to a reactive Syncore query and return the full
+ * {@link SyncoreQueryState} including loading, error, and runtime status.
+ *
+ * Use this instead of {@link useQuery} when you need to:
+ * - Differentiate between `undefined` data and an error.
+ * - React to `isLoading` / `isError` without relying on error boundaries.
+ * - Inspect `runtimeStatus` for the underlying runtime’s health.
+ *
+ * ```tsx
+ * const { data, isLoading, isError, error } = useQueryState(api.tasks.list);
+ *
+ * if (isLoading) return <Spinner />;
+ * if (isError)   return <ErrorBanner message={error.message} />;
+ * return <TaskList tasks={data} />;
+ * ```
  */
 export function useQueryState<TArgs, TResult>(
   reference: FunctionReference<"query", TArgs, TResult>,
@@ -219,7 +312,25 @@ export function useQueryState<TArgs, TResult>(
 }
 
 /**
- * Construct a stable function that executes a Syncore mutation.
+ * Returns a stable callback for executing a Syncore mutation.
+ *
+ * The returned function is type-safe: its parameter types are inferred from
+ * the mutation definition and remain stable across re-renders (no need to
+ * wrap in `useCallback`).
+ *
+ * ```tsx
+ * const createTask = useMutation(api.tasks.create);
+ *
+ * return (
+ *   <button onClick={() => createTask({ title: "New task" })}>
+ *     Add task
+ *   </button>
+ * );
+ * ```
+ *
+ * @param reference - A typed mutation reference from the generated `api` object.
+ * @returns A function that, when called, executes the mutation and returns a
+ *   promise that resolves to the mutation’s return value.
  */
 export function useMutation<TArgs, TResult>(
   reference: FunctionReference<"mutation", TArgs, TResult>
@@ -229,7 +340,25 @@ export function useMutation<TArgs, TResult>(
 }
 
 /**
- * Construct a stable function that executes a Syncore action.
+ * Returns a stable callback for executing a Syncore action.
+ *
+ * Identical to {@link useMutation} but for actions. Use this when the work you
+ * need to do cannot run inside a transaction (external API calls, long-running
+ * tasks, etc.).
+ *
+ * ```tsx
+ * const importTasks = useAction(api.tasks.importFromCsv);
+ *
+ * return (
+ *   <button onClick={() => importTasks({ url: csvUrl })}>
+ *     Import
+ *   </button>
+ * );
+ * ```
+ *
+ * @param reference - A typed action reference from the generated `api` object.
+ * @returns A function that, when called, executes the action and returns a
+ *   promise that resolves to the action’s return value.
  */
 export function useAction<TArgs, TResult>(
   reference: FunctionReference<"action", TArgs, TResult>
@@ -239,7 +368,25 @@ export function useAction<TArgs, TResult>(
 }
 
 /**
- * Load a keyed set of Syncore queries at once with per-entry state.
+ * Subscribe to multiple Syncore queries simultaneously and receive per-entry
+ * state objects in a single hook call.
+ *
+ * More efficient than calling `useQuery` in a loop when the set of queries is
+ * known at component render time. The hook maintains only one subscription per
+ * unique `(reference, args)` combination even if entries are duplicated.
+ *
+ * ```tsx
+ * const { header, sidebar } = useQueries({
+ *   header:  { query: api.layout.header },
+ *   sidebar: { query: api.layout.sidebar, args: { userId } },
+ * });
+ *
+ * if (header.isLoading || sidebar.isLoading) return <Spinner />;
+ * ```
+ *
+ * @param entries - A record of named query requests. Each entry can include
+ *   `args: skip` to suppress that specific subscription.
+ * @returns A record with the same keys, each holding a {@link SyncoreQueryState}.
  */
 export function useQueries<TEntries extends QueriesRequestInput>(
   entries: TEntries
@@ -297,7 +444,44 @@ export function useQueries<TEntries extends QueriesRequestInput>(
 }
 
 /**
- * Load a paginated Syncore query as a growing reactive list.
+ * Subscribe to a paginated Syncore query, incrementally loading more pages.
+ *
+ * The query must accept a `paginationOpts` argument and return a
+ * `PaginationResult`. The hook manages cursors automatically — call the
+ * returned `loadMore` function to append the next page to the results.
+ *
+ * ```tsx
+ * const { results, status, loadMore, hasMore } = usePaginatedQuery(
+ *   api.tasks.list,
+ *   { projectId },
+ *   { initialNumItems: 20 },
+ * );
+ *
+ * return (
+ *   <>
+ *     {results.map((t) => <TaskRow key={t._id} task={t} />)}
+ *     {hasMore && (
+ *       <button
+ *         onClick={() => loadMore(20)}
+ *         disabled={status === "loadingMore"}
+ *       >
+ *         Load more
+ *       </button>
+ *     )}
+ *   </>
+ * );
+ * ```
+ *
+ * Pass `skip` as `args` to suppress the subscription until arguments are
+ * ready.
+ *
+ * @param reference          - A typed query reference whose handler calls
+ *   `ctx.db.query(…).paginate(paginationOpts)`.
+ * @param args               - Arguments for the query (excluding
+ *   `paginationOpts`, which is managed internally), or `skip`.
+ * @param options.initialNumItems - Number of items to load on the first page.
+ * @returns A {@link UsePaginatedQueryResult} with the accumulated results and
+ *   a `loadMore` callback.
  */
 export function usePaginatedQuery<TReference extends PaginatedQueryReference>(
   reference: TReference,

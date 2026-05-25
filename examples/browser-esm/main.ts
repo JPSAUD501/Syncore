@@ -11,13 +11,6 @@ interface Contact {
   createdAt: number;
 }
 
-interface ContactStats {
-  total: number;
-  companies: number;
-  favorites: number;
-  newestAt: number | null;
-}
-
 /* ─── DOM refs ─── */
 const $ = (sel: string) => document.querySelector(sel)!;
 const listEl = $("#contact-list") as HTMLElement;
@@ -27,7 +20,6 @@ const nameInput = $("#name-input") as HTMLInputElement;
 const emailInput = $("#email-input") as HTMLInputElement;
 const companyInput = $("#company-input") as HTMLInputElement;
 const addBtn = $("#add-btn") as HTMLButtonElement;
-const logEl = $("#log") as HTMLElement;
 const statsEl = $("#stats") as HTMLElement;
 const seedBtn = $("#seed-btn") as HTMLButtonElement;
 
@@ -37,18 +29,6 @@ const managed = createBrowserWorkerClient({
 });
 
 const client = managed.client;
-
-let logLines: string[] = [];
-
-function log(msg: string) {
-  const ts = new Date().toLocaleTimeString("en-US", { hour12: false });
-  logLines.push(`[${ts}] ${msg}`);
-  if (logLines.length > 50) logLines = logLines.slice(-50);
-  logEl.textContent = logLines.join("\n");
-  logEl.scrollTop = logEl.scrollHeight;
-}
-
-log("Booting Syncore runtime in web worker...");
 
 /* ─── Time formatting ─── */
 function timeAgo(ts: number): string {
@@ -92,7 +72,6 @@ function render(contacts: Contact[]) {
     btn.addEventListener("click", () => {
       const id = (btn as HTMLElement).dataset.id!;
       void client.mutation(api.contacts.remove, { id });
-      log(`Removed contact ${id.slice(0, 8)}...`);
     });
   });
 
@@ -100,7 +79,6 @@ function render(contacts: Contact[]) {
     btn.addEventListener("click", () => {
       const id = (btn as HTMLElement).dataset.id!;
       void client.mutation(api.contacts.toggleFavorite, { id });
-      log(`Toggled favorite ${id.slice(0, 8)}...`);
     });
   });
 }
@@ -124,7 +102,6 @@ function startWatch(searchQuery?: string) {
     watch.onUpdate(() => {
       const results = (watch.localQueryResult() ?? []) as Contact[];
       render(results);
-      log(`Search "${searchQuery}" → ${results.length} result(s)`);
     });
     currentWatch = watch;
   } else {
@@ -134,7 +111,6 @@ function startWatch(searchQuery?: string) {
       render(contacts);
     });
     currentWatch = watch;
-    log("Watching contacts list (reactive)");
   }
 }
 
@@ -167,12 +143,10 @@ addBtn.addEventListener("click", () => {
   const company = companyInput.value.trim();
 
   if (!name || !email) {
-    log("Error: Name and email are required");
     return;
   }
 
   void client.mutation(api.contacts.create, { name, email, company });
-  log(`Created contact: ${name}`);
   nameInput.value = "";
   emailInput.value = "";
   companyInput.value = "";
@@ -180,8 +154,7 @@ addBtn.addEventListener("click", () => {
 });
 
 seedBtn.addEventListener("click", async () => {
-  const inserted = await client.mutation(api.contacts.seedDemo);
-  log(`Seeded ${inserted} contact${inserted === 1 ? "" : "s"}`);
+  await client.mutation(api.contacts.seedDemo);
 });
 
 /* Enter key to submit */

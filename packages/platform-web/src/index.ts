@@ -44,9 +44,19 @@ export * from "./indexeddb.js";
 export * from "./opfs.js";
 export * from "./external-change.js";
 
+/**
+ * Schema type constraint for web-platform Syncore runtimes.
+ *
+ * Pass any schema produced by `defineSchema()` where this type is expected.
+ * Defaults to the unconstrained `SyncoreDataModel` when omitted.
+ */
 export type WebSyncoreSchema<
   TSchema extends SyncoreDataModel = SyncoreDataModel
 > = TSchema;
+/**
+ * Alias of {@link WebSyncoreSchema} for the `syncorejs/browser` surface.
+ * @see WebSyncoreSchema
+ */
 export type BrowserSyncoreSchema<
   TSchema extends SyncoreDataModel = SyncoreDataModel
 > = WebSyncoreSchema<TSchema>;
@@ -58,65 +68,174 @@ const DATA_SOURCE_ALIAS_PREFIX = "data-source-alias";
 /**
  * Options for constructing a browser Syncore runtime.
  *
- * Use this when you want to host the full runtime in a browser tab or worker.
+ * Use this when you want to host the full runtime directly in a browser tab or
+ * dedicated Web Worker. In most React or Svelte apps you should call
+ * `createWebWorkerSyncoreRuntime()` inside a worker file instead, so that
+ * SQLite and query execution run off the main thread.
+ *
+ * At minimum you must supply `schema` and `functions`. Everything else has
+ * sensible defaults (OPFS persistence, SQL.js driver, auto-devtools connect).
+ *
+ * ```ts
+ * const runtime = await createWebSyncoreRuntime({
+ *   schema,
+ *   functions,
+ *   databaseName: "my-app",
+ * });
+ * ```
  */
 export interface CreateWebRuntimeOptions<
   TSchema extends WebSyncoreSchema = WebSyncoreSchema
 > {
-  /** The schema for the local Syncore app. */
+  /** The data model that defines the available tables and indexes. */
   schema: TSchema;
 
-  /** The generated function registry for the local Syncore app. */
+  /**
+   * The registered function map. In practice this is always the `functions`
+   * export from `syncore/_generated/functions.ts`.
+   */
   functions: SyncoreRuntimeOptions<TSchema>["functions"];
 
-  /** Optional resolved installed components for the local Syncore app. */
+  /**
+   * Resolved Syncore component instances to mount alongside the root app.
+   * Only required when your app installs Syncore component packages.
+   */
   components?: SyncoreRuntimeOptions<TSchema>["components"];
 
-  /** Optional platform capabilities exposed to function handlers. */
+  /**
+   * Platform capabilities injected into `ctx.capabilities` inside function
+   * handlers. Use this to expose browser APIs (e.g. `navigator.geolocation`)
+   * to your Syncore functions in a portable way.
+   */
   capabilities?: SyncoreCapabilities;
 
-  /** Optional custom SQL driver. Defaults to SQL.js with local persistence. */
+  /**
+   * Custom SQLite driver. Defaults to a `SqlJsDriver` backed by the
+   * persistence layer chosen by `persistenceMode` / `persistence`.
+   *
+   * Override only when you need a non-standard SQLite binding.
+   */
   driver?: SyncoreRuntimeOptions<TSchema>["driver"];
 
-  /** Optional custom file/blob storage adapter. */
+  /**
+   * Custom blob storage adapter. Defaults to `BrowserFileStorageAdapter`
+   * backed by the same persistence layer as the SQL driver.
+   *
+   * Override when you want to store files in a different location (e.g. an
+   * in-memory adapter for tests).
+   */
   storage?: SyncoreStorageAdapter;
 
-  /** Optional explicit persistence implementation. */
+  /**
+   * An explicit persistence implementation. When provided, `persistenceMode`,
+   * `persistenceDatabaseName`, and `opfsRootDirectoryName` are ignored.
+   *
+   * Most apps should omit this and let Syncore choose the best available mode
+   * automatically via `persistenceMode`.
+   */
   persistence?: SyncoreWebPersistence;
 
-  /** Which browser persistence mode to use when Syncore creates one for you. */
+  /**
+   * Which browser storage backend Syncore should use when it creates the
+   * persistence layer for you.
+   *
+   * - `"opfs"` — Origin Private File System (recommended for modern browsers;
+   *   supports large databases and true WAL mode).
+   * - `"indexeddb"` — IndexedDB-backed persistence (wider compatibility).
+   *
+   * Defaults to the best mode available in the current browser.
+   */
   persistenceMode?: WebPersistenceMode;
 
-  /** Logical database name for SQL.js and local storage namespaces. */
+  /**
+   * Logical name used to namespace the SQL.js database and local storage keys.
+   *
+   * Set a stable value (e.g. your app’s slug) so the database persists across
+   * page reloads with a predictable name. Defaults to `"syncore"`.
+   */
   databaseName?: string;
 
-  /** Optional IndexedDB database name for persistence metadata. */
+  /**
+   * IndexedDB database name used to store persistence metadata (e.g. the OPFS
+   * scope identifier). Defaults to `databaseName`.
+   */
   persistenceDatabaseName?: string;
 
-  /** Optional OPFS directory name for persistent files. */
+  /**
+   * OPFS root directory name for the SQLite database file and blob storage.
+   * Defaults to `databaseName` or `"syncore"`.
+   */
   opfsRootDirectoryName?: string;
 
-  /** Optional namespace for file/blob storage. */
+  /**
+   * Namespace prefix for blob storage keys. Defaults to `databaseName` or
+   * `"syncore"`.
+   */
   storageNamespace?: string;
 
-  /** Optional direct wasm URL for SQL.js. */
+  /**
+   * Explicit URL for the `sql.js` WebAssembly binary.
+   *
+   * Syncore resolves the URL automatically in most bundler setups. Override
+   * this only if the auto-resolved URL is incorrect (e.g. in a custom CDN
+   * deploy or a worker with a different asset base path).
+   */
   wasmUrl?: string;
 
-  /** Optional callback for resolving SQL.js support files. */
+  /**
+   * Custom file resolver for SQL.js support files (wasm + worker scripts).
+   *
+   * Takes a filename (e.g. `"sql-wasm.wasm"`) and returns the full URL.
+   * Equivalent to sql.js’s `locateFile` option. Use `wasmUrl` instead when
+   * you only need to override the `.wasm` path.
+   */
   locateFile?: (fileName: string) => string;
 
-  /** Optional runtime platform label shown in devtools snapshots. */
+  /**
+   * Platform label reported to the devtools dashboard.
+   * Defaults to `"browser"`.
+   */
   platform?: string;
 
-  /** Optional devtools sink used during development. */
+  /** Human-readable app name shown in the devtools dashboard header. */
+  appName?: string;
+
+  /**
+   * Explicit devtools WebSocket server URL.
+   * Defaults to `ws://127.0.0.1:4311` (the Syncore devtools default port).
+   */
+  devtoolsUrl?: string;
+
+  /**
+   * Devtools event sink. Pass `false` to disable devtools entirely
+   * (recommended for production builds). Omit to auto-connect to the local
+   * devtools server when running in development.
+   */
   devtools?: DevtoolsSink | false;
 
-  /** Optional scheduler configuration for jobs and recurring work. */
+  /** Scheduler configuration for background and recurring jobs. */
   scheduler?: SchedulerOptions;
 }
 
 /**
- * Options for hosting a Syncore runtime inside a browser Worker.
+ * Options for hosting a Syncore runtime inside a dedicated browser Worker.
+ *
+ * Extends {@link CreateWebRuntimeOptions} with the `endpoint` field that wires
+ * the runtime to the worker’s message port. Use this inside a worker entry
+ * file (`syncore.worker.ts`):
+ *
+ * ```ts
+ * // syncore.worker.ts
+ * import { createWebWorkerSyncoreRuntime } from "syncorejs/browser";
+ * import schema from "./syncore/schema";
+ * import { functions } from "./syncore/_generated/functions";
+ *
+ * createWebWorkerSyncoreRuntime({
+ *   schema,
+ *   functions,
+ *   endpoint: self as unknown as SyncoreWorkerMessageEndpoint,
+ * });
+ * ```
  */
 export interface CreateWebWorkerRuntimeOptions<
   TSchema extends WebSyncoreSchema = WebSyncoreSchema
@@ -126,29 +245,56 @@ export interface CreateWebWorkerRuntimeOptions<
 }
 
 /**
- * Options for constructing a browser Syncore runtime.
+ * Alias of {@link CreateWebRuntimeOptions} for the `syncorejs/browser` surface.
+ * @see CreateWebRuntimeOptions
  */
 export type CreateBrowserRuntimeOptions<
   TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema
 > = CreateWebRuntimeOptions<TSchema>;
 
 /**
- * Options for hosting a Syncore runtime inside a browser Worker.
+ * Alias of {@link CreateWebWorkerRuntimeOptions} for the `syncorejs/browser` surface.
+ * @see CreateWebWorkerRuntimeOptions
  */
 export type CreateBrowserWorkerRuntimeOptions<
   TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema
 > = CreateWebWorkerRuntimeOptions<TSchema>;
 
+/**
+ * Internal bookkeeping for the browser cross-tab change synchronisation layer.
+ *
+ * Holds the `BroadcastChannel`-based signal that publishes and receives
+ * database-change events between tabs, and optionally an `applier` that
+ * reconciles incoming changes into an in-memory SQL.js database.
+ *
+ * You do not need to use this directly — `createWebSyncoreRuntime` builds it
+ * for you from your options. Exposed for advanced setups (e.g. Expo web) that
+ * construct the change support layer independently.
+ */
 export interface WebExternalChangeSupport {
   signal: BroadcastChannelExternalChangeSignal;
   applier?: SqlJsExternalChangeApplier;
 }
 
 /**
- * Create a full Syncore runtime directly in the browser.
+ * Create a full Syncore runtime directly in the browser (main thread or
+ * shared worker).
  *
- * Most React apps should use a worker runtime instead so queries and SQLite work
- * stay off the main thread.
+ * This function sets up SQL.js, the OPFS/IndexedDB persistence layer, blob
+ * storage, cross-tab change synchronisation via `BroadcastChannel`, and
+ * auto-connects to the devtools server in development.
+ *
+ * @remarks
+ * Most React/Svelte apps should run the runtime inside a `Worker` using
+ * `createWebWorkerSyncoreRuntime()` instead, so that SQLite queries don’t
+ * block the main thread. Use `createWebSyncoreRuntime` only when a worker is
+ * not practical (e.g. in Electron renderer processes or certain test setups).
+ *
+ * ```ts
+ * const runtime = await createWebSyncoreRuntime({ schema, functions });
+ * await runtime.start();
+ * const client = runtime.createClient();
+ * ```
  */
 export async function createWebSyncoreRuntime<
   TSchema extends WebSyncoreSchema
@@ -189,7 +335,7 @@ export async function createWebSyncoreRuntime<
     persistence,
     driver
   });
-  const appName = resolveWebAppName();
+  const appName = options.appName ?? resolveWebAppName();
   const origin = resolveWebOrigin();
   const sessionLabel = resolveWebSessionLabel();
   const databaseLabel = options.databaseName ?? "syncore";
@@ -211,7 +357,7 @@ export async function createWebSyncoreRuntime<
     options.devtools === undefined && shouldAutoConnectDevtools()
       ? (() => {
           const sinkOptions: BrowserWebSocketDevtoolsSinkOptions = {
-            url: resolveDefaultDevtoolsUrl(),
+            url: options.devtoolsUrl ?? resolveDefaultDevtoolsUrl(),
             targetKind: "client",
             storageProtocol: persistence.storageProtocol,
             databaseLabel,
@@ -242,7 +388,7 @@ export async function createWebSyncoreRuntime<
     devtoolsUrl:
       options.devtools && typeof options.devtools === "object"
         ? undefined
-        : resolveDefaultDevtoolsUrl()
+        : options.devtoolsUrl ?? resolveDefaultDevtoolsUrl()
   });
 
   const runtime = new SyncoreRuntime({
@@ -261,9 +407,9 @@ export async function createWebSyncoreRuntime<
     ...(options.scheduler ? { scheduler: options.scheduler } : {})
   });
 
-  if (autoDevtools) {
-    autoDevtools.attachRuntime(runtime);
-    autoDevtools.attachCommandHandler(
+  if (isAttachableBrowserDevtoolsSink(resolvedDevtools)) {
+    resolvedDevtools.attachRuntime(runtime);
+    resolvedDevtools.attachCommandHandler(
       createDevtoolsCommandHandler({
         driver,
         schema: options.schema,
@@ -271,7 +417,7 @@ export async function createWebSyncoreRuntime<
         admin: runtime.getAdmin()
       })
     );
-    autoDevtools.attachSubscriptionHost(
+    resolvedDevtools.attachSubscriptionHost(
       createDevtoolsSubscriptionHost({
         driver,
         schema: options.schema,
@@ -284,6 +430,31 @@ export async function createWebSyncoreRuntime<
   return runtime;
 }
 
+function isAttachableBrowserDevtoolsSink(
+  sink: DevtoolsSink | undefined
+): sink is BrowserWebSocketDevtoolsSink {
+  return (
+    !!sink &&
+    typeof (sink as BrowserWebSocketDevtoolsSink).attachRuntime === "function" &&
+    typeof (sink as BrowserWebSocketDevtoolsSink).attachCommandHandler ===
+      "function" &&
+    typeof (sink as BrowserWebSocketDevtoolsSink).attachSubscriptionHost ===
+      "function"
+  );
+}
+
+/**
+ * Build a {@link WebExternalChangeSupport} bundle for a given database and
+ * persistence layer.
+ *
+ * Creates a `BroadcastChannel`-based signal so that all tabs sharing the same
+ * `databaseName` are notified when a mutation commits. When `driver` is a
+ * `SqlJsDriver` (i.e. an in-memory database), an `applier` is also created so
+ * the local database can be updated from the latest on-disk snapshot.
+ *
+ * Called automatically by `createWebSyncoreRuntime`. Exposed for advanced use
+ * cases such as the Expo web adapter.
+ */
 export function createWebExternalChangeSupport(options: {
   databaseName: string;
   persistence: SyncoreWebPersistence;
@@ -312,6 +483,17 @@ export function createWebExternalChangeSupport(options: {
   };
 }
 
+/**
+ * Build a {@link WebExternalChangeSupport} bundle for an Expo app running on
+ * the web platform.
+ *
+ * Behaves identically to {@link createWebExternalChangeSupport} but accepts
+ * the same options shape used by `createExpoSyncoreRuntime`, making it easy
+ * to share config when bootstrapping an Expo web runtime.\
+ *
+ * Called internally by the Expo platform adapter. Use directly only when
+ * constructing the runtime outside of `createExpoSyncoreRuntime`.
+ */
 export async function createExpoWebExternalChangeSupport(options: {
   databaseName: string;
   locateFile?: (fileName: string) => string;
@@ -347,19 +529,45 @@ export async function createExpoWebExternalChangeSupport(options: {
 }
 
 /**
- * Attach a Syncore runtime to a browser Worker endpoint.
+ * Start a Syncore runtime inside a browser `Worker` and wire it to the
+ * worker’s own message endpoint.
+ *
+ * This is the function you call **inside your worker file** (`syncore.worker.ts`).
+ * It creates the full runtime (SQL.js + OPFS + BroadcastChannel) in the worker
+ * context and begins listening for messages from the main-thread client.
+ *
+ * ```ts
+ * // syncore.worker.ts
+ * import { createWebWorkerRuntime } from "syncorejs/browser";
+ * import schema from "./syncore/schema";
+ * import { functions } from "./syncore/_generated/functions";
+ *
+ * void createWebWorkerRuntime({
+ *   schema,
+ *   functions,
+ *   endpoint: self as unknown as SyncoreWorkerMessageEndpoint,
+ * });
+ * ```
+ *
+ * On the main thread, connect with `createManagedWebWorkerClient()` or
+ * `SyncoreNextProvider` (Next.js).
  */
 export function createWebWorkerRuntime<
   TSchema extends WebSyncoreSchema
 >(options: CreateWebWorkerRuntimeOptions<TSchema>) {
   return attachWebWorkerRuntime({
     endpoint: options.endpoint,
-    createRuntime: () => createWebSyncoreRuntime(options)
+    createRuntime: () =>
+      createWebSyncoreRuntime({
+        ...options,
+        platform: options.platform ?? "browser-worker"
+      })
   });
 }
 
 /**
- * Attach a Syncore runtime to a browser Worker endpoint.
+ * Alias of {@link createWebWorkerRuntime} for the `syncorejs/browser` surface.
+ * @see createWebWorkerRuntime
  */
 export function createBrowserWorkerRuntime(
   options: CreateBrowserWorkerRuntimeOptions
@@ -368,7 +576,18 @@ export function createBrowserWorkerRuntime(
 }
 
 /**
- * Create a client directly from a browser Syncore runtime.
+ * Create a same-process Syncore client from a started browser runtime.
+ *
+ * Use this when the runtime lives in the same context as the client (e.g.
+ * main-thread runtime in an Electron renderer or a test harness). For
+ * worker-based setups use `createManagedWebWorkerClient()` instead, which
+ * communicates with the worker over `postMessage`.
+ *
+ * ```ts
+ * const runtime = await createWebSyncoreRuntime({ schema, functions });
+ * await runtime.start();
+ * const client = createWebSyncoreClient(runtime);
+ * ```
  */
 export function createWebSyncoreClient<
   TSchema extends WebSyncoreSchema
@@ -377,7 +596,8 @@ export function createWebSyncoreClient<
 }
 
 /**
- * Create a full Syncore runtime directly in the browser.
+ * Alias of {@link createWebSyncoreRuntime} for the `syncorejs/browser` surface.
+ * @see createWebSyncoreRuntime
  */
 export function createBrowserSyncoreRuntime<
   TSchema extends BrowserSyncoreSchema
@@ -386,7 +606,8 @@ export function createBrowserSyncoreRuntime<
 }
 
 /**
- * Create a client directly from a browser Syncore runtime.
+ * Alias of {@link createWebSyncoreClient} for the `syncorejs/browser` surface.
+ * @see createWebSyncoreClient
  */
 export function createBrowserSyncoreClient<
   TSchema extends BrowserSyncoreSchema
@@ -394,17 +615,40 @@ export function createBrowserSyncoreClient<
   return createWebSyncoreClient(runtime);
 }
 
+/**
+ * Configuration options for {@link createBrowserWebSocketDevtoolsSink}.
+ *
+ * All fields except `url` are optional — `createWebSyncoreRuntime` fills them
+ * in automatically from the runtime’s own metadata.
+ */
 export interface BrowserWebSocketDevtoolsSinkOptions {
+  /** WebSocket URL of the Syncore devtools server, e.g. `"ws://127.0.0.1:4311"`. */
   url: string;
+  /**
+   * How long to wait before attempting a reconnect after the WebSocket closes,
+   * in milliseconds. Defaults to `1200`.
+   */
   reconnectDelayMs?: number;
+  /** Human-readable app name shown in the devtools dashboard header. */
   appName?: string;
+  /** Origin label (e.g. `window.location.origin`) shown in the devtools session list. */
   origin?: string;
+  /** Session label auto-generated from the tab’s URL path; helps distinguish multiple open tabs. */
   sessionLabel?: string;
+  /** Kind of this devtools participant. Always `"client"` for browser runtimes. */
   targetKind?: "client";
+  /** Persistence protocol tag reported to devtools (e.g. `"opfs"`, `"indexeddb"`). */
   storageProtocol?: string;
+  /** Logical database name used to group sessions in the devtools UI. */
   databaseLabel?: string;
+  /** Stable alias for the data source, used by devtools for cross-session continuity. */
   dataSourceAlias?: string;
+  /**
+   * Opaque identity string that uniquely identifies this database across origin
+   * + persistence protocol + name, used by devtools for data-source tracking.
+   */
   storageIdentity?: string;
+  /** Capability flags advertising what devtools features this runtime supports. */
   capabilities?: SyncoreDevtoolsCapabilities;
 }
 
@@ -431,13 +675,45 @@ function isBrowserLikeRuntime(): boolean {
   return typeof window !== "undefined" || scope.WorkerGlobalScope !== undefined;
 }
 
+/**
+ * A {@link DevtoolsSink} that forwards runtime events to the Syncore devtools
+ * dashboard over a persistent WebSocket connection with auto-reconnect.
+ *
+ * Returned by {@link createBrowserWebSocketDevtoolsSink}. You typically do not
+ * use this interface directly — `createWebSyncoreRuntime` creates and manages
+ * the sink automatically when running in development.
+ */
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
+  /** Attach the runtime so the sink can pull metadata for devtools messages. */
   attachRuntime(runtime: SyncoreRuntime<WebSyncoreSchema>): void;
+  /** Attach the command handler that processes devtools RPC commands. */
   attachCommandHandler(handler: DevtoolsCommandHandler): void;
+  /** Attach the subscription host for live query streaming. */
   attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
+  /** Close the WebSocket and stop reconnecting. Call on runtime shutdown. */
   dispose(): void;
 }
 
+/**
+ * Create a WebSocket-based devtools sink that connects to the Syncore devtools
+ * server and forwards runtime events in real time.
+ *
+ * The sink auto-reconnects if the connection drops (e.g. while the devtools
+ * dashboard is restarting) and buffers events that arrive before the socket is
+ * open.
+ *
+ * In most cases you do not need to call this directly — `createWebSyncoreRuntime`
+ * creates and attaches the sink automatically when `devtools` is omitted and the
+ * page is served from a local/private hostname.
+ *
+ * ```ts
+ * const sink = createBrowserWebSocketDevtoolsSink({
+ *   url: "ws://127.0.0.1:4311",
+ *   appName: "My App",
+ * });
+ * const runtime = await createWebSyncoreRuntime({ schema, functions, devtools: sink });
+ * ```
+ */
 export function createBrowserWebSocketDevtoolsSink(
   options: BrowserWebSocketDevtoolsSinkOptions
 ): BrowserWebSocketDevtoolsSink {
@@ -1103,7 +1379,20 @@ function generateUniqueSessionName(): string {
 }
 
 /**
- * Browser file/blob storage built on top of Syncore web persistence.
+ * Browser file/blob storage adapter backed by `SyncoreWebPersistence`.
+ *
+ * Stores binary blobs (images, documents, etc.) in the same OPFS or
+ * IndexedDB store as the SQLite database. Pass an instance to
+ * `CreateWebRuntimeOptions.storage` to enable Syncore's Storage API
+ * (`ctx.storage.put`, `ctx.storage.get`, etc.) in browser functions.
+ *
+ * ```ts
+ * const runtime = await createWebSyncoreRuntime({
+ *   schema,
+ *   functions,
+ *   storage: (persistence) => new BrowserFileStorageAdapter(persistence, "files"),
+ * });
+ * ```
  */
 export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
   constructor(

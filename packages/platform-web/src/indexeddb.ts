@@ -1,6 +1,8 @@
 import type { SyncoreWebPersistence, StoredWebFile } from "./persistence.js";
 
+/** Options for constructing a {@link SyncoreIndexedDbPersistence}. */
 export interface IndexedDbPersistenceOptions {
+  /** IndexedDB database name. Defaults to `"syncore-web"`. */
   databaseName?: string;
 }
 
@@ -18,6 +20,16 @@ type StoredFileRecord = {
   updatedAt: number;
 };
 
+/**
+ * IndexedDB-backed {@link SyncoreWebPersistence} implementation.
+ *
+ * Stores the SQLite database blob and file objects in dedicated IndexedDB
+ * object stores. Used automatically when OPFS is unavailable or when the
+ * persistence mode is explicitly set to `"indexeddb"`.
+ *
+ * Prefer `createWebPersistence()` over constructing this directly unless
+ * you need to pass a specific IndexedDB database name.
+ */
 export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
   readonly storageProtocol = "idb" as const;
   private readonly databaseName: string;

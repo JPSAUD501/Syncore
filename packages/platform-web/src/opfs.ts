@@ -1,6 +1,8 @@
 import type { SyncoreWebPersistence, StoredWebFile } from "./persistence.js";
 
+/** Options for constructing a {@link SyncoreOpfsPersistence}. */
 export interface OpfsPersistenceOptions {
+  /** Root directory name inside the Origin Private File System bucket. Defaults to `"syncore"`. */
   rootDirectoryName?: string;
 }
 
@@ -12,6 +14,17 @@ type OpfsStorageManager = StorageManager & {
   getDirectory?: () => Promise<FileSystemDirectoryHandle>;
 };
 
+/**
+ * Origin Private File System (OPFS) backed {@link SyncoreWebPersistence}.
+ *
+ * Stores the SQLite database blob as a `.sqlite` file and binary file objects
+ * as individual OPFS entries under a configurable root directory. OPFS offers
+ * significantly better I/O throughput than IndexedDB and is the preferred
+ * persistence backend when available.
+ *
+ * Used automatically by `createWebPersistence()` in `"opfs"` or `"auto"` mode
+ * when `isOpfsAvailable()` returns `true`.
+ */
 export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
   readonly storageProtocol = "opfs" as const;
   private rootDirectoryPromise: Promise<FileSystemDirectoryHandle> | undefined;
