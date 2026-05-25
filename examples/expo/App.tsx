@@ -1,8 +1,9 @@
 import { SyncoreExpoProvider } from "syncorejs/expo/react";
-import { useMutation, useQuery } from "syncorejs/react";
+import { skip, useMutation, useQuery } from "syncorejs/react";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -48,18 +49,26 @@ export default function App() {
 function NotesScreen() {
   const [showComposer, setShowComposer] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [colorFilter, setColorFilter] = useState<string | null>(null);
 
   const allNotesQuery = useQuery(api.notes.list);
+  const stats = useQuery(api.notes.stats);
   const searchResults = useQuery(api.notes.search, { query: searchText });
+  const colorResults = useQuery(
+    api.notes.byColor,
+    colorFilter ? { color: colorFilter } : skip
+  );
   const createNote = useMutation(api.notes.create);
   const togglePin = useMutation(api.notes.togglePin);
   const removeNote = useMutation(api.notes.remove);
+  const seedDemo = useMutation(api.notes.seedDemo);
   const allNotes = useMemo(() => allNotesQuery ?? [], [allNotesQuery]);
 
   const notes = useMemo(() => {
     if (searchText.trim() && searchResults) return searchResults;
+    if (colorFilter && colorResults) return colorResults;
     return allNotes;
-  }, [searchText, searchResults, allNotes]);
+  }, [searchText, searchResults, colorFilter, colorResults, allNotes]);
 
   const pinnedNotes = useMemo(() => notes.filter((n) => n.pinned), [notes]);
   const unpinnedNotes = useMemo(() => notes.filter((n) => !n.pinned), [notes]);
@@ -82,16 +91,25 @@ function NotesScreen() {
         <View>
           <Text style={styles.headerTitle}>Notes</Text>
           <Text style={styles.headerSubtitle}>
-            {allNotes.length} note{allNotes.length !== 1 ? "s" : ""} stored
-            locally
+            {stats?.total ?? allNotes.length} note
+            {(stats?.total ?? allNotes.length) !== 1 ? "s" : ""} stored locally
+            {stats?.pinned ? ` / ${stats.pinned} pinned` : ""}
           </Text>
         </View>
-        <Pressable
-          style={styles.addButton}
-          onPress={() => setShowComposer(!showComposer)}
-        >
-          <Text style={styles.addButtonText}>{showComposer ? "x" : "+"}</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            style={styles.secondaryButton}
+            onPress={() => void seedDemo()}
+          >
+            <Text style={styles.secondaryButtonText}>Demo</Text>
+          </Pressable>
+          <Pressable
+            style={styles.addButton}
+            onPress={() => setShowComposer(!showComposer)}
+          >
+            <Text style={styles.addButtonText}>{showComposer ? "x" : "+"}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Search */}
@@ -104,6 +122,43 @@ function NotesScreen() {
           style={styles.searchInput}
         />
       </View>
+
+      {stats?.colors.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroller}
+          contentContainerStyle={styles.filterRow}
+        >
+          <Pressable
+            style={[
+              styles.colorFilter,
+              !colorFilter && styles.colorFilterActive
+            ]}
+            onPress={() => setColorFilter(null)}
+          >
+            <Text style={styles.colorFilterText}>All</Text>
+          </Pressable>
+          {stats.colors.map((item) => (
+            <Pressable
+              key={item.color}
+              style={[
+                styles.colorFilter,
+                colorFilter === item.color && styles.colorFilterActive
+              ]}
+              onPress={() => {
+                setSearchText("");
+                setColorFilter(colorFilter === item.color ? null : item.color);
+              }}
+            >
+              <View
+                style={[styles.colorDot, { backgroundColor: item.color }]}
+              />
+              <Text style={styles.colorFilterText}>{item.count}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
 
       {/* Composer */}
       {showComposer && <NoteComposer onCreate={handleCreate} />}
@@ -314,6 +369,24 @@ const styles = StyleSheet.create({
     color: "#888",
     marginTop: 2
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  secondaryButton: {
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: "#EEE",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  secondaryButtonText: {
+    color: "#444",
+    fontSize: 13,
+    fontWeight: "700"
+  },
   addButton: {
     width: 44,
     height: 44,
@@ -349,11 +422,48 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)"
+      },
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8
+      }
+    }),
     elevation: 3
+  },
+  filterScroller: {
+    maxHeight: 44,
+    marginBottom: 10
+  },
+  filterRow: {
+    paddingHorizontal: 24,
+    gap: 8
+  },
+  colorFilter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "#F0F0F0"
+  },
+  colorFilterActive: {
+    backgroundColor: "#E8E5FF"
+  },
+  colorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5
+  },
+  colorFilterText: {
+    fontSize: 13,
+    color: "#444",
+    fontWeight: "700"
   },
   composerTitle: {
     fontSize: 18,
@@ -408,10 +518,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderRadius: 14,
     borderLeftWidth: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 1px 6px rgba(0, 0, 0, 0.04)"
+      },
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6
+      }
+    }),
     elevation: 2
   },
   cardContent: {

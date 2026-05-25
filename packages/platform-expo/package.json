@@ -29,7 +29,8 @@
     "@syncore/platform-web": "^0.1.0",
     "@syncore/schema": "^0.1.0",
     "expo-file-system": "^56.0.7",
-    "expo-sqlite": "^56.0.4"
+    "expo-sqlite": "^56.0.4",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.15",

@@ -8,7 +8,15 @@ interface Contact {
   email: string;
   company: string;
   color: string;
+  favorite?: boolean;
   createdAt: number;
+}
+
+interface ContactStats {
+  total: number;
+  companies: number;
+  favorites: number;
+  newestAt: number | null;
 }
 
 const listContacts = createFunctionReference<
@@ -23,6 +31,12 @@ const searchContacts = createFunctionReference<
   Contact[]
 >("query", "contacts/search");
 
+const contactStats = createFunctionReference<
+  "query",
+  Record<never, never>,
+  ContactStats
+>("query", "contacts/stats");
+
 const createContact = createFunctionReference<
   "mutation",
   { name: string; email: string; company: string },
@@ -32,6 +46,17 @@ const createContact = createFunctionReference<
 const removeContact = createFunctionReference<"mutation", { id: string }, null>(
   "mutation",
   "contacts/remove"
+);
+
+const toggleFavorite = createFunctionReference<
+  "mutation",
+  { id: string },
+  null
+>("mutation", "contacts/toggleFavorite");
+
+const seedDemo = createFunctionReference<"mutation", Record<never, never>, number>(
+  "mutation",
+  "contacts/seedDemo"
 );
 
 /* ─── DOM refs ─── */
@@ -44,6 +69,8 @@ const emailInput = $("#email-input") as HTMLInputElement;
 const companyInput = $("#company-input") as HTMLInputElement;
 const addBtn = $("#add-btn") as HTMLButtonElement;
 const logEl = $("#log") as HTMLElement;
+const statsEl = $("#stats") as HTMLElement;
+const seedBtn = $("#seed-btn") as HTMLButtonElement;
 
 /* ─── Boot client ─── */
 const managed = createBrowserWorkerClient({
@@ -92,6 +119,9 @@ function render(contacts: Contact[]) {
         <div class="contact-meta">${esc(c.email)}${c.company ? ` · ${esc(c.company)}` : ""}</div>
         <div class="contact-time">${timeAgo(c.createdAt)}</div>
       </div>
+      <button class="favorite-btn ${c.favorite ? "favorite-btn--active" : ""}" data-id="${c._id}" title="${c.favorite ? "Remove favorite" : "Mark favorite"}">
+        ${c.favorite ? "★" : "☆"}
+      </button>
       <button class="remove-btn" data-id="${c._id}" title="Remove">&times;</button>
     </div>
   `
@@ -104,6 +134,14 @@ function render(contacts: Contact[]) {
       const id = (btn as HTMLElement).dataset.id!;
       void client.mutation(removeContact, { id });
       log(`Removed contact ${id.slice(0, 8)}...`);
+    });
+  });
+
+  listEl.querySelectorAll(".favorite-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = (btn as HTMLElement).dataset.id!;
+      void client.mutation(toggleFavorite, { id });
+      log(`Toggled favorite ${id.slice(0, 8)}...`);
     });
   });
 }
@@ -143,6 +181,16 @@ function startWatch(searchQuery?: string) {
 
 startWatch();
 
+const statsWatch = client.watchQuery(contactStats);
+statsWatch.onUpdate(() => {
+  const stats = statsWatch.localQueryResult();
+  if (!stats) return;
+  statsEl.innerHTML = `
+    <span><strong>${stats.companies}</strong> companies</span>
+    <span><strong>${stats.favorites}</strong> favorites</span>
+  `;
+});
+
 /* ─── Search ─── */
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -172,6 +220,11 @@ addBtn.addEventListener("click", () => {
   nameInput.focus();
 });
 
+seedBtn.addEventListener("click", async () => {
+  const inserted = await client.mutation(seedDemo);
+  log(`Seeded ${inserted} contact${inserted === 1 ? "" : "s"}`);
+});
+
 /* Enter key to submit */
 [nameInput, emailInput, companyInput].forEach((input) => {
   input.addEventListener("keydown", (e) => {
@@ -182,5 +235,6 @@ addBtn.addEventListener("click", () => {
 /* ─── Cleanup ─── */
 window.addEventListener("beforeunload", () => {
   currentWatch?.dispose?.();
+  statsWatch.dispose();
   managed.dispose();
 });

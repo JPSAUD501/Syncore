@@ -14,9 +14,12 @@ export { components } from "./components";
 import type { archiveHabit as habits__archiveHabit } from "../functions/habits";
 import type { completionsForDate as habits__completionsForDate } from "../functions/habits";
 import type { createHabit as habits__createHabit } from "../functions/habits";
+import type { dashboard as habits__dashboard } from "../functions/habits";
 import type { listCompletions as habits__listCompletions } from "../functions/habits";
 import type { listHabits as habits__listHabits } from "../functions/habits";
 import type { removeHabit as habits__removeHabit } from "../functions/habits";
+import type { renameHabit as habits__renameHabit } from "../functions/habits";
+import type { seedDemo as habits__seedDemo } from "../functions/habits";
 import type { toggleCompletion as habits__toggleCompletion } from "../functions/habits";
 
 /**
@@ -36,6 +39,10 @@ export interface SyncoreApi__habits {
    */
   readonly createHabit: FunctionReferenceFor<typeof habits__createHabit>;
   /**
+   * Reference to the public Syncore query `habits/dashboard`.
+   */
+  readonly dashboard: FunctionReferenceFor<typeof habits__dashboard>;
+  /**
    * Reference to the public Syncore query `habits/listCompletions`.
    */
   readonly listCompletions: FunctionReferenceFor<typeof habits__listCompletions>;
@@ -47,6 +54,14 @@ export interface SyncoreApi__habits {
    * Reference to the public Syncore mutation `habits/removeHabit`.
    */
   readonly removeHabit: FunctionReferenceFor<typeof habits__removeHabit>;
+  /**
+   * Reference to the public Syncore mutation `habits/renameHabit`.
+   */
+  readonly renameHabit: FunctionReferenceFor<typeof habits__renameHabit>;
+  /**
+   * Reference to the public Syncore mutation `habits/seedDemo`.
+   */
+  readonly seedDemo: FunctionReferenceFor<typeof habits__seedDemo>;
   /**
    * Reference to the public Syncore mutation `habits/toggleCompletion`.
    */
@@ -70,4 +85,4 @@ export interface SyncoreApi {
  * const listTasks = api.tasks.list;
  * ```
  */
-export const api: SyncoreApi = { habits: { archiveHabit: createFunctionReferenceFor<typeof habits__archiveHabit>("mutation", "habits/archiveHabit"), completionsForDate: createFunctionReferenceFor<typeof habits__completionsForDate>("query", "habits/completionsForDate"), createHabit: createFunctionReferenceFor<typeof habits__createHabit>("mutation", "habits/createHabit"), listCompletions: createFunctionReferenceFor<typeof habits__listCompletions>("query", "habits/listCompletions"), listHabits: createFunctionReferenceFor<typeof habits__listHabits>("query", "habits/listHabits"), removeHabit: createFunctionReferenceFor<typeof habits__removeHabit>("mutation", "habits/removeHabit"), toggleCompletion: createFunctionReferenceFor<typeof habits__toggleCompletion>("mutation", "habits/toggleCompletion") } } as const;
+export const api: SyncoreApi = { habits: { archiveHabit: createFunctionReferenceFor<typeof habits__archiveHabit>("mutation", "habits/archiveHabit"), completionsForDate: createFunctionReferenceFor<typeof habits__completionsForDate>("query", "habits/completionsForDate"), createHabit: createFunctionReferenceFor<typeof habits__createHabit>("mutation", "habits/createHabit"), dashboard: createFunctionReferenceFor<typeof habits__dashboard>("query", "habits/dashboard"), listCompletions: createFunctionReferenceFor<typeof habits__listCompletions>("query", "habits/listCompletions"), listHabits: createFunctionReferenceFor<typeof habits__listHabits>("query", "habits/listHabits"), removeHabit: createFunctionReferenceFor<typeof habits__removeHabit>("mutation", "habits/removeHabit"), renameHabit: createFunctionReferenceFor<typeof habits__renameHabit>("mutation", "habits/renameHabit"), seedDemo: createFunctionReferenceFor<typeof habits__seedDemo>("mutation", "habits/seedDemo"), toggleCompletion: createFunctionReferenceFor<typeof habits__toggleCompletion>("mutation", "habits/toggleCompletion") } } as const;

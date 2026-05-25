@@ -30,11 +30,13 @@ export interface CreateExpoRuntimeOptions<TSchema extends ExpoSyncoreSchema = Ex
     externalChangeApplier?: SyncoreExternalChangeApplier;
     externalChangeSignal?: SyncoreExternalChangeSignal;
     functions: SyncoreRuntimeOptions<TSchema>["functions"];
+    locateFile?: (fileName: string) => string;
     platform?: string;
     scheduler?: SchedulerOptions;
     schema: TSchema;
     storage?: SyncoreStorageAdapter;
     storageDirectoryName?: string;
+    wasmUrl?: string;
 }
 
 // @public
