@@ -16,8 +16,8 @@
     }
   },
   "scripts": {
-    "build": "bun run clean && tsdown --config tsdown.config.ts",
-    "build:deps": "bun run --filter @syncore/core build && bun run --filter @syncore/devtools-protocol build && bun run --filter @syncore/schema build && bun run --filter @syncore/platform-node build",
+    "build": "npm run clean && tsdown --config tsdown.config.ts",
+    "build:deps": "npm run build --workspace @syncore/core && npm run build --workspace @syncore/devtools-protocol && npm run build --workspace @syncore/schema && npm run build --workspace @syncore/platform-node",
     "clean": "node -e \"const fs=require('node:fs');for (const target of ['dist','node_modules/.unrun','node_modules/.vite','node_modules/.vite-temp']) { fs.rmSync(target,{recursive:true,force:true}); }\"",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
@@ -26,12 +26,12 @@
     "syncorejs:codegen": "syncorejs codegen"
   },
   "dependencies": {
-    "@syncore/core": "workspace:*",
-    "@syncore/devtools-protocol": "workspace:*",
-    "@syncore/platform-node": "workspace:*",
-    "adm-zip": "^0.5.16",
-    "commander": "^13.1.0",
-    "tsx": "^4.19.3",
-    "ws": "^8.18.0"
+    "@syncore/core": "^0.1.0",
+    "@syncore/devtools-protocol": "^0.1.0",
+    "@syncore/platform-node": "^0.1.0",
+    "adm-zip": "^0.5.17",
+    "commander": "^14.0.3",
+    "tsx": "^4.22.3",
+    "ws": "^8.21.0"
   }
 }

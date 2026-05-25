@@ -55,6 +55,7 @@ import { StorageEngine } from "./storageEngine.js";
 import { SchedulerEngine } from "./schedulerEngine.js";
 import { ReactivityEngine } from "./reactivityEngine.js";
 import {
+  createDevtoolsPreview,
   fieldExpression,
   normalizeOptionalArgs,
   omitSystemFields,
@@ -356,20 +357,28 @@ export class ExecutionEngine<
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "query");
     const dependencyCollector = new Set<DependencyKey>();
+    const executionId = meta.executionId ?? generateId();
     const startedAt = Date.now();
     const result = await this.invokeFunction<TResult>(definition, args, {
+      executionId,
       mutationDepth: 0,
       changedTables: new Set<string>(),
+      documentChanges: [],
       storageChanges: [],
       dependencyCollector,
       componentMetadata: definition.__syncoreComponent
     });
+    const completedAt = Date.now();
 
     this.deps.devtools.emit({
       type: "query.executed",
       runtimeId: this.deps.runtimeId,
       queryId: reference.name,
       functionName: reference.name,
+      executionId,
+      ...(meta.parentExecutionId
+        ? { parentExecutionId: meta.parentExecutionId }
+        : {}),
       ...(definition.__syncoreComponent
         ? {
             componentPath: definition.__syncoreComponent.componentPath,
@@ -377,8 +386,11 @@ export class ExecutionEngine<
           }
         : {}),
       dependencies: [...dependencyCollector],
-      durationMs: Date.now() - startedAt,
-      timestamp: Date.now(),
+      argsPreview: createDevtoolsPreview(args),
+      resultPreview: createDevtoolsPreview(result),
+      readScopes: [...dependencyCollector],
+      durationMs: completedAt - startedAt,
+      timestamp: completedAt,
       ...(meta.origin ? { origin: meta.origin } : {})
     });
 
@@ -392,28 +404,32 @@ export class ExecutionEngine<
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "mutation");
     const mutationId = generateId();
+    const executionId = meta.executionId ?? mutationId;
     const startedAt = Date.now();
     const execution = await this.deps.transactionCoordinator.runInTransaction(
       async (transactionState) =>
         this.invokeFunction<TResult>(definition, args, {
+          executionId,
           mutationDepth: 1,
           changedTables: transactionState.changedTables,
+          documentChanges: transactionState.documentChanges,
           storageChanges: transactionState.storageChanges,
           componentMetadata: definition.__syncoreComponent
         })
     );
+    const completedAt = Date.now();
 
-    await this.finalizeStatefulExecution(
-      mutationId,
-      execution,
-      Date.now() - startedAt
-    );
+    const impact = this.collectStatefulExecutionImpact(execution);
 
     this.deps.devtools.emit({
       type: "mutation.committed",
       runtimeId: this.deps.runtimeId,
       mutationId,
       functionName: reference.name,
+      executionId,
+      ...(meta.parentExecutionId
+        ? { parentExecutionId: meta.parentExecutionId }
+        : {}),
       ...(definition.__syncoreComponent
         ? {
             componentPath: definition.__syncoreComponent.componentPath,
@@ -421,10 +437,21 @@ export class ExecutionEngine<
           }
         : {}),
       changedTables: [...execution.changedTables],
-      durationMs: Date.now() - startedAt,
-      timestamp: Date.now(),
+      argsPreview: createDevtoolsPreview(args),
+      resultPreview: createDevtoolsPreview(execution.result),
+      writeScopes: [...impact.changedScopes],
+      changedScopes: [...impact.changedScopes],
+      changedDocumentsPreview: execution.documentChanges,
+      invalidatedQueryIds: impact.invalidatedQueryIds,
+      durationMs: completedAt - startedAt,
+      timestamp: completedAt,
       ...(meta.origin ? { origin: meta.origin } : {})
     });
+    await this.publishStatefulExecutionEffects(
+      executionId,
+      execution,
+      impact.changedScopes
+    );
 
     return execution.result;
   }
@@ -436,51 +463,73 @@ export class ExecutionEngine<
   ): Promise<TResult> {
     const definition = this.resolveFunction(reference, "action");
     const actionId = generateId();
+    const executionId = meta.executionId ?? actionId;
     const startedAt = Date.now();
     const state = this.deps.transactionCoordinator.createState();
 
     try {
       const result = await this.invokeFunction<TResult>(definition, args, {
+        executionId,
         mutationDepth: 0,
         changedTables: state.changedTables,
+        documentChanges: state.documentChanges,
         storageChanges: state.storageChanges,
         componentMetadata: definition.__syncoreComponent
       });
-      await this.finalizeStatefulExecution(
-        actionId,
-        createEmptyExecutionResult(result, state),
-        Date.now() - startedAt
-      );
+      const completedAt = Date.now();
+      const execution = createEmptyExecutionResult(result, state);
+      const impact = this.collectStatefulExecutionImpact(execution);
       this.deps.devtools.emit({
         type: "action.completed",
         runtimeId: this.deps.runtimeId,
         actionId,
         functionName: reference.name,
+        executionId,
+        ...(meta.parentExecutionId
+          ? { parentExecutionId: meta.parentExecutionId }
+          : {}),
         ...(definition.__syncoreComponent
           ? {
               componentPath: definition.__syncoreComponent.componentPath,
               componentName: definition.__syncoreComponent.componentName
             }
           : {}),
-        durationMs: Date.now() - startedAt,
-        timestamp: Date.now(),
+        argsPreview: createDevtoolsPreview(args),
+        resultPreview: createDevtoolsPreview(result),
+        writeScopes: [...impact.changedScopes],
+        changedScopes: [...impact.changedScopes],
+        changedDocumentsPreview: state.documentChanges,
+        invalidatedQueryIds: impact.invalidatedQueryIds,
+        durationMs: completedAt - startedAt,
+        timestamp: completedAt,
         ...(meta.origin ? { origin: meta.origin } : {})
       });
+      await this.publishStatefulExecutionEffects(
+        executionId,
+        execution,
+        impact.changedScopes
+      );
       return result;
     } catch (error) {
+      const completedAt = Date.now();
       this.deps.devtools.emit({
         type: "action.completed",
         runtimeId: this.deps.runtimeId,
         actionId,
         functionName: reference.name,
+        executionId,
+        ...(meta.parentExecutionId
+          ? { parentExecutionId: meta.parentExecutionId }
+          : {}),
         ...(definition.__syncoreComponent
           ? {
               componentPath: definition.__syncoreComponent.componentPath,
               componentName: definition.__syncoreComponent.componentName
             }
-          : {}),
-        durationMs: Date.now() - startedAt,
-        timestamp: Date.now(),
+        : {}),
+        argsPreview: createDevtoolsPreview(args),
+        durationMs: completedAt - startedAt,
+        timestamp: completedAt,
         ...(meta.origin ? { origin: meta.origin } : {}),
         error: error instanceof Error ? error.message : String(error)
       });
@@ -493,50 +542,76 @@ export class ExecutionEngine<
     meta: DevtoolsEventMeta = {}
   ): Promise<TResult> {
     const mutationId = generateId();
+    const executionId = meta.executionId ?? mutationId;
     const startedAt = Date.now();
     const execution = await this.deps.transactionCoordinator.runInTransaction(
       async (transactionState) =>
         callback({
           db: this.createDatabaseWriter({
+            executionId,
             mutationDepth: 1,
             changedTables: transactionState.changedTables,
+            documentChanges: transactionState.documentChanges,
             storageChanges: transactionState.storageChanges
           })
         })
     );
+    const completedAt = Date.now();
 
-    await this.finalizeStatefulExecution(
-      mutationId,
-      execution,
-      Date.now() - startedAt
-    );
+    const impact = this.collectStatefulExecutionImpact(execution);
 
     this.deps.devtools.emit({
       type: "mutation.committed",
       runtimeId: this.deps.runtimeId,
       mutationId,
       functionName: "__devtools__/mutation",
+      executionId,
+      ...(meta.parentExecutionId
+        ? { parentExecutionId: meta.parentExecutionId }
+        : {}),
       changedTables: [...execution.changedTables],
-      durationMs: Date.now() - startedAt,
-      timestamp: Date.now(),
+      argsPreview: createDevtoolsPreview({ source: "dashboard" }),
+      resultPreview: createDevtoolsPreview(execution.result),
+      writeScopes: [...impact.changedScopes],
+      changedScopes: [...impact.changedScopes],
+      changedDocumentsPreview: execution.documentChanges,
+      invalidatedQueryIds: impact.invalidatedQueryIds,
+      durationMs: completedAt - startedAt,
+      timestamp: completedAt,
       ...(meta.origin ? { origin: meta.origin } : {})
     });
+    await this.publishStatefulExecutionEffects(
+      executionId,
+      execution,
+      impact.changedScopes
+    );
     return execution.result;
   }
 
-  private async finalizeStatefulExecution<TResult>(
-    executionId: string,
-    execution: ExecutionResult<TResult>,
-    durationMs: number
-  ): Promise<void> {
+  private collectStatefulExecutionImpact<TResult>(
+    execution: ExecutionResult<TResult>
+  ): { changedScopes: Set<ImpactScope>; invalidatedQueryIds: string[] } {
     const changedScopes = collectChangedScopes(
       execution.changedTables,
       execution.storageChanges
     );
+    const invalidatedQueryIds =
+      changedScopes.size > 0
+        ? this.deps.reactivity.getInvalidatedQueryIdsForScopes(changedScopes)
+        : [];
+    return { changedScopes, invalidatedQueryIds };
+  }
+
+  private async publishStatefulExecutionEffects<TResult>(
+    executionId: string,
+    execution: ExecutionResult<TResult>,
+    changedScopes: Set<ImpactScope>
+  ): Promise<void> {
     if (changedScopes.size > 0) {
       await this.deps.reactivity.refreshQueriesForScopes(
         changedScopes,
-        `Execution ${executionId} touched ${[...changedScopes].join(", ")}`
+        `Execution ${executionId} touched ${[...changedScopes].join(", ")}`,
+        { executionId }
       );
     }
     if (execution.changedTables.size > 0) {
@@ -562,8 +637,10 @@ export class ExecutionEngine<
     );
     const dependencyCollector = new Set<DependencyKey>();
     await this.invokeFunction(definition, args, {
+      executionId: generateId(),
       mutationDepth: 0,
       changedTables: new Set<string>(),
+      documentChanges: [],
       storageChanges: [],
       dependencyCollector,
       componentMetadata: definition.__syncoreComponent
@@ -716,7 +793,8 @@ export class ExecutionEngine<
       ) =>
         this.runQuery(
           this.resolveReferenceForCaller(reference, "query", callerMetadata),
-          normalizeOptionalArgs(args) as JsonObject
+          normalizeOptionalArgs(args) as JsonObject,
+          state.executionId ? { parentExecutionId: state.executionId } : {}
         ),
       runMutation: <TArgs, TResult>(
         reference: FunctionReference<"mutation", TArgs, TResult>,
@@ -740,15 +818,21 @@ export class ExecutionEngine<
                 ),
                 normalizedArgs as JsonObject,
                 {
+                  ...(state.executionId ? { executionId: state.executionId } : {}),
                   mutationDepth: state.mutationDepth + 1,
                   changedTables: state.changedTables,
+                  documentChanges: state.documentChanges,
                   storageChanges: state.storageChanges,
                   componentMetadata: callerMetadata
                 }
               )
           );
         }
-        return this.runMutation(resolvedReference, normalizedArgs as JsonObject);
+        return this.runMutation(
+          resolvedReference,
+          normalizedArgs as JsonObject,
+          state.executionId ? { parentExecutionId: state.executionId } : {}
+        );
       },
       runAction: <TArgs, TResult>(
         reference: FunctionReference<"action", TArgs, TResult>,
@@ -756,7 +840,8 @@ export class ExecutionEngine<
       ) =>
         this.runAction(
           this.resolveReferenceForCaller(reference, "action", callerMetadata),
-          normalizeOptionalArgs(args) as JsonObject
+          normalizeOptionalArgs(args) as JsonObject,
+          state.executionId ? { parentExecutionId: state.executionId } : {}
         )
     } as QueryCtx<TSchema> | MutationCtx<TSchema> | ActionCtx<TSchema>;
   }
@@ -840,6 +925,17 @@ export class ExecutionEngine<
           _json: json
         });
         state.changedTables.add(scopedTableName);
+        state.documentChanges.push({
+          table: scopedTableName,
+          id,
+          operation: "insert",
+          fields: Object.keys(validated),
+          afterPreview: createDevtoolsPreview({
+            _id: id,
+            _creationTime: creationTime,
+            ...validated
+          })
+        });
         return id;
       },
       patch: async <TTableName extends TableNames<TSchema>>(
@@ -877,6 +973,18 @@ export class ExecutionEngine<
           await this.deps.schema.syncSearchIndexes(scopedTableName, row);
         }
         state.changedTables.add(scopedTableName);
+        state.documentChanges.push({
+          table: scopedTableName,
+          id,
+          operation: "patch",
+          fields: Object.keys(value as Record<string, unknown>),
+          beforePreview: createDevtoolsPreview(current),
+          afterPreview: createDevtoolsPreview(
+            row
+              ? this.deps.schema.deserializeDocument(scopedTableName, row)
+              : validated
+          )
+        });
       },
       replace: async <TTableName extends TableNames<TSchema>>(
         tableName: TTableName,
@@ -891,6 +999,7 @@ export class ExecutionEngine<
           scopedTableName,
           value as JsonObject
         );
+        const current = await reader.get(tableName, id);
         await this.deps.driver.run(
           `UPDATE ${quoteIdentifier(scopedTableName)} SET _json = ? WHERE _id = ?`,
           [stableStringify(validated), id]
@@ -904,6 +1013,16 @@ export class ExecutionEngine<
         }
         await this.deps.schema.syncSearchIndexes(scopedTableName, row);
         state.changedTables.add(scopedTableName);
+        state.documentChanges.push({
+          table: scopedTableName,
+          id,
+          operation: "replace",
+          fields: Object.keys(validated),
+          ...(current ? { beforePreview: createDevtoolsPreview(current) } : {}),
+          afterPreview: createDevtoolsPreview(
+            this.deps.schema.deserializeDocument(scopedTableName, row)
+          )
+        });
       },
       delete: async <TTableName extends TableNames<TSchema>>(
         tableName: TTableName,
@@ -913,12 +1032,19 @@ export class ExecutionEngine<
           tableName,
           state.componentMetadata
         );
+        const current = await reader.get(tableName, id);
         await this.deps.driver.run(
           `DELETE FROM ${quoteIdentifier(scopedTableName)} WHERE _id = ?`,
           [id]
         );
         await this.deps.schema.removeSearchIndexes(scopedTableName, id);
         state.changedTables.add(scopedTableName);
+        state.documentChanges.push({
+          table: scopedTableName,
+          id,
+          operation: "delete",
+          ...(current ? { beforePreview: createDevtoolsPreview(current) } : {})
+        });
       }
     };
   }

@@ -1,11 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   getRuntimeLabel,
   useActiveRuntime,
   useConnectedRuntimeCount,
   useRuntimeList,
-  useDevtoolsStore
+  useDevtoolsStore,
+  useSelectedRuntimeFilter,
+  useSelectedTarget
 } from "@/lib/store";
+import { readDashboardAuthSearch } from "@/lib/routeSearch";
 import {
   formatTime,
   formatRelativeTime,
@@ -24,12 +27,12 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   useDevtoolsSubscription,
+  useDevtoolsMultiRuntimeSubscription,
   useDidJustChange,
   useRefreshTimer,
   useConnection,
   useDevtools
 } from "@/hooks";
-import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
 import { useMemo, useRef, useEffect } from "react";
 import {
   EVENT_BADGE_VARIANTS,
@@ -40,8 +43,19 @@ import {
   getEventRuntimeTag,
   getEventSummary
 } from "@/lib/eventPresentation";
+import type {
+  SyncoreDevtoolsEvent,
+  SyncoreDevtoolsSubscriptionResultPayload
+} from "@syncore/devtools-protocol";
+import {
+  buildInvalidationsByQueryId,
+  formatInvalidationTitle,
+  getInvalidationsForQuery,
+  isVisibleActivityEvent
+} from "@/lib/queryInvalidations";
 
 export const Route = createFileRoute("/")({
+  validateSearch: readDashboardAuthSearch,
   component: OverviewPage
 });
 
@@ -54,15 +68,17 @@ function StatCard({
   value,
   icon: Icon,
   color,
-  subtitle
+  subtitle,
+  resetKey
 }: {
   label: string;
   value: string | number;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   color: string;
   subtitle?: string;
+  resetKey?: unknown;
 }) {
-  const { didChange, pulse } = useDidJustChange(value);
+  const { didChange, pulse } = useDidJustChange(value, { resetKey });
 
   return (
     <div
@@ -123,17 +139,36 @@ function getEventConfig(type: string) {
 /* ------------------------------------------------------------------ */
 
 function ActiveQueries() {
+  const navigate = useNavigate();
   const { runtimeConnected } = useConnection();
   const activeRuntime = useActiveRuntime();
+  const selectedTarget = useSelectedTarget();
+  const runtimeFilter = useSelectedRuntimeFilter();
   const runtimeId = activeRuntime?.runtimeId ?? null;
-  const activeQueriesSubscription = useDevtoolsSubscription(
-    runtimeConnected && runtimeId ? { kind: "runtime.activeQueries" } : null,
-    { enabled: runtimeConnected && !!runtimeId }
+  const runtimeIds = useMemo(() => {
+    if (runtimeFilter === "all" && selectedTarget) {
+      return selectedTarget.runtimes
+        .filter((runtime) => runtime.connected)
+        .map((runtime) => runtime.runtimeId);
+    }
+    return runtimeConnected && runtimeId ? [runtimeId] : [];
+  }, [runtimeConnected, runtimeFilter, runtimeId, selectedTarget]);
+  const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
+    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+  >(
+    runtimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
+    runtimeIds,
+    { enabled: runtimeIds.length > 0 }
   );
-  const queries =
-    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
-      ? activeQueriesSubscription.data.activeQueries
-      : (activeRuntime?.activeQueries ?? []);
+  const queries = useMemo(
+    () =>
+      Object.values(activeQueriesSubscription.dataByRuntime).flatMap((payload) =>
+        payload.kind === "runtime.activeQueries.result"
+          ? payload.activeQueries
+          : []
+      ),
+    [activeQueriesSubscription.dataByRuntime]
+  );
 
   // Keep relative timestamps ticking
   useRefreshTimer(1000);
@@ -158,9 +193,11 @@ function ActiveQueries() {
   return (
     <div className="flex flex-col gap-1">
       {queries.map((q) => (
-        <div
+        <button
           key={q.id}
-          className="flex items-center justify-between px-3 py-2 rounded-md bg-bg-base text-[12px] border border-border hover:border-border-hover transition-colors animate-fade-in"
+          type="button"
+          onClick={() => void navigate({ to: "/queries", search: { queryId: q.id } })}
+          className="flex items-center justify-between px-3 py-2 rounded-md bg-bg-base text-[12px] border border-border hover:border-border-hover hover:bg-bg-surface transition-colors animate-fade-in text-left w-full"
         >
           <span className="font-mono text-fn-query truncate mr-3">
             {q.functionName.replaceAll("/", ":")}
@@ -168,7 +205,7 @@ function ActiveQueries() {
           <span className="text-text-tertiary shrink-0 tabular-nums">
             {formatRelativeTime(q.lastRunAt)}
           </span>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -179,8 +216,11 @@ function ActiveQueries() {
 /* ------------------------------------------------------------------ */
 
 export function OverviewPage() {
+  const navigate = useNavigate();
   const connected = useDevtoolsStore((s) => s.connected);
   const activeRuntime = useActiveRuntime();
+  const selectedTarget = useSelectedTarget();
+  const runtimeFilter = useSelectedRuntimeFilter();
   const { runtimeConnected } = useConnection();
   const {
     events,
@@ -213,18 +253,30 @@ export function OverviewPage() {
     runtimeConnected && runtimeId ? { kind: "runtime.summary" } : null,
     { enabled: runtimeConnected && !!runtimeId }
   );
-  const activeQueriesSubscription = useDevtoolsSubscription(
-    runtimeConnected && runtimeId ? { kind: "runtime.activeQueries" } : null,
-    { enabled: runtimeConnected && !!runtimeId }
+  const activeQueryRuntimeIds = useMemo(() => {
+    if (runtimeFilter === "all" && selectedTarget) {
+      return selectedTarget.runtimes
+        .filter((runtime) => runtime.connected)
+        .map((runtime) => runtime.runtimeId);
+    }
+    return runtimeConnected && runtimeId ? [runtimeId] : [];
+  }, [runtimeConnected, runtimeFilter, runtimeId, selectedTarget]);
+  const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
+    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+  >(
+    activeQueryRuntimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
+    activeQueryRuntimeIds,
+    { enabled: activeQueryRuntimeIds.length > 0 }
   );
-  const summary =
-    summarySubscription.data?.kind === "runtime.summary.result"
-      ? summarySubscription.data.summary
-      : (activeRuntime?.summary ?? null);
-  const activeQueries =
-    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
-      ? activeQueriesSubscription.data.activeQueries
-      : (activeRuntime?.activeQueries ?? []);
+  const activeQueries = useMemo(
+    () =>
+      Object.values(activeQueriesSubscription.dataByRuntime).flatMap((payload) =>
+        payload.kind === "runtime.activeQueries.result"
+          ? payload.activeQueries
+          : []
+      ),
+    [activeQueriesSubscription.dataByRuntime]
+  );
   const runtimeDataLoading =
     runtimeConnected &&
     (summarySubscription.loading || activeQueriesSubscription.loading);
@@ -240,32 +292,41 @@ export function OverviewPage() {
     }
     return defaultText;
   };
+  const statAnimationResetKey = `${runtimeId ?? "none"}:${runtimeSnapshotPending ? "pending" : "ready"}`;
+  const invalidationsByQueryId = useMemo(
+    () => buildInvalidationsByQueryId(events),
+    [events]
+  );
+  const visibleEvents = useMemo(
+    () => events.filter(isVisibleActivityEvent),
+    [events]
+  );
 
   // Only animate events that arrive after the first batch for a runtime.
   const previousRuntimeIdRef = useRef<string | null>(runtimeId);
-  const previousEventCountRef = useRef(events.length);
-  const hasHydratedInitialEventsRef = useRef(events.length > 0);
+  const previousEventCountRef = useRef(visibleEvents.length);
+  const hasHydratedInitialEventsRef = useRef(visibleEvents.length > 0);
   let newEventCount = 0;
   if (previousRuntimeIdRef.current !== runtimeId) {
     previousRuntimeIdRef.current = runtimeId;
-    previousEventCountRef.current = events.length;
-    hasHydratedInitialEventsRef.current = events.length > 0;
+    previousEventCountRef.current = visibleEvents.length;
+    hasHydratedInitialEventsRef.current = visibleEvents.length > 0;
   } else if (!hasHydratedInitialEventsRef.current) {
-    if (events.length > 0) {
+    if (visibleEvents.length > 0) {
       hasHydratedInitialEventsRef.current = true;
     }
-    previousEventCountRef.current = events.length;
-  } else if (events.length > previousEventCountRef.current) {
-    newEventCount = events.length - previousEventCountRef.current;
+    previousEventCountRef.current = visibleEvents.length;
+  } else if (visibleEvents.length > previousEventCountRef.current) {
+    newEventCount = visibleEvents.length - previousEventCountRef.current;
   }
 
   useEffect(() => {
     if (previousRuntimeIdRef.current !== runtimeId) {
       previousRuntimeIdRef.current = runtimeId;
-      hasHydratedInitialEventsRef.current = events.length > 0;
+      hasHydratedInitialEventsRef.current = visibleEvents.length > 0;
     }
-    previousEventCountRef.current = events.length;
-  }, [events.length, runtimeId]);
+    previousEventCountRef.current = visibleEvents.length;
+  }, [visibleEvents.length, runtimeId]);
 
   return (
     <div className="space-y-4">
@@ -307,6 +368,7 @@ export function OverviewPage() {
           icon={Search}
           color="text-fn-query"
           subtitle={statSubtitle("Total executed")}
+          resetKey={statAnimationResetKey}
         />
         <StatCard
           label="Mutations"
@@ -314,6 +376,7 @@ export function OverviewPage() {
           icon={Database}
           color="text-fn-mutation"
           subtitle={statSubtitle("Total committed")}
+          resetKey={statAnimationResetKey}
         />
         <StatCard
           label="Actions"
@@ -321,6 +384,7 @@ export function OverviewPage() {
           icon={Zap}
           color="text-fn-action"
           subtitle={statSubtitle("Total completed")}
+          resetKey={statAnimationResetKey}
         />
         <StatCard
           label="Errors"
@@ -328,16 +392,17 @@ export function OverviewPage() {
           icon={AlertTriangle}
           color="text-error"
           subtitle={statSubtitle("Total errors")}
+          resetKey={statAnimationResetKey}
         />
       </div>
 
       {/* Two column: activity + active queries — responsive */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
-        {/* Recent Activity */}
+        {/* Logs */}
         <div className="flex flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-[13px] font-semibold text-text-primary">
-              Recent Activity
+              Logs
             </h2>
             <div className="flex items-center gap-2">
               {!includeDashboardActivity && (
@@ -346,9 +411,9 @@ export function OverviewPage() {
                 </Badge>
               )}
               <span className="text-[11px] text-text-tertiary tabular-nums">
-                {events.length} events
+                {visibleEvents.length} events
               </span>
-              {events.length > 0 && (
+              {visibleEvents.length > 0 && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -362,27 +427,44 @@ export function OverviewPage() {
             </div>
           </div>
           <ScrollArea className="max-h-[420px] bg-bg-base/30">
-            {runtimeSnapshotPending && events.length === 0 ? (
+            {runtimeSnapshotPending && visibleEvents.length === 0 ? (
               <div className="flex h-28 items-center justify-center gap-2 px-4 text-[12px] text-text-tertiary">
                 <Activity size={13} className="animate-pulse" />
                 Waiting for runtime data.
               </div>
-            ) : events.length === 0 ? (
+            ) : visibleEvents.length === 0 ? (
               <div className="flex h-28 items-center justify-center px-4 text-[12px] text-text-tertiary">
                 Waiting for runtime activity.
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {events.slice(0, 50).map((event, i) => {
+                {visibleEvents.slice(0, 50).map((event, i) => {
                   const config = getEventConfig(event.type);
                   const summary = getEventSummary(event);
                   const duration = getEventDuration(event);
                   const isNew = i < newEventCount;
+                  const executionId = getExecutionIdForEvent(event);
+                  const invalidations =
+                    event.type === "query.executed"
+                      ? getInvalidationsForQuery(event, invalidationsByQueryId)
+                      : [];
+                  const Component = executionId ? "button" : "div";
                   return (
-                    <div
+                    <Component
                       key={`${event.type}-${event.timestamp}-${i}`}
+                      type={executionId ? "button" : undefined}
+                      onClick={
+                        executionId
+                          ? () =>
+                              void navigate({
+                                to: "/logs",
+                                search: { executionId }
+                              })
+                          : undefined
+                      }
                       className={cn(
-                        "flex items-center gap-3 px-4 py-2.5 hover:bg-bg-elevated/50 transition-colors",
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-bg-elevated/50 transition-colors",
+                        executionId && "cursor-pointer",
                         isNew && "animate-fade-in-fast"
                       )}
                     >
@@ -402,6 +484,15 @@ export function OverviewPage() {
                       <span className="flex-1 truncate font-mono text-[12px] text-text-secondary">
                         {summary}
                       </span>
+                      {invalidations.length > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="shrink-0 text-[10px]"
+                          title={formatInvalidationTitle(invalidations)}
+                        >
+                          Rerun
+                        </Badge>
+                      )}
                       {duration && (
                         <span className="shrink-0 font-mono text-[11px] text-text-tertiary tabular-nums">
                           {duration}
@@ -410,7 +501,7 @@ export function OverviewPage() {
                       <span className="shrink-0 font-mono text-[11px] text-text-tertiary tabular-nums">
                         {formatTime(event.timestamp)}
                       </span>
-                    </div>
+                    </Component>
                   );
                 })}
               </div>
@@ -435,4 +526,17 @@ export function OverviewPage() {
       </div>
     </div>
   );
+}
+
+function getExecutionIdForEvent(event: SyncoreDevtoolsEvent): string | null {
+  if ("executionId" in event && event.executionId) {
+    return event.executionId;
+  }
+  if (event.type === "mutation.committed") {
+    return event.mutationId;
+  }
+  if (event.type === "action.completed") {
+    return event.actionId;
+  }
+  return null;
 }

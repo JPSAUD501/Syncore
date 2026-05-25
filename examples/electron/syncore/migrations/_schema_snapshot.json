@@ -1,0 +1,138 @@
+{
+  "formatVersion": 3,
+  "plannerVersion": 2,
+  "tables": [
+    {
+      "name": "entries",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "date": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "body": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "mood": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "wordCount": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "createdAt": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "updatedAt": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "date",
+        "body",
+        "mood",
+        "wordCount",
+        "createdAt",
+        "updatedAt"
+      ],
+      "fields": [
+        {
+          "name": "body",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "date",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "mood",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "updatedAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "wordCount",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_date",
+          "fields": [
+            "date"
+          ]
+        }
+      ],
+      "searchIndexes": [
+        {
+          "name": "search_body",
+          "searchField": "body",
+          "filterFields": [
+            "mood"
+          ]
+        }
+      ]
+    }
+  ],
+  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"date\",\"body\",\"mood\",\"wordCount\",\"createdAt\",\"updatedAt\"],\"fields\":[{\"name\":\"body\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"date\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"mood\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"updatedAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"wordCount\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}}],\"indexes\":[{\"fields\":[\"date\"],\"name\":\"by_date\"}],\"name\":\"entries\",\"searchIndexes\":[{\"filterFields\":[\"mood\"],\"name\":\"search_body\",\"searchField\":\"body\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"body\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"date\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"mood\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"updatedAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"wordCount\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}}}}}]}"
+}

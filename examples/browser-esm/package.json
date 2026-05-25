@@ -1,24 +1,25 @@
 {
   "name": "syncore-example-browser-esm",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "syncorejs": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
-    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
-    "build:deps": "bun run --filter syncorejs build:standalone",
+    "syncorejs": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
+    "syncorejs:dev": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
+    "syncorejs:codegen": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
+    "build:deps": "npm run build:standalone --workspace syncorejs",
     "build": "vite build",
     "dev": "turbo run dev:app --filter=syncore-example-browser-esm",
     "dev:app": "vite",
-    "dev:syncore": "bun run syncorejs:dev"
+    "dev:syncore": "npm run syncorejs:dev",
+    "prebuild": "npm run syncorejs:codegen",
+    "pretypecheck": "npm run syncorejs:codegen",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "sql.js": "^1.13.0",
-    "syncorejs": "workspace:*"
+    "syncorejs": "^0.2.2"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.4.1"
+    "vite": "^8.0.14"
   }
 }

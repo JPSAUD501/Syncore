@@ -27,6 +27,64 @@ export interface DataFilter {
 }
 
 // @public (undocumented)
+export type DevtoolsPreview = {
+    kind: "value";
+    value: unknown;
+    truncated?: boolean;
+    note?: string;
+} | {
+    kind: "error";
+    message: string;
+    truncated?: boolean;
+};
+
+// @public (undocumented)
+export interface DocumentChangePreview {
+    // (undocumented)
+    afterPreview?: DevtoolsPreview;
+    // (undocumented)
+    beforePreview?: DevtoolsPreview;
+    // (undocumented)
+    fields?: string[];
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    operation: "insert" | "patch" | "replace" | "delete";
+    // (undocumented)
+    table: string;
+}
+
+// @public (undocumented)
+export interface ExecutionTrace {
+    // (undocumented)
+    argsPreview?: DevtoolsPreview;
+    // (undocumented)
+    changedDocumentsPreview?: DocumentChangePreview[];
+    // (undocumented)
+    changedScopes?: string[];
+    // (undocumented)
+    error?: string;
+    // (undocumented)
+    executionId: string;
+    // (undocumented)
+    functionName?: string;
+    // (undocumented)
+    invalidatedQueryIds?: string[];
+    // (undocumented)
+    kind: "query" | "mutation" | "action" | "scheduler" | "dashboard";
+    // (undocumented)
+    parentExecutionId?: string;
+    // (undocumented)
+    readScopes?: string[];
+    // (undocumented)
+    resultPreview?: DevtoolsPreview;
+    // (undocumented)
+    schedulerJobId?: string;
+    // (undocumented)
+    writeScopes?: string[];
+}
+
+// @public (undocumented)
 export interface FunctionDefinition {
     args?: Record<string, unknown>;
     // (undocumented)
@@ -34,11 +92,17 @@ export interface FunctionDefinition {
     // (undocumented)
     componentPath?: string;
     // (undocumented)
-    file: string;
+    file?: string;
     // (undocumented)
     localName?: string;
     // (undocumented)
+    metadataAvailable?: boolean;
+    // (undocumented)
+    modulePath?: string;
+    // (undocumented)
     name: string;
+    // (undocumented)
+    namespace?: string;
     // (undocumented)
     owner?: "root" | "component";
     returns?: Record<string, unknown>;
@@ -46,6 +110,18 @@ export interface FunctionDefinition {
     type: "query" | "mutation" | "action";
     // (undocumented)
     visibility?: "public" | "internal";
+}
+
+// @public (undocumented)
+export interface InvalidationCause {
+    // (undocumented)
+    changedScopes: string[];
+    // (undocumented)
+    executionId?: string;
+    // (undocumented)
+    matchedScopes: string[];
+    // (undocumented)
+    reason: string;
 }
 
 // @public (undocumented)
@@ -161,9 +237,13 @@ export const SYNCORE_DEVTOOLS_PROTOCOL_VERSION = 1;
 // @public (undocumented)
 export interface SyncoreActiveQueryInfo {
     // (undocumented)
+    args?: Record<string, unknown>;
+    // (undocumented)
     componentName?: string;
     // (undocumented)
     componentPath?: string;
+    // (undocumented)
+    consumers?: number;
     // (undocumented)
     dependencyKeys: string[];
     // (undocumented)
@@ -174,6 +254,28 @@ export interface SyncoreActiveQueryInfo {
     lastRunAt: number;
     // (undocumented)
     owner?: "root" | "component";
+}
+
+// @public (undocumented)
+export interface SyncoreDevtoolsCapabilities {
+    // (undocumented)
+    data?: {
+        browse: boolean;
+        mutate: boolean;
+        importExport: boolean;
+    };
+    // (undocumented)
+    scheduler?: {
+        read: boolean;
+        edit: boolean;
+    };
+    // (undocumented)
+    sql?: {
+        read: boolean;
+        write: boolean;
+        live: boolean;
+        reason?: string;
+    };
 }
 
 // @public (undocumented)
@@ -213,6 +315,15 @@ export type SyncoreDevtoolsCommandPayload = {
     table: string;
     id: string;
 } | {
+    kind: "data.export";
+    tables?: string[];
+} | {
+    kind: "data.referenceOptions";
+    table: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+} | {
     kind: "sql.read";
     query: string;
 } | {
@@ -224,9 +335,9 @@ export type SyncoreDevtoolsCommandPayload = {
 } | {
     kind: "scheduler.update";
     jobId: string;
-    schedule: SchedulerRecurringSchedule;
+    schedule?: SchedulerRecurringSchedule;
     args: Record<string, unknown>;
-    misfirePolicy: SchedulerMisfirePolicy;
+    misfirePolicy?: SchedulerMisfirePolicy;
     runAt?: number;
 };
 
@@ -240,6 +351,22 @@ export type SyncoreDevtoolsCommandResultPayload = {
     kind: "data.mutate.result";
     success: boolean;
     id?: string;
+    error?: string;
+} | {
+    kind: "data.export.result";
+    tables: Array<{
+        name: string;
+        rows: Record<string, unknown>[];
+        totalCount: number;
+    }>;
+    error?: string;
+} | {
+    kind: "data.referenceOptions.result";
+    table: string;
+    rows: Record<string, unknown>[];
+    totalCount: number;
+    offset: number;
+    hasMore: boolean;
     error?: string;
 } | {
     kind: "sql.read.result";
@@ -283,12 +410,21 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     dependencies: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    readScopes?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "query.invalidated";
     queryId: string;
     componentPath?: string;
     componentName?: string;
     reason: string;
+    causedByExecutionId?: string;
+    changedScopes?: string[];
+    matchedScopes?: string[];
+    rerunExecutionId?: string;
 }) | (SyncoreDevtoolsEventBase & {
     type: "mutation.committed";
     mutationId: string;
@@ -297,6 +433,14 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     changedTables: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "action.completed";
     actionId: string;
@@ -305,9 +449,28 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     durationMs: number;
     error?: string;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "scheduler.tick";
     executedJobIds: string[];
+    executionId?: string;
+    jobExecutions?: Array<{
+        jobId: string;
+        executionId?: string;
+        functionName: string;
+        functionType: "mutation" | "action";
+        argsPreview?: DevtoolsPreview;
+        resultPreview?: DevtoolsPreview;
+        error?: string;
+        durationMs?: number;
+    }>;
 }) | (SyncoreDevtoolsEventBase & {
     type: "storage.updated";
     storageId: string;
@@ -323,6 +486,26 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
 export type SyncoreDevtoolsEventOrigin = "runtime" | "dashboard";
 
 // @public (undocumented)
+export interface SyncoreDevtoolsExternalChangeEvent {
+    // (undocumented)
+    changedScopes?: string[];
+    // (undocumented)
+    changedTables?: string[];
+    // (undocumented)
+    reason: "commit" | "storage-put" | "storage-delete" | "reconcile";
+    // (undocumented)
+    revision?: string;
+    // (undocumented)
+    scope: "database" | "storage" | "all";
+    // (undocumented)
+    sourceId: string;
+    // (undocumented)
+    storageIds?: string[];
+    // (undocumented)
+    timestamp: number;
+}
+
+// @public (undocumented)
 export type SyncoreDevtoolsMessage = {
     type: "hello";
     protocolVersion?: number;
@@ -335,9 +518,12 @@ export type SyncoreDevtoolsMessage = {
     origin?: string;
     sessionLabel?: string;
     targetKind?: "client" | "project";
+    runtimeRole?: "app" | "project-target";
     storageProtocol?: string;
     databaseLabel?: string;
+    dataSourceAlias?: string;
     storageIdentity?: string;
+    capabilities?: SyncoreDevtoolsCapabilities;
 } | {
     type: "event";
     event: SyncoreDevtoolsEvent;
@@ -364,6 +550,11 @@ export type SyncoreDevtoolsMessage = {
     subscriptionId: string;
     runtimeId: string;
     error: string;
+} | {
+    type: "external.change";
+    runtimeId: string;
+    storageIdentity: string;
+    event: SyncoreDevtoolsExternalChangeEvent;
 };
 
 // @public (undocumented)
@@ -454,9 +645,13 @@ export interface SyncoreRuntimeSummary {
     // (undocumented)
     appName?: string;
     // (undocumented)
+    capabilities?: SyncoreDevtoolsCapabilities;
+    // (undocumented)
     connectedAt: number;
     // (undocumented)
     databaseLabel?: string;
+    // (undocumented)
+    dataSourceAlias?: string;
     // (undocumented)
     origin?: string;
     // (undocumented)
@@ -465,6 +660,8 @@ export interface SyncoreRuntimeSummary {
     recentEventCount: number;
     // (undocumented)
     runtimeId: string;
+    // (undocumented)
+    runtimeRole?: "app" | "project-target";
     // (undocumented)
     sessionLabel?: string;
     // (undocumented)
@@ -481,6 +678,8 @@ export interface TableField {
     name: string;
     // (undocumented)
     optional: boolean;
+    // (undocumented)
+    referenceTable?: string;
     // (undocumented)
     type: string;
 }

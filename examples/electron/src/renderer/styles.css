@@ -69,6 +69,46 @@ textarea {
   letter-spacing: -0.02em;
 }
 
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.runtime-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--ink-faint);
+  background: rgba(255, 255, 255, 0.03);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.runtime-pill--ready {
+  border-color: rgba(94, 203, 127, 0.26);
+  color: #6ed58e;
+  background: rgba(94, 203, 127, 0.08);
+}
+
+.runtime-pill--starting {
+  border-color: rgba(200, 155, 60, 0.26);
+  color: var(--amber);
+  background: var(--amber-dim);
+}
+
+.runtime-pill--error {
+  border-color: rgba(181, 66, 66, 0.32);
+  color: #d87575;
+  background: var(--red-dim);
+}
+
 .icon-btn {
   background: none;
   border: none;
@@ -129,6 +169,41 @@ textarea {
   color: var(--ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.mood-filter {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mood-filter-btn {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 4px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.mood-filter-btn:hover,
+.mood-filter-btn--active {
+  border-color: rgba(200, 155, 60, 0.45);
+  background: var(--amber-dim);
+  color: var(--amber);
 }
 
 /* Entry list */
@@ -246,6 +321,34 @@ textarea {
   flex-shrink: 0;
 }
 
+.date-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.date-nav button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.date-nav button:hover {
+  border-color: rgba(200, 155, 60, 0.45);
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+
 .editor-date {
   font-size: 32px;
   font-weight: 700;
@@ -328,6 +431,34 @@ textarea {
   background: var(--amber-dim);
   border-color: var(--amber);
   color: var(--amber);
+}
+
+.prompt-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -2px 0 18px;
+  flex-shrink: 0;
+}
+
+.prompt-row button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-size: 13px;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.prompt-row button:hover {
+  border-color: rgba(200, 155, 60, 0.45);
+  background: var(--amber-dim);
+  color: var(--paper);
 }
 
 /* Textarea */

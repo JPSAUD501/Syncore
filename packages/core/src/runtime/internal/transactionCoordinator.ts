@@ -1,3 +1,4 @@
+import type { DocumentChangePreview } from "@syncore/devtools-protocol";
 import type {
   ExecutionResult,
   JsonObject,
@@ -7,6 +8,7 @@ import type { SyncoreExternalChangeReason } from "../runtime.js";
 
 export interface TransactionState {
   changedTables: Set<string>;
+  documentChanges: DocumentChangePreview[];
   storageChanges: Array<{
     storageId: string;
     reason: Extract<SyncoreExternalChangeReason, "storage-put" | "storage-delete">;
@@ -24,6 +26,7 @@ export class TransactionCoordinator {
     return {
       result,
       changedTables: state.changedTables,
+      documentChanges: state.documentChanges,
       storageChanges: state.storageChanges,
       scheduledJobs: [],
       devtoolsEvents: [],
@@ -34,6 +37,7 @@ export class TransactionCoordinator {
   createState(): TransactionState {
     return {
       changedTables: new Set<string>(),
+      documentChanges: [],
       storageChanges: []
     };
   }
@@ -46,6 +50,7 @@ export function createEmptyExecutionResult<TResult>(
   return {
     result,
     changedTables: state?.changedTables ?? new Set<string>(),
+    documentChanges: state?.documentChanges ?? [],
     storageChanges: state?.storageChanges ?? [],
     scheduledJobs: [],
     devtoolsEvents: [],

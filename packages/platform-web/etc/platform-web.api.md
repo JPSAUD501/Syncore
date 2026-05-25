@@ -15,16 +15,17 @@ import { default as initSqlJs_2 } from 'sql.js';
 import { SchedulerOptions } from '@syncore/core';
 import { StorageObject } from '@syncore/core';
 import { StorageWriteInput } from '@syncore/core';
-import * as _syncore_core0 from '@syncore/core';
 import { SyncoreBridgeClient } from '@syncore/core';
 import { SyncoreBridgeMessageEndpoint } from '@syncore/core';
 import { SyncoreCapabilities } from '@syncore/core';
+import { SyncoreClient } from '@syncore/core';
+import { SyncoreDataModel } from '@syncore/core';
+import { SyncoreDevtoolsCapabilities } from '@syncore/devtools-protocol';
 import { SyncoreExternalChangeApplier } from '@syncore/core';
 import { SyncoreExternalChangeEvent } from '@syncore/core';
 import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
-import { SyncoreSchema } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 
 // @public (undocumented)
@@ -34,7 +35,7 @@ export type AttachedWebWorkerRuntime = AttachedRuntimeBridge;
 export function attachWebWorkerRuntime(options: AttachWebWorkerRuntimeOptions): AttachedWebWorkerRuntime;
 
 // @public (undocumented)
-export type AttachWebWorkerRuntimeOptions = AttachRuntimeBridgeOptions<WebWorkerSyncoreSchema>;
+export type AttachWebWorkerRuntimeOptions<TSchema extends WebWorkerSyncoreSchema = WebWorkerSyncoreSchema> = AttachRuntimeBridgeOptions<TSchema>;
 
 // @public (undocumented)
 export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChangeSignal {
@@ -69,7 +70,7 @@ export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
 }
 
 // @public (undocumented)
-export type BrowserSyncoreSchema = WebSyncoreSchema;
+export type BrowserSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = WebSyncoreSchema<TSchema>;
 
 // @public (undocumented)
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
@@ -88,7 +89,11 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
     // (undocumented)
     appName?: string;
     // (undocumented)
+    capabilities?: SyncoreDevtoolsCapabilities;
+    // (undocumented)
     databaseLabel?: string;
+    // (undocumented)
+    dataSourceAlias?: string;
     // (undocumented)
     origin?: string;
     // (undocumented)
@@ -106,22 +111,22 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
 }
 
 // @public
-export type CreateBrowserRuntimeOptions = CreateWebRuntimeOptions;
+export type CreateBrowserRuntimeOptions<TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema> = CreateWebRuntimeOptions<TSchema>;
 
 // @public
-export function createBrowserSyncoreClient(runtime: SyncoreRuntime<BrowserSyncoreSchema>): _syncore_core0.SyncoreClient;
+export function createBrowserSyncoreClient<TSchema extends BrowserSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): SyncoreClient;
 
 // @public
-export function createBrowserSyncoreRuntime(options: CreateBrowserRuntimeOptions): Promise<SyncoreRuntime<WebSyncoreSchema>>;
+export function createBrowserSyncoreRuntime<TSchema extends BrowserSyncoreSchema>(options: CreateBrowserRuntimeOptions<TSchema>): Promise<SyncoreRuntime<TSchema>>;
 
 // @public (undocumented)
 export function createBrowserWebSocketDevtoolsSink(options: BrowserWebSocketDevtoolsSinkOptions): BrowserWebSocketDevtoolsSink;
 
 // @public
-export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOptions): _syncore_core0.AttachedRuntimeBridge;
+export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOptions): AttachedRuntimeBridge;
 
 // @public
-export type CreateBrowserWorkerRuntimeOptions = CreateWebWorkerRuntimeOptions;
+export type CreateBrowserWorkerRuntimeOptions<TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema> = CreateWebWorkerRuntimeOptions<TSchema>;
 
 // @public (undocumented)
 export function createDefaultSyncChannelName(databaseName: string): string;
@@ -148,7 +153,7 @@ export function createSyncoreWebWorkerClient(options: CreateWebWorkerClientProvi
 export function createWebExternalChangeSupport(options: {
     databaseName: string;
     persistence: SyncoreWebPersistence;
-    driver: CreateWebRuntimeOptions["driver"] | undefined;
+    driver: CreateWebRuntimeOptions<SyncoreDataModel>["driver"] | undefined;
 }): WebExternalChangeSupport;
 
 // @public (undocumented)
@@ -165,13 +170,13 @@ export interface CreateWebPersistenceOptions {
 }
 
 // @public
-export interface CreateWebRuntimeOptions {
+export interface CreateWebRuntimeOptions<TSchema extends WebSyncoreSchema = WebSyncoreSchema> {
     capabilities?: SyncoreCapabilities;
-    components?: SyncoreRuntimeOptions<WebSyncoreSchema>["components"];
+    components?: SyncoreRuntimeOptions<TSchema>["components"];
     databaseName?: string;
     devtools?: DevtoolsSink | false;
-    driver?: SyncoreRuntimeOptions<WebSyncoreSchema>["driver"];
-    functions: SyncoreRuntimeOptions<WebSyncoreSchema>["functions"];
+    driver?: SyncoreRuntimeOptions<TSchema>["driver"];
+    functions: SyncoreRuntimeOptions<TSchema>["functions"];
     locateFile?: (fileName: string) => string;
     opfsRootDirectoryName?: string;
     persistence?: SyncoreWebPersistence;
@@ -179,17 +184,17 @@ export interface CreateWebRuntimeOptions {
     persistenceMode?: WebPersistenceMode;
     platform?: string;
     scheduler?: SchedulerOptions;
-    schema: WebSyncoreSchema;
+    schema: TSchema;
     storage?: SyncoreStorageAdapter;
     storageNamespace?: string;
     wasmUrl?: string;
 }
 
 // @public
-export function createWebSyncoreClient(runtime: SyncoreRuntime<WebSyncoreSchema>): _syncore_core0.SyncoreClient;
+export function createWebSyncoreClient<TSchema extends WebSyncoreSchema>(runtime: SyncoreRuntime<TSchema>): SyncoreClient;
 
 // @public
-export function createWebSyncoreRuntime(options: CreateWebRuntimeOptions): Promise<SyncoreRuntime<WebSyncoreSchema>>;
+export function createWebSyncoreRuntime<TSchema extends WebSyncoreSchema>(options: CreateWebRuntimeOptions<TSchema>): Promise<SyncoreRuntime<TSchema>>;
 
 // @public
 export function createWebWorkerClient(endpoint: SyncoreWorkerMessageEndpoint): SyncoreWebWorkerClient;
@@ -202,10 +207,10 @@ export interface CreateWebWorkerClientProviderOptions {
 }
 
 // @public
-export function createWebWorkerRuntime(options: CreateWebWorkerRuntimeOptions): _syncore_core0.AttachedRuntimeBridge;
+export function createWebWorkerRuntime<TSchema extends WebSyncoreSchema>(options: CreateWebWorkerRuntimeOptions<TSchema>): AttachedRuntimeBridge;
 
 // @public
-export interface CreateWebWorkerRuntimeOptions extends CreateWebRuntimeOptions {
+export interface CreateWebWorkerRuntimeOptions<TSchema extends WebSyncoreSchema = WebSyncoreSchema> extends CreateWebRuntimeOptions<TSchema> {
     endpoint: SyncoreWorkerMessageEndpoint;
 }
 
@@ -354,10 +359,10 @@ export interface WebExternalChangeSupport {
 export type WebPersistenceMode = "auto" | "indexeddb" | "opfs";
 
 // @public (undocumented)
-export type WebSyncoreSchema = SyncoreSchema<any>;
+export type WebSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
 // @public (undocumented)
-export type WebWorkerSyncoreSchema = SyncoreSchema<any>;
+export type WebWorkerSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
 // @public (undocumented)
 export type WorkerQueryWatch<TValue> = BridgeQueryWatch<TValue>;

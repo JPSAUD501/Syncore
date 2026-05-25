@@ -19,8 +19,8 @@
 
 ## Tests To Run
 
-- `bun run --filter syncore test`
-- `bun run --filter syncore typecheck`
+- `npm run test --workspace @syncore/core`
+- `npm run typecheck --workspace @syncore/core`
 
 ## Common Failure Modes
 

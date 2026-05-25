@@ -12,7 +12,10 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { SchedulerJob } from "@syncore/devtools-protocol";
+import type {
+  SchedulerJob,
+  SyncoreDevtoolsEvent
+} from "@syncore/devtools-protocol";
 import { defineSchema, defineTable, s } from "../../../schema/src/index.js";
 import { cronJobs, mutation, query } from "./functions.js";
 import {
@@ -811,6 +814,145 @@ describe("SyncoreRuntime schema + scheduler", () => {
     await runtime.stop();
   });
 
+  it("emits causal devtools traces with previews and invalidation links", async () => {
+    const databasePath = path.join(rootDirectory, "devtools-traces.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const events: SyncoreDevtoolsEvent[] = [];
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: s.string(),
+        done: s.boolean()
+      })
+    });
+
+    const functions = {
+      "tasks/list": query({
+        args: {},
+        returns: s.array(s.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("tasks").collect()
+      }),
+      "tasks/create": mutation({
+        args: { text: s.string() },
+        returns: s.string(),
+        handler: async (ctx, args) =>
+          (ctx as MutationCtx).db.insert("tasks", {
+            text: (args as { text: string }).text,
+            done: false
+          })
+      })
+    };
+
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath),
+      devtools: {
+        emit: (event) => {
+          events.push(event);
+        }
+      }
+    });
+
+    await runtime.start();
+    const client = runtime.createClient();
+    const devtoolsInvalidationScopes: string[][] = [];
+    const unsubscribeDevtoolsInvalidations = runtime
+      .getAdmin()
+      .subscribeToDevtoolsInvalidations((scopes) => {
+        devtoolsInvalidationScopes.push([...scopes]);
+      });
+    const watch = client.watchQuery(
+      createFunctionReference<"query", Record<never, never>, unknown[]>(
+        "query",
+        "tasks/list"
+      )
+    );
+
+    await waitFor(
+      () => events.some((event) => event.type === "query.executed"),
+      "initial query trace"
+    );
+
+    const id = await client.mutation(
+      createFunctionReference<"mutation", { text: string }, string>(
+        "mutation",
+        "tasks/create"
+      ),
+      { text: "trace me" }
+    );
+
+    await waitFor(
+      () => events.some((event) => event.type === "query.invalidated"),
+      "query invalidation trace"
+    );
+
+    const mutationEvent = events.find(
+      (event): event is Extract<SyncoreDevtoolsEvent, { type: "mutation.committed" }> =>
+        event.type === "mutation.committed" &&
+        event.functionName === "tasks/create"
+    );
+    expect(mutationEvent).toMatchObject({
+      executionId: expect.any(String),
+      argsPreview: {
+        kind: "value",
+        value: { text: "trace me" }
+      },
+      changedScopes: ["table:tasks"],
+      changedDocumentsPreview: [
+        expect.objectContaining({
+          table: "tasks",
+          id,
+          operation: "insert"
+        })
+      ]
+    });
+
+    const invalidationEvent = events.find(
+      (event): event is Extract<SyncoreDevtoolsEvent, { type: "query.invalidated" }> =>
+        event.type === "query.invalidated"
+    );
+    expect(invalidationEvent).toMatchObject({
+      causedByExecutionId: mutationEvent?.executionId,
+      changedScopes: ["table:tasks"],
+      matchedScopes: ["table:tasks"],
+      rerunExecutionId: expect.any(String)
+    });
+    expect(mutationEvent?.timestamp).toBeLessThanOrEqual(
+      invalidationEvent?.timestamp ?? 0
+    );
+
+    const rerunEvent = events.find(
+      (event): event is Extract<SyncoreDevtoolsEvent, { type: "query.executed" }> =>
+        event.type === "query.executed" &&
+        event.executionId === invalidationEvent?.rerunExecutionId
+    );
+    expect(rerunEvent?.timestamp).toBeGreaterThanOrEqual(
+      invalidationEvent?.timestamp ?? 0
+    );
+    expect(events.indexOf(mutationEvent!)).toBeLessThan(
+      events.indexOf(invalidationEvent!)
+    );
+    expect(events.indexOf(mutationEvent!)).toBeLessThan(
+      events.indexOf(rerunEvent!)
+    );
+    expect(mutationEvent?.sequence).toEqual(expect.any(Number));
+    expect(invalidationEvent?.sequence).toBeGreaterThan(
+      mutationEvent?.sequence ?? 0
+    );
+    expect(rerunEvent?.sequence).toBeGreaterThan(
+      mutationEvent?.sequence ?? 0
+    );
+
+    watch.dispose?.();
+    expect(runtime.getAdmin().getActiveQueryInfos()).toHaveLength(0);
+    expect(devtoolsInvalidationScopes).toContainEqual(
+      expect.arrayContaining(["runtime.activeQueries"])
+    );
+    unsubscribeDevtoolsInvalidations();
+    await runtime.stop();
+  });
+
   it("pushes scoped devtools subscription updates for matching table changes", async () => {
     const databasePath = path.join(rootDirectory, "devtools-live.db");
     const storagePath = path.join(rootDirectory, "storage");
@@ -854,6 +996,13 @@ describe("SyncoreRuntime schema + scheduler", () => {
     await runtime.start();
     const hostDriver = new TestSqliteDriver(databasePath);
     const host = createDevtoolsSubscriptionHost({
+      driver: hostDriver,
+      schema,
+      functions,
+      admin: runtime.getAdmin(),
+      sql: nodeDevtoolsSqlSupport
+    });
+    const handler = createDevtoolsCommandHandler({
       driver: hostDriver,
       schema,
       functions,
@@ -925,6 +1074,21 @@ describe("SyncoreRuntime schema + scheduler", () => {
     expect(taskUpdates.at(-1)?.rows).toHaveLength(1);
     expect(noteUpdates.at(-1)?.rows).toHaveLength(1);
 
+    const exportResult = await handler({ kind: "data.export" });
+    expect(exportResult.kind).toBe("data.export.result");
+    if (exportResult.kind === "data.export.result") {
+      expect(exportResult.tables.map((table) => table.name).sort()).toEqual([
+        "notes",
+        "tasks"
+      ]);
+      expect(
+        exportResult.tables.find((table) => table.name === "tasks")?.rows
+      ).toMatchObject([{ text: "first task", done: false }]);
+      expect(
+        exportResult.tables.find((table) => table.name === "notes")?.rows
+      ).toMatchObject([{ body: "note" }]);
+    }
+
     host.dispose();
     await hostDriver.close();
     await runtime.stop();
@@ -949,6 +1113,19 @@ describe("SyncoreRuntime schema + scheduler", () => {
             text: (args as { text: string }).text,
             done: false
           })
+      }),
+      "tasks/scheduleCreate": mutation({
+        args: { text: s.string(), delayMs: s.number() },
+        returns: s.null(),
+        handler: async (ctx, args) => {
+          const typedArgs = args as { text: string; delayMs: number };
+          await (ctx as MutationCtx).scheduler.runAfter(
+            typedArgs.delayMs,
+            createFunctionReference("mutation", "tasks/create"),
+            { text: typedArgs.text }
+          );
+          return null;
+        }
       })
     };
 
@@ -991,6 +1168,10 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
 
     await runtime.start();
+    await runtime.createClient().mutation(
+      createFunctionReference("mutation", "tasks/scheduleCreate"),
+      { text: "one-shot", delayMs: 60_000 }
+    );
     const hostDriver = new TestSqliteDriver(databasePath);
     const handler = createDevtoolsCommandHandler({
       driver: hostDriver,
@@ -1015,12 +1196,19 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
 
     const initialJobs = schedulerSnapshots.at(-1) ?? [];
-    expect(initialJobs).toHaveLength(3);
-    expect(initialJobs.map((job) => job.recurringName).sort()).toEqual([
+    expect(initialJobs).toHaveLength(4);
+    expect(
+      initialJobs
+        .filter((job) => job.recurringName)
+        .map((job) => job.recurringName)
+        .sort()
+    ).toEqual([
       "cleanup",
       "digest",
       "report"
     ]);
+    const oneShotJob = initialJobs.find((job) => !job.recurringName);
+    expect(oneShotJob?.functionName).toBe("tasks/create");
     expect(initialJobs.find((job) => job.recurringName === "cleanup")?.schedule).toEqual({
       type: "interval",
       minutes: 5
@@ -1064,6 +1252,24 @@ describe("SyncoreRuntime schema + scheduler", () => {
         )?.args.text === "cleanup-updated",
       "scheduler subscription should refresh after update"
     );
+
+    expect(oneShotJob).toBeDefined();
+    const oneShotUpdateResult = await handler({
+      kind: "scheduler.update",
+      jobId: oneShotJob!.id,
+      args: { text: "one-shot-updated" },
+      runAt: oneShotJob!.runAt + 30_000
+    });
+    expect(oneShotUpdateResult.kind).toBe("scheduler.update.result");
+    if (oneShotUpdateResult.kind === "scheduler.update.result") {
+      expect(oneShotUpdateResult.success).toBe(true);
+      expect(oneShotUpdateResult.updated).toBe(true);
+      expect(oneShotUpdateResult.job?.args).toEqual({
+        text: "one-shot-updated"
+      });
+      expect(oneShotUpdateResult.job?.runAt).toBe(oneShotJob!.runAt + 30_000);
+      expect(oneShotUpdateResult.job?.schedule).toBeUndefined();
+    }
 
     const cancelResult = await handler({
       kind: "scheduler.cancel",
@@ -1185,7 +1391,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
       expect(result.kind).toBe("sql.read.result");
       if (result.kind === "sql.read.result") {
-        expect(result.error).toMatch(/only available in Node-hosted runtimes/i);
+        expect(result.error).toMatch(/not available for this runtime/i);
       }
       await hostDriver.close();
     } finally {

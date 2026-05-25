@@ -11,12 +11,16 @@ import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
 export { components } from "./components";
 
+import type { byColor as notes__byColor } from "../functions/notes";
 import type { create as notes__create } from "../functions/notes";
 import type { get as notes__get } from "../functions/notes";
 import type { list as notes__list } from "../functions/notes";
 import type { remove as notes__remove } from "../functions/notes";
 import type { scheduleAutoSave as notes__scheduleAutoSave } from "../functions/notes";
 import type { search as notes__search } from "../functions/notes";
+import type { seedDemo as notes__seedDemo } from "../functions/notes";
+import type { setColor as notes__setColor } from "../functions/notes";
+import type { stats as notes__stats } from "../functions/notes";
 import type { togglePin as notes__togglePin } from "../functions/notes";
 import type { update as notes__update } from "../functions/notes";
 
@@ -24,6 +28,10 @@ import type { update as notes__update } from "../functions/notes";
  * Type-safe references to functions exported from `syncore/functions/notes.ts`.
  */
 export interface SyncoreApi__notes {
+  /**
+   * Reference to the public Syncore query `notes/byColor`.
+   */
+  readonly byColor: FunctionReferenceFor<typeof notes__byColor>;
   /**
    * Reference to the public Syncore mutation `notes/create`.
    */
@@ -48,6 +56,18 @@ export interface SyncoreApi__notes {
    * Reference to the public Syncore query `notes/search`.
    */
   readonly search: FunctionReferenceFor<typeof notes__search>;
+  /**
+   * Reference to the public Syncore mutation `notes/seedDemo`.
+   */
+  readonly seedDemo: FunctionReferenceFor<typeof notes__seedDemo>;
+  /**
+   * Reference to the public Syncore mutation `notes/setColor`.
+   */
+  readonly setColor: FunctionReferenceFor<typeof notes__setColor>;
+  /**
+   * Reference to the public Syncore query `notes/stats`.
+   */
+  readonly stats: FunctionReferenceFor<typeof notes__stats>;
   /**
    * Reference to the public Syncore mutation `notes/togglePin`.
    */
@@ -75,4 +95,4 @@ export interface SyncoreApi {
  * const listTasks = api.tasks.list;
  * ```
  */
-export const api: SyncoreApi = { notes: { create: createFunctionReferenceFor<typeof notes__create>("mutation", "notes/create"), get: createFunctionReferenceFor<typeof notes__get>("query", "notes/get"), list: createFunctionReferenceFor<typeof notes__list>("query", "notes/list"), remove: createFunctionReferenceFor<typeof notes__remove>("mutation", "notes/remove"), scheduleAutoSave: createFunctionReferenceFor<typeof notes__scheduleAutoSave>("mutation", "notes/scheduleAutoSave"), search: createFunctionReferenceFor<typeof notes__search>("query", "notes/search"), togglePin: createFunctionReferenceFor<typeof notes__togglePin>("mutation", "notes/togglePin"), update: createFunctionReferenceFor<typeof notes__update>("mutation", "notes/update") } } as const;
+export const api: SyncoreApi = { notes: { byColor: createFunctionReferenceFor<typeof notes__byColor>("query", "notes/byColor"), create: createFunctionReferenceFor<typeof notes__create>("mutation", "notes/create"), get: createFunctionReferenceFor<typeof notes__get>("query", "notes/get"), list: createFunctionReferenceFor<typeof notes__list>("query", "notes/list"), remove: createFunctionReferenceFor<typeof notes__remove>("mutation", "notes/remove"), scheduleAutoSave: createFunctionReferenceFor<typeof notes__scheduleAutoSave>("mutation", "notes/scheduleAutoSave"), search: createFunctionReferenceFor<typeof notes__search>("query", "notes/search"), seedDemo: createFunctionReferenceFor<typeof notes__seedDemo>("mutation", "notes/seedDemo"), setColor: createFunctionReferenceFor<typeof notes__setColor>("mutation", "notes/setColor"), stats: createFunctionReferenceFor<typeof notes__stats>("query", "notes/stats"), togglePin: createFunctionReferenceFor<typeof notes__togglePin>("mutation", "notes/togglePin"), update: createFunctionReferenceFor<typeof notes__update>("mutation", "notes/update") } } as const;

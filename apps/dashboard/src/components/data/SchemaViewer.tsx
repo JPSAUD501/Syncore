@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TableSchema } from "@syncore/devtools-protocol";
-import { Layers, Hash, ToggleLeft, Type, Calendar, Braces } from "lucide-react";
+import { Layers, Hash, ToggleLeft, Type, Calendar, Braces, Link2 } from "lucide-react";
 
 interface SchemaViewerProps {
   schema: TableSchema | null;
@@ -49,7 +49,7 @@ export function SchemaViewer({ schema, className }: SchemaViewerProps) {
 
         <div className="space-y-1">
           {schema.fields.map((field) => {
-            const Icon = TYPE_ICONS[field.type] ?? Type;
+            const Icon = field.referenceTable ? Link2 : (TYPE_ICONS[field.type] ?? Type);
             return (
               <div
                 key={field.name}
@@ -62,6 +62,11 @@ export function SchemaViewer({ schema, className }: SchemaViewerProps) {
                 <Badge variant="outline" className="text-[10px] font-mono">
                   {field.type}
                 </Badge>
+                {field.referenceTable && (
+                  <Badge variant="secondary" className="text-[10px] font-mono">
+                    {"->"} {field.referenceTable}
+                  </Badge>
+                )}
                 {field.optional && (
                   <Badge variant="secondary" className="text-[10px]">
                     optional

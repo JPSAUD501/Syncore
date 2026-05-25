@@ -145,7 +145,8 @@ function parseImportText(text: string): Record<string, unknown>[] {
         throw new Error(
           err instanceof Error
             ? `Line ${index + 1}: ${err.message}`
-            : `Line ${index + 1}: Invalid JSON`
+            : `Line ${index + 1}: Invalid JSON`,
+          { cause: err }
         );
       }
     });

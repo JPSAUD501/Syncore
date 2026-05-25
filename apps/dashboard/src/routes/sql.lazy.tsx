@@ -12,17 +12,25 @@ import {
 } from "lucide-react";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { sql as sqlLang } from "@codemirror/lang-sql";
+import { SQLite, sql as sqlLang } from "@codemirror/lang-sql";
+import type { SQLNamespace } from "@codemirror/lang-sql";
 import { EditorView } from "@codemirror/view";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared";
 import { useConnection } from "@/hooks";
 import { usePreferredTarget } from "@/hooks/usePreferredTarget";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
+import type { TableSchema } from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/sql")({
   component: SqlPage
@@ -56,25 +64,39 @@ type SqlMode = "read" | "write" | "live";
 
 const STORAGE_KEY = "syncore-sql-history";
 
-const PRAGMA_SHORTCUTS: Array<{ label: string; query: string }> = [
+const PRAGMA_SHORTCUTS: Array<{ label: string; query: string; mode: SqlMode }> = [
   {
     label: "Table List",
-    query: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+    query: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;",
+    mode: "read"
   },
   {
     label: "Schema Info",
-    query: "SELECT sql FROM sqlite_master WHERE type='table';"
+    query: "SELECT sql FROM sqlite_master WHERE type='table';",
+    mode: "read"
   },
   {
     label: "Index List",
-    query: "SELECT name, tbl_name FROM sqlite_master WHERE type='index';"
+    query: "SELECT name, tbl_name FROM sqlite_master WHERE type='index';",
+    mode: "read"
   },
-  { label: "Database Size", query: "PRAGMA page_count; PRAGMA page_size;" },
-  { label: "Journal Mode", query: "PRAGMA journal_mode;" },
-  { label: "WAL Status", query: "PRAGMA wal_checkpoint;" },
-  { label: "Foreign Keys", query: "PRAGMA foreign_keys;" },
-  { label: "Integrity Check", query: "PRAGMA integrity_check;" }
+  { label: "Page Count", query: "PRAGMA page_count;", mode: "read" },
+  { label: "Page Size", query: "PRAGMA page_size;", mode: "read" },
+  { label: "Journal Mode", query: "PRAGMA journal_mode;", mode: "read" },
+  { label: "WAL Status", query: "PRAGMA wal_checkpoint;", mode: "read" },
+  { label: "Foreign Keys", query: "PRAGMA foreign_keys;", mode: "read" },
+  { label: "Integrity Check", query: "PRAGMA integrity_check;", mode: "read" }
 ];
+
+function getModeUnavailableReason(mode: SqlMode, fallback: string): string {
+  if (mode === "live") {
+    return "SQL Live is not available for this data source.";
+  }
+  if (mode === "write") {
+    return "SQL Write is not available for this data source.";
+  }
+  return fallback;
+}
 
 /* ------------------------------------------------------------------ */
 /*  CodeMirror Substrate theme                                         */
@@ -158,11 +180,18 @@ const substrateHighlight = EditorView.baseTheme({
 
 function SqlPage() {
   const { isReady } = useConnection();
-  const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
+  const {
+    activeRuntime,
+    targetRuntimeId,
+    usingProjectTarget,
+    selectedTarget,
+    runtimeFilter
+  } = usePreferredTarget();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SqlMode>("read");
   const [result, setResult] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -173,6 +202,37 @@ function SqlPage() {
     }
   });
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const sqlCapabilities = activeRuntime?.capabilities?.sql;
+  const allRuntimesSelected =
+    selectedTarget?.kind === "client" &&
+    selectedTarget.runtimes.length > 1 &&
+    runtimeFilter === "all";
+  const sqlUnavailableReason =
+    sqlCapabilities?.reason ??
+    (allRuntimesSelected
+      ? "SQL Console requires an executor runtime with SQL support. The current All runtimes executor does not provide SQL."
+      : "SQL Console is not available for the selected runtime.");
+  const canReadSql = sqlCapabilities?.read === true;
+  const canWriteSql = canReadSql && sqlCapabilities?.write === true;
+  const canLiveSql = canReadSql && sqlCapabilities?.live === true;
+  const schemaSubscription = useDevtoolsSubscription(
+    targetRuntimeId ? { kind: "schema.tables" } : null,
+    {
+      enabled: Boolean(targetRuntimeId),
+      targetRuntimeId
+    }
+  );
+  const schemaTables = useMemo(
+    () =>
+      schemaSubscription.data?.kind === "schema.tables.result"
+        ? schemaSubscription.data.tables
+        : [],
+    [schemaSubscription.data]
+  );
+  const sqlSchema = useMemo(
+    () => buildSqlCompletionSchema(schemaTables),
+    [schemaTables]
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Persist history                                                  */
@@ -189,13 +249,13 @@ function SqlPage() {
   const liveStartedAtRef = useRef<number | null>(null);
 
   const liveSubscription = useDevtoolsSubscription(
-    isReady && !usingProjectTarget && mode === "live" && query.trim()
+    isReady && canLiveSql && mode === "live" && query.trim()
       ? { kind: "sql.watch", query: query.trim() }
       : null,
     {
       enabled:
         isReady &&
-        !usingProjectTarget &&
+        canLiveSql &&
         mode === "live" &&
         query.trim().length > 0,
       targetRuntimeId
@@ -222,19 +282,40 @@ function SqlPage() {
   /* ---------------------------------------------------------------- */
 
   const executeQuery = useCallback(
-    async (sql?: string) => {
+    async (sql?: string, modeOverride?: SqlMode) => {
       const queryText = sql ?? query.trim();
+      const executionMode = modeOverride ?? mode;
       if (!queryText || !targetRuntimeId) return;
-      if (mode === "live") {
-        if (usingProjectTarget) {
+      if (!canReadSql) {
+        setResult({
+          columns: [],
+          rows: [],
+          durationMs: 0,
+          mode: executionMode,
+          error: sqlUnavailableReason
+        });
+        return;
+      }
+      if (executionMode === "live") {
+        if (!canLiveSql) {
           setResult({
             columns: [],
             rows: [],
             durationMs: 0,
             mode: "live",
-            error: "SQL Live requires an active runtime."
+            error: "SQL Live is not available for this data source."
           });
         }
+        return;
+      }
+      if (executionMode === "write" && !canWriteSql) {
+        setResult({
+          columns: [],
+          rows: [],
+          durationMs: 0,
+          mode: "write",
+          error: "SQL Write is not available for this data source."
+        });
         return;
       }
 
@@ -243,7 +324,7 @@ function SqlPage() {
 
       try {
         const res = await sendRequest({
-          kind: mode === "write" ? "sql.write" : "sql.read",
+          kind: executionMode === "write" ? "sql.write" : "sql.read",
           query: queryText
         }, { targetRuntimeId });
         const durationMs = performance.now() - startTime;
@@ -299,14 +380,22 @@ function SqlPage() {
           columns: [],
           rows: [],
           durationMs,
-          mode,
+          mode: executionMode,
           error: errorMsg
         });
       } finally {
         setLoading(false);
       }
     },
-    [mode, query, targetRuntimeId, usingProjectTarget]
+    [
+      canLiveSql,
+      canReadSql,
+      canWriteSql,
+      mode,
+      query,
+      sqlUnavailableReason,
+      targetRuntimeId
+    ]
   );
 
   useEffect(() => {
@@ -316,7 +405,7 @@ function SqlPage() {
       return;
     }
     const queryText = query.trim();
-    if (!isReady || !queryText || usingProjectTarget) {
+    if (!isReady || !queryText || !canLiveSql) {
       liveStartedAtRef.current = null;
       setResult(null);
       return;
@@ -362,9 +451,9 @@ function SqlPage() {
     isReady,
     liveSubscription.data,
     liveSubscription.loading,
+    canLiveSql,
     mode,
-    query,
-    usingProjectTarget
+    query
   ]);
 
   /* ---------------------------------------------------------------- */
@@ -382,7 +471,11 @@ function SqlPage() {
 
   const extensions = useMemo(
     () => [
-      sqlLang(),
+      sqlLang({
+        dialect: SQLite,
+        schema: sqlSchema,
+        upperCaseKeywords: true
+      }),
       substrateTheme,
       substrateHighlight,
       EditorView.lineWrapping,
@@ -397,12 +490,24 @@ function SqlPage() {
         }
       })
     ],
-    [executeQuery]
+    [executeQuery, sqlSchema]
   );
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
+
+  if (selectedTarget && !canReadSql) {
+    return (
+      <div className="flex h-[calc(100vh-7rem)] items-center justify-center rounded-md border border-border bg-bg-surface">
+        <EmptyState
+          icon={Terminal}
+          title="SQL Console unavailable"
+          description={sqlUnavailableReason}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-3">
@@ -416,7 +521,7 @@ function SqlPage() {
             </h2>
             {usingProjectTarget && (
               <Badge variant="outline" className="text-[9px]">
-                Project Offline
+                Project Target
               </Badge>
             )}
             <Badge variant="outline" className="text-[9px]">
@@ -454,7 +559,12 @@ function SqlPage() {
             {mode !== "live" && (
               <Button
                 onClick={() => void executeQuery()}
-                disabled={!targetRuntimeId || loading || !query.trim()}
+                disabled={
+                  !targetRuntimeId ||
+                  loading ||
+                  !query.trim() ||
+                  (mode === "write" ? !canWriteSql : !canReadSql)
+                }
                 size="sm"
                 className="gap-1.5 px-4"
               >
@@ -472,12 +582,20 @@ function SqlPage() {
                 <button
                   key={nextMode}
                   type="button"
+                  disabled={
+                    nextMode === "live"
+                      ? !canLiveSql
+                      : nextMode === "write"
+                        ? !canWriteSql
+                        : !canReadSql
+                  }
                   onClick={() => setMode(nextMode)}
                   className={cn(
                     "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
                     mode === nextMode
                       ? "bg-accent text-bg-deep"
-                      : "text-text-tertiary hover:text-text-primary"
+                      : "text-text-tertiary hover:text-text-primary",
+                    "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-tertiary"
                   )}
                 >
                   {nextMode[0]!.toUpperCase() + nextMode.slice(1)}
@@ -485,9 +603,19 @@ function SqlPage() {
               ))}
             </div>
 
-            <span className="text-[11px] text-text-tertiary">
+            <span className="text-[11px] text-text-tertiary hidden sm:block">
               {mode === "live" ? "Live updates enabled" : "Ctrl+Enter to run"}
             </span>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 lg:hidden"
+              onClick={() => setMobileHistoryOpen(true)}
+            >
+              <History size={12} />
+              History
+            </Button>
 
             {result && !result.error && (
               <div className="ml-auto flex items-center gap-3 text-[11px] text-text-tertiary animate-fade-in">
@@ -506,9 +634,9 @@ function SqlPage() {
 
         {/* Results area */}
         <div className="flex min-h-0 flex-1 flex-col bg-bg-base">
-          {mode === "live" && usingProjectTarget ? (
+          {mode === "live" && !canLiveSql ? (
             <div className="p-4 text-[12px] text-text-tertiary">
-              SQL Live is only available while a runtime is active.
+              {getModeUnavailableReason("live", sqlUnavailableReason)}
             </div>
           ) : mode === "live" && liveSubscription.loading && !result ? (
             <div className="p-4 text-[12px] text-text-tertiary">
@@ -546,9 +674,18 @@ function SqlPage() {
         </div>
       </div>
 
-      {/* ---- Right sidebar: PRAGMA shortcuts + history ---- */}
-      <div className="hidden w-64 shrink-0 overflow-hidden rounded-md border border-border bg-bg-surface lg:flex lg:flex-col">
-        {/* PRAGMA shortcuts */}
+      {/* ---- Right sidebar: schema, shortcuts, history ---- */}
+      <div className="hidden w-80 shrink-0 overflow-hidden rounded-md border border-border bg-bg-surface lg:flex lg:flex-col">
+        <SchemaBrowser
+          tables={schemaTables}
+          loading={schemaSubscription.loading}
+          onSelectTable={(tableName) => {
+            const nextQuery = `SELECT * FROM ${quoteSqlIdentifier(tableName)} LIMIT 50;`;
+            setMode("read");
+            setQuery(nextQuery);
+          }}
+        />
+
         <div className="border-b border-border p-3">
           <div className="mb-2 flex items-center gap-2">
             <Table2 size={12} className="text-accent" />
@@ -562,8 +699,9 @@ function SqlPage() {
                 key={shortcut.label}
                 type="button"
                 onClick={() => {
+                  setMode(shortcut.mode);
                   setQuery(shortcut.query);
-                  void executeQuery(shortcut.query);
+                  void executeQuery(shortcut.query, shortcut.mode);
                 }}
                 disabled={!targetRuntimeId || mode === "live"}
                 className={cn(
@@ -641,6 +779,172 @@ function SqlPage() {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Mobile: shortcuts + history dialog */}
+      <Dialog open={mobileHistoryOpen} onOpenChange={setMobileHistoryOpen}>
+        <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-sm">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="text-[14px]">Quick Actions & History</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[70vh]">
+            <div className="p-3">
+              {/* Quick actions */}
+              <p className="mb-2 text-[11px] font-semibold text-text-primary">Quick Actions</p>
+              <div className="mb-4 space-y-0.5">
+                {PRAGMA_SHORTCUTS.map((shortcut) => (
+                  <button
+                    key={shortcut.label}
+                    type="button"
+                    onClick={() => {
+                      setMode(shortcut.mode);
+                      setQuery(shortcut.query);
+                      setMobileHistoryOpen(false);
+                      void executeQuery(shortcut.query, shortcut.mode);
+                    }}
+                    disabled={!targetRuntimeId || mode === "live"}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded px-2 py-2 text-[12px] text-text-secondary transition-colors",
+                      "hover:bg-bg-base hover:text-text-primary",
+                      "disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
+                  >
+                    <ChevronRight size={10} className="text-text-tertiary" />
+                    {shortcut.label}
+                  </button>
+                ))}
+              </div>
+              {/* History */}
+              <p className="mb-2 text-[11px] font-semibold text-text-primary">History</p>
+              {history.length === 0 ? (
+                <p className="py-4 text-center text-[11px] text-text-tertiary">No query history</p>
+              ) : (
+                <div className="space-y-0.5">
+                  {history.map((entry, i) => (
+                    <button
+                      key={`${entry.timestamp}-${i}`}
+                      type="button"
+                      onClick={() => {
+                        setQuery(entry.query);
+                        setMobileHistoryOpen(false);
+                      }}
+                      className="group w-full rounded px-2 py-2 text-left transition-colors hover:bg-bg-base"
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        {entry.error ? (
+                          <AlertCircle size={9} className="text-error shrink-0" />
+                        ) : (
+                          <Terminal size={9} className="text-text-tertiary shrink-0" />
+                        )}
+                        <span className="text-[10px] text-text-tertiary">
+                          {new Date(entry.timestamp).toLocaleTimeString()}
+                        </span>
+                        <span className="text-[9px] text-text-tertiary ml-auto">
+                          {entry.rowCount}r / {formatDuration(entry.durationMs)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-text-secondary font-mono truncate group-hover:text-text-primary">
+                        {entry.query}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Schema helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+function buildSqlCompletionSchema(tables: TableSchema[]): SQLNamespace {
+  const namespace: Record<string, readonly string[]> = {};
+  for (const table of tables) {
+    namespace[table.name] = [
+      "_id",
+      "_creationTime",
+      ...table.fields.map((field) => field.name)
+    ];
+  }
+  return namespace;
+}
+
+function quoteSqlIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function SchemaBrowser({
+  tables,
+  loading,
+  onSelectTable
+}: {
+  tables: TableSchema[];
+  loading: boolean;
+  onSelectTable: (tableName: string) => void;
+}) {
+  return (
+    <div className="max-h-72 shrink-0 border-b border-border p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Table2 size={12} className="text-accent" />
+        <span className="flex-1 text-[11px] font-semibold text-text-primary">
+          Schema
+        </span>
+        {loading ? (
+          <Loader2 size={11} className="animate-spin text-text-tertiary" />
+        ) : (
+          <span className="text-[10px] text-text-tertiary">
+            {tables.length}
+          </span>
+        )}
+      </div>
+      <ScrollArea className="max-h-60">
+        <div className="space-y-1 pr-1">
+          {tables.length === 0 ? (
+            <p className="py-4 text-center text-[10px] text-text-tertiary">
+              No schema loaded
+            </p>
+          ) : (
+            tables.map((table) => (
+              <button
+                key={table.name}
+                type="button"
+                onClick={() => onSelectTable(table.name)}
+                className="group w-full rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-border-hover hover:bg-bg-base"
+                title={`Insert SELECT for ${table.name}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] font-semibold text-text-primary">
+                    {table.name}
+                  </span>
+                  <span className="rounded border border-border px-1.5 py-0.5 text-[9px] text-text-tertiary">
+                    {table.documentCount}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {table.fields.slice(0, 5).map((field) => (
+                    <span
+                      key={field.name}
+                      className="rounded bg-bg-elevated px-1.5 py-0.5 font-mono text-[9px] text-text-tertiary"
+                      title={`${field.name}: ${field.type}`}
+                    >
+                      {field.name}
+                    </span>
+                  ))}
+                  {table.fields.length > 5 && (
+                    <span className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] text-text-tertiary">
+                      +{table.fields.length - 5}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }
@@ -650,6 +954,58 @@ function SqlPage() {
 /* ------------------------------------------------------------------ */
 
 function ResultsTable({ result }: { result: QueryResult }) {
+  const prevRowsRef = useRef<unknown[][] | null>(null);
+  const cellPulseVersionsRef = useRef<Map<string, number>>(new Map());
+  const [changedCells, setChangedCells] = useState<Map<string, number>>(
+    new Map()
+  );
+
+  useEffect(() => {
+    if (result.mode !== "live") {
+      prevRowsRef.current = null;
+      setChangedCells(new Map());
+      return;
+    }
+
+    const prevRows = prevRowsRef.current;
+    prevRowsRef.current = result.rows;
+
+    if (!prevRows) return;
+
+    const changed = new Map<string, number>();
+    const pulseVersions = cellPulseVersionsRef.current;
+
+    for (let rowIdx = 0; rowIdx < result.rows.length; rowIdx++) {
+      const row = result.rows[rowIdx]!;
+      const prevRow = prevRows[rowIdx];
+      if (!prevRow) {
+        for (let cellIdx = 0; cellIdx < row.length; cellIdx++) {
+          const key = `${rowIdx}:${cellIdx}`;
+          const next = (pulseVersions.get(key) ?? 0) + 1;
+          pulseVersions.set(key, next);
+          changed.set(key, next);
+        }
+      } else {
+        for (let cellIdx = 0; cellIdx < row.length; cellIdx++) {
+          if (
+            JSON.stringify(row[cellIdx]) !== JSON.stringify(prevRow[cellIdx])
+          ) {
+            const key = `${rowIdx}:${cellIdx}`;
+            const next = (pulseVersions.get(key) ?? 0) + 1;
+            pulseVersions.set(key, next);
+            changed.set(key, next);
+          }
+        }
+      }
+    }
+
+    if (changed.size > 0) {
+      setChangedCells(changed);
+      const timer = setTimeout(() => setChangedCells(new Map()), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [result.rows, result.mode]);
+
   if (result.columns.length === 0 && result.rows.length === 0) {
     return (
       <div className="p-4 text-center animate-fade-in">
@@ -679,45 +1035,90 @@ function ResultsTable({ result }: { result: QueryResult }) {
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="min-w-full animate-fade-in bg-bg-base">
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex border-b border-border bg-bg-surface">
-          <div className="w-12 shrink-0 border-r border-border px-2 py-2 text-center text-[10px] font-semibold text-text-tertiary">
-            #
-          </div>
-          {result.columns.map((col) => (
-            <div
-              key={col}
-              className="flex-shrink-0 min-w-[120px] max-w-[300px] w-auto border-r border-border px-3 py-2 text-[10px] font-semibold text-text-tertiary last:border-r-0"
-            >
-              {col}
-            </div>
-          ))}
-        </div>
-
-        {/* Data rows */}
-        {result.rows.map((row, rowIdx) => (
-          <div
-            key={rowIdx}
-            className="flex border-b border-border hover:bg-bg-elevated/50 transition-colors"
-          >
-            <div className="w-12 shrink-0 px-2 py-1.5 text-[10px] text-text-tertiary border-r border-border text-center font-mono">
-              {rowIdx + 1}
-            </div>
-            {row.map((cell, cellIdx) => (
-              <div
-                key={cellIdx}
-                className="flex-shrink-0 min-w-[120px] max-w-[300px] w-auto px-3 py-1.5 text-[11px] font-mono border-r border-border last:border-r-0 truncate"
-              >
-                <SqlCellValue value={cell} />
-              </div>
-            ))}
-          </div>
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col animate-fade-in">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-bg-surface px-3 py-2">
+        <Badge variant="outline" className="text-[10px]">
+          {result.rows.length} rows
+        </Badge>
+        <Badge variant="outline" className="text-[10px]">
+          {result.columns.length} columns
+        </Badge>
+        <span className="text-[10px] text-text-tertiary">
+          {formatDuration(result.durationMs)}
+        </span>
+        {result.observedTables && result.observedTables.length > 0 && (
+          <span className="ml-auto truncate text-[10px] text-text-tertiary">
+            Watching {result.observedTables.join(", ")}
+          </span>
+        )}
       </div>
-    </ScrollArea>
+
+      <ScrollArea className="flex-1">
+        <div className="min-w-full overflow-x-auto bg-bg-base">
+          <table className="w-max min-w-full border-collapse text-left">
+            <thead className="sticky top-0 z-10 bg-bg-surface">
+              <tr className="border-b border-border">
+                <th className="sticky left-0 z-20 w-12 border-r border-border bg-bg-surface px-2 py-2 text-center text-[10px] font-semibold text-text-tertiary">
+                  #
+                </th>
+                {result.columns.map((col) => (
+                  <th
+                    key={col}
+                    className="min-w-32 max-w-80 border-r border-border px-3 py-2 font-mono text-[10px] font-semibold text-text-tertiary last:border-r-0"
+                    title={col}
+                  >
+                    <span className="block truncate">{col}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {result.rows.map((row, rowIdx) => (
+                <tr
+                  key={rowIdx}
+                  className="border-b border-border/80 transition-colors hover:bg-bg-elevated/50"
+                >
+                  <td className="sticky left-0 z-10 w-12 border-r border-border bg-bg-base px-2 py-1.5 text-center font-mono text-[10px] text-text-tertiary">
+                    {rowIdx + 1}
+                  </td>
+                  {row.map((cell, cellIdx) => {
+                    const cellKey = `${rowIdx}:${cellIdx}`;
+                    const pulse = changedCells.get(cellKey);
+                    return (
+                      <td
+                        key={cellIdx}
+                        className={cn(
+                          "max-w-80 border-r border-border px-3 py-1.5 font-mono text-[11px] last:border-r-0",
+                          pulse !== undefined &&
+                            (pulse % 2 === 0
+                              ? "animate-highlight-a"
+                              : "animate-highlight-b")
+                        )}
+                        title={formatSqlCellTitle(cell)}
+                      >
+                        <div className="max-w-72 truncate">
+                          <SqlCellValue value={cell} />
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ScrollArea>
+    </div>
   );
+}
+
+function formatSqlCellTitle(value: unknown): string {
+  if (value === null) return "NULL";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
 }
 
 function SqlCellValue({ value }: { value: unknown }) {

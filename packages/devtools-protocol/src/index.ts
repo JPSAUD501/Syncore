@@ -30,8 +30,54 @@ export function isCompatibleVersionHandshake(
 type SyncoreDevtoolsEventBase = {
   runtimeId: string;
   timestamp: number;
+  sequence?: number;
   origin?: SyncoreDevtoolsEventOrigin;
 };
+
+export type DevtoolsPreview =
+  | {
+      kind: "value";
+      value: unknown;
+      truncated?: boolean;
+      note?: string;
+    }
+  | {
+      kind: "error";
+      message: string;
+      truncated?: boolean;
+    };
+
+export interface DocumentChangePreview {
+  table: string;
+  id: string;
+  operation: "insert" | "patch" | "replace" | "delete";
+  fields?: string[];
+  beforePreview?: DevtoolsPreview;
+  afterPreview?: DevtoolsPreview;
+}
+
+export interface InvalidationCause {
+  executionId?: string;
+  reason: string;
+  changedScopes: string[];
+  matchedScopes: string[];
+}
+
+export interface ExecutionTrace {
+  executionId: string;
+  parentExecutionId?: string;
+  kind: "query" | "mutation" | "action" | "scheduler" | "dashboard";
+  functionName?: string;
+  argsPreview?: DevtoolsPreview;
+  resultPreview?: DevtoolsPreview;
+  error?: string;
+  readScopes?: string[];
+  writeScopes?: string[];
+  changedScopes?: string[];
+  changedDocumentsPreview?: DocumentChangePreview[];
+  invalidatedQueryIds?: string[];
+  schedulerJobId?: string;
+}
 
 export type SyncoreDevtoolsEvent =
   | (SyncoreDevtoolsEventBase & {
@@ -49,6 +95,11 @@ export type SyncoreDevtoolsEvent =
       componentName?: string;
       dependencies: string[];
       durationMs: number;
+      executionId?: string;
+      parentExecutionId?: string;
+      argsPreview?: DevtoolsPreview;
+      resultPreview?: DevtoolsPreview;
+      readScopes?: string[];
     })
   | (SyncoreDevtoolsEventBase & {
       type: "query.invalidated";
@@ -56,6 +107,10 @@ export type SyncoreDevtoolsEvent =
       componentPath?: string;
       componentName?: string;
       reason: string;
+      causedByExecutionId?: string;
+      changedScopes?: string[];
+      matchedScopes?: string[];
+      rerunExecutionId?: string;
     })
   | (SyncoreDevtoolsEventBase & {
       type: "mutation.committed";
@@ -65,6 +120,14 @@ export type SyncoreDevtoolsEvent =
       componentName?: string;
       changedTables: string[];
       durationMs: number;
+      executionId?: string;
+      parentExecutionId?: string;
+      argsPreview?: DevtoolsPreview;
+      resultPreview?: DevtoolsPreview;
+      writeScopes?: string[];
+      changedScopes?: string[];
+      changedDocumentsPreview?: DocumentChangePreview[];
+      invalidatedQueryIds?: string[];
     })
   | (SyncoreDevtoolsEventBase & {
       type: "action.completed";
@@ -74,10 +137,29 @@ export type SyncoreDevtoolsEvent =
       componentName?: string;
       durationMs: number;
       error?: string;
+      executionId?: string;
+      parentExecutionId?: string;
+      argsPreview?: DevtoolsPreview;
+      resultPreview?: DevtoolsPreview;
+      writeScopes?: string[];
+      changedScopes?: string[];
+      changedDocumentsPreview?: DocumentChangePreview[];
+      invalidatedQueryIds?: string[];
     })
   | (SyncoreDevtoolsEventBase & {
       type: "scheduler.tick";
       executedJobIds: string[];
+      executionId?: string;
+      jobExecutions?: Array<{
+        jobId: string;
+        executionId?: string;
+        functionName: string;
+        functionType: "mutation" | "action";
+        argsPreview?: DevtoolsPreview;
+        resultPreview?: DevtoolsPreview;
+        error?: string;
+        durationMs?: number;
+      }>;
     })
   | (SyncoreDevtoolsEventBase & {
       type: "storage.updated";
@@ -94,6 +176,8 @@ export type SyncoreDevtoolsEvent =
 export interface SyncoreActiveQueryInfo {
   id: string;
   functionName: string;
+  args?: Record<string, unknown>;
+  consumers?: number;
   owner?: "root" | "component";
   componentPath?: string;
   componentName?: string;
@@ -108,12 +192,44 @@ export interface SyncoreRuntimeSummary {
   origin?: string;
   sessionLabel?: string;
   targetKind?: "client" | "project";
+  runtimeRole?: "app" | "project-target";
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
+  capabilities?: SyncoreDevtoolsCapabilities;
   connectedAt: number;
   activeQueryCount: number;
   recentEventCount: number;
+}
+
+export interface SyncoreDevtoolsCapabilities {
+  sql?: {
+    read: boolean;
+    write: boolean;
+    live: boolean;
+    reason?: string;
+  };
+  data?: {
+    browse: boolean;
+    mutate: boolean;
+    importExport: boolean;
+  };
+  scheduler?: {
+    read: boolean;
+    edit: boolean;
+  };
+}
+
+export interface SyncoreDevtoolsExternalChangeEvent {
+  sourceId: string;
+  scope: "database" | "storage" | "all";
+  reason: "commit" | "storage-put" | "storage-delete" | "reconcile";
+  timestamp: number;
+  revision?: string;
+  changedScopes?: string[];
+  changedTables?: string[];
+  storageIds?: string[];
 }
 
 export function createBasePublicId(input: string): string {
@@ -205,9 +321,12 @@ export type SyncoreDevtoolsMessage =
       origin?: string;
       sessionLabel?: string;
       targetKind?: "client" | "project";
+      runtimeRole?: "app" | "project-target";
       storageProtocol?: string;
       databaseLabel?: string;
+      dataSourceAlias?: string;
       storageIdentity?: string;
+      capabilities?: SyncoreDevtoolsCapabilities;
     }
   | { type: "event"; event: SyncoreDevtoolsEvent }
   | {
@@ -234,6 +353,12 @@ export type SyncoreDevtoolsMessage =
       subscriptionId: string;
       runtimeId: string;
       error: string;
+    }
+  | {
+      type: "external.change";
+      runtimeId: string;
+      storageIdentity: string;
+      event: SyncoreDevtoolsExternalChangeEvent;
     };
 
 /* ------------------------------------------------------------------ */
@@ -282,6 +407,14 @@ export type SyncoreDevtoolsCommandPayload =
       fields: Record<string, unknown>;
     }
   | { kind: "data.delete"; table: string; id: string }
+  | { kind: "data.export"; tables?: string[] }
+  | {
+      kind: "data.referenceOptions";
+      table: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    }
   /* SQL */
   | { kind: "sql.read"; query: string }
   | { kind: "sql.write"; query: string }
@@ -290,9 +423,9 @@ export type SyncoreDevtoolsCommandPayload =
   | {
       kind: "scheduler.update";
       jobId: string;
-      schedule: SchedulerRecurringSchedule;
+      schedule?: SchedulerRecurringSchedule;
       args: Record<string, unknown>;
-      misfirePolicy: SchedulerMisfirePolicy;
+      misfirePolicy?: SchedulerMisfirePolicy;
       runAt?: number;
     };
 
@@ -346,6 +479,24 @@ export type SyncoreDevtoolsCommandResultPayload =
       kind: "data.mutate.result";
       success: boolean;
       id?: string;
+      error?: string;
+    }
+  | {
+      kind: "data.export.result";
+      tables: Array<{
+        name: string;
+        rows: Record<string, unknown>[];
+        totalCount: number;
+      }>;
+      error?: string;
+    }
+  | {
+      kind: "data.referenceOptions.result";
+      table: string;
+      rows: Record<string, unknown>[];
+      totalCount: number;
+      offset: number;
+      hasMore: boolean;
       error?: string;
     }
   | {
@@ -409,7 +560,10 @@ export type SyncoreDevtoolsSubscriptionResultPayload =
 export interface FunctionDefinition {
   name: string;
   type: "query" | "mutation" | "action";
-  file: string;
+  file?: string;
+  modulePath?: string;
+  namespace?: string;
+  metadataAvailable?: boolean;
   owner?: "root" | "component";
   componentPath?: string;
   componentName?: string;
@@ -436,6 +590,7 @@ export interface TableField {
   name: string;
   type: string;
   optional: boolean;
+  referenceTable?: string;
 }
 
 export interface TableIndex {

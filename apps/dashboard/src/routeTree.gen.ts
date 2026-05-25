@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as SqlRouteImport } from "./routes/sql"
 import { Route as SchedulerRouteImport } from "./routes/scheduler"
+import { Route as QueriesRouteImport } from "./routes/queries"
 import { Route as LogsRouteImport } from "./routes/logs"
 import { Route as FunctionsRouteImport } from "./routes/functions"
 import { Route as DataRouteImport } from "./routes/data"
@@ -26,6 +27,11 @@ const SchedulerRoute = SchedulerRouteImport.update({
   path: "/scheduler",
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import("./routes/scheduler.lazy").then((d) => d.Route))
+const QueriesRoute = QueriesRouteImport.update({
+  id: "/queries",
+  path: "/queries",
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import("./routes/queries.lazy").then((d) => d.Route))
 const LogsRoute = LogsRouteImport.update({
   id: "/logs",
   path: "/logs",
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   "/data": typeof DataRoute
   "/functions": typeof FunctionsRoute
   "/logs": typeof LogsRoute
+  "/queries": typeof QueriesRoute
   "/scheduler": typeof SchedulerRoute
   "/sql": typeof SqlRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   "/data": typeof DataRoute
   "/functions": typeof FunctionsRoute
   "/logs": typeof LogsRoute
+  "/queries": typeof QueriesRoute
   "/scheduler": typeof SchedulerRoute
   "/sql": typeof SqlRoute
 }
@@ -69,20 +77,36 @@ export interface FileRoutesById {
   "/data": typeof DataRoute
   "/functions": typeof FunctionsRoute
   "/logs": typeof LogsRoute
+  "/queries": typeof QueriesRoute
   "/scheduler": typeof SchedulerRoute
   "/sql": typeof SqlRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/" | "/data" | "/functions" | "/logs" | "/scheduler" | "/sql"
+  fullPaths:
+    | "/"
+    | "/data"
+    | "/functions"
+    | "/logs"
+    | "/queries"
+    | "/scheduler"
+    | "/sql"
   fileRoutesByTo: FileRoutesByTo
-  to: "/" | "/data" | "/functions" | "/logs" | "/scheduler" | "/sql"
+  to:
+    | "/"
+    | "/data"
+    | "/functions"
+    | "/logs"
+    | "/queries"
+    | "/scheduler"
+    | "/sql"
   id:
     | "__root__"
     | "/"
     | "/data"
     | "/functions"
     | "/logs"
+    | "/queries"
     | "/scheduler"
     | "/sql"
   fileRoutesById: FileRoutesById
@@ -92,6 +116,7 @@ export interface RootRouteChildren {
   DataRoute: typeof DataRoute
   FunctionsRoute: typeof FunctionsRoute
   LogsRoute: typeof LogsRoute
+  QueriesRoute: typeof QueriesRoute
   SchedulerRoute: typeof SchedulerRoute
   SqlRoute: typeof SqlRoute
 }
@@ -110,6 +135,13 @@ declare module "@tanstack/react-router" {
       path: "/scheduler"
       fullPath: "/scheduler"
       preLoaderRoute: typeof SchedulerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/queries": {
+      id: "/queries"
+      path: "/queries"
+      fullPath: "/queries"
+      preLoaderRoute: typeof QueriesRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/logs": {
@@ -148,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   DataRoute: DataRoute,
   FunctionsRoute: FunctionsRoute,
   LogsRoute: LogsRoute,
+  QueriesRoute: QueriesRoute,
   SchedulerRoute: SchedulerRoute,
   SqlRoute: SqlRoute,
 }

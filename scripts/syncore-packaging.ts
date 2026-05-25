@@ -230,11 +230,11 @@ export function replaceModuleSpecifier(
       `export * from '${replacement}'`
     )
     .replace(
-      new RegExp(`import("${escaped}")`, "g"),
+      new RegExp(`import\\("${escaped}"\\)`, "g"),
       `import("${replacement}")`
     )
     .replace(
-      new RegExp(`import('${escaped}')`, "g"),
+      new RegExp(`import\\('${escaped}'\\)`, "g"),
       `import('${replacement}')`
     );
 }
@@ -249,9 +249,10 @@ export async function execCommand(
     await mkdir(cwd, { recursive: true });
   }
   try {
-    return await execFileAsync(command, args, {
+    return await execFileAsync(resolveExecutable(command), args, {
       cwd,
       env: process.env,
+      shell: process.platform === "win32",
       windowsHide: true
     });
   } catch (error) {
@@ -271,6 +272,16 @@ export async function execCommand(
       `Command failed: ${command} ${args.join(" ")}${stdout ? `\nSTDOUT:\n${stdout}` : ""}${stderr ? `\nSTDERR:\n${stderr}` : ""}`
     );
   }
+}
+
+function resolveExecutable(command: string): string {
+  if (process.platform !== "win32") {
+    return command;
+  }
+  if (command === "npm" || command === "npx") {
+    return `${command}.cmd`;
+  }
+  return command;
 }
 
 export async function walkFiles(

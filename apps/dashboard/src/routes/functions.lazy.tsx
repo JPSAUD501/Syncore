@@ -1,4 +1,8 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import {
+  createLazyFileRoute,
+  useNavigate,
+  useSearch
+} from "@tanstack/react-router";
 import {
   Code2,
   ChevronRight,
@@ -7,18 +11,27 @@ import {
   Loader2,
   AlertCircle,
   Clock,
+  Radio,
   Activity,
   Search,
   XCircle,
-  CheckCircle2
+  CheckCircle2,
+  Copy,
+  ExternalLink
 } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import {
   FunctionBadge,
   inferFunctionType,
@@ -28,9 +41,17 @@ import {
 } from "@/components/shared";
 import type { FunctionType } from "@/components/shared/FunctionBadge";
 import { useDevtools, usePreferredTarget } from "@/hooks";
-import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
+import {
+  useDevtoolsMultiRuntimeSubscription,
+  useDevtoolsSubscription
+} from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
+import type {
+  ExecutionTrace,
+  SyncoreActiveQueryInfo,
+  SyncoreDevtoolsSubscriptionResultPayload
+} from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/functions")({
   component: FunctionsPage
@@ -47,15 +68,35 @@ interface FunctionRunResult {
   durationMs?: number;
 }
 
+type FunctionListEntry = {
+  name: string;
+  type: FunctionType;
+  file?: string;
+  modulePath?: string;
+  namespace: string;
+  metadataAvailable: boolean;
+  invocations: number;
+  avgDuration: number;
+  errorRate: number;
+  lastInvoked: number;
+  registered: boolean;
+  activeCount: number;
+  args?: Record<string, unknown>;
+};
+
 /* ------------------------------------------------------------------ */
 /*  Main page                                                          */
 /* ------------------------------------------------------------------ */
 
 function FunctionsPage() {
-  const { functionMetrics, functionEvents } = useDevtools();
-  const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
+  const { functionMetrics, functionEvents, traceIndex } = useDevtools();
+  const { targetRuntimeId, usingProjectTarget, selectedTarget, runtimeFilter } = usePreferredTarget();
+  const functionSearch = useSearch({ from: "/functions" });
+  const navigate = useNavigate();
+  const appliedSearchRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [mobileFunctionsOpen, setMobileFunctionsOpen] = useState(false);
   const [runResult, setRunResult] = useState<FunctionRunResult>({
     status: "idle"
   });
@@ -69,12 +110,36 @@ function FunctionsPage() {
     targetRuntimeId ? { kind: "functions.catalog" } : null,
     { enabled: Boolean(targetRuntimeId), targetRuntimeId }
   );
+  const activeQueryRuntimeIds = useMemo(() => {
+    if (runtimeFilter === "all" && selectedTarget) {
+      return selectedTarget.runtimes
+        .filter((runtime) => runtime.connected)
+        .map((runtime) => runtime.runtimeId);
+    }
+    return targetRuntimeId ? [targetRuntimeId] : [];
+  }, [runtimeFilter, selectedTarget, targetRuntimeId]);
+  const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
+    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+  >(
+    activeQueryRuntimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
+    activeQueryRuntimeIds,
+    { enabled: activeQueryRuntimeIds.length > 0 }
+  );
 
   const registeredFunctions =
     functionsSubscription.data?.kind === "functions.catalog.result"
       ? functionsSubscription.data.functions
       : null;
   const loadingFunctions = functionsSubscription.loading;
+  const activeQueries = useMemo(
+    () =>
+      Object.values(activeQueriesSubscription.dataByRuntime).flatMap((payload) =>
+        payload.kind === "runtime.activeQueries.result"
+          ? payload.activeQueries
+          : []
+      ),
+    [activeQueriesSubscription.dataByRuntime]
+  );
 
   const fnList = useMemo(
     () => registeredFunctions ?? [],
@@ -86,42 +151,23 @@ function FunctionsPage() {
   /* ---------------------------------------------------------------- */
 
   const allFunctions = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        type: FunctionType;
-        file: string;
-        invocations: number;
-        avgDuration: number;
-        errorRate: number;
-        lastInvoked: number;
-        registered: boolean;
-        args?: Record<string, unknown>;
-      }
-    >();
+    const map = new Map<string, FunctionListEntry>();
 
     // Seed from registered functions
     for (const fn of fnList) {
-      const entry: {
-        name: string;
-        type: FunctionType;
-        file: string;
-        invocations: number;
-        avgDuration: number;
-        errorRate: number;
-        lastInvoked: number;
-        registered: boolean;
-        args?: Record<string, unknown>;
-      } = {
+      const entry: FunctionListEntry = {
         name: fn.name,
-        type: fn.type as FunctionType,
-        file: fn.file,
+        type: fn.type,
+        ...(fn.file ? { file: fn.file } : {}),
+        ...(fn.modulePath ? { modulePath: fn.modulePath } : {}),
+        namespace: fn.namespace ?? inferFunctionNamespace(fn.name),
+        metadataAvailable: fn.metadataAvailable ?? Boolean(fn.file),
         invocations: 0,
         avgDuration: 0,
         errorRate: 0,
         lastInvoked: 0,
-        registered: true
+        registered: true,
+        activeCount: activeQueries.filter((query) => query.functionName === fn.name).length
       };
       if (fn.args) entry.args = fn.args;
       map.set(fn.name, entry);
@@ -133,56 +179,57 @@ function FunctionsPage() {
       const fnType =
         existing?.type ?? inferFunctionType(metric.type) ?? "query";
 
-      const entry: {
-        name: string;
-        type: FunctionType;
-        file: string;
-        invocations: number;
-        avgDuration: number;
-        errorRate: number;
-        lastInvoked: number;
-        registered: boolean;
-        args?: Record<string, unknown>;
-      } = {
+      const entry: FunctionListEntry = {
         name: metric.functionName,
         type: fnType,
-        file: existing?.file ?? inferFileFromName(metric.functionName),
+        ...(existing?.file ? { file: existing.file } : {}),
+        ...(existing?.modulePath ? { modulePath: existing.modulePath } : {}),
+        namespace: existing?.namespace ?? inferFunctionNamespace(metric.functionName),
+        metadataAvailable: existing?.metadataAvailable ?? false,
         invocations: metric.invocations,
         avgDuration: metric.avgDuration,
         errorRate: metric.errorRate,
         lastInvoked: metric.lastInvoked,
-        registered: existing?.registered ?? false
+        registered: existing?.registered ?? false,
+        activeCount: activeQueries.filter(
+          (query) => query.functionName === metric.functionName
+        ).length
       };
       if (existing?.args) entry.args = existing.args;
       map.set(metric.functionName, entry);
     }
 
     return Array.from(map.values());
-  }, [fnList, functionMetrics]);
+  }, [activeQueries, fnList, functionMetrics]);
 
   /* ---------------------------------------------------------------- */
   /*  Group by file for tree view                                      */
   /* ---------------------------------------------------------------- */
 
   const fileTree = useMemo(() => {
-    const filtered = search
+    const normalizedSearch = search.trim().toLowerCase();
+    const tracesByFunction = traceIndex.byFunctionName;
+    const filtered = normalizedSearch
       ? allFunctions.filter(
-          (fn) =>
-            fn.name.toLowerCase().includes(search.toLowerCase()) ||
-            fn.file.toLowerCase().includes(search.toLowerCase())
+          (fn) => getFunctionSearchText(fn, tracesByFunction).includes(normalizedSearch)
         )
       : allFunctions;
 
     const groups = new Map<string, typeof filtered>();
     for (const fn of filtered) {
-      const file = fn.file;
-      const existing = groups.get(file) ?? [];
+      const group = getFunctionGroupLabel(fn);
+      const existing = groups.get(group) ?? [];
       existing.push(fn);
-      groups.set(file, existing);
+      groups.set(group, existing);
     }
 
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [allFunctions, search]);
+    return Array.from(groups.entries())
+      .map(([group, functions]) => [
+        group,
+        [...functions].sort(compareFunctionEntries)
+      ] as const)
+      .sort(([a], [b]) => a.localeCompare(b));
+  }, [allFunctions, search, traceIndex.byFunctionName]);
 
   /* ---------------------------------------------------------------- */
   /*  Selected function details                                        */
@@ -197,11 +244,40 @@ function FunctionsPage() {
     if (!selectedFn) return [];
     return functionEvents.filter((e) => e.functionName === selectedFn);
   }, [functionEvents, selectedFn]);
+  const selectedFnTraces = useMemo(
+    () => (selectedFn ? (traceIndex.byFunctionName.get(selectedFn) ?? []) : []),
+    [selectedFn, traceIndex]
+  );
+  const selectedFnActiveQueries = useMemo(
+    () =>
+      selectedFn
+        ? activeQueries.filter((query) => query.functionName === selectedFn)
+        : [],
+    [activeQueries, selectedFn]
+  );
+  const selectFunction = useCallback(
+    (name: string, options: { clearRouteSearch?: boolean } = {}) => {
+      setSelectedFn(name);
+      setArgsText("{}");
+      setRunResult({ status: "idle" });
+      if (options.clearRouteSearch) {
+        appliedSearchRef.current = null;
+        void navigate({ to: "/functions", search: {}, replace: true });
+      }
+    },
+    [navigate]
+  );
 
   useEffect(() => {
+    if (functionSearch.fn) {
+      return;
+    }
+
     if (allFunctions.length === 0) {
       if (selectedFn !== null) {
         setSelectedFn(null);
+        setArgsText("{}");
+        setRunResult({ status: "idle" });
       }
       return;
     }
@@ -210,33 +286,61 @@ function FunctionsPage() {
       return;
     }
 
-    setSelectedFn(allFunctions[0]!.name);
-  }, [allFunctions, selectedFn]);
+    selectFunction(allFunctions[0]!.name);
+  }, [allFunctions, functionSearch.fn, selectFunction, selectedFn]);
+
+  useEffect(() => {
+    if (!functionSearch.fn) {
+      return;
+    }
+
+    const searchKey = `${functionSearch.fn}\u0000${functionSearch.args ?? ""}`;
+    if (appliedSearchRef.current === searchKey) {
+      return;
+    }
+
+    setSelectedFn(functionSearch.fn);
+    setRunResult({ status: "idle" });
+    if (functionSearch.args) {
+      try {
+        setArgsText(JSON.stringify(JSON.parse(functionSearch.args), null, 2));
+      } catch {
+        setArgsText(functionSearch.args);
+      }
+    } else {
+      setArgsText("{}");
+    }
+    appliedSearchRef.current = searchKey;
+  }, [functionSearch.args, functionSearch.fn]);
 
   /* ---------------------------------------------------------------- */
   /*  Run function                                                     */
   /* ---------------------------------------------------------------- */
 
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async (overrideArgs?: Record<string, unknown>) => {
     if (!selectedFunction || !targetRuntimeId) return;
 
     let args: Record<string, unknown>;
-    try {
-      const parsed = JSON.parse(argsText) as unknown;
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (overrideArgs) {
+      args = overrideArgs;
+    } else {
+      try {
+        const parsed = JSON.parse(argsText) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          setRunResult({
+            status: "error",
+            error: "Arguments must be a JSON object"
+          });
+          return;
+        }
+        args = parsed as Record<string, unknown>;
+      } catch {
         setRunResult({
           status: "error",
-          error: "Arguments must be a JSON object"
+          error: "Invalid JSON in arguments"
         });
         return;
       }
-      args = parsed as Record<string, unknown>;
-    } catch {
-      setRunResult({
-        status: "error",
-        error: "Invalid JSON in arguments"
-      });
-      return;
     }
 
     setRunResult({ status: "running" });
@@ -287,7 +391,7 @@ function FunctionsPage() {
             </h2>
             {usingProjectTarget && (
               <Badge variant="outline" className="text-[9px]">
-                Project Offline
+                Project Target
               </Badge>
             )}
             {loadingFunctions && (
@@ -316,17 +420,19 @@ function FunctionsPage() {
                 <p className="text-[11px] text-text-tertiary">
                   {targetRuntimeId
                     ? "No functions available for this target"
-                    : "Connect a runtime or configure a project target"}
+                    : "Connect a runtime"}
                 </p>
               </div>
             ) : (
-              fileTree.map(([file, fns]) => (
+              fileTree.map(([group, fns]) => (
                 <FileGroup
-                  key={file}
-                  file={file}
+                  key={group}
+                  group={group}
                   functions={fns}
                   selectedFn={selectedFn}
-                  onSelect={setSelectedFn}
+                  onSelect={(name) =>
+                    selectFunction(name, { clearRouteSearch: true })
+                  }
                 />
               ))
             )}
@@ -353,6 +459,29 @@ function FunctionsPage() {
 
       {/* ---- Right content: function details ---- */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
+        {/* Mobile: function selector button */}
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setMobileFunctionsOpen(true)}
+          >
+            <Code2 size={13} />
+            Functions
+          </Button>
+          {selectedFunction && (
+            <Badge variant="secondary" className="max-w-[60vw] truncate font-mono">
+              <span className="truncate">{selectedFunction.name}</span>
+            </Badge>
+          )}
+          {allFunctions.length > 0 && (
+            <span className="ml-auto text-[11px] text-text-tertiary">
+              {allFunctions.length} fns
+            </span>
+          )}
+        </div>
+
         {selectedFunction ? (
           <>
             {/* Header */}
@@ -366,12 +495,31 @@ function FunctionsPage() {
               <div className="flex items-center gap-4 text-[11px] text-text-tertiary flex-wrap">
                 <span className="flex items-center gap-1">
                   <FileCode size={11} />
-                  {selectedFunction.file}
+                  {selectedFunction.file ??
+                    "file unavailable from runtime metadata"}
                 </span>
+                <span className="flex items-center gap-1">
+                  <Code2 size={11} />
+                  {selectedFunction.namespace}
+                </span>
+                <Badge variant={selectedFunction.registered ? "secondary" : "outline"}>
+                  {selectedFunction.registered ? "registered" : "observed only"}
+                </Badge>
+                {!selectedFunction.metadataAvailable && (
+                  <Badge variant="outline">
+                    file metadata unavailable
+                  </Badge>
+                )}
                 <span className="flex items-center gap-1">
                   <Activity size={11} />
                   {selectedFunction.invocations} invocations
                 </span>
+                {selectedFnActiveQueries.length > 0 && (
+                  <span className="flex items-center gap-1 text-fn-query">
+                    <Radio size={11} />
+                    {selectedFnActiveQueries.length} active
+                  </span>
+                )}
                 <span className="flex items-center gap-1">
                   <Clock size={11} />
                   {formatDuration(selectedFunction.avgDuration)} avg
@@ -404,6 +552,17 @@ function FunctionsPage() {
                       </Badge>
                     )}
                   </TabsTrigger>
+                  <TabsTrigger value="active">
+                    Active
+                    {selectedFnActiveQueries.length > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="ml-1.5 text-[9px] px-1 py-0"
+                      >
+                        {selectedFnActiveQueries.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                   <TabsTrigger value="metrics">Metrics</TabsTrigger>
                 </TabsList>
               </div>
@@ -420,11 +579,32 @@ function FunctionsPage() {
               </TabsContent>
 
               <TabsContent value="logs" className="flex-1 min-h-0">
-                <FunctionLogs events={selectedFnEvents} />
+                <FunctionLogs
+                  events={selectedFnEvents}
+                  traces={selectedFnTraces}
+                  onUseArgs={(args) => setArgsText(JSON.stringify(args, null, 2))}
+                  onOpenExecution={(executionId) =>
+                    void navigate({
+                      to: "/logs",
+                      search: { executionId }
+                    })
+                  }
+                />
+              </TabsContent>
+
+              <TabsContent value="active" className="flex-1 min-h-0">
+                <FunctionActiveQueries
+                  queries={selectedFnActiveQueries}
+                  onOpenQueries={() => void navigate({ to: "/queries" })}
+                />
               </TabsContent>
 
               <TabsContent value="metrics" className="flex-1 min-h-0">
-                <FunctionMetricsPanel fn={selectedFunction} />
+                <FunctionMetricsPanel
+                  fn={selectedFunction}
+                  activeQueries={selectedFnActiveQueries}
+                  traces={selectedFnTraces}
+                />
               </TabsContent>
             </Tabs>
           </>
@@ -437,6 +617,56 @@ function FunctionsPage() {
           />
         )}
       </div>
+
+      {/* Mobile: function list dialog */}
+      <Dialog open={mobileFunctionsOpen} onOpenChange={setMobileFunctionsOpen}>
+        <DialogContent className="max-h-[80vh] overflow-hidden p-0 sm:max-w-sm">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="text-[14px]">Functions</DialogTitle>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="relative border-b border-border px-3 py-2">
+              <Search
+                size={13}
+                className="pointer-events-none absolute left-5.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+              />
+              <Input
+                placeholder="Search functions..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 border-border bg-bg-base pl-8 text-[12px]"
+              />
+            </div>
+            <ScrollArea className="max-h-[55vh]">
+              <div className="p-2">
+                {fileTree.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <Code2 size={20} className="mx-auto mb-2 text-text-tertiary" />
+                    <p className="text-[11px] text-text-tertiary">
+                      {targetRuntimeId
+                        ? "No functions available"
+                        : "Connect a runtime first"}
+                    </p>
+                  </div>
+                ) : (
+                  fileTree.map(([group, fns]) => (
+                    <FileGroup
+                      key={group}
+                      group={group}
+                      functions={fns}
+                      selectedFn={selectedFn}
+                      onSelect={(name) => {
+                        selectFunction(name, { clearRouteSearch: true });
+                        setMobileFunctionsOpen(false);
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -446,17 +676,13 @@ function FunctionsPage() {
 /* ------------------------------------------------------------------ */
 
 function FileGroup({
-  file,
+  group,
   functions,
   selectedFn,
   onSelect
 }: {
-  file: string;
-  functions: Array<{
-    name: string;
-    type: FunctionType;
-    invocations: number;
-  }>;
+  group: string;
+  functions: FunctionListEntry[];
   selectedFn: string | null;
   onSelect: (name: string) => void;
 }) {
@@ -477,7 +703,7 @@ function FileGroup({
           )}
         />
         <FileCode size={11} className="text-text-tertiary shrink-0" />
-        <span className="truncate font-medium">{file}</span>
+        <span className="truncate font-medium">{group}</span>
         <span className="ml-auto text-text-tertiary text-[10px]">
           {functions.length}
         </span>
@@ -505,11 +731,23 @@ function FileGroup({
               <span className="truncate font-mono text-[11px]">
                 {extractFnName(fn.name)}
               </span>
-              {fn.invocations > 0 && (
-                <span className="ml-auto text-[10px] text-text-tertiary">
-                  {fn.invocations}x
-                </span>
-              )}
+              <span className="ml-auto flex shrink-0 items-center gap-1">
+                {fn.invocations > 0 && (
+                  <span className="text-[10px] text-text-tertiary">
+                    {fn.invocations}x
+                  </span>
+                )}
+                {fn.activeCount > 0 && (
+                  <Badge variant="secondary" className="px-1 py-0 text-[8px]">
+                    active
+                  </Badge>
+                )}
+                {!fn.registered && (
+                  <Badge variant="outline" className="px-1 py-0 text-[8px]">
+                    observed
+                  </Badge>
+                )}
+              </span>
             </button>
           ))}
         </div>
@@ -650,7 +888,10 @@ function FunctionRunner({
 /* ------------------------------------------------------------------ */
 
 function FunctionLogs({
-  events
+  events,
+  traces,
+  onUseArgs,
+  onOpenExecution
 }: {
   events: Array<{
     type: string;
@@ -659,8 +900,11 @@ function FunctionLogs({
     durationMs?: number;
     error?: string;
   }>;
+  traces: ExecutionTrace[];
+  onUseArgs: (args: Record<string, unknown>) => void;
+  onOpenExecution: (executionId: string) => void;
 }) {
-  if (events.length === 0) {
+  if (events.length === 0 && traces.length === 0) {
     return (
       <EmptyState
         icon={Activity}
@@ -674,7 +918,78 @@ function FunctionLogs({
   return (
     <ScrollArea className="h-full">
       <div className="p-4 space-y-1">
-        {events.map((event, i) => {
+        {traces.length > 0 ? traces.map((trace, i) => {
+          const event = events[i];
+          const eventType =
+            trace.kind === "query"
+              ? "query.executed"
+              : trace.kind === "mutation" || trace.kind === "dashboard"
+                ? "mutation.committed"
+                : "action.completed";
+          const fnType = inferFunctionType(eventType);
+          const args =
+            trace.argsPreview?.kind === "value" &&
+            trace.argsPreview.value &&
+            typeof trace.argsPreview.value === "object" &&
+            !Array.isArray(trace.argsPreview.value)
+              ? (trace.argsPreview.value as Record<string, unknown>)
+              : null;
+          return (
+            <div
+              key={`${trace.executionId}-${i}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenExecution(trace.executionId)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenExecution(trace.executionId);
+                }
+              }}
+              title="Open execution in Logs"
+              className="group flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors animate-fade-in hover:bg-bg-surface/50 focus:outline-none focus:ring-2 focus:ring-accent/30"
+            >
+              {fnType && (
+                <FunctionBadge
+                  type={fnType}
+                  showIcon={false}
+                  className="text-[8px] px-1 py-0 w-14 justify-center"
+                />
+              )}
+              <TimestampCell timestamp={event?.timestamp ?? Date.now()} format="time" />
+              {event && "durationMs" in event && event.durationMs !== undefined && (
+                <span className="text-[11px] text-text-tertiary font-mono">
+                  {formatDuration(event.durationMs)}
+                </span>
+              )}
+              {((event && "error" in event && event.error) || trace?.error) && (
+                <Badge variant="destructive" className="text-[9px]">
+                  Error
+                </Badge>
+              )}
+              <span className="ml-auto text-[10px] text-text-tertiary font-mono truncate max-w-48">
+                {trace.executionId}
+              </span>
+              <ExternalLink
+                size={12}
+                className="shrink-0 text-text-tertiary opacity-60 transition-colors group-hover:text-accent group-hover:opacity-100"
+              />
+              {args && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Use args"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onUseArgs(args);
+                  }}
+                >
+                  <Copy size={12} />
+                </Button>
+              )}
+            </div>
+          );
+        }) : events.map((event, i) => {
           const fnType = inferFunctionType(event.type);
           return (
             <div
@@ -689,12 +1004,12 @@ function FunctionLogs({
                 />
               )}
               <TimestampCell timestamp={event.timestamp} format="time" />
-              {"durationMs" in event && event.durationMs !== undefined && (
+              {event.durationMs !== undefined && (
                 <span className="text-[11px] text-text-tertiary font-mono">
                   {formatDuration(event.durationMs)}
                 </span>
               )}
-              {"error" in event && event.error && (
+              {event.error && (
                 <Badge variant="destructive" className="text-[9px]">
                   Error
                 </Badge>
@@ -711,11 +1026,80 @@ function FunctionLogs({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Function Active Queries                                            */
+/* ------------------------------------------------------------------ */
+
+function FunctionActiveQueries({
+  queries,
+  onOpenQueries
+}: {
+  queries: SyncoreActiveQueryInfo[];
+  onOpenQueries: () => void;
+}) {
+  if (queries.length === 0) {
+    return (
+      <EmptyState
+        icon={Radio}
+        title="No active query runs"
+        description="This query function is not currently watched by the app."
+        className="h-full"
+      />
+    );
+  }
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="space-y-3 p-4">
+        <div className="flex items-center justify-between rounded-md border border-border bg-bg-base px-3 py-2">
+          <div className="text-[12px] text-text-secondary">
+            {queries.length} active subscription{queries.length === 1 ? "" : "s"} ·{" "}
+            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0)} consumer
+            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0) === 1
+              ? ""
+              : "s"}
+          </div>
+          <Button variant="outline" size="xs" className="gap-1.5" onClick={onOpenQueries}>
+            <Radio size={11} />
+            Open Queries
+          </Button>
+        </div>
+
+        {queries.map((query) => (
+          <div
+            key={query.id}
+            className="rounded-md border border-border bg-bg-base p-3"
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <code className="min-w-0 flex-1 truncate text-[11px] text-text-primary">
+                {query.id}
+              </code>
+              <Badge variant="secondary" className="shrink-0 text-[9px]">
+                {query.consumers ?? 1} consumer
+                {(query.consumers ?? 1) === 1 ? "" : "s"}
+              </Badge>
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] text-text-tertiary">
+              <span>Last run</span>
+              <TimestampCell timestamp={query.lastRunAt} format="relative" />
+              <span>Dependencies</span>
+              <span className="font-mono">{query.dependencyKeys.length}</span>
+            </div>
+            <JsonViewer data={query.args ?? {}} maxDepth={3} />
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Function Metrics Panel                                             */
 /* ------------------------------------------------------------------ */
 
 function FunctionMetricsPanel({
-  fn
+  fn,
+  activeQueries,
+  traces
 }: {
   fn: {
     name: string;
@@ -725,12 +1109,21 @@ function FunctionMetricsPanel({
     errorRate: number;
     lastInvoked: number;
   };
+  activeQueries: SyncoreActiveQueryInfo[];
+  traces: ExecutionTrace[];
 }) {
+  const successCount = traces.filter((trace) => !trace.error).length;
+  const errorCount = traces.filter((trace) => trace.error).length;
+  const totalConsumers = activeQueries.reduce(
+    (sum, query) => sum + (query.consumers ?? 1),
+    0
+  );
+
   return (
     <div className="p-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <MetricCard
-          label="Invocations"
+          label={fn.type === "query" ? "Runs" : "Occurrences"}
           value={String(fn.invocations)}
           icon={Activity}
         />
@@ -746,7 +1139,31 @@ function FunctionMetricsPanel({
           variant={fn.errorRate > 0.1 ? "error" : "default"}
         />
         <MetricCard
-          label="Last Invoked"
+          label="Active"
+          value={fn.type === "query" ? String(activeQueries.length) : "-"}
+          icon={Radio}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <MetricCard
+          label="Consumers"
+          value={fn.type === "query" ? String(totalConsumers) : "-"}
+          icon={Radio}
+        />
+        <MetricCard
+          label="Success"
+          value={String(successCount)}
+          icon={CheckCircle2}
+        />
+        <MetricCard
+          label="Errors"
+          value={String(errorCount)}
+          icon={AlertCircle}
+          variant={errorCount > 0 ? "error" : "default"}
+        />
+        <MetricCard
+          label="Last Run"
           value={
             fn.lastInvoked > 0
               ? new Date(fn.lastInvoked).toLocaleTimeString()
@@ -813,11 +1230,60 @@ function extractFnName(fullName: string): string {
   return parts.length > 1 ? parts[parts.length - 1]! : fullName;
 }
 
-/** Infer a file path from a function name like "api/users:list" */
-function inferFileFromName(name: string): string {
-  const parts = name.split(":");
-  if (parts.length > 1) {
-    return parts[0]! + ".ts";
+function inferFunctionNamespace(name: string): string {
+  if (name.includes(":")) {
+    return name.split(":")[0] ?? "root";
   }
-  return "unknown";
+  if (name.includes("/")) {
+    return name.split("/")[0] ?? "root";
+  }
+  return "root";
+}
+
+function getFunctionGroupLabel(fn: FunctionListEntry): string {
+  if (fn.namespace && fn.namespace !== "root") {
+    return `${fn.namespace}/`;
+  }
+  return "Root functions";
+}
+
+function compareFunctionEntries(left: FunctionListEntry, right: FunctionListEntry) {
+  if (left.activeCount !== right.activeCount) {
+    return right.activeCount - left.activeCount;
+  }
+  if (left.lastInvoked !== right.lastInvoked) {
+    return right.lastInvoked - left.lastInvoked;
+  }
+  if (left.registered !== right.registered) {
+    return left.registered ? -1 : 1;
+  }
+  return left.name.localeCompare(right.name);
+}
+
+function getFunctionSearchText(
+  fn: FunctionListEntry,
+  tracesByFunction: Map<string, ExecutionTrace[]>
+): string {
+  const traces = tracesByFunction.get(fn.name) ?? [];
+  return [
+    fn.name,
+    fn.type,
+    fn.file ?? "",
+    fn.modulePath ?? "",
+    fn.namespace,
+    fn.registered ? "registered" : "observed only",
+    JSON.stringify(fn.args ?? {}),
+    traces
+      .slice(0, 5)
+      .map((trace) =>
+        JSON.stringify({
+          args: trace.argsPreview,
+          result: trace.resultPreview,
+          error: trace.error
+        })
+      )
+      .join(" ")
+  ]
+    .join(" ")
+    .toLowerCase();
 }

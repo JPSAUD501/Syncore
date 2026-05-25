@@ -22,8 +22,8 @@ The public CLI centers on:
 Common generator and local-data workflows also include:
 
 - `npx syncorejs import --table <table> <file>`
-- `npx syncorejs seed --table <table>`
-- `npx syncorejs seed --table <table> --file <file>`
+- `npx syncorejs import <directory-or-zip>`
+- `npx syncorejs export --path <directory-or-zip>`
 
 ## Product Contract
 
@@ -85,9 +85,9 @@ The CLI compares the current schema against a stored snapshot and renders SQL
 for safe changes:
 
 ```bash
-npx syncorejs migrate:status
-npx syncorejs migrate:generate add_notes_table
-npx syncorejs migrate:apply
+npx syncorejs migrate status
+npx syncorejs migrate generate add_notes_table
+npx syncorejs migrate apply
 ```
 
 ## Best Practices
@@ -96,3 +96,5 @@ npx syncorejs migrate:apply
 - keep generated files as outputs, never hand-maintained sources
 - document `syncorejs dev` as the happy path unless the task is specifically about one-off commands
 - review migration SQL rather than treating it as boilerplate
+- use `syncorejs targets` before `run`, `data`, `import`, or `export` when multiple targets may exist
+- pass `--target` and, for client targets with multiple runtimes, `--runtime` in scripts

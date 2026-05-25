@@ -9,12 +9,16 @@
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
 import { composeProjectFunctionRegistry } from "syncorejs";
+import { byColor as notes__byColor } from "../functions/notes";
 import { create as notes__create } from "../functions/notes";
 import { get as notes__get } from "../functions/notes";
 import { list as notes__list } from "../functions/notes";
 import { remove as notes__remove } from "../functions/notes";
 import { scheduleAutoSave as notes__scheduleAutoSave } from "../functions/notes";
 import { search as notes__search } from "../functions/notes";
+import { seedDemo as notes__seedDemo } from "../functions/notes";
+import { setColor as notes__setColor } from "../functions/notes";
+import { stats as notes__stats } from "../functions/notes";
 import { togglePin as notes__togglePin } from "../functions/notes";
 import { update as notes__update } from "../functions/notes";
 
@@ -24,6 +28,10 @@ const componentsManifest = {} as const;
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
 export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
+  /**
+   * Runtime definition for the public Syncore query `notes/byColor`.
+   */
+  readonly "notes/byColor": typeof notes__byColor;
   /**
    * Runtime definition for the public Syncore mutation `notes/create`.
    */
@@ -49,6 +57,18 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
    */
   readonly "notes/search": typeof notes__search;
   /**
+   * Runtime definition for the public Syncore mutation `notes/seedDemo`.
+   */
+  readonly "notes/seedDemo": typeof notes__seedDemo;
+  /**
+   * Runtime definition for the public Syncore mutation `notes/setColor`.
+   */
+  readonly "notes/setColor": typeof notes__setColor;
+  /**
+   * Runtime definition for the public Syncore query `notes/stats`.
+   */
+  readonly "notes/stats": typeof notes__stats;
+  /**
    * Runtime definition for the public Syncore mutation `notes/togglePin`.
    */
   readonly "notes/togglePin": typeof notes__togglePin;
@@ -65,11 +85,15 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
  */
 const rootFunctions: SyncoreRootFunctionsRegistry = {
   "notes/list": notes__list,
+  "notes/stats": notes__stats,
   "notes/get": notes__get,
   "notes/search": notes__search,
+  "notes/byColor": notes__byColor,
   "notes/create": notes__create,
   "notes/update": notes__update,
+  "notes/setColor": notes__setColor,
   "notes/togglePin": notes__togglePin,
+  "notes/seedDemo": notes__seedDemo,
   "notes/remove": notes__remove,
   "notes/scheduleAutoSave": notes__scheduleAutoSave,
 } as const;

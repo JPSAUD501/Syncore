@@ -1,6 +1,11 @@
 const DATE_FIELD_PATTERN =
   /(date|time|timestamp|createdat|updatedat|deletedat|publishedat|expiresat|scheduledat|lastseenat|lastsyncedat|lastupdatedat)$/i;
 
+const COLOR_FIELD_PATTERN =
+  /(color|colour|bgcolor|background|tint|hue|accent|fill|stroke|border-color|textcolor|foreground)$/i;
+
+const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
 function normalizeFieldName(field: string): string {
   return field.replace(/[^a-z0-9]/gi, "").toLowerCase();
 }
@@ -24,6 +29,29 @@ function toTimestampMs(value: number): number {
 
 export function isDateLikeField(field: string): boolean {
   return DATE_FIELD_PATTERN.test(normalizeFieldName(field));
+}
+
+export function isColorLikeField(field: string): boolean {
+  return COLOR_FIELD_PATTERN.test(normalizeFieldName(field));
+}
+
+export function isHexColor(value: unknown): boolean {
+  return typeof value === "string" && HEX_COLOR_REGEX.test(value.trim());
+}
+
+export function inferColorValue(
+  field: string,
+  value: unknown
+): { hex: string } | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (HEX_COLOR_REGEX.test(trimmed)) {
+    return { hex: trimmed };
+  }
+  if (isColorLikeField(field) && /^[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return { hex: `#${trimmed}` };
+  }
+  return null;
 }
 
 export function inferDateValue(
@@ -96,6 +124,10 @@ export function parseEditableCellValue(
     return nextDate.toISOString();
   }
 
+  if (typeof originalValue === "string") {
+    return text;
+  }
+
   try {
     return JSON.parse(text);
   } catch {
@@ -116,10 +148,10 @@ export function parseEditableCellValue(
   }
 }
 
-export function formatCellPreview(field: string, value: unknown): {
-  kind: "date" | "text" | "number" | "boolean" | "null" | "empty" | "object";
+export function formatCellPreview(field: string, value: unknown): {  kind: "date" | "color" | "text" | "number" | "boolean" | "null" | "empty" | "object";
   text: string;
   title?: string;
+  colorHex?: string;
 } {
   const inferredDate = inferDateValue(field, value);
   if (inferredDate) {
@@ -130,6 +162,15 @@ export function formatCellPreview(field: string, value: unknown): {
         typeof inferredDate.rawTimestamp === "number"
           ? String(inferredDate.rawTimestamp)
           : inferredDate.rawTimestamp
+    };
+  }
+
+  const inferredColor = inferColorValue(field, value);
+  if (inferredColor) {
+    return {
+      kind: "color",
+      text: String(value),
+      colorHex: inferredColor.hex
     };
   }
 
@@ -164,4 +205,35 @@ export function formatCellPreview(field: string, value: unknown): {
     return { kind: "number", text: String(value) };
   }
   return { kind: "empty", text: "-" };
+}
+
+export function getDocumentId(document: Record<string, unknown>): string {
+  const candidate = document._id ?? document.id;
+  if (
+    typeof candidate === "string" ||
+    typeof candidate === "number" ||
+    typeof candidate === "bigint"
+  ) {
+    return String(candidate);
+  }
+  return "unknown";
+}
+
+export function formatReadableDate(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+    const now = new Date();
+    const sameYear = date.getFullYear() === now.getFullYear();
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      ...(sameYear ? {} : { year: "numeric" }),
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  } catch {
+    return isoString;
+  }
 }

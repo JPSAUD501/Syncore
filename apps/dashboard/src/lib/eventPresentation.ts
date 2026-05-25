@@ -98,13 +98,13 @@ export function formatInvalidationSourceId(queryId: string): string {
 export function getEventSummary(event: SyncoreDevtoolsEvent): string {
   switch (event.type) {
     case "query.executed":
-      return `${normalizeFunctionName(event.functionName)} · ${shortenDisplayId(event.queryId)}`;
+      return `${normalizeFunctionName(event.functionName)} · ${shortenDisplayId(event.executionId ?? event.queryId)}`;
     case "query.invalidated":
-      return `${formatInvalidationSourceId(event.queryId)} · ${shortenUuidTokens(event.reason)}`;
+      return `${formatInvalidationSourceId(event.queryId)} · ${shortenUuidTokens(event.causedByExecutionId ?? event.reason)}`;
     case "mutation.committed":
-      return `${normalizeFunctionName(event.functionName)} · ${shortenDisplayId(event.mutationId)}`;
+      return `${normalizeFunctionName(event.functionName)} · ${shortenDisplayId(event.executionId ?? event.mutationId)}`;
     case "action.completed":
-      return `${normalizeFunctionName(event.functionName)} · ${shortenDisplayId(event.actionId)}`;
+      return `${normalizeFunctionName(event.functionName)} · ${shortenDisplayId(event.executionId ?? event.actionId)}`;
     case "scheduler.tick":
       return `${event.executedJobIds.length} job(s)`;
     case "storage.updated":
@@ -148,6 +148,9 @@ export function getEventDetailRows(
     case "query.executed":
       return [
         { label: "Function", value: normalizeFunctionName(event.functionName), mono: true },
+        ...(event.executionId
+          ? [{ label: "Execution ID", value: shortenDisplayId(event.executionId), mono: true }]
+          : []),
         { label: "Query ID", value: shortenDisplayId(event.queryId), mono: true },
         { label: "Duration", value: formatDuration(event.durationMs) },
         {
@@ -160,31 +163,49 @@ export function getEventDetailRows(
       return [
         {
           label: "Invalidated By",
-          value: formatInvalidationSourceId(event.queryId),
+          value: event.causedByExecutionId
+            ? shortenDisplayId(event.causedByExecutionId)
+            : formatInvalidationSourceId(event.queryId),
           mono: true
         },
+        ...(event.rerunExecutionId
+          ? [{ label: "Rerun", value: shortenDisplayId(event.rerunExecutionId), mono: true }]
+          : []),
         { label: "Reason", value: shortenUuidTokens(event.reason) }
       ];
     case "mutation.committed":
       return [
         { label: "Function", value: normalizeFunctionName(event.functionName), mono: true },
+        ...(event.executionId
+          ? [{ label: "Execution ID", value: shortenDisplayId(event.executionId), mono: true }]
+          : []),
         { label: "Mutation ID", value: shortenDisplayId(event.mutationId), mono: true },
         { label: "Duration", value: formatDuration(event.durationMs) },
         {
           label: "Changed Tables",
           value: event.changedTables.join(", ") || "none",
           mono: true
+        },
+        {
+          label: "Invalidations",
+          value: String(event.invalidatedQueryIds?.length ?? 0)
         }
       ];
     case "action.completed":
       return [
         { label: "Function", value: normalizeFunctionName(event.functionName), mono: true },
+        ...(event.executionId
+          ? [{ label: "Execution ID", value: shortenDisplayId(event.executionId), mono: true }]
+          : []),
         { label: "Action ID", value: shortenDisplayId(event.actionId), mono: true },
         { label: "Duration", value: formatDuration(event.durationMs) },
         ...(event.error ? [{ label: "Error", value: event.error, error: true }] : [])
       ];
     case "scheduler.tick":
       return [
+        ...(event.executionId
+          ? [{ label: "Execution ID", value: shortenDisplayId(event.executionId), mono: true }]
+          : []),
         {
           label: "Executed Jobs",
           value: event.executedJobIds.join(", ") || "none",

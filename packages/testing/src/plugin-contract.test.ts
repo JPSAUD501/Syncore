@@ -1,5 +1,6 @@
 import "fake-indexeddb/auto";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -20,10 +21,8 @@ import {
 } from "@syncore/platform-node";
 import { createWebSyncoreRuntime } from "@syncore/platform-web";
 
-const wasmFilePath = path.resolve(
-  process.cwd(),
-  "node_modules/sql.js/dist/sql-wasm.wasm"
-);
+const require = createRequire(import.meta.url);
+const wasmFilePath = require.resolve("sql.js/dist/sql-wasm.wasm");
 
 const schema = defineSchema({
   tasks: defineTable({

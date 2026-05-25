@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFunctionReference,
@@ -11,9 +11,8 @@ import { defineSchema, defineTable, s } from "@syncore/schema";
 import { createWebPersistence } from "./persistence.js";
 import { createWebSyncoreRuntime } from "./index.js";
 
-const wasmFilePath = fileURLToPath(
-  new URL("../node_modules/sql.js/dist/sql-wasm.wasm", import.meta.url)
-);
+const require = createRequire(import.meta.url);
+const wasmFilePath = require.resolve("sql.js/dist/sql-wasm.wasm");
 
 describe("platform-web OPFS persistence", () => {
   const originalNavigator = globalThis.navigator;

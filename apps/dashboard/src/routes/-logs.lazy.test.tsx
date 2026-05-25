@@ -8,6 +8,7 @@ const storeState = {
     {
       type: "query.executed" as const,
       runtimeId: "runtime-1",
+      executionId: "1234567890abcdef",
       queryId: "1234567890abcdef",
       functionName: "auth/signIn",
       dependencies: [],
@@ -17,9 +18,20 @@ const storeState = {
     {
       type: "query.invalidated" as const,
       runtimeId: "runtime-1",
-      queryId: "8765432100000000:stale",
+      queryId: "1234567890abcdef:stale",
       reason: "stale",
+      rerunExecutionId: "abcdef1234567890",
       timestamp: 2
+    },
+    {
+      type: "query.executed" as const,
+      runtimeId: "runtime-1",
+      executionId: "abcdef1234567890",
+      queryId: "1234567890abcdef",
+      functionName: "auth/signIn",
+      dependencies: [],
+      durationMs: 8,
+      timestamp: 3
     }
   ],
   runtimes: [
@@ -32,21 +44,33 @@ const storeState = {
 };
 
 vi.mock("@tanstack/react-router", () => ({
-  createLazyFileRoute: () => ({ component }: { component: unknown }) => component
+  createLazyFileRoute: () => ({ component }: { component: unknown }) => component,
+  useNavigate: () => vi.fn(),
+  useSearch: () => ({})
 }));
 
 vi.mock("@/lib/store", () => ({
   useDevtoolsStore: (selector: (state: { includeDashboardActivity: boolean }) => unknown) =>
     selector({ includeDashboardActivity: storeState.includeDashboardActivity }),
   useRuntimeList: () => storeState.runtimes,
+  sendRequest: vi.fn(),
   getRuntimeLabel: (runtime: { sessionLabel?: string; appName?: string; platform: string }) =>
     runtime.sessionLabel ?? runtime.appName ?? runtime.platform
 }));
 
 vi.mock("@/hooks", () => ({
   useDevtools: () => ({
-    events: storeState.events
-  })
+    events: storeState.events,
+    traceIndex: {
+      traces: [],
+      byExecutionId: new Map(),
+      byQueryId: new Map(),
+      byFunctionName: new Map(),
+      byDocument: new Map(),
+      invalidationsByCause: new Map()
+    }
+  }),
+  usePreferredTarget: () => ({ targetRuntimeId: "runtime-1" })
 }));
 
 function resetState() {
@@ -55,6 +79,7 @@ function resetState() {
     {
       type: "query.executed",
       runtimeId: "runtime-1",
+      executionId: "1234567890abcdef",
       queryId: "1234567890abcdef",
       functionName: "auth/signIn",
       dependencies: [],
@@ -64,9 +89,20 @@ function resetState() {
     {
       type: "query.invalidated",
       runtimeId: "runtime-1",
-      queryId: "8765432100000000:stale",
+      queryId: "1234567890abcdef:stale",
       reason: "stale",
+      rerunExecutionId: "abcdef1234567890",
       timestamp: 2
+    },
+    {
+      type: "query.executed",
+      runtimeId: "runtime-1",
+      executionId: "abcdef1234567890",
+      queryId: "1234567890abcdef",
+      functionName: "auth/signIn",
+      dependencies: [],
+      durationMs: 8,
+      timestamp: 3
     }
   ];
 }
@@ -80,9 +116,21 @@ describe("LogsPage", () => {
     render(<LogsPage />);
 
     expect(screen.getByText("auth:signIn · 12345678")).toBeTruthy();
-    expect(screen.getByText("87654321 · stale")).toBeTruthy();
+    expect(screen.getByText("Rerun")).toBeTruthy();
+    expect(screen.queryByText("12345678 · stale")).toBeNull();
     expect(screen.getAllByText("Orbital Maverick").length).toBeGreaterThan(0);
     expect(screen.queryByText(/K123/)).toBeNull();
+  });
+
+  it("does not mark the first query run as invalidated", () => {
+    render(<LogsPage />);
+
+    const rows = screen.getAllByRole("button", {
+      name: /auth:signIn · (12345678|abcdef12)/
+    });
+
+    expect(rows[0]?.textContent).not.toContain("Rerun");
+    expect(rows[1]?.textContent).toContain("Rerun");
   });
 
   it("shows shortened ids in the detail panel", () => {
@@ -91,7 +139,7 @@ describe("LogsPage", () => {
     fireEvent.click(screen.getAllByText("auth:signIn · 12345678")[0]!);
 
     expect(screen.getByText("Query ID")).toBeTruthy();
-    expect(screen.getByText("12345678")).toBeTruthy();
+    expect(screen.getAllByText("12345678").length).toBeGreaterThan(0);
     expect(screen.queryByText("1234567890abcdef")).toBeNull();
   });
 });

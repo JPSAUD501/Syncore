@@ -25,14 +25,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/core": "workspace:*",
-    "@syncore/platform-web": "workspace:*",
-    "@syncore/schema": "workspace:*",
-    "expo-file-system": "^55.0.10",
-    "expo-sqlite": "^55.0.10"
+    "@syncore/core": "^0.1.0",
+    "@syncore/platform-web": "^0.1.0",
+    "@syncore/schema": "^0.1.0",
+    "expo-file-system": "^56.0.7",
+    "expo-sqlite": "^56.0.4",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@types/react": "^19.0.10",
-    "react": "^19.0.0"
+    "@types/react": "^19.2.15",
+    "react": "19.2.3"
   }
 }

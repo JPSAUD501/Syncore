@@ -29,11 +29,11 @@ If public behavior changed, describe it:
 
 ## Validation
 
-- [ ] `bun run lint`
-- [ ] `bun run typecheck`
-- [ ] `bun run test`
-- [ ] `bun run build`
-- [ ] `bun run api:check`
+- [ ] `npm run lint`
+- [ ] `npm run typecheck`
+- [ ] `npm run test`
+- [ ] `npm run build`
+- [ ] `npm run api:check`
 - [ ] focused package or example validation
 
 Commands run:

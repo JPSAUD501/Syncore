@@ -19,6 +19,7 @@ import {
   SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
   SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
   type SyncoreDevtoolsClientMessage,
+  type SyncoreDevtoolsCapabilities,
   type SyncoreDevtoolsMessage,
   type SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
@@ -52,6 +53,7 @@ export type BrowserSyncoreSchema<
 
 const DEVTOOLS_META_NAMESPACE = "__syncore_devtools_meta__";
 const STORAGE_SCOPE_ID_PREFIX = "storage-scope";
+const DATA_SOURCE_ALIAS_PREFIX = "data-source-alias";
 
 /**
  * Options for constructing a browser Syncore runtime.
@@ -163,12 +165,17 @@ export async function createWebSyncoreRuntime<
       opfsRootDirectoryName:
         options.opfsRootDirectoryName ?? options.databaseName ?? "syncore"
     }));
+  const wasmUrl =
+    options.wasmUrl ??
+    (options.locateFile || !isBrowserLikeRuntime()
+      ? undefined
+      : await resolveDefaultWebWasmUrl());
   const driver =
     options.driver ??
     (await SqlJsDriver.create({
       databaseName: options.databaseName ?? "syncore",
       persistence,
-      ...(options.wasmUrl ? { wasmUrl: options.wasmUrl } : {}),
+      ...(wasmUrl ? { wasmUrl } : {}),
       ...(options.locateFile ? { locateFile: options.locateFile } : {})
     }));
   const storage =
@@ -190,6 +197,10 @@ export async function createWebSyncoreRuntime<
     persistence,
     databaseLabel
   );
+  const dataSourceAlias = await resolvePersistedDataSourceAlias(
+    persistence,
+    databaseLabel
+  );
   const storageIdentity = [
     origin ?? "unknown-origin",
     persistence.storageProtocol,
@@ -204,7 +215,9 @@ export async function createWebSyncoreRuntime<
             targetKind: "client",
             storageProtocol: persistence.storageProtocol,
             databaseLabel,
-            storageIdentity
+            dataSourceAlias,
+            storageIdentity,
+            capabilities: createBrowserDevtoolsCapabilities()
           };
           if (appName) {
             sinkOptions.appName = appName;
@@ -314,10 +327,15 @@ export async function createExpoWebExternalChangeSupport(options: {
       : {}),
     opfsRootDirectoryName: options.opfsRootDirectoryName ?? options.databaseName
   });
+  const wasmUrl =
+    options.wasmUrl ??
+    (options.locateFile || !isBrowserLikeRuntime()
+      ? undefined
+      : await resolveDefaultWebWasmUrl());
   const driver = await SqlJsDriver.create({
     databaseName: options.databaseName,
     persistence,
-    ...(options.wasmUrl ? { wasmUrl: options.wasmUrl } : {}),
+    ...(wasmUrl ? { wasmUrl } : {}),
     ...(options.locateFile ? { locateFile: options.locateFile } : {})
   });
 
@@ -385,7 +403,32 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
   targetKind?: "client";
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
+  capabilities?: SyncoreDevtoolsCapabilities;
+}
+
+async function resolveDefaultWebWasmUrl(): Promise<string | undefined> {
+  try {
+    const module = await import("./web-sqljs-wasm.js");
+    return module.resolveDefaultWebSqlJsWasmUrl();
+  } catch (error) {
+    if (!isBrowserLikeRuntime()) {
+      return undefined;
+    }
+    throw new Error(
+      "Syncore could not resolve the default sql.js WebAssembly asset. " +
+        "Pass wasmUrl or locateFile to createWebSyncoreRuntime/createBrowserWorkerRuntime for this bundler.",
+      { cause: error }
+    );
+  }
+}
+
+function isBrowserLikeRuntime(): boolean {
+  const scope = globalThis as typeof globalThis & {
+    WorkerGlobalScope?: unknown;
+  };
+  return typeof window !== "undefined" || scope.WorkerGlobalScope !== undefined;
 }
 
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
@@ -438,9 +481,13 @@ export function createBrowserWebSocketDevtoolsSink(
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
         });
       }
       flushPendingMessages();
@@ -574,9 +621,13 @@ export function createBrowserWebSocketDevtoolsSink(
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
         });
       }
       send({ type: "event", event });
@@ -616,9 +667,31 @@ function withRuntimeSummaryMeta(
       ? { storageProtocol: options.storageProtocol }
       : {}),
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+    ...(options.dataSourceAlias ? { dataSourceAlias: options.dataSourceAlias } : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
-      : {})
+      : {}),
+    capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
+  };
+}
+
+function createBrowserDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
+  return {
+    sql: {
+      read: false,
+      write: false,
+      live: false,
+      reason: "SQL Console is not available for browser runtimes."
+    },
+    data: {
+      browse: true,
+      mutate: true,
+      importExport: true
+    },
+    scheduler: {
+      read: true,
+      edit: true
+    }
   };
 }
 
@@ -836,6 +909,30 @@ async function resolvePersistedStorageScopeId(
   }
 
   const nextValue = generateId();
+  await persistence.putFile(
+    DEVTOOLS_META_NAMESPACE,
+    id,
+    new TextEncoder().encode(nextValue),
+    "text/plain"
+  );
+  return nextValue;
+}
+
+async function resolvePersistedDataSourceAlias(
+  persistence: SyncoreWebPersistence,
+  databaseLabel: string
+): Promise<string> {
+  const id = `${DATA_SOURCE_ALIAS_PREFIX}:${databaseLabel}`;
+  const existing = await persistence.getFile(DEVTOOLS_META_NAMESPACE, id);
+
+  if (existing) {
+    const value = new TextDecoder().decode(existing.bytes).trim();
+    if (value.length > 0) {
+      return value;
+    }
+  }
+
+  const nextValue = generateUniqueSessionName();
   await persistence.putFile(
     DEVTOOLS_META_NAMESPACE,
     id,

@@ -1,39 +1,40 @@
 {
   "name": "syncore-example-electron",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/examples/electron/src/main.js",
   "scripts": {
-    "syncorejs": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
-    "syncorejs:dev": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
-    "build:deps": "bun run --filter syncorejs build:standalone",
+    "syncorejs": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
+    "syncorejs:dev": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
+    "build:deps": "npm run build:standalone --workspace syncorejs",
     "dev": "turbo run dev:app --filter=syncore-example-electron",
-    "dev:app": "bun run build && electron ./dist/examples/electron/src/main.js",
-    "dev:syncore": "bun run syncorejs:dev",
-    "build": "bun run build:main && bun run build:renderer",
+    "dev:app": "npm run build && electron ./dist/examples/electron/src/main.js",
+    "dev:syncore": "npm run syncorejs:dev",
+    "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json && node ./scripts/copy-preload.mjs",
     "build:renderer": "vite build --config vite.renderer.config.ts && node ./scripts/fix-renderer-html.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"syncore/**/*.ts\"",
-    "prebuild": "bun run syncorejs:codegen",
-    "predev": "bun run syncorejs:codegen",
-    "prelint": "bun run syncorejs:codegen",
-    "pretypecheck": "bun run syncorejs:codegen",
-    "syncorejs:codegen": "bunx tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
+    "prebuild": "npm run build:deps && npm run syncorejs:codegen",
+    "predev": "npm run build:deps && npm run syncorejs:codegen",
+    "prelint": "npm run syncorejs:codegen",
+    "pretypecheck": "npm run syncorejs:codegen",
+    "syncorejs:codegen": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "syncorejs": "workspace:*"
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "syncorejs": "^0.2.2"
   },
   "devDependencies": {
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^36.3.2",
-    "typescript": "^5.8.2",
-    "vite": "^6.4.1"
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.2.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
   },
   "trustedDependencies": [
     "electron"

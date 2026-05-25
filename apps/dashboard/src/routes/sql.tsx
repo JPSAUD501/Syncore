@@ -1,3 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { readDashboardAuthSearch } from "@/lib/routeSearch";
 
-export const Route = createFileRoute("/sql")({});
+export const Route = createFileRoute("/sql")({
+  validateSearch: readDashboardAuthSearch
+});

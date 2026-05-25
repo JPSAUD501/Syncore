@@ -6,7 +6,8 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
-import { createRequire as createNodeRequire } from "node:module";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import WebSocket from "ws";
@@ -17,17 +18,15 @@ import {
 } from "@syncore/devtools-protocol";
 import type {
   SyncoreDevtoolsClientMessage,
+  SyncoreDevtoolsCapabilities,
+  SyncoreDevtoolsExternalChangeEvent,
   SyncoreDevtoolsMessage,
   SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
 import {
   createDevtoolsCommandHandler,
   createDevtoolsSubscriptionHost,
-  type DevtoolsSqlAnalysis,
   type DevtoolsCommandHandler,
-  type DevtoolsSqlMode,
-  type DevtoolsSqlReadResult,
-  type DevtoolsSqlSupport,
   type DevtoolsSink,
   type DevtoolsSubscriptionHost,
   type SchedulerOptions,
@@ -35,6 +34,8 @@ import {
   type StorageWriteInput,
   type SyncoreCapabilities,
   type SyncoreDataModel,
+  type SyncoreExternalChangeEvent,
+  type SyncoreExternalChangeSignal,
   SyncoreRuntime,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
@@ -52,92 +53,8 @@ export type NodeSyncoreSchema<
   TSchema extends SyncoreDataModel = SyncoreDataModel
 > = TSchema;
 
-const nodeRequire = createNodeRequire(import.meta.url);
-const { Parser: NodeSqlParser } = nodeRequire("node-sql-parser") as {
-  Parser: new () => {
-    astify(sql: string, options?: { database?: string }): unknown;
-  };
-};
-const nodeSqlParser = new NodeSqlParser();
-
-type SqlAst = {
-  type: string;
-  from?: Array<{ table?: string; expr?: { ast?: SqlAst } }>;
-  table?: Array<{ table?: string }> | { table?: string } | null | string;
-};
-
-const nodeDevtoolsSqlSupport: DevtoolsSqlSupport = {
-  analyzeSqlStatement(query: string): DevtoolsSqlAnalysis {
-    const ast = nodeSqlParser.astify(query, {
-      database: "sqlite"
-    }) as SqlAst | SqlAst[];
-    if (Array.isArray(ast)) {
-      throw new Error("Only a single SQL statement is supported.");
-    }
-
-    switch (ast.type) {
-      case "select":
-        return buildReadAnalysis(ast);
-      case "update":
-      case "delete":
-      case "insert":
-      case "replace":
-        return buildWriteAnalysis(extractTables(ast.table), false);
-      case "create":
-      case "drop":
-      case "alter":
-        return buildWriteAnalysis(extractTables(ast.table), true);
-      default:
-        throw new Error(`Unsupported SQL statement type: ${String(ast.type)}`);
-    }
-  },
-  ensureSqlMode(
-    analysis: DevtoolsSqlAnalysis,
-    expected: DevtoolsSqlMode | "watch"
-  ): void {
-    if (expected === "watch") {
-      if (analysis.mode !== "read") {
-        throw new Error("Live mode supports read-only SQL only.");
-      }
-      return;
-    }
-
-    if (analysis.mode !== expected) {
-      if (expected === "read") {
-        throw new Error("Use SQL Write for mutating statements.");
-      }
-      throw new Error("Use SQL Read or SQL Live for read-only statements.");
-    }
-  },
-  runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult {
-    const analysis = this.analyzeSqlStatement(query);
-    this.ensureSqlMode(analysis, "read");
-
-    const database = new DatabaseSync(databasePath, { readOnly: true });
-    try {
-      const statement = database.prepare(query);
-      const rows = statement.all() as Array<Record<string, unknown>>;
-      const columnsMeta = statement.columns();
-      const columns = columnsMeta.map((column) => column.name);
-      const observedTables = Array.from(
-        new Set(
-          columnsMeta
-            .map((column) => column.table)
-            .filter((table): table is string => typeof table === "string")
-        )
-      );
-
-      return {
-        columns,
-        rows: rows.map((row) => columns.map((column) => row[column])),
-        observedTables:
-          observedTables.length > 0 ? observedTables : analysis.readTables
-      };
-    } finally {
-      database.close();
-    }
-  }
-};
+const DEVTOOLS_META_DIRECTORY = ".syncore-devtools";
+const DATA_SOURCE_ALIAS_PREFIX = "data-source-alias";
 
 function normalizeData(input: StorageWriteInput["data"]): Uint8Array {
   if (typeof input === "string") {
@@ -149,70 +66,6 @@ function normalizeData(input: StorageWriteInput["data"]): Uint8Array {
   return new Uint8Array(input);
 }
 
-function buildReadAnalysis(ast: SqlAst): DevtoolsSqlAnalysis {
-  const readTables = Array.from(new Set(extractReadTables(ast)));
-  return {
-    mode: "read",
-    readTables,
-    writeTables: [],
-    schemaChanged: false,
-    observedScopes:
-      readTables.length > 0
-        ? readTables.map((table) => `table:${table}` as const)
-        : ["all"]
-  };
-}
-
-function buildWriteAnalysis(
-  tables: string[],
-  schemaChanged: boolean
-): DevtoolsSqlAnalysis {
-  const uniqueTables = Array.from(new Set(tables));
-  return {
-    mode: schemaChanged ? "ddl" : "write",
-    readTables: [],
-    writeTables: uniqueTables,
-    schemaChanged,
-    observedScopes: schemaChanged
-      ? [
-          "schema.tables",
-          ...uniqueTables.map((table) => `table:${table}` as const)
-        ]
-      : uniqueTables.length > 0
-        ? uniqueTables.map((table) => `table:${table}` as const)
-        : ["all"]
-  };
-}
-
-function extractReadTables(ast: SqlAst): string[] {
-  return (ast.from ?? [])
-    .flatMap((entry) => {
-      if (entry.table) {
-        return [entry.table];
-      }
-      if (entry.expr?.ast) {
-        return extractReadTables(entry.expr.ast);
-      }
-      return [];
-    })
-    .filter((table) => table !== "dual");
-}
-
-function extractTables(table: SqlAst["table"]): string[] {
-  if (Array.isArray(table)) {
-    return table
-      .map((entry) => entry?.table)
-      .filter((value): value is string => typeof value === "string");
-  }
-  if (table && typeof table === "object") {
-    return typeof table.table === "string" ? [table.table] : [];
-  }
-  if (typeof table === "string") {
-    return [table];
-  }
-  return [];
-}
-
 function toSqlParameters(params: unknown[]): SQLInputValue[] {
   return params as SQLInputValue[];
 }
@@ -221,8 +74,8 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
   private readonly database: DatabaseSync;
   private transactionDepth = 0;
 
-  constructor(filename: string) {
-    this.database = new DatabaseSync(filename);
+  constructor(readonly databasePath: string) {
+    this.database = new DatabaseSync(databasePath);
     this.database.exec("PRAGMA foreign_keys = ON;");
     this.database.exec("PRAGMA journal_mode = WAL;");
   }
@@ -365,6 +218,129 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
   }
 }
 
+const SESSION_ADJECTIVES = [
+  "Acrobatic",
+  "Bold",
+  "Cosmic",
+  "Daring",
+  "Electric",
+  "Fierce",
+  "Golden",
+  "Hidden",
+  "Iron",
+  "Jade",
+  "Keen",
+  "Lunar",
+  "Mystic",
+  "Noble",
+  "Orbital",
+  "Primal",
+  "Quick",
+  "Radiant",
+  "Shadow",
+  "Turbo",
+  "Ultra",
+  "Vivid",
+  "Wicked",
+  "Xenon",
+  "Zen",
+  "Arctic",
+  "Binary",
+  "Cyber",
+  "Digital",
+  "Ember",
+  "Frozen",
+  "Galactic",
+  "Hyper",
+  "Infra",
+  "Jumbo",
+  "Kinetic",
+  "Liquid",
+  "Magnetic",
+  "Neon",
+  "Onyx",
+  "Phantom",
+  "Quantum",
+  "Rapid",
+  "Sonic",
+  "Titan",
+  "Velvet",
+  "Wild",
+  "Blazing",
+  "Crystal",
+  "Dynamic"
+] as const;
+
+const SESSION_NOUNS = [
+  "Phoenix",
+  "Dragon",
+  "Developer",
+  "Hacker",
+  "Wizard",
+  "Runner",
+  "Ranger",
+  "Maverick",
+  "Spartan",
+  "Viking",
+  "Sentinel",
+  "Guardian",
+  "Nomad",
+  "Cipher",
+  "Vector",
+  "Matrix",
+  "Prism",
+  "Nebula",
+  "Comet",
+  "Pulse",
+  "Vertex",
+  "Flux",
+  "Storm",
+  "Blaze",
+  "Frost",
+  "Thunder",
+  "Drift"
+] as const;
+
+function generateUniqueSessionName(): string {
+  const adj =
+    SESSION_ADJECTIVES[Math.floor(Math.random() * SESSION_ADJECTIVES.length)]!;
+  const noun = SESSION_NOUNS[Math.floor(Math.random() * SESSION_NOUNS.length)]!;
+  return `${adj} ${noun}`;
+}
+
+function resolvePersistedDataSourceAlias(
+  storageDirectory: string,
+  storageIdentity: string
+): string {
+  const metaDirectory = path.join(storageDirectory, DEVTOOLS_META_DIRECTORY);
+  const aliasId = createHash("sha256")
+    .update(storageIdentity)
+    .digest("hex")
+    .slice(0, 16);
+  const aliasPath = path.join(
+    metaDirectory,
+    `${DATA_SOURCE_ALIAS_PREFIX}-${aliasId}.txt`
+  );
+
+  try {
+    const existing = readFileSync(aliasPath, "utf8").trim();
+    if (existing.length > 0) {
+      return existing;
+    }
+  } catch {
+    // Missing metadata is expected for a new data source.
+  }
+
+  const nextValue = generateUniqueSessionName();
+  try {
+    mkdirSync(metaDirectory, { recursive: true });
+    writeFileSync(aliasPath, nextValue, "utf8");
+  } catch {
+    // The alias is a dashboard convenience; runtime startup must not depend on it.
+  }
+  return nextValue;
+}
+
 export interface CreateNodeRuntimeOptions<
   TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
 > {
@@ -447,6 +423,7 @@ export function createNodeSyncoreRuntime<
 ): SyncoreRuntime<TSchema> {
   const resolvedDevtoolsUrl =
     options.devtoolsUrl ?? resolveDefaultNodeDevtoolsUrl();
+  const storageIdentity = `file::${path.resolve(options.databasePath)}`;
   const websocketDevtools =
     options.devtools === undefined &&
     resolvedDevtoolsUrl &&
@@ -461,7 +438,13 @@ export function createNodeSyncoreRuntime<
           targetKind: "client",
           storageProtocol: "file",
           databaseLabel: path.basename(options.databasePath),
-          storageIdentity: `file::${path.resolve(options.databasePath)}`
+          dataSourceAlias: resolvePersistedDataSourceAlias(
+            options.storageDirectory,
+            storageIdentity
+          ),
+          storageIdentity,
+          runtimeRole: "app",
+          capabilities: createNodeDevtoolsCapabilities()
         })
       : undefined;
   const runtimeOptions: SyncoreRuntimeOptions<TSchema> = {
@@ -482,6 +465,9 @@ export function createNodeSyncoreRuntime<
   if (resolvedDevtools) {
     runtimeOptions.devtools = resolvedDevtools;
   }
+  if (websocketDevtools?.externalChangeSignal) {
+    runtimeOptions.externalChangeSignal = websocketDevtools.externalChangeSignal;
+  }
   if (options.scheduler) {
     runtimeOptions.scheduler = options.scheduler;
   }
@@ -493,8 +479,7 @@ export function createNodeSyncoreRuntime<
         driver: runtimeOptions.driver,
         schema: options.schema,
         functions: options.functions,
-        admin: runtime.getAdmin(),
-        sql: nodeDevtoolsSqlSupport
+        admin: runtime.getAdmin()
       })
     );
     websocketDevtools.attachSubscriptionHost(
@@ -502,8 +487,7 @@ export function createNodeSyncoreRuntime<
         driver: runtimeOptions.driver,
         schema: options.schema,
         functions: options.functions,
-        admin: runtime.getAdmin(),
-        sql: nodeDevtoolsSqlSupport
+        admin: runtime.getAdmin()
       })
     );
     const stop = runtime.stop.bind(runtime);
@@ -683,15 +667,19 @@ export interface NodeWebSocketDevtoolsSinkOptions {
   origin?: string;
   sessionLabel?: string;
   targetKind?: "client" | "project";
+  runtimeRole?: "app" | "project-target";
   storageProtocol?: string;
   databaseLabel?: string;
+  dataSourceAlias?: string;
   storageIdentity?: string;
+  capabilities?: SyncoreDevtoolsCapabilities;
 }
 
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
   attachRuntime(runtime: SyncoreRuntime<NodeSyncoreSchema>): void;
   attachCommandHandler(handler: DevtoolsCommandHandler): void;
   attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
+  externalChangeSignal?: SyncoreExternalChangeSignal;
   dispose(): void;
 }
 
@@ -704,6 +692,9 @@ export function createNodeWebSocketDevtoolsSink(
   let getSummary: (() => SyncoreRuntimeSummary) | undefined;
   let onCommand: DevtoolsCommandHandler | undefined;
   let subscriptionHost: DevtoolsSubscriptionHost | undefined;
+  const externalChangeListeners = new Set<
+    (event: SyncoreExternalChangeEvent) => void
+  >();
   const pendingMessages: SyncoreDevtoolsMessage[] = [];
   let latestHello:
     | {
@@ -734,13 +725,18 @@ export function createNodeWebSocketDevtoolsSink(
             ? { sessionLabel: options.sessionLabel }
             : {}),
           ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.runtimeRole ? { runtimeRole: options.runtimeRole } : {}),
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createNodeDevtoolsCapabilities()
         });
       }
       flushPendingMessages();
@@ -768,6 +764,10 @@ export function createNodeWebSocketDevtoolsSink(
         | SyncoreDevtoolsClientMessage;
       if (message.type === "ping") {
         send({ type: "pong" });
+      } else if (message.type === "external.change") {
+        for (const listener of externalChangeListeners) {
+          listener(message.event as SyncoreExternalChangeEvent);
+        }
       } else if (message.type === "command" && onCommand) {
         onCommand(message.payload)
           .then((responsePayload) => {
@@ -861,7 +861,7 @@ export function createNodeWebSocketDevtoolsSink(
 
   connect();
 
-  return {
+  const sink: NodeWebSocketDevtoolsSink = {
     emit(event) {
       if (event.type === "runtime.connected") {
         latestHello = {
@@ -883,13 +883,18 @@ export function createNodeWebSocketDevtoolsSink(
             ? { sessionLabel: options.sessionLabel }
             : {}),
           ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.runtimeRole ? { runtimeRole: options.runtimeRole } : {}),
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
           ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.dataSourceAlias
+            ? { dataSourceAlias: options.dataSourceAlias }
+            : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
-            : {})
+            : {}),
+          capabilities: options.capabilities ?? createNodeDevtoolsCapabilities()
         });
       }
       send({
@@ -916,6 +921,32 @@ export function createNodeWebSocketDevtoolsSink(
       socket?.close();
     }
   };
+  if (options.storageIdentity) {
+    sink.externalChangeSignal = {
+      subscribe(listener) {
+        externalChangeListeners.add(listener);
+        return () => {
+          externalChangeListeners.delete(listener);
+        };
+      },
+      publish(event) {
+        const runtimeId = latestHello?.runtimeId ?? getSummary?.().runtimeId;
+        if (!runtimeId) {
+          return;
+        }
+        send({
+          type: "external.change",
+          runtimeId,
+          storageIdentity: options.storageIdentity!,
+          event: event as SyncoreDevtoolsExternalChangeEvent
+        });
+      },
+      close() {
+        externalChangeListeners.clear();
+      }
+    };
+  }
+  return sink;
 }
 
 function withRuntimeSummaryMeta(
@@ -928,13 +959,36 @@ function withRuntimeSummaryMeta(
     ...(options.origin ? { origin: options.origin } : {}),
     ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {}),
     ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+    ...(options.runtimeRole ? { runtimeRole: options.runtimeRole } : {}),
     ...(options.storageProtocol
       ? { storageProtocol: options.storageProtocol }
       : {}),
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+    ...(options.dataSourceAlias ? { dataSourceAlias: options.dataSourceAlias } : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
-      : {})
+      : {}),
+    capabilities: options.capabilities ?? createNodeDevtoolsCapabilities()
+  };
+}
+
+function createNodeDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
+  return {
+    sql: {
+      read: false,
+      write: false,
+      live: false,
+      reason: "SQL Console is provided by the Project Target for this data source."
+    },
+    data: {
+      browse: true,
+      mutate: true,
+      importExport: true
+    },
+    scheduler: {
+      read: true,
+      edit: true
+    }
   };
 }
 

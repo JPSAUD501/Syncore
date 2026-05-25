@@ -156,40 +156,40 @@ Platform status right now:
 Install dependencies and run the standard checks:
 
 ```bash
-bun install
-bun run api:check
-bun run lint
-bun run typecheck
-bun run test
-bun run build
-bun run test:smoke
+npm install
+npm run api:check
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run test:smoke
 ```
 
 If public APIs change intentionally, refresh the checked-in API reports before
 committing:
 
 ```bash
-bun run api:update
+npm run api:update
 ```
 
 Release metadata is managed with Changesets:
 
 ```bash
-bun run changeset
+npm run changeset
 ```
 
 Beta prereleases use the same changesets plus prerelease mode on the `beta`
 branch:
 
 ```bash
-bun run changeset:beta:enter
-bun run changeset
+npm run changeset:beta:enter
+npm run changeset
 ```
 
 To remove generated build artifacts across the workspace:
 
 ```bash
-bun run clean
+npm run clean
 ```
 
 Inside an app project, `npx syncorejs dev` is the main development loop. It can
@@ -198,9 +198,9 @@ also scaffold Syncore automatically when the project is still empty.
 Smoke commands:
 
 ```bash
-bun run --filter @syncore/testing test:smoke:web
-bun run --filter @syncore/testing test:smoke:electron
-bun run --filter @syncore/testing test:smoke:expo
+npm run test:smoke:web --workspace @syncore/testing
+npm run test:smoke:electron --workspace @syncore/testing
+npm run test:smoke:expo --workspace @syncore/testing
 ```
 
 The Expo smoke runner skips cleanly when `adb` or an Android device or emulator

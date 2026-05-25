@@ -24,6 +24,9 @@ export interface SyncoreBridgeMessageEndpoint {
 
 export type SyncoreBridgeRequest =
   | {
+      type: "runtime.status.request";
+    }
+  | {
       type: "invoke";
       requestId: string;
       kind: "query";
@@ -189,6 +192,7 @@ export class SyncoreBridgeClient implements SyncoreClient {
 
   constructor(private readonly endpoint: SyncoreBridgeMessageEndpoint) {
     this.endpoint.addEventListener("message", this.handleMessage);
+    this.endpoint.postMessage({ type: "runtime.status.request" });
   }
 
   query<TArgs, TResult>(
@@ -509,6 +513,18 @@ export function attachRuntimeBridge<
       unsubscribe: () => void;
     }
   >();
+  let latestStatus: SyncoreRuntimeStatus = {
+    kind: "starting",
+    reason: "booting"
+  };
+
+  const sendStatus = (status: SyncoreRuntimeStatus) => {
+    latestStatus = status;
+    options.endpoint.postMessage({
+      type: "runtime.status",
+      status
+    } satisfies SyncoreBridgeResponse);
+  };
 
   const runtimePromise = Promise.resolve(options.createRuntime()).then(
     async (runtime) => {
@@ -521,25 +537,19 @@ export function attachRuntimeBridge<
 
   const ready = clientPromise
     .then(() => {
-      options.endpoint.postMessage({
-        type: "runtime.status",
-        status: {
-          kind: "ready"
-        }
-      } satisfies SyncoreBridgeResponse);
+      sendStatus({
+        kind: "ready"
+      });
       options.endpoint.postMessage({
         type: "runtime.ready"
       } satisfies SyncoreBridgeResponse);
     })
     .catch((error) => {
-      options.endpoint.postMessage({
-        type: "runtime.status",
-        status: {
-          kind: "error",
-          reason: "runtime-unavailable",
-          ...(error instanceof Error ? { error } : {})
-        }
-      } satisfies SyncoreBridgeResponse);
+      sendStatus({
+        kind: "error",
+        reason: "runtime-unavailable",
+        ...(error instanceof Error ? { error } : {})
+      });
       options.endpoint.postMessage({
         type: "runtime.error",
         error: error instanceof Error ? error.message : String(error)
@@ -551,6 +561,11 @@ export function attachRuntimeBridge<
     void (async () => {
       const message = event.data as SyncoreBridgeRequest;
       if (!message || typeof message !== "object" || !("type" in message)) {
+        return;
+      }
+
+      if (message.type === "runtime.status.request") {
+        sendStatus(latestStatus);
         return;
       }
 
@@ -606,6 +621,7 @@ export function attachRuntimeBridge<
               return;
             }
             subscription.unsubscribe();
+            subscription.watch.dispose?.();
             subscriptions.delete(message.subscriptionId);
           }
         }
@@ -633,27 +649,22 @@ export function attachRuntimeBridge<
   };
 
   options.endpoint.addEventListener("message", handleMessage);
-  options.endpoint.postMessage({
-    type: "runtime.status",
-    status: {
-      kind: "starting",
-      reason: "booting"
-    }
-  } satisfies SyncoreBridgeResponse);
+  sendStatus({
+    kind: "starting",
+    reason: "booting"
+  });
 
   return {
     ready,
     async dispose() {
-      options.endpoint.postMessage({
-        type: "runtime.status",
-        status: {
-          kind: "unavailable",
-          reason: "disposed"
-        }
-      } satisfies SyncoreBridgeResponse);
+      sendStatus({
+        kind: "unavailable",
+        reason: "disposed"
+      });
       options.endpoint.removeEventListener("message", handleMessage);
       for (const subscription of subscriptions.values()) {
         subscription.unsubscribe();
+        subscription.watch.dispose?.();
       }
       subscriptions.clear();
       const runtime = await runtimePromise;

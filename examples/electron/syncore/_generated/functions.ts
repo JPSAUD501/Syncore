@@ -9,10 +9,13 @@
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
 import { composeProjectFunctionRegistry } from "syncorejs";
+import { byMood as entries__byMood } from "../functions/entries.js";
 import { getByDate as entries__getByDate } from "../functions/entries.js";
 import { list as entries__list } from "../functions/entries.js";
 import { remove as entries__remove } from "../functions/entries.js";
 import { search as entries__search } from "../functions/entries.js";
+import { seedDemo as entries__seedDemo } from "../functions/entries.js";
+import { stats as entries__stats } from "../functions/entries.js";
 import { upsert as entries__upsert } from "../functions/entries.js";
 
 const componentsManifest = {} as const;
@@ -21,6 +24,10 @@ const componentsManifest = {} as const;
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
 export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
+  /**
+   * Runtime definition for the public Syncore query `entries/byMood`.
+   */
+  readonly "entries/byMood": typeof entries__byMood;
   /**
    * Runtime definition for the public Syncore query `entries/getByDate`.
    */
@@ -38,6 +45,14 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
    */
   readonly "entries/search": typeof entries__search;
   /**
+   * Runtime definition for the public Syncore mutation `entries/seedDemo`.
+   */
+  readonly "entries/seedDemo": typeof entries__seedDemo;
+  /**
+   * Runtime definition for the public Syncore query `entries/stats`.
+   */
+  readonly "entries/stats": typeof entries__stats;
+  /**
    * Runtime definition for the public Syncore mutation `entries/upsert`.
    */
   readonly "entries/upsert": typeof entries__upsert;
@@ -52,7 +67,10 @@ const rootFunctions: SyncoreRootFunctionsRegistry = {
   "entries/list": entries__list,
   "entries/getByDate": entries__getByDate,
   "entries/search": entries__search,
+  "entries/stats": entries__stats,
+  "entries/byMood": entries__byMood,
   "entries/upsert": entries__upsert,
+  "entries/seedDemo": entries__seedDemo,
   "entries/remove": entries__remove,
 } as const;
 

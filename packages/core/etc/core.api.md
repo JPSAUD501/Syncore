@@ -15,7 +15,7 @@ export function action<TContext = unknown, TArgsShape extends ValidatorMap = Val
 }): SyncoreFunctionDefinition<"action", TContext, InferArgs<TArgsShape>, TResult>;
 
 // @public
-export interface ActionCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends QueryCtx<TSchema> {
+export interface ActionCtx<TSchema extends SyncoreDataModel = SyncoreDataModel> extends QueryCtx<TSchema> {
     // (undocumented)
     runAction<TArgs, TResult>(reference: FunctionReference<"action", TArgs, TResult>, ...args: OptionalArgsTuple<TArgs>): Promise<TResult>;
     // Warning: (ae-forgotten-export) The symbol "OptionalArgsTuple" needs to be exported by the entry point index.d.mts
@@ -137,7 +137,7 @@ export function composeProjectFunctionRegistry(rootFunctions: SyncoreFunctionReg
 // Warning: (ae-forgotten-export) The symbol "TablesOfSchema" needs to be exported by the entry point index.d.mts
 //
 // @public (undocumented)
-export function composeProjectSchema<TRootSchema extends SyncoreSchema<any>>(rootSchema: TRootSchema, manifest?: SyncoreComponentsManifest): SyncoreSchema<TablesOfSchema<TRootSchema> & Record<string, AnyTableDefinition>>;
+export function composeProjectSchema<TRootSchema extends SyncoreDataModel>(rootSchema: TRootSchema, manifest?: SyncoreComponentsManifest): SyncoreSchema<TablesOfSchema<TRootSchema> & Record<string, AnyTableDefinition>>;
 
 // @public (undocumented)
 export function createBindingFunctionReference<TKind extends SyncoreFunctionKind, TArgs = JsonObject, TResult = unknown>(kind: TKind, bindingName: string, functionName: string): FunctionReference<TKind, TArgs, TResult>;
@@ -199,7 +199,7 @@ export class CronJobs {
 export function cronJobs(): CronJobs;
 
 // @public (undocumented)
-export function defineComponent<TConfig = unknown, TSchema extends SyncoreSchema<any> | undefined = SyncoreSchema<any> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined>(component: Omit<SyncoreComponent<TConfig, TSchema, TPublic, TInternal>, "kind">): SyncoreComponent<TConfig, TSchema, TPublic, TInternal>;
+export function defineComponent<TConfig = unknown, TSchema extends SyncoreDataModel | undefined = SyncoreDataModel | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined>(component: Omit<SyncoreComponent<TConfig, TSchema, TPublic, TInternal>, "kind">): SyncoreComponent<TConfig, TSchema, TPublic, TInternal>;
 
 // @public (undocumented)
 export function defineComponents<TManifest extends SyncoreComponentsManifest>(components: TManifest): TManifest;
@@ -228,13 +228,13 @@ export type DevtoolsCommandHandler = (payload: SyncoreDevtoolsCommandPayload) =>
 // @public (undocumented)
 export interface DevtoolsCommandHandlerDeps {
     // (undocumented)
-    admin: SyncoreRuntimeAdmin<SyncoreSchema<any>>;
+    admin: SyncoreRuntimeAdmin<SyncoreDataModel>;
     // (undocumented)
     driver: SyncoreSqlDriver;
     // (undocumented)
-    functions: SyncoreRuntimeOptions<SyncoreSchema<any>>["functions"];
+    functions: SyncoreRuntimeOptions<SyncoreDataModel>["functions"];
     // (undocumented)
-    schema: SyncoreSchema<any>;
+    schema: SyncoreDataModel;
     // (undocumented)
     sql?: DevtoolsSqlSupport;
 }
@@ -272,7 +272,7 @@ export interface DevtoolsLiveQuerySnapshot {
 // @public (undocumented)
 export interface DevtoolsSink {
     // (undocumented)
-    attachRuntime?(runtime: SyncoreRuntime<SyncoreSchema<any>>): void;
+    attachRuntime?(runtime: SyncoreRuntime<SyncoreDataModel>): void;
     // (undocumented)
     emit(event: SyncoreDevtoolsEvent): void;
 }
@@ -335,7 +335,7 @@ export type DevtoolsSubscriptionListener = (payload: SyncoreDevtoolsSubscription
 export function diffSchemaSnapshots(previousSnapshot: SchemaSnapshot | null | undefined, nextSnapshot: SchemaSnapshot): SchemaMigrationPlan;
 
 // @public (undocumented)
-export type DocumentForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = InferDocument<TSchema["tables"][TTableName]>;
+export type DocumentForTable<TSchema extends SyncoreDataModel, TTableName extends TableNames<TSchema>> = InferDocument<TSchema["tables"][TTableName]>;
 
 // @public (undocumented)
 export type EmptyArgs = Record<never, never>;
@@ -363,6 +363,10 @@ export interface ExecutionResult<TResult = unknown> {
     changedTables: Set<string>;
     // (undocumented)
     devtoolsEvents: SyncoreDevtoolsEvent[];
+    // Warning: (ae-forgotten-export) The symbol "DocumentChangePreview" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
+    documentChanges: DocumentChangePreview[];
     // (undocumented)
     externalChangeRequests: Array<{
         scope: SyncoreExternalChangeScope;
@@ -483,7 +487,7 @@ export type ImpactSet = ReadonlySet<ImpactScope>;
 
 // @public (undocumented)
 export namespace index_d_exports {
-    export { ActionCtx, AnySyncoreFunctionDefinition, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, ComponentPath, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionReferencesForTree, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, InstalledComponentApi, InstalledComponentsApi, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, PatchValueForTable, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, ResolvedSyncoreComponent, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreComponent, SyncoreComponentFunctionMetadata, SyncoreComponentHookContext, SyncoreComponentInstall, SyncoreComponentsManifest, SyncoreCoreCapability, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreFunctionTree, SyncoreHostServiceName, SyncorePaginatedQueryStatus, SyncoreQueriesRequest, SyncoreQueryRequest, SyncoreQueryState, SyncoreQueryStatus, SyncoreRequestedCapability, SyncoreResolvedComponents, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeOptions, SyncoreRuntimeStatus, SyncoreRuntimeStatusKind, SyncoreRuntimeStatusReason, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, UsePaginatedQueryResult, action, attachRuntimeBridge, composeProjectFunctionRegistry, composeProjectSchema, createBindingFunctionReference, createComponentPhysicalTableName, createDeferredSyncoreClient, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInstalledComponentsApi, createInvokeRequest, createUnavailableSyncoreClient, createWatchKey, cronJobs, defineComponent, defineComponents, generateId, installComponent, mutation, normalizeOptionalArgs, query, resolveComponentsManifest, stableStringify, toCanonicalComponentFunctionName };
+    export { ActionCtx, AnySyncoreFunctionDefinition, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, ComponentPath, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionReferencesForTree, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, InstalledComponentApi, InstalledComponentsApi, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, PatchValueForTable, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, ResolvedSyncoreComponent, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreComponent, SyncoreComponentFunctionMetadata, SyncoreComponentHookContext, SyncoreComponentInstall, SyncoreComponentsManifest, SyncoreCoreCapability, SyncoreDataModel, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreFunctionTree, SyncoreHostServiceName, SyncorePaginatedQueryStatus, SyncoreQueriesRequest, SyncoreQueryRequest, SyncoreQueryState, SyncoreQueryStatus, SyncoreRequestedCapability, SyncoreResolvedComponents, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeOptions, SyncoreRuntimeStatus, SyncoreRuntimeStatusKind, SyncoreRuntimeStatusReason, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, UsePaginatedQueryResult, action, attachRuntimeBridge, composeProjectFunctionRegistry, composeProjectSchema, createBindingFunctionReference, createComponentPhysicalTableName, createDeferredSyncoreClient, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInstalledComponentsApi, createInvokeRequest, createUnavailableSyncoreClient, createWatchKey, cronJobs, defineComponent, defineComponents, generateId, installComponent, mutation, normalizeOptionalArgs, query, resolveComponentsManifest, stableStringify, toCanonicalComponentFunctionName };
 }
 
 // @public (undocumented)
@@ -526,7 +530,7 @@ export type InferStorage<TValidator> = TValidator extends Validator<unknown, inf
 export type InferTableInput<TTable extends AnyTableDefinition> = Infer<TTable["validator"]>;
 
 // @public (undocumented)
-export type InsertValueForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = InferTableInput<TSchema["tables"][TTableName]>;
+export type InsertValueForTable<TSchema extends SyncoreDataModel, TTableName extends TableNames<TSchema>> = InferTableInput<TSchema["tables"][TTableName]>;
 
 // @public (undocumented)
 export function installComponent<TComponent extends SyncoreComponent, TChildren extends SyncoreComponentsManifest = {}>(install: {
@@ -589,7 +593,7 @@ export function mutation<TContext = unknown, TArgsShape extends ValidatorMap = V
 }): SyncoreFunctionDefinition<"mutation", TContext, InferArgs<TArgsShape>, TResult>;
 
 // @public
-export interface MutationCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends QueryCtx<TSchema> {
+export interface MutationCtx<TSchema extends SyncoreDataModel = SyncoreDataModel> extends QueryCtx<TSchema> {
     // (undocumented)
     db: SyncoreDatabaseWriter<TSchema>;
     // (undocumented)
@@ -685,7 +689,7 @@ export function parseSchemaSnapshot(source: string): SchemaSnapshot;
 // Warning: (ae-forgotten-export) The symbol "PatchValue" needs to be exported by the entry point index.d.mts
 //
 // @public (undocumented)
-export type PatchValueForTable<TSchema extends SyncoreSchema<any>, TTableName extends TableNames<TSchema>> = PatchValue<InsertValueForTable<TSchema, TTableName>>;
+export type PatchValueForTable<TSchema extends SyncoreDataModel, TTableName extends TableNames<TSchema>> = PatchValue<InsertValueForTable<TSchema, TTableName>>;
 
 // @public
 export function query<TContext = unknown, TValidator extends Validator<unknown, unknown, string> = Validator<unknown, unknown, string>, TResult = unknown>(config: FunctionConfig<TContext, Infer<TValidator>, TResult> & {
@@ -727,7 +731,7 @@ export type QueryCondition = {
 };
 
 // @public
-export interface QueryCtx<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
+export interface QueryCtx<TSchema extends SyncoreDataModel = SyncoreDataModel> {
     // (undocumented)
     capabilities?: Readonly<SyncoreCapabilities>;
     // (undocumented)
@@ -908,7 +912,7 @@ export interface ResolvedSyncoreComponent {
     // (undocumented)
     requestedCapabilities: readonly SyncoreRequestedCapability[];
     // (undocumented)
-    schema: SyncoreSchema<any> | undefined;
+    schema: SyncoreDataModel | undefined;
     // (undocumented)
     source: string;
     // (undocumented)
@@ -1050,9 +1054,13 @@ export class StringValidator extends BaseValidator<string> {
 // @public (undocumented)
 export interface SyncoreActiveQueryInfo {
     // (undocumented)
+    args?: Record<string, unknown>;
+    // (undocumented)
     componentName?: string;
     // (undocumented)
     componentPath?: string;
+    // (undocumented)
+    consumers?: number;
     // (undocumented)
     dependencyKeys: string[];
     // (undocumented)
@@ -1096,6 +1104,8 @@ export interface SyncoreBridgeMessageEndpoint {
 
 // @public (undocumented)
 export type SyncoreBridgeRequest = {
+    type: "runtime.status.request";
+} | {
     type: "invoke";
     requestId: string;
     kind: "query";
@@ -1175,7 +1185,7 @@ export interface SyncoreClient {
 }
 
 // @public (undocumented)
-export interface SyncoreComponent<TConfig = unknown, TSchema extends SyncoreSchema<any> | undefined = SyncoreSchema<any> | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined> {
+export interface SyncoreComponent<TConfig = unknown, TSchema extends SyncoreDataModel | undefined = SyncoreDataModel | undefined, TPublic extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined, TInternal extends SyncoreFunctionTree | undefined = SyncoreFunctionTree | undefined> {
     // (undocumented)
     readonly config?: Validator<TConfig>;
     // (undocumented)
@@ -1265,7 +1275,7 @@ export type SyncoreComponentsManifest = Record<string, SyncoreComponentInstall>;
 export type SyncoreCoreCapability = "storage" | "scheduler" | "devtools" | "ownTables" | "publicExports" | "internalActions";
 
 // @public (undocumented)
-export interface SyncoreDatabaseReader<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
+export interface SyncoreDatabaseReader<TSchema extends SyncoreDataModel = SyncoreDataModel> {
     // (undocumented)
     get<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<DocumentForTable<TSchema, TTableName> | null>;
     // (undocumented)
@@ -1275,7 +1285,7 @@ export interface SyncoreDatabaseReader<TSchema extends SyncoreSchema<any> = Sync
 }
 
 // @public (undocumented)
-export interface SyncoreDatabaseWriter<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> extends SyncoreDatabaseReader<TSchema> {
+export interface SyncoreDatabaseWriter<TSchema extends SyncoreDataModel = SyncoreDataModel> extends SyncoreDatabaseReader<TSchema> {
     // (undocumented)
     delete<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<void>;
     // (undocumented)
@@ -1284,6 +1294,16 @@ export interface SyncoreDatabaseWriter<TSchema extends SyncoreSchema<any> = Sync
     patch<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: PatchValueForTable<TSchema, TTableName>): Promise<void>;
     // (undocumented)
     replace<TTableName extends TableNames<TSchema>>(table: TTableName, id: string, value: InsertValueForTable<TSchema, TTableName>): Promise<void>;
+}
+
+// @public (undocumented)
+export interface SyncoreDataModel<TTables extends SyncoreSchemaDefinition = SyncoreSchemaDefinition> {
+    // (undocumented)
+    getTable(tableName: Extract<keyof TTables, string>): TTables[Extract<keyof TTables, string>];
+    // (undocumented)
+    tableNames(): Array<Extract<keyof TTables, string>>;
+    // (undocumented)
+    readonly tables: TTables;
 }
 
 // Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsEventBase" needs to be exported by the entry point index.d.mts
@@ -1302,12 +1322,21 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     dependencies: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    readScopes?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "query.invalidated";
     queryId: string;
     componentPath?: string;
     componentName?: string;
     reason: string;
+    causedByExecutionId?: string;
+    changedScopes?: string[];
+    matchedScopes?: string[];
+    rerunExecutionId?: string;
 }) | (SyncoreDevtoolsEventBase & {
     type: "mutation.committed";
     mutationId: string;
@@ -1316,6 +1345,14 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     changedTables: string[];
     durationMs: number;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "action.completed";
     actionId: string;
@@ -1324,9 +1361,28 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
     componentName?: string;
     durationMs: number;
     error?: string;
+    executionId?: string;
+    parentExecutionId?: string;
+    argsPreview?: DevtoolsPreview;
+    resultPreview?: DevtoolsPreview;
+    writeScopes?: string[];
+    changedScopes?: string[];
+    changedDocumentsPreview?: DocumentChangePreview[];
+    invalidatedQueryIds?: string[];
 }) | (SyncoreDevtoolsEventBase & {
     type: "scheduler.tick";
     executedJobIds: string[];
+    executionId?: string;
+    jobExecutions?: Array<{
+        jobId: string;
+        executionId?: string;
+        functionName: string;
+        functionType: "mutation" | "action";
+        argsPreview?: DevtoolsPreview;
+        resultPreview?: DevtoolsPreview;
+        error?: string;
+        durationMs?: number;
+    }>;
 }) | (SyncoreDevtoolsEventBase & {
     type: "storage.updated";
     storageId: string;
@@ -1458,7 +1514,7 @@ export type SyncoreRequestedCapability = SyncoreCoreCapability | `host:${Syncore
 export type SyncoreResolvedComponents = readonly ResolvedSyncoreComponent[];
 
 // @public
-export class SyncoreRuntime<TSchema extends SyncoreSchema<any>> {
+export class SyncoreRuntime<TSchema extends SyncoreDataModel> {
     constructor(options: SyncoreRuntimeOptions<TSchema>);
     // (undocumented)
     createClient(): SyncoreClient;
@@ -1483,7 +1539,7 @@ export class SyncoreRuntime<TSchema extends SyncoreSchema<any>> {
 }
 
 // @public (undocumented)
-export interface SyncoreRuntimeAdmin<TSchema extends SyncoreSchema<any> = SyncoreSchema<any>> {
+export interface SyncoreRuntimeAdmin<TSchema extends SyncoreDataModel = SyncoreDataModel> {
     // (undocumented)
     cancelScheduledJob(id: string): Promise<boolean>;
     // (undocumented)
@@ -1521,7 +1577,7 @@ export interface SyncoreRuntimeAdmin<TSchema extends SyncoreSchema<any> = Syncor
 }
 
 // @public (undocumented)
-export interface SyncoreRuntimeOptions<TSchema extends SyncoreSchema<any>> {
+export interface SyncoreRuntimeOptions<TSchema extends SyncoreDataModel> {
     // (undocumented)
     capabilities?: SyncoreCapabilities;
     // (undocumented)
@@ -1570,10 +1626,16 @@ export interface SyncoreRuntimeSummary {
     activeQueryCount: number;
     // (undocumented)
     appName?: string;
+    // Warning: (ae-forgotten-export) The symbol "SyncoreDevtoolsCapabilities" needs to be exported by the entry point index.d.mts
+    //
+    // (undocumented)
+    capabilities?: SyncoreDevtoolsCapabilities;
     // (undocumented)
     connectedAt: number;
     // (undocumented)
     databaseLabel?: string;
+    // (undocumented)
+    dataSourceAlias?: string;
     // (undocumented)
     origin?: string;
     // (undocumented)
@@ -1582,6 +1644,8 @@ export interface SyncoreRuntimeSummary {
     recentEventCount: number;
     // (undocumented)
     runtimeId: string;
+    // (undocumented)
+    runtimeRole?: "app" | "project-target";
     // (undocumented)
     sessionLabel?: string;
     // (undocumented)
@@ -1761,7 +1825,7 @@ export type TableIndexFields<TTable, TIndexName extends TableIndexNames<TTable>>
 export type TableIndexNames<TTable> = Extract<keyof TableIndexes<TTable>, string>;
 
 // @public (undocumented)
-export type TableNames<TSchema extends SyncoreSchema<any>> = Extract<keyof TSchema["tables"], string>;
+export type TableNames<TSchema extends SyncoreDataModel> = Extract<keyof TSchema["tables"], string>;
 
 // @public (undocumented)
 export type TableSearchIndexConfig<TTable, TIndexName extends TableSearchIndexNames<TTable>> = TableSearchIndexes<TTable>[TIndexName];
@@ -1826,11 +1890,11 @@ export interface UpdateScheduledJobOptions {
     // (undocumented)
     id: string;
     // (undocumented)
-    misfirePolicy: MisfirePolicy;
+    misfirePolicy?: MisfirePolicy;
     // (undocumented)
     runAt?: number;
     // (undocumented)
-    schedule: RecurringSchedule;
+    schedule?: RecurringSchedule;
 }
 
 // @public (undocumented)
@@ -1961,6 +2025,10 @@ export type ValidatorKind = "string" | "number" | "boolean" | "literal" | "enum"
 
 // @public (undocumented)
 export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
+
+// Warnings were encountered during analysis:
+//
+// D:/GitHub/Syncore/packages/devtools-protocol/src/index.ts:100:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
 
 // (No @packageDocumentation comment for this package)
 

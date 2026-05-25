@@ -4,6 +4,7 @@ import type {
 } from "@syncore/devtools-protocol";
 import type { FunctionReference } from "../../functions.js";
 import type {
+  DevtoolsLiveQueryScope,
   ImpactScope,
   JsonObject,
   SyncoreExternalChangeApplier,
@@ -12,6 +13,7 @@ import type {
   SyncoreWatch
 } from "../../runtime.js";
 import { DevtoolsEngine } from "./devtoolsEngine.js";
+import { generateId } from "../../id.js";
 import type {
   ActiveQueryRecord,
   DependencyKey
@@ -26,7 +28,8 @@ type ReactivityEngineDeps = {
   devtools: DevtoolsEngine;
   runQuery: <TResult>(
     reference: FunctionReference<"query", unknown, TResult>,
-    args: JsonObject
+    args: JsonObject,
+    meta?: { executionId?: string; parentExecutionId?: string }
   ) => Promise<TResult>;
   collectQueryDependencies: (
     functionName: string,
@@ -66,6 +69,8 @@ export class ReactivityEngine {
       return {
         id: query.id,
         functionName: query.functionName,
+        args: query.args,
+        consumers: query.consumers,
         ...(componentFunction
           ? {
               owner: "component" as const,
@@ -100,6 +105,7 @@ export class ReactivityEngine {
         lastRunAt: 0
       };
       this.activeQueries.set(key, record);
+      this.notifyActiveQueriesChanged();
       void this.rerunActiveQuery(record);
     }
 
@@ -132,6 +138,7 @@ export class ReactivityEngine {
         activeRecord.consumers = Math.max(0, activeRecord.consumers - 1);
         if (activeRecord.consumers === 0) {
           this.activeQueries.delete(key);
+          this.notifyActiveQueriesChanged();
         }
       }
     };
@@ -152,19 +159,18 @@ export class ReactivityEngine {
 
   async refreshQueriesForScopes(
     scopes: Iterable<ImpactScope>,
-    reason: string
-  ): Promise<void> {
+    reason: string,
+    cause?: { executionId?: string }
+  ): Promise<string[]> {
     const scopeSet = new Set(scopes);
     if (scopeSet.size === 0) {
-      return;
+      return [];
     }
-    for (const query of this.activeQueries.values()) {
-      const needsRefresh = [...scopeSet].some((scope) =>
-        query.dependencyKeys.has(scope)
-      );
-      if (!needsRefresh) {
-        continue;
-      }
+    const invalidatedQueryIds: string[] = [];
+    for (const { query, matchedScopes } of this.getInvalidatedQueriesForScopes(
+      scopeSet
+    )) {
+      const rerunExecutionId = generateReactivityExecutionId();
       this.deps.devtools.emit({
         type: "query.invalidated",
         runtimeId: this.deps.runtimeId,
@@ -176,10 +182,25 @@ export class ReactivityEngine {
             }
           : {}),
         reason,
+        ...(cause?.executionId ? { causedByExecutionId: cause.executionId } : {}),
+        changedScopes: [...scopeSet],
+        matchedScopes,
+        rerunExecutionId,
         timestamp: Date.now()
       });
-      await this.rerunActiveQuery(query);
+      invalidatedQueryIds.push(query.id);
+      await this.rerunActiveQuery(query, {
+        executionId: rerunExecutionId,
+        ...(cause?.executionId ? { parentExecutionId: cause.executionId } : {})
+      });
     }
+    return invalidatedQueryIds;
+  }
+
+  getInvalidatedQueryIdsForScopes(scopes: Iterable<ImpactScope>): string[] {
+    return this.getInvalidatedQueriesForScopes(new Set(scopes)).map(
+      ({ query }) => query.id
+    );
   }
 
   async publishExternalChange(
@@ -221,12 +242,16 @@ export class ReactivityEngine {
     );
   }
 
-  private async rerunActiveQuery(record: ActiveQueryRecord): Promise<void> {
+  private async rerunActiveQuery(
+    record: ActiveQueryRecord,
+    meta?: { executionId?: string; parentExecutionId?: string }
+  ): Promise<void> {
     record.dependencyKeys.clear();
     try {
       const result = await this.deps.runQuery(
         { kind: "query", name: record.functionName },
-        record.args
+        record.args,
+        meta
       );
       record.lastResult = result;
       record.lastError = undefined;
@@ -237,10 +262,30 @@ export class ReactivityEngine {
       );
     } catch (error) {
       record.lastError = error as Error;
+      record.lastRunAt = Date.now();
     }
     for (const listener of record.listeners) {
       listener();
     }
+    this.notifyActiveQueriesChanged();
+  }
+
+  private notifyActiveQueriesChanged(): void {
+    this.deps.devtools.notifyScopes(["runtime.summary", "runtime.activeQueries"]);
+  }
+
+  private getInvalidatedQueriesForScopes(scopeSet: Set<ImpactScope>): Array<{
+    query: ActiveQueryRecord;
+    matchedScopes: ImpactScope[];
+  }> {
+    return [...this.activeQueries.values()]
+      .map((query) => ({
+        query,
+        matchedScopes: [...scopeSet].filter((scope) =>
+          query.dependencyKeys.has(scope)
+        )
+      }))
+      .filter(({ matchedScopes }) => matchedScopes.length > 0);
   }
 
   private async handleExternalChangeEvent(
@@ -277,6 +322,7 @@ export class ReactivityEngine {
     }
 
     this.pendingExternalChangePromise = (async () => {
+      this.deps.devtools.notifyScopes(toDevtoolsScopes(changedScopes));
       await this.refreshQueriesForScopes(
         changedScopes,
         `External change touched ${[...changedScopes].join(", ")}`
@@ -300,6 +346,10 @@ export class ReactivityEngine {
   private createActiveQueryKey(name: string, args: JsonObject): string {
     return `${name}:${stableStringify(args)}`;
   }
+}
+
+function generateReactivityExecutionId(): string {
+  return generateId();
 }
 
 function resolveChangedScopes(
@@ -327,6 +377,32 @@ function resolveChangedScopes(
   }
 
   return scopes;
+}
+
+function toDevtoolsScopes(
+  scopes: Iterable<ImpactScope>
+): DevtoolsLiveQueryScope[] {
+  const resolved = new Set<DevtoolsLiveQueryScope>();
+  for (const scope of scopes) {
+    if (scope.startsWith("row:")) {
+      const [, tableName] = scope.split(":");
+      if (tableName) {
+        resolved.add(`table:${tableName}`);
+      }
+      continue;
+    }
+    if (
+      scope === "runtime.summary" ||
+      scope === "runtime.activeQueries" ||
+      scope === "schema.tables" ||
+      scope === "scheduler.jobs" ||
+      scope.startsWith("table:") ||
+      scope.startsWith("storage:")
+    ) {
+      resolved.add(scope as DevtoolsLiveQueryScope);
+    }
+  }
+  return resolved.size > 0 ? [...resolved] : ["all"];
 }
 
 function stableStringify(value: unknown): string {

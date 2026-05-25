@@ -477,29 +477,26 @@ function useManagedQueryWatch<TArgs, TResult>(
   isSkipped = false
 ): ManagedSyncoreWatch<TResult> {
   const argsKey = isSkipped ? skip : stableStringify(args ?? {});
-  const normalizedArgs = useMemo(
-    () => (isSkipped ? undefined : (JSON.parse(argsKey) as TArgs)),
-    [argsKey, isSkipped]
-  );
-  const watch = useMemo<ManagedSyncoreWatch<TResult>>(
-    () =>
-      isSkipped
-        ? noOpWatch
-        : (client.watchQuery(
-            reference,
-            normalizedArgs as TArgs
-          ) as ManagedSyncoreWatch<TResult>),
-    [client, isSkipped, normalizedArgs, reference]
+  const [watch, setWatch] = useState<ManagedSyncoreWatch<TResult>>(
+    () => noOpWatch
   );
 
-  useEffect(
-    () => () => {
-      if (!isSkipped) {
-        watch.dispose?.();
-      }
-    },
-    [isSkipped, watch]
-  );
+  useEffect(() => {
+    if (isSkipped) {
+      setWatch(noOpWatch);
+      return;
+    }
+
+    const nextWatch = client.watchQuery(
+      reference,
+      JSON.parse(argsKey) as TArgs
+    ) as ManagedSyncoreWatch<TResult>;
+    setWatch(nextWatch);
+
+    return () => {
+      nextWatch.dispose?.();
+    };
+  }, [argsKey, client, isSkipped, reference]);
 
   return watch;
 }

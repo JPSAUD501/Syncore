@@ -31,6 +31,10 @@ import { RuntimeStatusController } from "./runtimeStatus.js";
 
 type DevtoolsEventMeta = {
   origin?: SyncoreDevtoolsEventOrigin;
+  executionId?: string;
+  parentExecutionId?: string;
+  schedulerJobId?: string;
+  schedulerRun?: boolean;
 };
 
 export class RuntimeKernel<
@@ -98,9 +102,10 @@ export class RuntimeKernel<
       devtools: this.devtoolsEngine,
       recurringJobs: options.scheduler?.recurringJobs ?? [],
       pollIntervalMs: options.scheduler?.pollIntervalMs ?? 1000,
-      runMutation: (reference, args) =>
-        this.executionEngine.runMutation(reference, args),
-      runAction: (reference, args) => this.executionEngine.runAction(reference, args)
+      runMutation: (reference, args, meta) =>
+        this.executionEngine.runMutation(reference, args, meta),
+      runAction: (reference, args, meta) =>
+        this.executionEngine.runAction(reference, args, meta)
     });
     this.reactivityEngine = new ReactivityEngine({
       runtimeId: this.runtimeId,
@@ -112,7 +117,8 @@ export class RuntimeKernel<
         ? { externalChangeApplier: options.externalChangeApplier }
         : {}),
       devtools: this.devtoolsEngine,
-      runQuery: (reference, args) => this.executionEngine.runQuery(reference, args),
+      runQuery: (reference, args, meta) =>
+        this.executionEngine.runQuery(reference, args, meta),
       collectQueryDependencies: (functionName, args) =>
         this.executionEngine.collectQueryDependencies(functionName, args)
     });

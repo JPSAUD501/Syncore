@@ -129,6 +129,16 @@ vi.mock("@/lib/store", () => ({
       includeDashboardActivity: storeState.includeDashboardActivity
     }),
   useActiveRuntime: () => storeState.activeRuntime,
+  useSelectedTarget: () =>
+    storeState.activeRuntime
+      ? {
+          id: "target-1",
+          runtimes: [storeState.activeRuntime],
+          runtimeIds: [storeState.activeRuntime.runtimeId],
+          connected: storeState.activeRuntime.connected
+        }
+      : null,
+  useSelectedRuntimeFilter: () => storeState.activeRuntime?.runtimeId ?? null,
   useConnectedRuntimeCount: () => storeState.connectedRuntimeCount,
   useRuntimeList: () => (storeState.activeRuntime ? [storeState.activeRuntime] : []),
   getPublicRuntimeId: (runtimeId: string) => runtimeId.slice(0, 8),
@@ -168,6 +178,22 @@ vi.mock("@/hooks", () => ({
       };
     }
     return { data: null, loading: false, error: null, hasData: false };
+  },
+  useDevtoolsMultiRuntimeSubscription: (payload: { kind: string } | null) => {
+    if (!payload) {
+      return { dataByRuntime: {}, loading: false, error: null, hasData: false };
+    }
+    if (payload.kind === "runtime.activeQueries") {
+      return {
+        dataByRuntime: subscriptionState.activeQueries.data
+          ? { "runtime-1": subscriptionState.activeQueries.data }
+          : {},
+        loading: subscriptionState.activeQueries.loading,
+        error: null,
+        hasData: subscriptionState.activeQueries.data !== null
+      };
+    }
+    return { dataByRuntime: {}, loading: false, error: null, hasData: false };
   },
   useDidJustChange: () => ({ didChange: false, pulse: 0 }),
   useRefreshTimer: () => undefined

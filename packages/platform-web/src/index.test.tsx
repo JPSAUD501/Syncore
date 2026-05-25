@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFunctionReference,
@@ -48,9 +48,8 @@ const storageFunctions = {
   })
 };
 
-const wasmFilePath = fileURLToPath(
-  new URL("../node_modules/sql.js/dist/sql-wasm.wasm", import.meta.url)
-);
+const require = createRequire(import.meta.url);
+const wasmFilePath = require.resolve("sql.js/dist/sql-wasm.wasm");
 
 describe("platform-web sql.js runtime", () => {
   beforeEach(async () => {
@@ -59,6 +58,143 @@ describe("platform-web sql.js runtime", () => {
 
   afterEach(async () => {
     await deleteDatabase("syncore-web-test");
+  });
+
+  it("creates a runtime without app-level wasm plumbing", async () => {
+    const schema = defineSchema({
+      todos: defineTable({
+        title: s.string()
+      })
+    });
+    const functions = {
+      "todos/list": query({
+        args: {},
+        returns: s.array(s.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
+      })
+    };
+
+    const runtime = await createWebSyncoreRuntime({
+      databaseName: "todos-default-wasm",
+      persistenceDatabaseName: "syncore-web-test",
+      schema,
+      functions
+    });
+    await runtime.start();
+    const rows = await runtime
+      .createClient()
+      .query(createFunctionReference("query", "todos/list"));
+    expect(rows).toEqual([]);
+    await runtime.stop();
+  });
+
+  it("still supports an explicit wasmUrl override", async () => {
+    const schema = defineSchema({
+      todos: defineTable({
+        title: s.string()
+      })
+    });
+    const functions = {
+      "todos/list": query({
+        args: {},
+        returns: s.array(s.any()),
+        handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
+      })
+    };
+
+    const runtime = await createWebSyncoreRuntime({
+      databaseName: "todos-explicit-wasm-url",
+      persistenceDatabaseName: "syncore-web-test",
+      schema,
+      functions,
+      wasmUrl: wasmFilePath
+    });
+    await runtime.start();
+    const rows = await runtime
+      .createClient()
+      .query(createFunctionReference("query", "todos/list"));
+    expect(rows).toEqual([]);
+    await runtime.stop();
+  });
+
+  it("still supports an explicit locateFile override", async () => {
+    vi.doMock("./web-sqljs-wasm.js", () => {
+      throw new Error("default wasm resolver should not run");
+    });
+    const scope = globalThis as typeof globalThis & {
+      WorkerGlobalScope?: unknown;
+    };
+    const previousWorkerGlobalScope = scope.WorkerGlobalScope;
+    scope.WorkerGlobalScope = function WorkerGlobalScope() {};
+
+    try {
+      const schema = defineSchema({
+        todos: defineTable({
+          title: s.string()
+        })
+      });
+      const functions = {
+        "todos/list": query({
+          args: {},
+          returns: s.array(s.any()),
+          handler: async (ctx) => (ctx as QueryCtx).db.query("todos").collect()
+        })
+      };
+
+      const runtime = await createWebSyncoreRuntime({
+        databaseName: "todos-explicit-locate-file",
+        persistenceDatabaseName: "syncore-web-test",
+        schema,
+        functions,
+        locateFile: () => wasmFilePath
+      });
+      await runtime.start();
+      const rows = await runtime
+        .createClient()
+        .query(createFunctionReference("query", "todos/list"));
+      expect(rows).toEqual([]);
+      await runtime.stop();
+    } finally {
+      if (previousWorkerGlobalScope === undefined) {
+        delete scope.WorkerGlobalScope;
+      } else {
+        scope.WorkerGlobalScope = previousWorkerGlobalScope;
+      }
+      vi.doUnmock("./web-sqljs-wasm.js");
+    }
+  });
+
+  it("reports a clear browser error when the default wasm asset cannot be resolved", async () => {
+    vi.doMock("./web-sqljs-wasm.js", () => {
+      throw new Error("missing wasm asset");
+    });
+    const scope = globalThis as typeof globalThis & {
+      WorkerGlobalScope?: unknown;
+    };
+    const previousWorkerGlobalScope = scope.WorkerGlobalScope;
+    scope.WorkerGlobalScope = function WorkerGlobalScope() {};
+
+    try {
+      await expect(
+        createWebSyncoreRuntime({
+          databaseName: "todos-missing-default-wasm",
+          persistenceDatabaseName: "syncore-web-test",
+          schema: defineSchema({
+            todos: defineTable({
+              title: s.string()
+            })
+          }),
+          functions: {}
+        })
+      ).rejects.toThrow("Syncore could not resolve the default sql.js");
+    } finally {
+      if (previousWorkerGlobalScope === undefined) {
+        delete scope.WorkerGlobalScope;
+      } else {
+        scope.WorkerGlobalScope = previousWorkerGlobalScope;
+      }
+      vi.doUnmock("./web-sqljs-wasm.js");
+    }
   });
 
   it("persists sqlite state into IndexedDB between runtime instances", async () => {
@@ -231,6 +367,24 @@ describe("platform-web sql.js runtime", () => {
       expect(
         sentMessages.some((payload) => payload.includes('"type":"hello"'))
       ).toBe(true);
+      const helloPayload = sentMessages.find((payload) =>
+        payload.includes('"type":"hello"')
+      );
+      expect(helloPayload).toBeDefined();
+      const hello = JSON.parse(helloPayload ?? "{}") as {
+        dataSourceAlias?: string;
+        capabilities?: {
+          sql?: { read: boolean; write: boolean; live: boolean; reason?: string };
+        };
+      };
+      expect(hello.dataSourceAlias).toEqual(expect.any(String));
+      expect(hello.dataSourceAlias?.length).toBeGreaterThan(0);
+      expect(hello.capabilities?.sql).toMatchObject({
+        read: false,
+        write: false,
+        live: false,
+        reason: "SQL Console is not available for browser runtimes."
+      });
       expect(
         sentMessages.some((payload) => payload.includes('"type":"event"'))
       ).toBe(true);

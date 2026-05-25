@@ -9,7 +9,7 @@ const preStatePath = path.join(workspaceRoot, ".changeset", "pre.json");
 async function main() {
   const preState = await readPreState();
   if (preState === null) {
-    await runCommand("bunx", ["changeset", "pre", "enter", prereleaseTag]);
+    await runCommand("npx", ["changeset", "pre", "enter", prereleaseTag]);
     return;
   }
 

@@ -27,12 +27,19 @@ export class SqlJsDriver implements SyncoreSqlDriver {
   static async create(options: CreateSqlJsDriverOptions): Promise<SqlJsDriver> {
     const persistence =
       options.persistence ?? new SyncoreIndexedDbPersistence();
+    const hasExplicitWasmResolver = Boolean(options.locateFile ?? options.wasmUrl);
+    if (isBrowserLikeRuntime() && !hasExplicitWasmResolver) {
+      throw new Error(
+        "SqlJsDriver requires an explicit wasmUrl or locateFile in browser runtimes. " +
+          "Use createWebSyncoreRuntime/createBrowserWorkerRuntime for the default Syncore web resolver."
+      );
+    }
     const SQL = await initSqlJs(
-      typeof window === "undefined" && !options.locateFile && !options.wasmUrl
+      !hasExplicitWasmResolver
         ? undefined
         : {
             locateFile:
-              options.locateFile ?? (() => options.wasmUrl ?? "/sql-wasm.wasm")
+              options.locateFile ?? (() => options.wasmUrl as string)
           }
     );
     const existingBytes = await persistence.loadDatabase(options.databaseName);
@@ -193,6 +200,13 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     this.database = database;
     previousDatabase.close();
   }
+}
+
+function isBrowserLikeRuntime(): boolean {
+  const scope = globalThis as typeof globalThis & {
+    WorkerGlobalScope?: unknown;
+  };
+  return typeof window !== "undefined" || scope.WorkerGlobalScope !== undefined;
 }
 
 function normalizeParams(values: unknown[]): SqlJsValue[] {

@@ -18,9 +18,13 @@ function isDirectInvocation(moduleUrl: string): boolean {
 }
 
 if (isDirectInvocation(import.meta.url)) {
-  void runSyncoreCli().catch((error) => {
-    process.nextTick(() => {
-      throw error;
+  void runSyncoreCli()
+    .then(() => {
+      process.exit(process.exitCode ?? 0);
+    })
+    .catch((error) => {
+      process.nextTick(() => {
+        throw error;
+      });
     });
-  });
 }

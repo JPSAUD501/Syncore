@@ -18,8 +18,8 @@
 
 ## Tests To Run
 
-- `bun run --filter @syncore/react test`
-- `bun run --filter @syncore/react typecheck`
+- `npm run test --workspace @syncore/react`
+- `npm run typecheck --workspace @syncore/react`
 
 ## Common Failure Modes
 

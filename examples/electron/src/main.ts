@@ -5,7 +5,6 @@ import {
   createNodeSyncoreRuntime
 } from "syncorejs/node";
 import schema from "../syncore/_generated/schema.js";
-import { resolvedComponents } from "../syncore/_generated/components.js";
 import { functions } from "../syncore/_generated/functions.js";
 
 const rendererHtmlPath = path.resolve(
@@ -17,8 +16,10 @@ const rendererHtmlPath = path.resolve(
   "index.html"
 );
 
+const developmentDataDirectory = path.join(process.cwd(), ".syncore");
 const userDataDirectory =
-  process.env.SYNCORE_ELECTRON_USER_DATA_DIR ?? app.getPath("userData");
+  process.env.SYNCORE_ELECTRON_USER_DATA_DIR ??
+  (app.isPackaged ? app.getPath("userData") : developmentDataDirectory);
 
 app.setPath("userData", userDataDirectory);
 
@@ -27,7 +28,6 @@ const runtime = createNodeSyncoreRuntime({
   storageDirectory: path.join(userDataDirectory, "storage"),
   schema,
   functions,
-  components: resolvedComponents,
   platform: "electron-main"
 });
 

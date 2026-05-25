@@ -11,6 +11,7 @@ import type {
 import { type DevtoolsEngine } from "./devtoolsEngine.js";
 import {
   computeNextRun,
+  createDevtoolsPreview,
   parseMisfirePolicy,
   shouldRunMissedJob,
   stableStringify,
@@ -26,11 +27,13 @@ type SchedulerEngineDeps = {
   pollIntervalMs: number;
   runMutation: (
     reference: FunctionReference<"mutation", unknown, unknown>,
-    args: JsonObject
+    args: JsonObject,
+    meta?: { executionId?: string; schedulerJobId?: string; schedulerRun?: boolean }
   ) => Promise<unknown>;
   runAction: (
     reference: FunctionReference<"action", unknown, unknown>,
-    args: JsonObject
+    args: JsonObject,
+    meta?: { executionId?: string; schedulerJobId?: string; schedulerRun?: boolean }
   ) => Promise<unknown>;
 };
 
@@ -123,30 +126,40 @@ export class SchedulerEngine {
   async updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean> {
     const existing = await this.deps.driver.get<{
       status: string;
+      run_at: number;
       recurring_name: string | null;
+      schedule_json: string | null;
+      misfire_policy: string | null;
+      window_ms: number | null;
     }>(
-      `SELECT status, recurring_name FROM "_scheduled_functions" WHERE id = ?`,
+      `SELECT status, run_at, recurring_name, schedule_json, misfire_policy, window_ms
+       FROM "_scheduled_functions" WHERE id = ?`,
       [options.id]
     );
-    if (!existing || existing.status !== "scheduled" || !existing.recurring_name) {
+    if (!existing || existing.status !== "scheduled") {
       return false;
     }
+    const existingSchedule = existing.schedule_json
+      ? (JSON.parse(existing.schedule_json) as RecurringJobDefinition["schedule"])
+      : undefined;
+    const schedule = options.schedule ?? existingSchedule;
+    const misfirePolicy =
+      options.misfirePolicy ??
+      parseMisfirePolicy(existing.misfire_policy ?? "catch_up", existing.window_ms);
     const now = Date.now();
-    const runAt = options.runAt ?? computeNextRun(options.schedule, now);
+    const runAt = options.runAt ?? (schedule ? computeNextRun(schedule, now) : existing.run_at);
     const result = await this.deps.driver.run(
       `UPDATE "_scheduled_functions"
        SET args_json = ?, run_at = ?, updated_at = ?, schedule_json = ?, timezone = ?, misfire_policy = ?, window_ms = ?
-       WHERE id = ? AND status = 'scheduled' AND recurring_name IS NOT NULL`,
+       WHERE id = ? AND status = 'scheduled'`,
       [
         stableStringify(options.args),
         runAt,
         now,
-        stableStringify(options.schedule),
-        "timezone" in options.schedule ? (options.schedule.timezone ?? null) : null,
-        options.misfirePolicy.type,
-        options.misfirePolicy.type === "windowed"
-          ? options.misfirePolicy.windowMs
-          : null,
+        schedule ? stableStringify(schedule) : null,
+        schedule && "timezone" in schedule ? (schedule.timezone ?? null) : null,
+        misfirePolicy.type,
+        misfirePolicy.type === "windowed" ? misfirePolicy.windowMs : null,
         options.id
       ]
     );
@@ -204,6 +217,16 @@ export class SchedulerEngine {
       [now]
     );
     const executedJobIds: string[] = [];
+    const jobExecutions: Array<{
+      jobId: string;
+      executionId?: string;
+      functionName: string;
+      functionType: "mutation" | "action";
+      argsPreview?: ReturnType<typeof createDevtoolsPreview>;
+      resultPreview?: ReturnType<typeof createDevtoolsPreview>;
+      error?: string;
+      durationMs?: number;
+    }> = [];
 
     for (const job of dueJobs) {
       const misfirePolicy = parseMisfirePolicy(
@@ -216,20 +239,41 @@ export class SchedulerEngine {
       }
 
       try {
+        const args = JSON.parse(job.args_json) as JsonObject;
+        const executionId = generateId();
+        const startedAt = Date.now();
+        let result: unknown;
         if (job.function_kind === "mutation") {
-          await this.deps.runMutation(
+          result = await this.deps.runMutation(
             { kind: "mutation", name: job.function_name },
-            JSON.parse(job.args_json) as JsonObject
+            args,
+            { executionId, schedulerJobId: job.id, schedulerRun: true }
           );
         } else {
-          await this.deps.runAction(
+          result = await this.deps.runAction(
             { kind: "action", name: job.function_name },
-            JSON.parse(job.args_json) as JsonObject
+            args,
+            { executionId, schedulerJobId: job.id, schedulerRun: true }
           );
         }
         executedJobIds.push(job.id);
+        jobExecutions.push({
+          jobId: job.id,
+          executionId,
+          functionName: job.function_name,
+          functionType: job.function_kind === "mutation" ? "mutation" : "action",
+          argsPreview: createDevtoolsPreview(args),
+          resultPreview: createDevtoolsPreview(result),
+          durationMs: Date.now() - startedAt
+        });
         await this.advanceOrFinalizeJob(job, "completed", now);
       } catch (error) {
+        jobExecutions.push({
+          jobId: job.id,
+          functionName: job.function_name,
+          functionType: job.function_kind === "mutation" ? "mutation" : "action",
+          error: error instanceof Error ? error.message : String(error)
+        });
         await this.deps.driver.run(
           `UPDATE "_scheduled_functions" SET status = 'failed', updated_at = ? WHERE id = ?`,
           [Date.now(), job.id]
@@ -247,11 +291,13 @@ export class SchedulerEngine {
       }
     }
 
-    if (executedJobIds.length > 0) {
+    if (jobExecutions.length > 0) {
       this.deps.devtools.emit({
         type: "scheduler.tick",
         runtimeId: this.deps.runtimeId,
+        executionId: generateId(),
         executedJobIds,
+        jobExecutions,
         timestamp: Date.now()
       });
       this.notifySchedulerJobsChanged();

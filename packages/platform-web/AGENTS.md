@@ -18,9 +18,9 @@
 
 ## Tests To Run
 
-- `bun run --filter @syncore/platform-web test`
-- `bun run --filter @syncore/platform-web typecheck`
-- `bun run --filter syncore-example-next-pwa build`
+- `npm run test --workspace @syncore/platform-web`
+- `npm run typecheck --workspace @syncore/platform-web`
+- `npm run build --workspace syncore-example-next-pwa`
 
 ## Common Failure Modes
 

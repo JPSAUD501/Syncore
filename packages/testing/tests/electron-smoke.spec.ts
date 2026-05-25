@@ -27,11 +27,12 @@ test("Electron example persists local state across app relaunches", async () => 
   try {
     firstLaunch = await launchElectronApp(userDataDirectory);
     const firstWindow = await firstLaunch.firstWindow();
+    await firstWindow.waitForLoadState("domcontentloaded");
     const editor = firstWindow.getByPlaceholder(
       "What happened today? How are you feeling?"
     );
     const deleteButton = firstWindow.getByRole("button", { name: "Delete" });
-    await expect(editor).toBeVisible();
+    await expect(editor).toBeVisible({ timeout: 30_000 });
 
     const entryText = `Electron smoke ${Date.now()} captured through the renderer bridge`;
     await editor.fill(entryText);
@@ -44,6 +45,7 @@ test("Electron example persists local state across app relaunches", async () => 
 
     secondLaunch = await launchElectronApp(userDataDirectory);
     const secondWindow = await secondLaunch.firstWindow();
+    await secondWindow.waitForLoadState("domcontentloaded");
     const relaunchedEditor = secondWindow.getByPlaceholder(
       "What happened today? How are you feeling?"
     );

@@ -1,38 +1,22 @@
 import { createBrowserWorkerClient } from "syncorejs/browser";
-import { createFunctionReference } from "syncorejs";
+import { api } from "./syncore/_generated/api";
 
-/* ─── Function references (no codegen — all inline) ─── */
 interface Contact {
   _id: string;
   name: string;
   email: string;
   company: string;
   color: string;
+  favorite?: boolean;
   createdAt: number;
 }
 
-const listContacts = createFunctionReference<
-  "query",
-  Record<never, never>,
-  Contact[]
->("query", "contacts/list");
-
-const searchContacts = createFunctionReference<
-  "query",
-  { query: string },
-  Contact[]
->("query", "contacts/search");
-
-const createContact = createFunctionReference<
-  "mutation",
-  { name: string; email: string; company: string },
-  string
->("mutation", "contacts/create");
-
-const removeContact = createFunctionReference<"mutation", { id: string }, null>(
-  "mutation",
-  "contacts/remove"
-);
+interface ContactStats {
+  total: number;
+  companies: number;
+  favorites: number;
+  newestAt: number | null;
+}
 
 /* ─── DOM refs ─── */
 const $ = (sel: string) => document.querySelector(sel)!;
@@ -44,6 +28,8 @@ const emailInput = $("#email-input") as HTMLInputElement;
 const companyInput = $("#company-input") as HTMLInputElement;
 const addBtn = $("#add-btn") as HTMLButtonElement;
 const logEl = $("#log") as HTMLElement;
+const statsEl = $("#stats") as HTMLElement;
+const seedBtn = $("#seed-btn") as HTMLButtonElement;
 
 /* ─── Boot client ─── */
 const managed = createBrowserWorkerClient({
@@ -92,6 +78,9 @@ function render(contacts: Contact[]) {
         <div class="contact-meta">${esc(c.email)}${c.company ? ` · ${esc(c.company)}` : ""}</div>
         <div class="contact-time">${timeAgo(c.createdAt)}</div>
       </div>
+      <button class="favorite-btn ${c.favorite ? "favorite-btn--active" : ""}" data-id="${c._id}" title="${c.favorite ? "Remove favorite" : "Mark favorite"}">
+        ${c.favorite ? "★" : "☆"}
+      </button>
       <button class="remove-btn" data-id="${c._id}" title="Remove">&times;</button>
     </div>
   `
@@ -102,8 +91,16 @@ function render(contacts: Contact[]) {
   listEl.querySelectorAll(".remove-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = (btn as HTMLElement).dataset.id!;
-      void client.mutation(removeContact, { id });
+      void client.mutation(api.contacts.remove, { id });
       log(`Removed contact ${id.slice(0, 8)}...`);
+    });
+  });
+
+  listEl.querySelectorAll(".favorite-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = (btn as HTMLElement).dataset.id!;
+      void client.mutation(api.contacts.toggleFavorite, { id });
+      log(`Toggled favorite ${id.slice(0, 8)}...`);
     });
   });
 }
@@ -121,7 +118,7 @@ function startWatch(searchQuery?: string) {
   currentWatch?.dispose?.();
 
   if (searchQuery?.trim()) {
-    const watch = client.watchQuery(searchContacts, {
+    const watch = client.watchQuery(api.contacts.search, {
       query: searchQuery.trim()
     });
     watch.onUpdate(() => {
@@ -131,7 +128,7 @@ function startWatch(searchQuery?: string) {
     });
     currentWatch = watch;
   } else {
-    const watch = client.watchQuery(listContacts);
+    const watch = client.watchQuery(api.contacts.list);
     watch.onUpdate(() => {
       const contacts = (watch.localQueryResult() ?? []) as Contact[];
       render(contacts);
@@ -142,6 +139,16 @@ function startWatch(searchQuery?: string) {
 }
 
 startWatch();
+
+const statsWatch = client.watchQuery(api.contacts.stats);
+statsWatch.onUpdate(() => {
+  const stats = statsWatch.localQueryResult();
+  if (!stats) return;
+  statsEl.innerHTML = `
+    <span><strong>${stats.companies}</strong> companies</span>
+    <span><strong>${stats.favorites}</strong> favorites</span>
+  `;
+});
 
 /* ─── Search ─── */
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -164,12 +171,17 @@ addBtn.addEventListener("click", () => {
     return;
   }
 
-  void client.mutation(createContact, { name, email, company });
+  void client.mutation(api.contacts.create, { name, email, company });
   log(`Created contact: ${name}`);
   nameInput.value = "";
   emailInput.value = "";
   companyInput.value = "";
   nameInput.focus();
+});
+
+seedBtn.addEventListener("click", async () => {
+  const inserted = await client.mutation(api.contacts.seedDemo);
+  log(`Seeded ${inserted} contact${inserted === 1 ? "" : "s"}`);
 });
 
 /* Enter key to submit */
@@ -182,5 +194,6 @@ addBtn.addEventListener("click", () => {
 /* ─── Cleanup ─── */
 window.addEventListener("beforeunload", () => {
   currentWatch?.dispose?.();
+  statsWatch.dispose();
   managed.dispose();
 });

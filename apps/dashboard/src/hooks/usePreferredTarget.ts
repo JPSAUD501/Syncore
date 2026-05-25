@@ -2,14 +2,12 @@ import {
   useActiveRuntime,
   useSelectedRuntimeFilter,
   useSelectedTarget,
-  useProjectTargetRuntime,
   useSelectedRuntimeConnected
 } from "@/lib/store";
 
 interface PreferredTargetState {
   activeRuntime: ReturnType<typeof useActiveRuntime>;
   selectedTarget: ReturnType<typeof useSelectedTarget>;
-  projectTarget: ReturnType<typeof useProjectTargetRuntime>;
   runtimeConnected: boolean;
   runtimeFilter: ReturnType<typeof useSelectedRuntimeFilter>;
   liveTargetId: string | null;
@@ -23,18 +21,17 @@ interface PreferredTargetState {
 export function usePreferredTarget(): PreferredTargetState {
   const activeRuntime = useActiveRuntime();
   const selectedTarget = useSelectedTarget();
-  const projectTarget = useProjectTargetRuntime();
   const runtimeConnected = useSelectedRuntimeConnected();
   const runtimeFilter = useSelectedRuntimeFilter();
   const liveTargetId = activeRuntime?.runtimeId ?? null;
-  const projectTargetId = projectTarget?.runtimeId ?? null;
-  const targetRuntimeId = liveTargetId ?? projectTargetId;
+  const projectTargetId =
+    activeRuntime?.targetKind === "project" ? activeRuntime.runtimeId : null;
+  const targetRuntimeId = liveTargetId;
   const selectedTargetId = selectedTarget?.id ?? null;
 
   return {
     activeRuntime,
     selectedTarget,
-    projectTarget,
     runtimeConnected,
     runtimeFilter,
     liveTargetId,
@@ -42,6 +39,6 @@ export function usePreferredTarget(): PreferredTargetState {
     targetRuntimeId,
     selectedTargetId,
     supportsOffline: Boolean(projectTargetId),
-    usingProjectTarget: selectedTarget?.kind === "project"
+    usingProjectTarget: activeRuntime?.targetKind === "project"
   };
 }

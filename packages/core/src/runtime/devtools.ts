@@ -25,6 +25,7 @@ import { createFunctionReference } from "./runtime.js";
 import {
   parseCanonicalComponentFunctionName,
   parseComponentScopedIdentifier,
+  quoteIdentifier,
   safeReadRecurringSchedule
 } from "./internal/engines/shared.js";
 
@@ -142,6 +143,7 @@ export function createDevtoolsCommandHandler(
           const id = await runDevtoolsMutation(admin, async (ctx) =>
             ctx.db.insert(payload.table as never, payload.document as never)
           , { origin: "dashboard" });
+          notifyDataMutationScopes(admin, payload.table);
           return { kind: "data.mutate.result", success: true, id };
         } catch (error) {
           return {
@@ -162,6 +164,7 @@ export function createDevtoolsCommandHandler(
             );
             return null;
           }, { origin: "dashboard" });
+          notifyDataMutationScopes(admin, payload.table);
           return {
             kind: "data.mutate.result",
             success: true,
@@ -182,11 +185,73 @@ export function createDevtoolsCommandHandler(
             await ctx.db.delete(payload.table as never, payload.id);
             return null;
           }, { origin: "dashboard" });
+          notifyDataMutationScopes(admin, payload.table);
           return { kind: "data.mutate.result", success: true };
         } catch (error) {
           return {
             kind: "data.mutate.result",
             success: false,
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
+      case "data.export": {
+        try {
+          const requestedTables =
+            payload.tables && payload.tables.length > 0
+              ? payload.tables
+              : deps.schema.tableNames();
+          const tables = await Promise.all(
+            requestedTables.map(async (name) => {
+              const result = await queryTable(driver, name);
+              return {
+                name,
+                rows: result.rows,
+                totalCount: result.totalCount
+              };
+            })
+          );
+          return {
+            kind: "data.export.result",
+            tables
+          };
+        } catch (error) {
+          return {
+            kind: "data.export.result",
+            tables: [],
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
+      case "data.referenceOptions": {
+        const limit = Math.min(Math.max(payload.limit ?? 100, 1), 200);
+        const offset = Math.max(payload.offset ?? 0, 0);
+        try {
+          const result = await queryReferenceOptions(
+            driver,
+            payload.table,
+            payload.search,
+            limit,
+            offset
+          );
+          return {
+            kind: "data.referenceOptions.result",
+            table: payload.table,
+            rows: result.rows,
+            totalCount: result.totalCount,
+            offset,
+            hasMore: offset + result.rows.length < result.totalCount
+          };
+        } catch (error) {
+          return {
+            kind: "data.referenceOptions.result",
+            table: payload.table,
+            rows: [],
+            totalCount: 0,
+            offset,
+            hasMore: false,
             error: error instanceof Error ? error.message : String(error)
           };
         }
@@ -273,9 +338,11 @@ export function createDevtoolsCommandHandler(
         try {
           const updated = await admin.updateScheduledJob({
             id: payload.jobId,
-            schedule: payload.schedule,
             args: payload.args,
-            misfirePolicy: payload.misfirePolicy,
+            ...(payload.schedule ? { schedule: payload.schedule } : {}),
+            ...(payload.misfirePolicy
+              ? { misfirePolicy: payload.misfirePolicy }
+              : {}),
             ...(payload.runAt !== undefined ? { runAt: payload.runAt } : {})
           });
           const jobs = updated ? await listSchedulerJobs(driver) : [];
@@ -517,16 +584,16 @@ async function queryTable(
   totalCount: number;
   cursor?: string;
 }> {
-  let sql = `SELECT _id, _creationTime, _json FROM "${table}"`;
+  let sql = `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(table)}`;
   const params: unknown[] = [];
+  const whereClauses: string[] = [];
 
   if (filters && filters.length > 0) {
-    sql += ` WHERE ${filters
-      .map((filter) => {
-        params.push(normalizeFilterValue(filter));
-        return `json_extract(_json, '$.${filter.field}') ${filterOperatorToSql(filter.operator)} ?`;
-      })
-      .join(" AND ")}`;
+    for (const filter of filters) {
+      whereClauses.push(filterToSql(filter));
+      params.push(normalizeFilterValue(filter));
+    }
+    sql += ` WHERE ${whereClauses.join(" AND ")}`;
   }
 
   sql += " ORDER BY _creationTime DESC";
@@ -545,9 +612,54 @@ async function queryTable(
     ...(JSON.parse(row._json) as Record<string, unknown>)
   }));
   const countRow = await driver.get<{ count: number }>(
-    `SELECT COUNT(*) as count FROM "${table}"`
+    `SELECT COUNT(*) as count FROM ${quoteIdentifier(table)}${
+      whereClauses.length > 0 ? ` WHERE ${whereClauses.join(" AND ")}` : ""
+    }`,
+    params
   );
 
+  return {
+    rows,
+    totalCount: countRow?.count ?? 0
+  };
+}
+
+async function queryReferenceOptions(
+  driver: SyncoreSqlDriver,
+  table: string,
+  search: string | undefined,
+  limit: number,
+  offset: number
+): Promise<{
+  rows: Record<string, unknown>[];
+  totalCount: number;
+}> {
+  let sql = `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(table)}`;
+  const params: unknown[] = [];
+  const trimmedSearch = search?.trim();
+  const whereClause = trimmedSearch
+    ? " WHERE _id LIKE ? OR _json LIKE ?"
+    : "";
+  if (trimmedSearch) {
+    const like = `%${trimmedSearch}%`;
+    params.push(like, like);
+  }
+
+  sql += `${whereClause} ORDER BY _creationTime DESC LIMIT ? OFFSET ?`;
+  const rawRows = await driver.all<{
+    _id: string;
+    _creationTime: number;
+    _json: string;
+  }>(sql, [...params, limit, offset]);
+  const rows = rawRows.map((row) => ({
+    _id: row._id,
+    _creationTime: row._creationTime,
+    ...(JSON.parse(row._json) as Record<string, unknown>)
+  }));
+  const countRow = await driver.get<{ count: number }>(
+    `SELECT COUNT(*) as count FROM ${quoteIdentifier(table)}${whereClause}`,
+    params
+  );
   return {
     rows,
     totalCount: countRow?.count ?? 0
@@ -569,13 +681,16 @@ async function getSchemaTables(
           ? Object.entries(validatorDesc.shape).map(
               ([fieldName, fieldDesc]) => {
                 const field = fieldDesc as {
-                  validator: { kind: string };
+                  validator: { kind: string; tableName?: string };
                   optional: boolean;
                 };
                 return {
                   name: fieldName,
                   type: field.validator.kind,
-                  optional: field.optional
+                  optional: field.optional,
+                  ...(field.validator.kind === "id" && field.validator.tableName
+                    ? { referenceTable: field.validator.tableName }
+                    : {})
                 };
               }
             )
@@ -586,15 +701,10 @@ async function getSchemaTables(
         { name: "_creationTime", type: "number", optional: false }
       );
 
-      let documentCount = 0;
-      try {
-        const countRow = await driver.get<{ count: number }>(
-          `SELECT COUNT(*) as count FROM "${name}"`
-        );
-        documentCount = countRow?.count ?? 0;
-      } catch {
-        documentCount = 0;
-      }
+      const documentCount = await driver
+        .get<{ count: number }>(`SELECT COUNT(*) as count FROM "${name}"`)
+        .then((countRow) => countRow?.count ?? 0)
+        .catch(() => 0);
 
       return {
         name,
@@ -693,7 +803,10 @@ function listFunctions(
       const descriptor: {
         name: string;
         type: "query" | "mutation" | "action";
-        file: string;
+        file?: string;
+        modulePath?: string;
+        namespace?: string;
+        metadataAvailable?: boolean;
         owner?: "root" | "component";
         componentPath?: string;
         visibility?: "public" | "internal";
@@ -702,15 +815,23 @@ function listFunctions(
       } = {
         name,
         type: fn.kind,
-        file: inferFileFromFunctionName(name),
         owner: componentFunction ? "component" : "root",
+        namespace: inferFunctionNamespace(name),
+        metadataAvailable: componentFunction !== null || name.includes(":"),
         ...(componentFunction
           ? {
+              file: `components/${componentFunction.componentPath}`,
+              modulePath: componentFunction.componentPath,
               componentPath: componentFunction.componentPath,
               visibility: componentFunction.visibility,
               localName: componentFunction.localName
             }
-          : {})
+          : inferFileFromFunctionName(name)
+            ? {
+                file: inferFileFromFunctionName(name),
+                modulePath: inferFunctionNamespace(name)
+              }
+            : {})
       };
       const argsDesc = describeValidator(fn.argsValidator);
       if (argsDesc.kind === "object") {
@@ -729,21 +850,64 @@ function inferFileFromFunctionName(name: string): string {
   if (parts.length > 1) {
     return `${parts[0]}.ts`;
   }
-  return "unknown";
+  return "";
+}
+
+function inferFunctionNamespace(name: string): string {
+  const componentFunction = parseCanonicalComponentFunctionName(name);
+  if (componentFunction) {
+    return componentFunction.componentPath;
+  }
+  if (name.includes(":")) {
+    return name.split(":")[0] ?? "root";
+  }
+  if (name.includes("/")) {
+    return name.split("/")[0] ?? "root";
+  }
+  return "root";
 }
 
 function normalizeFilterValue(filter: {
   operator: string;
   value: unknown;
 }): unknown {
+  const value = coerceFilterValue(filter.value);
   switch (filter.operator) {
     case "contains":
-      return `%${String(filter.value)}%`;
+      return `%${String(value)}%`;
     case "startsWith":
-      return `${String(filter.value)}%`;
+      return `${String(value)}%`;
     default:
-      return filter.value;
+      return value;
   }
+}
+
+function filterToSql(filter: { field: string; operator: string }): string {
+  const operator = filterOperatorToSql(filter.operator);
+  if (filter.field === "_id") {
+    return `_id ${operator} ?`;
+  }
+  if (filter.field === "_creationTime") {
+    return `_creationTime ${operator} ?`;
+  }
+  return `json_extract(_json, ${JSON.stringify(`$.${filter.field}`)}) ${operator} ?`;
+}
+
+function coerceFilterValue(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const trimmed = value.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (trimmed === "null") return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
+    const numberValue = Number(trimmed);
+    if (Number.isFinite(numberValue)) {
+      return numberValue;
+    }
+  }
+  return value;
 }
 
 function filterOperatorToSql(operator: string): string {
@@ -855,6 +1019,13 @@ async function runDevtoolsMutation<TResult>(
     return admin.runDevtoolsMutation(callback as never, meta);
   }
 
+function notifyDataMutationScopes(
+  admin: SyncoreRuntimeAdmin<SyncoreDataModel>,
+  tableName: string
+): void {
+  admin.notifyDevtoolsScopes(["schema.tables", `table:${tableName}`]);
+}
+
 function scopesForSubscription(
   payload: SyncoreDevtoolsSubscriptionPayload,
   sql?: DevtoolsSqlSupport
@@ -908,7 +1079,7 @@ function requireDevtoolsSqlSupport(
   sql?: DevtoolsSqlSupport
 ): DevtoolsSqlSupport {
   if (!sql) {
-    throw new Error("SQL devtools are only available in Node-hosted runtimes.");
+    throw new Error("SQL Console is not available for this runtime.");
   }
   return sql;
 }

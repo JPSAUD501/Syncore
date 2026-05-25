@@ -18,12 +18,15 @@
   /* Queries */
   const habitsStore = createQueryStore(api.habits.listHabits);
   const completionsStore = createQueryStore(api.habits.listCompletions);
+  const dashboardStore = createQueryStore(api.habits.dashboard);
   const runtimeStatusStore = createSyncoreStatusStore();
 
   /* Mutations */
   const createHabit = createMutation(api.habits.createHabit);
   const toggleCompletion = createMutation(api.habits.toggleCompletion);
   const archiveHabit = createMutation(api.habits.archiveHabit);
+  const renameHabit = createMutation(api.habits.renameHabit);
+  const seedDemo = createMutation(api.habits.seedDemo);
 
   /* Form state */
   let showForm = false;
@@ -73,6 +76,12 @@
     showForm = false;
   }
 
+  async function handleRename(id: string, currentName: string) {
+    const nextName = window.prompt("Rename habit", currentName)?.trim();
+    if (!nextName || nextName === currentName) return;
+    await renameHabit({ id, name: nextName });
+  }
+
   /* Compute current streak for a habit */
   function computeStreak(habitId: string, completionSet: Set<string>): number {
     let streak = 0;
@@ -100,9 +109,11 @@
   /* Reactive bindings */
   $: habitState = $habitsStore;
   $: completionState = $completionsStore;
+  $: dashboardState = $dashboardStore;
   $: runtimeStatus = $runtimeStatusStore;
   $: habits = habitState.data ?? [];
   $: completions = completionState.data ?? [];
+  $: dashboard = dashboardState.data;
   $: loading = habitState.status === "loading" || runtimeStatus.kind !== "ready";
 
   /* Build a set of "habitId:date" for quick lookups */
@@ -134,6 +145,9 @@
       <span class="add-icon">{showForm ? "\u2715" : "+"}</span>
       <span>{showForm ? "Cancel" : "New habit"}</span>
     </button>
+    <button class="demo-btn" on:click={() => void seedDemo()}>
+      Demo data
+    </button>
   </header>
 
   <!-- Stats row -->
@@ -143,12 +157,16 @@
       <span class="stat-label">Today</span>
     </div>
     <div class="stat-card">
-      <span class="stat-value">{totalCompletions}</span>
+      <span class="stat-value">{dashboard?.totalCompletions ?? totalCompletions}</span>
       <span class="stat-label">Total check-ins</span>
     </div>
     <div class="stat-card">
       <span class="stat-value">{bestStreak}</span>
       <span class="stat-label">Best streak</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{dashboard?.activeDays ?? 0}</span>
+      <span class="stat-label">Active days</span>
     </div>
   </div>
 
@@ -179,6 +197,7 @@
               class="color-btn {draftColor === color ? 'color-btn--active' : ''}"
               style="background: {color}"
               on:click={() => (draftColor = color)}
+              aria-label="Use color {color}"
             ></button>
           {/each}
         </div>
@@ -213,6 +232,11 @@
               on:click={() => void archiveHabit({ id: habit._id })}
               title="Archive habit"
             >&times;</button>
+            <button
+              class="rename-btn"
+              on:click={() => void handleRename(habit._id, habit.name)}
+              title="Rename habit"
+            >Edit</button>
           </div>
 
           <!-- 7-day grid -->
@@ -241,6 +265,7 @@
       <p class="empty-icon">/</p>
       <p class="empty-title">No habits yet</p>
       <p class="empty-desc">Create your first habit to start tracking daily progress. Everything stays local.</p>
+      <button class="save-btn" on:click={() => void seedDemo()}>Load demo habits</button>
     </div>
   {/if}
 
@@ -312,6 +337,22 @@
     transition: background 0.15s;
   }
 
+  .demo-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: #E6E1D6;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .demo-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
   .add-btn:hover {
     background: rgba(93, 228, 199, 0.15);
   }
@@ -324,7 +365,7 @@
   /* Stats */
   .stats-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     margin-bottom: 24px;
   }
@@ -514,6 +555,23 @@
     transition: color 0.15s;
   }
 
+  .rename-btn {
+    border: none;
+    background: rgba(255, 255, 255, 0.04);
+    color: #6B7280;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1;
+    font-family: inherit;
+  }
+
+  .rename-btn:hover {
+    color: #5DE4C7;
+  }
+
   .archive-btn:hover {
     color: #E06C75;
   }
@@ -628,5 +686,11 @@
 
   .dot {
     opacity: 0.5;
+  }
+
+  @media (max-width: 640px) {
+    .stats-row {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
 </style>

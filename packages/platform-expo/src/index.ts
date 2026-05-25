@@ -1,3 +1,5 @@
+/// <reference path="./assets.d.ts" />
+
 import { Directory, File, Paths } from "expo-file-system";
 import {
   defaultDatabaseDirectory,
@@ -21,7 +23,8 @@ import {
 } from "@syncore/core";
 import {
   BroadcastChannelExternalChangeSignal,
-  createDefaultSyncChannelName
+  createDefaultSyncChannelName,
+  createWebSyncoreRuntime
 } from "@syncore/platform-web";
 
 export type ExpoSyncoreSchema<
@@ -78,6 +81,12 @@ export interface CreateExpoRuntimeOptions<
 
   /** Optional applier used to reconcile browser-side external changes. */
   externalChangeApplier?: SyncoreExternalChangeApplier;
+
+  /** Optional direct SQL.js wasm URL used when the Expo app runs on web. */
+  wasmUrl?: string;
+
+  /** Optional SQL.js support file resolver used when the Expo app runs on web. */
+  locateFile?: (fileName: string) => string;
 }
 
 /**
@@ -194,8 +203,10 @@ export function createExpoSyncoreBootstrap<
     ReturnType<SyncoreRuntime<TSchema>["createClient"]>
   > | null = null;
 
-  const ensureRuntime = () => {
-    runtime ??= createExpoSyncoreRuntime(options);
+  const ensureRuntime = async () => {
+    runtime ??= isWebEnvironment()
+      ? await createExpoWebSyncoreRuntime(options)
+      : createExpoSyncoreRuntime(options);
     return runtime;
   };
 
@@ -207,10 +218,9 @@ export function createExpoSyncoreBootstrap<
     },
     async getClient() {
       if (!started) {
-        const activeRuntime = ensureRuntime();
-        started = activeRuntime
-          .start()
-          .then(() => activeRuntime.createClient());
+        started = ensureRuntime().then((activeRuntime) =>
+          activeRuntime.start().then(() => activeRuntime.createClient())
+        );
       }
       return started;
     },
@@ -458,4 +468,39 @@ function normalizeBinary(data: StorageWriteInput["data"]): Uint8Array {
     return data;
   }
   return new Uint8Array(data);
+}
+
+async function createExpoWebSyncoreRuntime<TSchema extends ExpoSyncoreSchema>(
+  options: CreateExpoRuntimeOptions<TSchema>
+): Promise<SyncoreRuntime<TSchema>> {
+  const wasmUrl =
+    options.wasmUrl ??
+    (options.locateFile
+      ? undefined
+      : await resolveDefaultExpoWebSqlJsWasmUrl());
+
+  return createWebSyncoreRuntime({
+    schema: options.schema,
+    functions: options.functions,
+    ...(options.components ? { components: options.components } : {}),
+    ...(options.capabilities ? { capabilities: options.capabilities } : {}),
+    databaseName: options.databaseName ?? "syncore.db",
+    storageNamespace: options.storageDirectoryName ?? "syncore-storage",
+    ...(wasmUrl ? { wasmUrl } : {}),
+    ...(options.locateFile ? { locateFile: options.locateFile } : {}),
+    platform: options.platform ?? "expo-web",
+    ...(options.devtools !== undefined ? { devtools: options.devtools } : {}),
+    ...(options.scheduler ? { scheduler: options.scheduler } : {})
+  });
+}
+
+async function resolveDefaultExpoWebSqlJsWasmUrl(): Promise<
+  string | undefined
+> {
+  const module = await import("./web-sqljs-wasm.js");
+  return module.resolveDefaultExpoWebSqlJsWasmUrl();
+}
+
+function isWebEnvironment(): boolean {
+  return typeof window !== "undefined" && typeof document !== "undefined";
 }

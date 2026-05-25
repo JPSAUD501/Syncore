@@ -19,6 +19,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { getDocumentId } from "@/lib/dataValue";
+import {
+  createReferenceOptions,
+  type ReferenceFieldOptions
+} from "@/lib/dataReferences";
 import {
   ConfirmActionDialog,
   DataTable,
@@ -70,6 +75,8 @@ function DataPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState<DataFilter[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [pendingSelectedRowId, setPendingSelectedRowId] = useState<string | null>(null);
+  const [panelDocId, setPanelDocId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<
     "insert" | "patch" | "duplicate"
@@ -82,12 +89,17 @@ function DataPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteManyOpen, setConfirmDeleteManyOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [databaseImportOpen, setDatabaseImportOpen] = useState(false);
   const [importSeedText, setImportSeedText] = useState<string | undefined>(
     undefined
   );
   const [mobileTablesOpen, setMobileTablesOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
+  const [showMissingReferencesOnly, setShowMissingReferencesOnly] = useState(false);
+  const [referenceRowsByTable, setReferenceRowsByTable] = useState<
+    Record<string, Record<string, unknown>[]>
+  >({});
 
   /* ---------------------------------------------------------------- */
   /*  Reactive schema fetch                                            */
@@ -106,6 +118,27 @@ function DataPage() {
     [schemaSubscription.data]
   );
 
+  const currentSchema = useMemo(
+    () => tableList.find((t) => t.name === selectedTable) ?? null,
+    [tableList, selectedTable]
+  );
+
+  const referenceFields = useMemo<Record<string, ReferenceFieldOptions>>(() => {
+    const entries =
+      currentSchema?.fields
+        .map((field) =>
+          createReferenceOptions(
+            field,
+            field.referenceTable
+              ? (referenceRowsByTable[field.referenceTable] ?? [])
+              : []
+          )
+        )
+        .filter((entry): entry is ReferenceFieldOptions => Boolean(entry)) ??
+      [];
+    return Object.fromEntries(entries.map((entry) => [entry.field.name, entry]));
+  }, [currentSchema, referenceRowsByTable]);
+
   // Auto-select first table
   useEffect(() => {
     if (tableList.length > 0 && !selectedTable) {
@@ -118,6 +151,58 @@ function DataPage() {
       setActivePanelTab("data");
     }
   }, [selectedTable]);
+
+  useEffect(() => {
+    if (!targetRuntimeId || !currentSchema) {
+      setReferenceRowsByTable({});
+      return;
+    }
+    const referenceTableNames = Array.from(
+      new Set(
+        currentSchema.fields
+          .map((field) => field.referenceTable)
+          .filter((tableName): tableName is string => Boolean(tableName))
+      )
+    );
+    if (referenceTableNames.length === 0) {
+      setReferenceRowsByTable({});
+      return;
+    }
+
+    let cancelled = false;
+    void Promise.all(
+      referenceTableNames.map(async (tableName) => {
+        const result = await sendRequest(
+          {
+            kind: "data.referenceOptions",
+            table: tableName,
+            limit: 100,
+            offset: 0
+          },
+          { targetRuntimeId }
+        );
+        if (result.kind !== "data.referenceOptions.result" || result.error) {
+          return [tableName, []] as const;
+        }
+        return [tableName, result.rows] as const;
+      })
+    )
+      .then((entries) => {
+        if (cancelled) {
+          return;
+        }
+        setReferenceRowsByTable(Object.fromEntries(entries));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setReferenceRowsByTable({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSchema, targetRuntimeId]);
 
   /* ---------------------------------------------------------------- */
   /*  Fetch table data (reactive via runtime events)                   */
@@ -224,6 +309,7 @@ function DataPage() {
       options?: { silent?: boolean }
     ) => {
       if (!targetRuntimeId || !selectedTable) return;
+      validateDocumentReferences(referenceFields, document);
       const res = await sendRequest({
         kind: "data.insert",
         table: selectedTable,
@@ -240,12 +326,13 @@ function DataPage() {
         });
       }
     },
-    [pushToast, selectedTable, targetRuntimeId]
+    [pushToast, referenceFields, selectedTable, targetRuntimeId]
   );
 
   const handlePatch = useCallback(
     async (id: string, fields: Record<string, unknown>) => {
       if (!targetRuntimeId || !selectedTable) return;
+      validateDocumentReferences(referenceFields, fields);
       const res = await sendRequest({
         kind: "data.patch",
         table: selectedTable,
@@ -261,20 +348,22 @@ function DataPage() {
         description: `${id} was updated.`
       });
     },
-    [pushToast, selectedTable, targetRuntimeId]
+    [pushToast, referenceFields, selectedTable, targetRuntimeId]
   );
 
   const handleFieldEdit = useCallback(
     async (id: string, field: string, value: unknown) => {
+      validateReferenceValue(referenceFields[field], value);
       await handlePatch(id, { [field]: value });
       setFieldEditState(null);
     },
-    [handlePatch]
+    [handlePatch, referenceFields]
   );
 
   const handleImport = useCallback(
     async (documents: Record<string, unknown>[]) => {
       for (const document of documents) {
+        validateDocumentReferences(referenceFields, document);
         await handleInsert(document, { silent: true });
       }
       pushToast({
@@ -283,20 +372,12 @@ function DataPage() {
         description: `${documents.length} document${documents.length === 1 ? "" : "s"} imported into ${selectedTable}.`
       });
     },
-    [handleInsert, pushToast, selectedTable]
+    [handleInsert, pushToast, referenceFields, selectedTable]
   );
 
   const handleExport = useCallback(() => {
     if (!selectedTable) return;
-    const blob = new Blob([JSON.stringify(rows, null, 2)], {
-      type: "application/json"
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${selectedTable}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadJson(rows, `${selectedTable}.json`);
     pushToast({
       tone: "info",
       title: "Export ready",
@@ -310,21 +391,77 @@ function DataPage() {
     const selectedRows = rows.filter((row) =>
       selectedSet.has(getDocumentId(row))
     );
-    const blob = new Blob([JSON.stringify(selectedRows, null, 2)], {
-      type: "application/json"
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${selectedTable}-selection.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadJson(selectedRows, `${selectedTable}-selection.json`);
     pushToast({
       tone: "info",
       title: "Selection exported",
       description: `${selectedRows.length} selected row${selectedRows.length === 1 ? "" : "s"} exported.`
     });
   }, [pushToast, rows, selectedRowIds, selectedTable]);
+
+  const handleExportDatabase = useCallback(async () => {
+    if (!targetRuntimeId || tableList.length === 0) return;
+    const res = await sendRequest(
+      {
+        kind: "data.export",
+        tables: tableList.map((table) => table.name)
+      },
+      { targetRuntimeId }
+    );
+    if (res.kind !== "data.export.result") {
+      throw new Error("Unexpected export response.");
+    }
+    if (res.error) {
+      throw new Error(res.error);
+    }
+
+    const payload = {
+      format: "syncore.devtools.export.v1",
+      exportedAt: new Date().toISOString(),
+      tables: res.tables
+    };
+    downloadJson(payload, "syncore-database-export.json");
+    const totalRows = res.tables.reduce(
+      (total, table) => total + table.rows.length,
+      0
+    );
+    pushToast({
+      tone: "info",
+      title: "Database export ready",
+      description: `${res.tables.length} table${res.tables.length === 1 ? "" : "s"} and ${totalRows} row${totalRows === 1 ? "" : "s"} exported.`
+    });
+  }, [pushToast, tableList, targetRuntimeId]);
+
+  const handleImportDatabase = useCallback(
+    async (tables: Array<{ name: string; rows: Record<string, unknown>[] }>) => {
+      if (!targetRuntimeId) return;
+      let importedRows = 0;
+      for (const table of tables) {
+        for (const row of table.rows) {
+          const res = await sendRequest(
+            {
+              kind: "data.insert",
+              table: table.name,
+              document: stripSystemFields(row)
+            },
+            { targetRuntimeId }
+          );
+          if (res.kind === "data.mutate.result" && !res.success) {
+            throw new Error(
+              res.error ?? `Failed to import into ${table.name}.`
+            );
+          }
+          importedRows += 1;
+        }
+      }
+      pushToast({
+        tone: "success",
+        title: "Database import complete",
+        description: `${importedRows} row${importedRows === 1 ? "" : "s"} imported into ${tables.length} table${tables.length === 1 ? "" : "s"}.`
+      });
+    },
+    [pushToast, targetRuntimeId]
+  );
 
   const handleDuplicateMany = useCallback(async () => {
     const selectedSet = new Set(selectedRowIds);
@@ -357,31 +494,32 @@ function DataPage() {
   /*  Derived                                                          */
   /* ---------------------------------------------------------------- */
 
-  const currentSchema = useMemo(
-    () => tableList.find((t) => t.name === selectedTable) ?? null,
-    [tableList, selectedTable]
-  );
-
-  const selectedDocId = useMemo(
-    () => (selectedRowIds.length === 1 ? selectedRowIds[0] ?? null : null),
-    [selectedRowIds]
-  );
+  const selectedDocId = panelDocId;
 
   const liveSelectedDoc = useMemo(() => {
-    if (!selectedDocId) return null;
-    return rows.find((row) => getDocumentId(row) === selectedDocId) ?? null;
-  }, [rows, selectedDocId]);
+    if (!panelDocId) return null;
+    return rows.find((row) => getDocumentId(row) === panelDocId) ?? null;
+  }, [rows, panelDocId]);
 
   useEffect(() => {
-    if (selectedDocId && !liveSelectedDoc) {
-      setSelectedRowIds((current) => current.filter((id) => id !== selectedDocId));
+    if (panelDocId && !liveSelectedDoc) {
+      setPanelDocId(null);
     }
-  }, [liveSelectedDoc, selectedDocId]);
+  }, [liveSelectedDoc, panelDocId]);
 
   useEffect(() => {
     const liveIds = new Set(rows.map((row) => getDocumentId(row)));
     setSelectedRowIds((current) => current.filter((id) => liveIds.has(id)));
   }, [rows]);
+
+  // When a pending reference-navigation row appears, open it in the panel
+  useEffect(() => {
+    if (!pendingSelectedRowId) return;
+    const found = rows.some((row) => getDocumentId(row) === pendingSelectedRowId);
+    if (!found) return;
+    setPanelDocId(pendingSelectedRowId);
+    setPendingSelectedRowId(null);
+  }, [pendingSelectedRowId, rows]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -481,6 +619,15 @@ function DataPage() {
     return [];
   }, [currentSchema, rows]);
 
+  const rowsWithMissingReferences = useMemo(
+    () =>
+      rows.filter((row) => hasMissingReference(row, referenceFields)),
+    [referenceFields, rows]
+  );
+  const visibleRows = showMissingReferencesOnly
+    ? rowsWithMissingReferences
+    : rows;
+
   const filteredTables = useMemo(
     () =>
       tableSearch
@@ -519,6 +666,8 @@ function DataPage() {
           onSelectTable={(tableName) => {
             setSelectedTable(tableName);
             setSelectedRowIds([]);
+            setPanelDocId(null);
+            setPendingSelectedRowId(null);
             setFilters([]);
             setMobileTablesOpen(false);
           }}
@@ -552,7 +701,8 @@ function DataPage() {
           <>
             {/* Toolbar */}
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              {/* Table name — hidden on mobile since the row above already shows it */}
+              <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
                 <h3 className="truncate font-mono text-[13px] font-semibold text-text-primary">
                   {selectedTable}
                 </h3>
@@ -566,7 +716,7 @@ function DataPage() {
                   />
                 )}
                 {dataError && (
-                  <Badge variant="destructive" className="max-w-[22rem]">
+                  <Badge variant="destructive" className="max-w-88">
                     <span className="truncate">{dataError}</span>
                   </Badge>
                 )}
@@ -580,7 +730,24 @@ function DataPage() {
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-1 overflow-x-auto">
+              {/* Mobile: compact status — table name shown in the row above */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:hidden">
+                <Badge variant="outline" className="text-[10px]">
+                  {totalCount} rows
+                </Badge>
+                {loading && (
+                  <Loader2
+                    size={12}
+                    className="animate-spin text-text-tertiary"
+                  />
+                )}
+                {dataError && (
+                  <Badge variant="destructive" className="max-w-36">
+                    <span className="truncate">{dataError}</span>
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
                   size="xs"
@@ -604,7 +771,7 @@ function DataPage() {
                   }}
                   disabled={!selectedTable}
                 >
-                  <Upload size={11} />
+                  <Download size={11} />
                   Import
                 </Button>
                 <Button
@@ -614,18 +781,48 @@ function DataPage() {
                   onClick={handleExport}
                   disabled={rows.length === 0}
                 >
-                  <Download size={11} />
+                  <Upload size={11} />
                   Export
+                </Button>
+
+                <div className="mx-1 h-4 w-px bg-border" />
+
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="gap-1"
+                  onClick={() => setDatabaseImportOpen(true)}
+                  disabled={!targetRuntimeId}
+                  title="Import all tables from a database export file"
+                >
+                  <Database size={11} />
+                  <Download size={11} />
+                  <span className="hidden md:inline">Import DB</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="xs"
-                  className="gap-1 hidden sm:inline-flex"
-                  onClick={() => setShortcutsOpen(true)}
+                  className="gap-1"
+                  onClick={() => {
+                    void handleExportDatabase().catch((err) => {
+                      pushToast({
+                        tone: "error",
+                        title: "Database export failed",
+                        description:
+                          err instanceof Error ? err.message : "Unknown error"
+                      });
+                    });
+                  }}
+                  disabled={!targetRuntimeId || tableList.length === 0}
+                  title="Export all tables as a single file"
                 >
-                  <Keyboard size={11} />
-                  Shortcuts
+                  <Database size={11} />
+                  <Upload size={11} />
+                  <span className="hidden md:inline">Export DB</span>
                 </Button>
+
+                <div className="mx-1 h-4 w-px bg-border" />
+
                 <Button
                   variant="ghost"
                   size="xs"
@@ -653,6 +850,14 @@ function DataPage() {
                 >
                   <CopyPlus size={11} />
                   Duplicate
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="gap-1 hidden sm:inline-flex"
+                  onClick={() => setShortcutsOpen(true)}
+                >
+                  <Keyboard size={11} />
                 </Button>
               </div>
             </div>
@@ -708,6 +913,25 @@ function DataPage() {
                 filters={filters}
                 onFiltersChange={setFilters}
               />
+              {Object.keys(referenceFields).length > 0 && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Button
+                    variant={showMissingReferencesOnly ? "secondary" : "ghost"}
+                    size="xs"
+                    onClick={() =>
+                      setShowMissingReferencesOnly((current) => !current)
+                    }
+                    disabled={rowsWithMissingReferences.length === 0}
+                  >
+                    Missing refs
+                    {rowsWithMissingReferences.length > 0 && (
+                      <Badge variant="destructive" className="ml-1 px-1 py-0 text-[9px]">
+                        {rowsWithMissingReferences.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="mx-3 mb-3 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-base">
@@ -745,12 +969,14 @@ function DataPage() {
                 >
                   <div className="flex h-full">
                     <div className="min-w-0 flex-1 p-2">
-                      {rows.length === 0 ? (
+                      {visibleRows.length === 0 ? (
                         <EmptyState
                           icon={Database}
                           title="No data"
                           description={
-                            filters.length > 0
+                            showMissingReferencesOnly
+                              ? "No rows have missing references."
+                              : filters.length > 0
                               ? "No rows match the current filters."
                               : "This table is empty."
                           }
@@ -758,9 +984,9 @@ function DataPage() {
                         />
                       ) : (
                         <DataTable
-                          key={`${selectedTable}:${rows.length}`}
+                          key={selectedTable}
                           columns={columns}
-                          rows={rows}
+                          rows={visibleRows}
                           selectedRowId={selectedDocId}
                           selectedRowIds={selectedRowIds}
                           onToggleRowSelection={(rowId) => {
@@ -784,28 +1010,42 @@ function DataPage() {
                           onCellEdit={(rowId, field, value) => {
                             void handleFieldEdit(rowId, field, value);
                           }}
+                          onOpenReference={(tableName, id) => {
+                            setSelectedTable(tableName);
+                            setFilters([{ field: "_id", operator: "eq", value: id }]);
+                            setSelectedRowIds([]);
+                            setPanelDocId(null);
+                            setPendingSelectedRowId(id);
+                            setShowMissingReferencesOnly(false);
+                          }}
+                          onRowClick={(rowId) => setPanelDocId(rowId)}
+                          referenceFields={referenceFields}
                           className="h-full rounded-md border border-border bg-bg-base"
                         />
                       )}
                     </div>
 
                     {liveSelectedDoc && (
-                      <DocumentPanel
-                        document={liveSelectedDoc}
-                        onClose={() => setSelectedRowIds([])}
-                        onEditField={(id, field, value) =>
-                          setFieldEditState({ id, field, value })
-                        }
-                        onEditDocument={() => {
-                          setEditorMode("patch");
-                          setEditorOpen(true);
-                        }}
-                        onDuplicate={() => {
-                          setEditorMode("duplicate");
-                          setEditorOpen(true);
-                        }}
-                        onDelete={(id) => setConfirmDeleteId(id)}
-                      />
+                      <div className="fixed inset-0 z-50 overflow-y-auto md:contents">
+                        <DocumentPanel
+                          document={liveSelectedDoc}
+                          onClose={() => setPanelDocId(null)}
+                          onEditField={(id, field, value) =>
+                            setFieldEditState({ id, field, value })
+                          }
+                          onEditDocument={() => {
+                            setEditorMode("patch");
+                            setEditorOpen(true);
+                          }}
+                          onDuplicate={() => {
+                            setEditorMode("duplicate");
+                            setEditorOpen(true);
+                          }}
+                          onDelete={(id) => setConfirmDeleteId(id)}
+                          referenceFields={referenceFields}
+                          className="w-full border-l-0 md:w-96 md:border-l"
+                        />
+                      </div>
                     )}
                   </div>
                 </TabsContent>
@@ -895,6 +1135,12 @@ function DataPage() {
         tableName={selectedTable}
         initialText={importSeedText}
         onImport={handleImport}
+      />
+
+      <ImportDatabaseDialog
+        open={databaseImportOpen}
+        onOpenChange={setDatabaseImportOpen}
+        onImport={handleImportDatabase}
       />
 
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
@@ -1013,6 +1259,7 @@ function DataPage() {
             onSelectTable={(tableName) => {
               setSelectedTable(tableName);
               setSelectedRowIds([]);
+              setPanelDocId(null);
               setFilters([]);
               setMobileTablesOpen(false);
             }}
@@ -1094,8 +1341,8 @@ function TableDirectory({
                 {targetAvailable
                   ? "No tables found"
                   : usingProjectTarget
-                    ? "Project target unavailable"
-                    : "Connect a runtime or configure a project target"}
+                    ? "Selected Project Target runtime unavailable"
+                    : "Connect a runtime"}
               </p>
             </div>
           ) : (
@@ -1118,29 +1365,182 @@ function TableDirectory({
                     <div className="truncate font-mono text-[12px]">
                       {table.name}
                     </div>
-                    <div className="text-[10px] text-text-tertiary">
-                      {table.documentCount} row
-                      {table.documentCount === 1 ? "" : "s"}
-                    </div>
                   </div>
-                  <Badge
-                    variant={isActive ? "outline" : "secondary"}
-                    className="shrink-0 px-1.5 py-0 text-[9px]"
-                  >
+                  <span className="shrink-0 text-[10px] text-text-tertiary tabular-nums">
                     {table.documentCount}
-                  </Badge>
+                  </span>
                 </button>
               );
             })
           )}
         </div>
       </ScrollArea>
-
-      <div className="border-t border-border px-3 py-2 text-[11px] text-text-tertiary">
-        {tableCount} tables
-      </div>
     </div>
   );
+}
+
+function ImportDatabaseDialog({
+  open,
+  onOpenChange,
+  onImport
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onImport: (
+    tables: Array<{ name: string; rows: Record<string, unknown>[] }>
+  ) => Promise<void>;
+}) {
+  const [text, setText] = useState(
+    '{\n  "format": "syncore.devtools.export.v1",\n  "tables": []\n}'
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setText('{\n  "format": "syncore.devtools.export.v1",\n  "tables": []\n}');
+      setError(null);
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const handleImport = async () => {
+    setError(null);
+    let tables: Array<{ name: string; rows: Record<string, unknown>[] }>;
+    try {
+      tables = parseDatabaseImportText(text);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid import payload.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await onImport(tables);
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Import Database</DialogTitle>
+          <DialogDescription>
+            Paste a Syncore database export or a JSON object whose keys are table
+            names and values are document arrays.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="rounded-md border border-border bg-bg-base/70 p-2">
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              spellCheck={false}
+              className="min-h-80 w-full resize-y bg-transparent px-2 py-1 font-mono text-[12px] leading-6 text-text-code outline-none placeholder:text-text-tertiary"
+              placeholder='{
+  "tasks": [{ "text": "Ship" }],
+  "projects": [{ "name": "Syncore" }]
+}'
+            />
+          </div>
+
+          <div className="rounded-md border border-accent/15 bg-accent/5 px-3 py-2 text-[11px] text-text-secondary">
+            System fields like{" "}
+            <span className="font-mono text-text-primary">_id</span> and{" "}
+            <span className="font-mono text-text-primary">_creationTime</span>{" "}
+            are ignored on import, matching single-table imports.
+          </div>
+
+          {error && (
+            <div className="rounded-md border border-error/20 bg-error/5 px-3 py-2 text-[11px] text-error">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button onClick={() => void handleImport()} disabled={submitting}>
+            {submitting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Upload size={14} />
+            )}
+            Import database
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function parseDatabaseImportText(
+  text: string
+): Array<{ name: string; rows: Record<string, unknown>[] }> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("Paste a database export or table map to import.");
+  }
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Database import payload must be a JSON object.");
+  }
+  const payload = parsed as Record<string, unknown>;
+
+  if (Array.isArray(payload.tables)) {
+    return payload.tables.map((entry, index) => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        throw new Error(`tables[${index}] must be an object.`);
+      }
+      const table = entry as Record<string, unknown>;
+      if (typeof table.name !== "string" || !table.name.trim()) {
+        throw new Error(`tables[${index}].name must be a table name.`);
+      }
+      if (!Array.isArray(table.rows)) {
+        throw new Error(`tables[${index}].rows must be an array.`);
+      }
+      return {
+        name: table.name,
+        rows: table.rows.map((row, rowIndex) =>
+          assertImportDocument(row, `${table.name}[${rowIndex}]`)
+        )
+      };
+    });
+  }
+
+  return Object.entries(payload).map(([name, value]) => {
+    if (!Array.isArray(value)) {
+      throw new Error(`${name} must be an array of documents.`);
+    }
+    return {
+      name,
+      rows: value.map((row, rowIndex) =>
+        assertImportDocument(row, `${name}[${rowIndex}]`)
+      )
+    };
+  });
+}
+
+function assertImportDocument(
+  value: unknown,
+  label: string
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+  return value as Record<string, unknown>;
 }
 
 function stripSystemFields(document: Record<string, unknown>) {
@@ -1150,16 +1550,16 @@ function stripSystemFields(document: Record<string, unknown>) {
   return next;
 }
 
-function getDocumentId(document: Record<string, unknown>): string {
-  const candidate = document._id ?? document.id;
-  if (
-    typeof candidate === "string" ||
-    typeof candidate === "number" ||
-    typeof candidate === "bigint"
-  ) {
-    return String(candidate);
-  }
-  return "unknown";
+function downloadJson(value: unknown, filename: string): void {
+  const blob = new Blob([JSON.stringify(value, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function shallowEqualRows(
@@ -1197,4 +1597,59 @@ function stringifyEditableValue(value: unknown): string {
     return "";
   }
   return JSON.stringify(value);
+}
+
+function validateReferenceValue(
+  reference: ReferenceFieldOptions | undefined,
+  value: unknown
+): void {
+  if (!reference) {
+    return;
+  }
+  if (
+    (value === undefined || value === null || value === "") &&
+    reference.field.optional
+  ) {
+    return;
+  }
+  if (typeof value !== "string") {
+    throw new Error(
+      `${reference.field.name} must reference a row from ${reference.tableName}.`
+    );
+  }
+  if (!reference.options.some((option) => option.id === value)) {
+    throw new Error(
+      `${value} does not exist in referenced table ${reference.tableName}.`
+    );
+  }
+}
+
+function validateDocumentReferences(
+  references: Record<string, ReferenceFieldOptions>,
+  document: Record<string, unknown>
+): void {
+  for (const [field, reference] of Object.entries(references)) {
+    if (field in document) {
+      validateReferenceValue(reference, document[field]);
+    }
+  }
+}
+
+function hasMissingReference(
+  row: Record<string, unknown>,
+  references: Record<string, ReferenceFieldOptions>
+): boolean {
+  return Object.entries(references).some(([field, reference]) => {
+    const value = row[field];
+    if (
+      (value === undefined || value === null || value === "") &&
+      reference.field.optional
+    ) {
+      return false;
+    }
+    return (
+      typeof value === "string" &&
+      !reference.options.some((option) => option.id === value)
+    );
+  });
 }
