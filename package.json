@@ -56,6 +56,8 @@
     "jsdom": "^29.1.1",
     "playwright": "^1.60.0",
     "prettier": "^3.8.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "tailwindcss": "^4.3.0",
     "tsdown": "^0.22.0",
     "tsx": "^4.22.3",
