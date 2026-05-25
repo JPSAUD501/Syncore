@@ -24,13 +24,9 @@ export function getSyncoreWorkerUrl(): string;
 // @public
 export function registerSyncoreServiceWorker(options?: SyncoreNextOptions): Promise<SyncoreServiceWorkerRegistration | null>;
 
-// @public
-export function resolveSqlJsWasmUrl(options?: SyncoreNextOptions): string;
-
 // @public (undocumented)
 export interface SyncoreNextOptions {
     serviceWorkerUrl?: string;
-    wasmAssetUrl?: string;
     workerAssetUrl?: string;
 }
 

@@ -5,7 +5,6 @@ import {
   createNodeSyncoreRuntime
 } from "syncorejs/node";
 import schema from "../syncore/_generated/schema.js";
-import { resolvedComponents } from "../syncore/_generated/components.js";
 import { functions } from "../syncore/_generated/functions.js";
 
 const rendererHtmlPath = path.resolve(
@@ -29,7 +28,6 @@ const runtime = createNodeSyncoreRuntime({
   storageDirectory: path.join(userDataDirectory, "storage"),
   schema,
   functions,
-  components: resolvedComponents,
   platform: "electron-main"
 });
 

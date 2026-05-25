@@ -24,9 +24,6 @@ export interface SyncoreNextOptions {
   /** Optional service worker URL used to cache the application shell. */
   serviceWorkerUrl?: string;
 
-  /** Optional URL for the `sql.js` wasm asset. */
-  wasmAssetUrl?: string;
-
   /** Optional URL for the worker asset used by the local Syncore runtime. */
   workerAssetUrl?: string;
 }
@@ -60,13 +57,6 @@ export async function registerSyncoreServiceWorker(
     unregister: () => registration.unregister(),
     update: () => registration.update()
   };
-}
-
-/**
- * Resolve the public URL used by SQL.js to load its wasm file in a Next app.
- */
-export function resolveSqlJsWasmUrl(options?: SyncoreNextOptions): string {
-  return options?.wasmAssetUrl ?? "/sql-wasm.wasm";
 }
 
 /**

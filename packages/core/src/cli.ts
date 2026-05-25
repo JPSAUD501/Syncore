@@ -735,16 +735,12 @@ export const create = mutation({
 
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/_generated/schema";
-import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
-  functions,
-  components: resolvedComponents,
-  databaseName: "syncore-app",
-  persistenceMode: "opfs"
+  functions
 });
 `
         },
@@ -769,15 +765,11 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
         path: path.join("lib", "syncore.ts"),
         content: `import { createExpoSyncoreBootstrap } from "syncorejs/expo";
 import schema from "../syncore/_generated/schema";
-import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 export const syncore = createExpoSyncoreBootstrap({
   schema,
-  functions,
-  components: resolvedComponents,
-  databaseName: "syncore-app.db",
-  storageDirectoryName: "syncore-app-storage"
+  functions
 });
 `
       });
@@ -790,18 +782,12 @@ export const syncore = createExpoSyncoreBootstrap({
 
 import { createBrowserWorkerRuntime } from "syncorejs/browser";
 import schema from "../syncore/_generated/schema";
-import { resolvedComponents } from "../syncore/_generated/components";
 import { functions } from "../syncore/_generated/functions";
 
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
-  functions,
-  components: resolvedComponents,
-  databaseName: "syncore-app",
-  persistenceDatabaseName: "syncore-app",
-  locateFile: () => "/sql-wasm.wasm",
-  platform: "browser-worker"
+  functions
 });
 `
         },
@@ -835,7 +821,6 @@ export function AppSyncoreProvider({ children }: { children: ReactNode }) {
 import { withNodeSyncoreClient } from "syncorejs/node";
 import { api } from "./syncore/_generated/api.ts";
 import schema from "./syncore/_generated/schema.ts";
-import { resolvedComponents } from "./syncore/_generated/components.ts";
 import { functions } from "./syncore/_generated/functions.ts";
 
 await withNodeSyncoreClient(
@@ -843,8 +828,7 @@ await withNodeSyncoreClient(
     databasePath: path.join(process.cwd(), ".syncore", "syncore.db"),
     storageDirectory: path.join(process.cwd(), ".syncore", "storage"),
     schema,
-    functions,
-    components: resolvedComponents
+    functions
   },
   async (client) => {
     await client.mutation(api.tasks.create, { text: "Run locally" });
@@ -861,7 +845,6 @@ await withNodeSyncoreClient(
 import { app } from "electron";
 import { createNodeSyncoreRuntime } from "syncorejs/node";
 import schema from "../syncore/_generated/schema.js";
-import { resolvedComponents } from "../syncore/_generated/components.js";
 import { functions } from "../syncore/_generated/functions.js";
 
 export function createAppSyncoreRuntime() {
@@ -871,7 +854,6 @@ export function createAppSyncoreRuntime() {
     storageDirectory: path.join(userDataDirectory, "storage"),
     schema,
     functions,
-    components: resolvedComponents,
     platform: "electron-main"
   });
 }

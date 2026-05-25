@@ -1,7 +1,6 @@
 import { createBrowserWorkerClient } from "syncorejs/browser";
-import { createFunctionReference } from "syncorejs";
+import { api } from "./syncore/_generated/api";
 
-/* ─── Function references (no codegen — all inline) ─── */
 interface Contact {
   _id: string;
   name: string;
@@ -18,46 +17,6 @@ interface ContactStats {
   favorites: number;
   newestAt: number | null;
 }
-
-const listContacts = createFunctionReference<
-  "query",
-  Record<never, never>,
-  Contact[]
->("query", "contacts/list");
-
-const searchContacts = createFunctionReference<
-  "query",
-  { query: string },
-  Contact[]
->("query", "contacts/search");
-
-const contactStats = createFunctionReference<
-  "query",
-  Record<never, never>,
-  ContactStats
->("query", "contacts/stats");
-
-const createContact = createFunctionReference<
-  "mutation",
-  { name: string; email: string; company: string },
-  string
->("mutation", "contacts/create");
-
-const removeContact = createFunctionReference<"mutation", { id: string }, null>(
-  "mutation",
-  "contacts/remove"
-);
-
-const toggleFavorite = createFunctionReference<
-  "mutation",
-  { id: string },
-  null
->("mutation", "contacts/toggleFavorite");
-
-const seedDemo = createFunctionReference<"mutation", Record<never, never>, number>(
-  "mutation",
-  "contacts/seedDemo"
-);
 
 /* ─── DOM refs ─── */
 const $ = (sel: string) => document.querySelector(sel)!;
@@ -132,7 +91,7 @@ function render(contacts: Contact[]) {
   listEl.querySelectorAll(".remove-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = (btn as HTMLElement).dataset.id!;
-      void client.mutation(removeContact, { id });
+      void client.mutation(api.contacts.remove, { id });
       log(`Removed contact ${id.slice(0, 8)}...`);
     });
   });
@@ -140,7 +99,7 @@ function render(contacts: Contact[]) {
   listEl.querySelectorAll(".favorite-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = (btn as HTMLElement).dataset.id!;
-      void client.mutation(toggleFavorite, { id });
+      void client.mutation(api.contacts.toggleFavorite, { id });
       log(`Toggled favorite ${id.slice(0, 8)}...`);
     });
   });
@@ -159,7 +118,7 @@ function startWatch(searchQuery?: string) {
   currentWatch?.dispose?.();
 
   if (searchQuery?.trim()) {
-    const watch = client.watchQuery(searchContacts, {
+    const watch = client.watchQuery(api.contacts.search, {
       query: searchQuery.trim()
     });
     watch.onUpdate(() => {
@@ -169,7 +128,7 @@ function startWatch(searchQuery?: string) {
     });
     currentWatch = watch;
   } else {
-    const watch = client.watchQuery(listContacts);
+    const watch = client.watchQuery(api.contacts.list);
     watch.onUpdate(() => {
       const contacts = (watch.localQueryResult() ?? []) as Contact[];
       render(contacts);
@@ -181,7 +140,7 @@ function startWatch(searchQuery?: string) {
 
 startWatch();
 
-const statsWatch = client.watchQuery(contactStats);
+const statsWatch = client.watchQuery(api.contacts.stats);
 statsWatch.onUpdate(() => {
   const stats = statsWatch.localQueryResult();
   if (!stats) return;
@@ -212,7 +171,7 @@ addBtn.addEventListener("click", () => {
     return;
   }
 
-  void client.mutation(createContact, { name, email, company });
+  void client.mutation(api.contacts.create, { name, email, company });
   log(`Created contact: ${name}`);
   nameInput.value = "";
   emailInput.value = "";
@@ -221,7 +180,7 @@ addBtn.addEventListener("click", () => {
 });
 
 seedBtn.addEventListener("click", async () => {
-  const inserted = await client.mutation(seedDemo);
+  const inserted = await client.mutation(api.contacts.seedDemo);
   log(`Seeded ${inserted} contact${inserted === 1 ? "" : "s"}`);
 });
 

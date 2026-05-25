@@ -6,20 +6,20 @@
   "scripts": {
     "syncorejs": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
     "syncorejs:dev": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts dev",
+    "syncorejs:codegen": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts codegen",
     "build:deps": "npm run build:standalone --workspace syncorejs",
     "build": "vite build",
     "dev": "turbo run dev:app --filter=syncore-example-browser-esm",
     "dev:app": "vite",
-    "dev:syncore": "npm run syncorejs:dev"
+    "dev:syncore": "npm run syncorejs:dev",
+    "prebuild": "npm run syncorejs:codegen",
+    "pretypecheck": "npm run syncorejs:codegen",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "sql.js": "^1.14.1",
     "syncorejs": "^0.2.2"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.2",
     "vite": "^8.0.14"
   }
 }

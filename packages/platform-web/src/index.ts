@@ -165,12 +165,17 @@ export async function createWebSyncoreRuntime<
       opfsRootDirectoryName:
         options.opfsRootDirectoryName ?? options.databaseName ?? "syncore"
     }));
+  const wasmUrl =
+    options.wasmUrl ??
+    (options.locateFile || !isBrowserLikeRuntime()
+      ? undefined
+      : await resolveDefaultWebWasmUrl());
   const driver =
     options.driver ??
     (await SqlJsDriver.create({
       databaseName: options.databaseName ?? "syncore",
       persistence,
-      ...(options.wasmUrl ? { wasmUrl: options.wasmUrl } : {}),
+      ...(wasmUrl ? { wasmUrl } : {}),
       ...(options.locateFile ? { locateFile: options.locateFile } : {})
     }));
   const storage =
@@ -322,10 +327,15 @@ export async function createExpoWebExternalChangeSupport(options: {
       : {}),
     opfsRootDirectoryName: options.opfsRootDirectoryName ?? options.databaseName
   });
+  const wasmUrl =
+    options.wasmUrl ??
+    (options.locateFile || !isBrowserLikeRuntime()
+      ? undefined
+      : await resolveDefaultWebWasmUrl());
   const driver = await SqlJsDriver.create({
     databaseName: options.databaseName,
     persistence,
-    ...(options.wasmUrl ? { wasmUrl: options.wasmUrl } : {}),
+    ...(wasmUrl ? { wasmUrl } : {}),
     ...(options.locateFile ? { locateFile: options.locateFile } : {})
   });
 
@@ -396,6 +406,29 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
   dataSourceAlias?: string;
   storageIdentity?: string;
   capabilities?: SyncoreDevtoolsCapabilities;
+}
+
+async function resolveDefaultWebWasmUrl(): Promise<string | undefined> {
+  try {
+    const module = await import("./web-sqljs-wasm.js");
+    return module.resolveDefaultWebSqlJsWasmUrl();
+  } catch (error) {
+    if (!isBrowserLikeRuntime()) {
+      return undefined;
+    }
+    throw new Error(
+      "Syncore could not resolve the default sql.js WebAssembly asset. " +
+        "Pass wasmUrl or locateFile to createWebSyncoreRuntime/createBrowserWorkerRuntime for this bundler.",
+      { cause: error }
+    );
+  }
+}
+
+function isBrowserLikeRuntime(): boolean {
+  const scope = globalThis as typeof globalThis & {
+    WorkerGlobalScope?: unknown;
+  };
+  return typeof window !== "undefined" || scope.WorkerGlobalScope !== undefined;
 }
 
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {

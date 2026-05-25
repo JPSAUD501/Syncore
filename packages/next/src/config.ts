@@ -5,18 +5,16 @@ function joinAppWorkerPath(dir: string) {
 }
 
 /**
- * Wrap a Next config with the settings Syncore needs for SQL.js and worker assets.
+ * Wrap a Next config with the settings Syncore needs for worker assets.
  *
- * This enables async WebAssembly support and, for non-exported apps, adds a
- * long-lived cache header for `sql-wasm.wasm`. It also configures webpack to
- * bundle the syncore worker as a separate entry point.
+ * This enables async WebAssembly support and configures webpack to bundle the
+ * syncore worker as a separate entry point.
  */
 export function withSyncoreNext<TConfig extends Record<string, unknown>>(
   config: TConfig
 ): TConfig {
   const baseConfig = config as Record<string, unknown>;
   const isStaticExport = baseConfig.output === "export";
-  const headers = (baseConfig.headers ?? []) as Array<Record<string, unknown>>;
   const userWebpack =
     typeof baseConfig.webpack === "function"
       ? (baseConfig.webpack as (
@@ -24,21 +22,6 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
           context: unknown
         ) => Record<string, unknown>)
       : undefined;
-  const userHeaders =
-    typeof baseConfig.headers === "function"
-      ? (baseConfig.headers as () =>
-          | Array<Record<string, unknown>>
-          | Promise<Array<Record<string, unknown>>>)
-      : undefined;
-  const syncoreHeaders = {
-    source: "/sql-wasm.wasm",
-    headers: [
-      {
-        key: "Cache-Control",
-        value: "public, max-age=31536000, immutable"
-      }
-    ]
-  };
   const userTranspilePackages = Array.isArray(baseConfig.transpilePackages)
     ? baseConfig.transpilePackages
     : [];
@@ -75,6 +58,18 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
           ".js": [".ts", ".tsx", ".js"],
           ".mjs": [".mts", ".mjs"]
         }
+      };
+      const moduleConfig = (nextConfig.module ?? {}) as Record<string, unknown>;
+      const rules = Array.isArray(moduleConfig.rules) ? moduleConfig.rules : [];
+      nextConfig.module = {
+        ...moduleConfig,
+        rules: [
+          {
+            test: /\.wasm$/,
+            type: "asset/resource"
+          },
+          ...rules
+        ]
       };
 
       type WebpackContext = {
@@ -114,15 +109,6 @@ export function withSyncoreNext<TConfig extends Record<string, unknown>>(
       return nextConfig;
     }
   };
-
-  if (!isStaticExport || userHeaders) {
-    nextConfig.headers = async () => {
-      const resolvedHeaders = userHeaders ? await userHeaders() : headers;
-      return isStaticExport
-        ? resolvedHeaders
-        : [...resolvedHeaders, syncoreHeaders];
-    };
-  }
 
   return nextConfig as TConfig;
 }

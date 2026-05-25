@@ -10,11 +10,10 @@
     "syncorejs:migrate:generate": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts migrate generate init_planner",
     "build:deps": "npm run build:standalone --workspace syncorejs",
     "dev": "turbo run dev:app --filter=syncore-example-next-pwa",
-    "dev:app": "npm run copy:sqljs-wasm && next dev --webpack",
+    "dev:app": "next dev --webpack",
     "dev:syncore": "npm run syncorejs:dev",
-    "build": "npm run clean && npm run copy:sqljs-wasm && next build --webpack",
-    "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true});require('node:fs').rmSync('public/sql-wasm.wasm',{force:true})\"",
-    "copy:sqljs-wasm": "node ./scripts/copy-sqljs-wasm.mjs",
+    "build": "npm run clean && next build --webpack",
+    "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true});require('node:fs').rmSync('out',{recursive:true,force:true})\"",
     "lint": "eslint app syncore next.config.mjs --ext .ts,.tsx,.mjs",
     "prebuild": "npm run syncorejs:codegen",
     "predev": "npm run syncorejs:codegen",
@@ -28,7 +27,6 @@
     "next": "16.3.0-canary.27",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "sql.js": "^1.14.1",
     "syncorejs": "^0.2.2"
   },
   "devDependencies": {

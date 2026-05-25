@@ -15,7 +15,6 @@
     "typecheck": "npm run syncorejs:codegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "sql.js": "^1.14.1",
     "svelte": "^5.55.9",
     "syncorejs": "^0.2.2"
   },

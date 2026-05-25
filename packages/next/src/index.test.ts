@@ -2,17 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createSyncoreNextWorkerUrl,
   createNextSyncoreClient,
-  getSyncoreWorkerUrl,
-  resolveSqlJsWasmUrl
+  getSyncoreWorkerUrl
 } from "./index.js";
 import { withSyncoreNext } from "./config.js";
 
 describe("@syncore/next", () => {
-  it("resolves the default wasm url", () => {
-    expect(resolveSqlJsWasmUrl()).toBe("/sql-wasm.wasm");
-  });
-
-  it("adds async webassembly and wasm caching headers", async () => {
+  it("adds async webassembly and package transpilation", () => {
     const wrapped = withSyncoreNext({ transpilePackages: ["custom-package"] });
     const webpack = (
       wrapped as unknown as {
@@ -32,23 +27,15 @@ describe("@syncore/next", () => {
     );
     const nextConfig = webpack({ experiments: {} });
     expect(nextConfig.experiments).toMatchObject({ asyncWebAssembly: true });
+    expect(nextConfig.module).toMatchObject({
+      rules: [expect.objectContaining({ type: "asset/resource" })]
+    });
     expect(nextConfig.resolve).toMatchObject({
       extensionAlias: {
         ".js": [".ts", ".tsx", ".js"],
         ".mjs": [".mts", ".mjs"]
       }
     });
-
-    const headers = await (
-      wrapped as unknown as {
-        headers: () => Promise<Array<Record<string, unknown>>>;
-      }
-    ).headers();
-    expect(headers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ source: "/sql-wasm.wasm" })
-      ])
-    );
   });
 
   it("skips Syncore headers when Next exports a static app", () => {
