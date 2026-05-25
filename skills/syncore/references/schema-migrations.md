@@ -128,10 +128,10 @@ Authoring rules:
 
 1. change `syncore/schema.ts`
 2. update `syncore/components.ts` if component installs affect the composed schema
-3. run `npx syncorejs migrate:status`
-4. if the diff is safe, run `npx syncorejs migrate:generate [name]`
+3. run `npx syncorejs migrate status`
+4. if the diff is safe, run `npx syncorejs migrate generate [name]`
 5. review the generated SQL in `syncore/migrations/*.sql`
-6. apply it with `npx syncorejs migrate:apply`
+6. apply it with `npx syncorejs migrate apply`
 7. regenerate typed files with `npx syncorejs codegen` or let `npx syncorejs dev` keep them fresh
 
 ## Drift Safety
@@ -167,7 +167,7 @@ enough to support later projection work without another public redesign.
 - use codecs when storage shape differs from application shape
 - keep unions discriminated and optional/null semantics explicit
 - prefer `s.enum([...])` and `s.id("table")` over loose strings when the domain allows it
-- run `migrate:status` before generating or applying migrations
+- run `npx syncorejs migrate status` before generating or applying migrations
 - review generated SQL instead of blindly applying it
 - regenerate code after schema or component-install changes
 

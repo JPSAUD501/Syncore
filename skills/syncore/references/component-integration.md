@@ -98,9 +98,9 @@ Use the CLI to validate the integration:
 
 - `npx syncorejs doctor`
 - `npx syncorejs codegen`
-- `npx syncorejs migrate:status`
-- `npx syncorejs migrate:generate`
-- `npx syncorejs migrate:apply`
+- `npx syncorejs migrate status`
+- `npx syncorejs migrate generate`
+- `npx syncorejs migrate apply`
 
 ## Common Pitfalls
 
