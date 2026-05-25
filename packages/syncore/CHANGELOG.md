@@ -1,5 +1,11 @@
 # syncorejs
 
+## 0.2.3
+
+### Patch Changes
+
+- Auto-generated patch release for published Syncore package changes.
+
 ## 0.2.2
 
 ### Patch Changes
