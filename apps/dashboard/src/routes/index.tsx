@@ -4,8 +4,11 @@ import {
   useActiveRuntime,
   useConnectedRuntimeCount,
   useRuntimeList,
-  useDevtoolsStore
+  useDevtoolsStore,
+  useSelectedRuntimeFilter,
+  useSelectedTarget
 } from "@/lib/store";
+import { readDashboardAuthSearch } from "@/lib/routeSearch";
 import {
   formatTime,
   formatRelativeTime,
@@ -24,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   useDevtoolsSubscription,
+  useDevtoolsMultiRuntimeSubscription,
   useDidJustChange,
   useRefreshTimer,
   useConnection,
@@ -39,7 +43,10 @@ import {
   getEventRuntimeTag,
   getEventSummary
 } from "@/lib/eventPresentation";
-import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
+import type {
+  SyncoreDevtoolsEvent,
+  SyncoreDevtoolsSubscriptionResultPayload
+} from "@syncore/devtools-protocol";
 import {
   buildInvalidationsByQueryId,
   formatInvalidationTitle,
@@ -48,6 +55,7 @@ import {
 } from "@/lib/queryInvalidations";
 
 export const Route = createFileRoute("/")({
+  validateSearch: readDashboardAuthSearch,
   component: OverviewPage
 });
 
@@ -134,15 +142,33 @@ function ActiveQueries() {
   const navigate = useNavigate();
   const { runtimeConnected } = useConnection();
   const activeRuntime = useActiveRuntime();
+  const selectedTarget = useSelectedTarget();
+  const runtimeFilter = useSelectedRuntimeFilter();
   const runtimeId = activeRuntime?.runtimeId ?? null;
-  const activeQueriesSubscription = useDevtoolsSubscription(
-    runtimeConnected && runtimeId ? { kind: "runtime.activeQueries" } : null,
-    { enabled: runtimeConnected && !!runtimeId }
+  const runtimeIds = useMemo(() => {
+    if (runtimeFilter === "all" && selectedTarget) {
+      return selectedTarget.runtimes
+        .filter((runtime) => runtime.connected)
+        .map((runtime) => runtime.runtimeId);
+    }
+    return runtimeConnected && runtimeId ? [runtimeId] : [];
+  }, [runtimeConnected, runtimeFilter, runtimeId, selectedTarget]);
+  const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
+    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+  >(
+    runtimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
+    runtimeIds,
+    { enabled: runtimeIds.length > 0 }
   );
-  const queries =
-    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
-      ? activeQueriesSubscription.data.activeQueries
-      : (activeRuntime?.activeQueries ?? []);
+  const queries = useMemo(
+    () =>
+      Object.values(activeQueriesSubscription.dataByRuntime).flatMap((payload) =>
+        payload.kind === "runtime.activeQueries.result"
+          ? payload.activeQueries
+          : []
+      ),
+    [activeQueriesSubscription.dataByRuntime]
+  );
 
   // Keep relative timestamps ticking
   useRefreshTimer(1000);
@@ -193,6 +219,8 @@ export function OverviewPage() {
   const navigate = useNavigate();
   const connected = useDevtoolsStore((s) => s.connected);
   const activeRuntime = useActiveRuntime();
+  const selectedTarget = useSelectedTarget();
+  const runtimeFilter = useSelectedRuntimeFilter();
   const { runtimeConnected } = useConnection();
   const {
     events,
@@ -225,14 +253,30 @@ export function OverviewPage() {
     runtimeConnected && runtimeId ? { kind: "runtime.summary" } : null,
     { enabled: runtimeConnected && !!runtimeId }
   );
-  const activeQueriesSubscription = useDevtoolsSubscription(
-    runtimeConnected && runtimeId ? { kind: "runtime.activeQueries" } : null,
-    { enabled: runtimeConnected && !!runtimeId }
+  const activeQueryRuntimeIds = useMemo(() => {
+    if (runtimeFilter === "all" && selectedTarget) {
+      return selectedTarget.runtimes
+        .filter((runtime) => runtime.connected)
+        .map((runtime) => runtime.runtimeId);
+    }
+    return runtimeConnected && runtimeId ? [runtimeId] : [];
+  }, [runtimeConnected, runtimeFilter, runtimeId, selectedTarget]);
+  const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
+    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+  >(
+    activeQueryRuntimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
+    activeQueryRuntimeIds,
+    { enabled: activeQueryRuntimeIds.length > 0 }
   );
-  const activeQueries =
-    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
-      ? activeQueriesSubscription.data.activeQueries
-      : (activeRuntime?.activeQueries ?? []);
+  const activeQueries = useMemo(
+    () =>
+      Object.values(activeQueriesSubscription.dataByRuntime).flatMap((payload) =>
+        payload.kind === "runtime.activeQueries.result"
+          ? payload.activeQueries
+          : []
+      ),
+    [activeQueriesSubscription.dataByRuntime]
+  );
   const runtimeDataLoading =
     runtimeConnected &&
     (summarySubscription.loading || activeQueriesSubscription.loading);

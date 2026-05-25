@@ -26,10 +26,14 @@ import {
 const MAX_EVENTS = 500;
 const HUB_RUNTIME_ID = "syncore-dev-hub";
 const DASHBOARD_TOKEN_STORAGE_KEY = "syncore-dashboard-hub-token";
+const RUNTIME_FILTER_STORAGE_KEY = "syncore-dashboard-runtime-filter";
+const EXECUTOR_RUNTIME_STORAGE_KEY = "syncore-dashboard-executor-runtime";
 const RECONNECT_DELAY = 2000;
 const REQUEST_TIMEOUT = 10_000;
 const DEBUG_DEVTOOLS = false;
 const debugCounters = new Map<string, number>();
+let syncingDashboardTokenUrl = false;
+let dashboardTokenUrlSyncInstalled = false;
 
 function sanitizeHubToken(value: string | null | undefined): string | null {
   if (!value) {
@@ -43,10 +47,33 @@ function readDashboardTokenFromUrl(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
+  const initialToken = sanitizeHubToken(
+    (window as typeof window & { __syncoreDashboardInitialToken?: string })
+      .__syncoreDashboardInitialToken
+  );
+  if (initialToken) {
+    return initialToken;
+  }
   const searchParams = new URLSearchParams(window.location.search);
-  return sanitizeHubToken(
+  const currentUrlToken = sanitizeHubToken(
     searchParams.get("token") ?? searchParams.get("hubToken")
   );
+  if (currentUrlToken) {
+    return currentUrlToken;
+  }
+  try {
+    const navigation = performance.getEntriesByType("navigation")[0];
+    if (navigation) {
+      const navigationUrl = new URL(navigation.name);
+      return sanitizeHubToken(
+        navigationUrl.searchParams.get("token") ??
+          navigationUrl.searchParams.get("hubToken")
+      );
+    }
+  } catch {
+    /* ignore navigation timing failures */
+  }
+  return null;
 }
 
 function readStoredDashboardToken(): string | null {
@@ -84,7 +111,7 @@ function clearStoredDashboardToken(): void {
   }
 }
 
-function syncDashboardTokenInUrl(token: string | null): void {
+export function syncDashboardTokenInUrl(token: string | null): void {
   if (typeof window === "undefined") {
     return;
   }
@@ -96,7 +123,96 @@ function syncDashboardTokenInUrl(token: string | null): void {
     url.searchParams.delete("token");
     url.searchParams.delete("hubToken");
   }
-  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  if (nextUrl === `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+    return;
+  }
+  syncingDashboardTokenUrl = true;
+  window.history.replaceState({}, "", nextUrl);
+  syncingDashboardTokenUrl = false;
+}
+
+function readRuntimeFilterPreference(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const value = window.localStorage.getItem(RUNTIME_FILTER_STORAGE_KEY);
+    return value === "all" || (value && value.length > 0) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRuntimeFilterPreference(value: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (value) {
+      window.localStorage.setItem(RUNTIME_FILTER_STORAGE_KEY, value);
+    } else {
+      window.localStorage.removeItem(RUNTIME_FILTER_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function readExecutorRuntimePreference(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const value = window.localStorage.getItem(EXECUTOR_RUNTIME_STORAGE_KEY);
+    return value && value.length > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeExecutorRuntimePreference(value: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (value) {
+      window.localStorage.setItem(EXECUTOR_RUNTIME_STORAGE_KEY, value);
+    } else {
+      window.localStorage.removeItem(EXECUTOR_RUNTIME_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function installDashboardTokenUrlSync(): void {
+  if (typeof window === "undefined" || dashboardTokenUrlSyncInstalled) {
+    return;
+  }
+  dashboardTokenUrlSyncInstalled = true;
+  const { pushState, replaceState } = window.history;
+  const scheduleSync = () => {
+    if (syncingDashboardTokenUrl) {
+      return;
+    }
+    queueMicrotask(() => {
+      if (syncingDashboardTokenUrl) {
+        return;
+      }
+      syncDashboardTokenInUrl(readStoredDashboardToken());
+    });
+  };
+  window.history.pushState = function pushStateWithDashboardToken(...args) {
+    const result = pushState.apply(this, args);
+    scheduleSync();
+    return result;
+  };
+  window.history.replaceState = function replaceStateWithDashboardToken(...args) {
+    const result = replaceState.apply(this, args);
+    scheduleSync();
+    return result;
+  };
 }
 
 function resolveInitialHubToken(): string | null {
@@ -118,6 +234,9 @@ function buildDevtoolsWebSocketUrl(token: string): string {
 }
 
 const INITIAL_HUB_TOKEN = resolveInitialHubToken();
+const INITIAL_RUNTIME_FILTER = readRuntimeFilterPreference();
+const INITIAL_EXECUTOR_RUNTIME = readExecutorRuntimePreference();
+installDashboardTokenUrlSync();
 
 function debugLog(key: string, ...args: unknown[]) {
   if (!DEBUG_DEVTOOLS) {
@@ -137,6 +256,7 @@ interface RuntimeMeta {
   origin?: string;
   sessionLabel?: string;
   targetKind?: "client" | "project";
+  runtimeRole?: "app" | "project-target";
   storageProtocol?: string;
   databaseLabel?: string;
   dataSourceAlias?: string;
@@ -215,6 +335,7 @@ interface DevtoolsState {
   selectedTargetId: string | null;
   selectedRuntimeId: string | null;
   selectedRuntimeFilter: string | null;
+  preferredExecutorRuntimeId: string | null;
   selectedRuntimeSelectionMode: RuntimeSelectionMode;
   includeDashboardActivity: boolean;
   hubToken: string | null;
@@ -226,6 +347,7 @@ interface DevtoolsState {
   selectTarget: (targetId: string | null) => void;
   selectRuntime: (runtimeId: string | null) => void;
   selectRuntimeFilter: (runtimeId: string | null) => void;
+  selectExecutorRuntime: (runtimeId: string | null) => void;
   setIncludeDashboardActivity: (value: boolean) => void;
   toggleIncludeDashboardActivity: () => void;
   setHubToken: (value: string) => void;
@@ -291,6 +413,9 @@ function ensureRuntime(
     ...(meta.targetKind || existing.targetKind
       ? { targetKind: meta.targetKind ?? existing.targetKind }
       : {}),
+    ...(meta.runtimeRole || existing.runtimeRole
+      ? { runtimeRole: meta.runtimeRole ?? existing.runtimeRole }
+      : {}),
     ...(meta.appName ? { appName: meta.appName } : {}),
     ...(meta.origin ? { origin: meta.origin } : {}),
     ...(meta.sessionLabel ? { sessionLabel: meta.sessionLabel } : {}),
@@ -307,9 +432,9 @@ function ensureRuntime(
 }
 
 function isProjectRuntime(
-  runtime: Pick<RuntimeState, "targetKind">
+  runtime: Pick<RuntimeState, "targetKind" | "runtimeRole">
 ): boolean {
-  return runtime.targetKind === "project";
+  return runtime.runtimeRole === "project-target" || runtime.targetKind === "project";
 }
 
 export function getPublicRuntimeId(
@@ -360,9 +485,10 @@ export function getPublicTargetDisplayId(targetId: string): string {
 }
 
 function getTargetGroupKey(runtime: RuntimeState): string {
-  return isProjectRuntime(runtime)
-    ? "project"
-    : runtime.storageIdentity ?? `runtime::${runtime.runtimeId}`;
+  if (runtime.storageIdentity) {
+    return runtime.storageIdentity;
+  }
+  return `runtime::${runtime.runtimeId}`;
 }
 
 function normalizeStorageProtocol(protocol: string | undefined): string | undefined {
@@ -480,15 +606,12 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
   return [...groups.entries()]
     .map(([key, group]) => {
       const sorted = [...group];
-      const primary =
-        sorted.find((runtime) => runtime.connected) ?? sorted[0]!;
+      const kind: TargetState["kind"] = "client";
+      const primary = sorted.find((runtime) => runtime.connected) ?? sorted[0]!;
       const connectedRuntimes = sorted.filter((runtime) => runtime.connected).length;
-      const kind: TargetState["kind"] = isProjectRuntime(primary)
-        ? "project"
-        : "client";
       const capabilities = mergeDevtoolsCapabilities(sorted);
       const sqlAvailable = capabilities.sql?.read === true;
-      const id = kind === "project" ? "project" : createPublicTargetId(key, keys);
+      const id = createPublicTargetId(key, keys);
       const technicalLabel = getTargetTechnicalLabel(primary);
       const metadataWarning = getTargetMetadataWarning(primary);
       const storageProtocol = normalizeStorageProtocol(primary.storageProtocol);
@@ -686,7 +809,8 @@ function resolveSelectionState(
   currentSelectedTargetId: string | null,
   currentSelectedRuntimeFilter: string | null,
   currentSelectedRuntimeSelectionMode: RuntimeSelectionMode,
-  preferredRuntimeId?: string
+  preferredRuntimeId?: string,
+  preferredExecutorRuntimeId?: string | null
 ): {
   selectedTargetId: string | null;
   selectedRuntimeFilter: string | null;
@@ -717,7 +841,6 @@ function resolveSelectionState(
       : undefined) ??
     preferredTarget ??
     targets.find((target) => target.kind === "client" && target.connected) ??
-    targets.find((target) => target.kind === "project" && target.connected) ??
     targets.find((target) => target.kind === "client") ??
     targets[0] ??
     null;
@@ -731,23 +854,32 @@ function resolveSelectionState(
     };
   }
 
-  if (selectedTarget.kind === "project") {
-    return {
-      selectedTargetId: selectedTarget.id,
-      selectedRuntimeFilter: null,
-      selectedRuntimeId:
-        selectedTarget.runtimes.find((runtime) => runtime.connected)?.runtimeId ??
-        selectedTarget.runtimes[0]?.runtimeId ??
-        null,
-      selectedRuntimeSelectionMode: null
-    };
-  }
-
   const availableRuntimes = selectedTarget.runtimes.filter(
     (runtime) => runtime.connected
   );
+  const explicitRuntime =
+    currentSelectedRuntimeSelectionMode === "runtime" &&
+    typeof currentSelectedRuntimeFilter === "string" &&
+    currentSelectedRuntimeFilter !== "all"
+      ? selectedTarget.runtimes.find(
+          (runtime) =>
+            runtime.runtimeId === currentSelectedRuntimeFilter &&
+            runtime.connected
+        ) ?? null
+      : null;
+  if (explicitRuntime) {
+    return {
+      selectedTargetId: selectedTarget.id,
+      selectedRuntimeFilter: explicitRuntime.runtimeId,
+      selectedRuntimeId: explicitRuntime.runtimeId,
+      selectedRuntimeSelectionMode: "runtime"
+    };
+  }
+
   const candidateRuntimes =
-    availableRuntimes.length > 0 ? availableRuntimes : selectedTarget.runtimes;
+    availableRuntimes.length > 0
+      ? availableRuntimes
+      : selectedTarget.runtimes;
 
   if (candidateRuntimes.length === 1) {
     const singleRuntimeId = candidateRuntimes[0]?.runtimeId ?? null;
@@ -777,9 +909,10 @@ function resolveSelectionState(
   const selectedRuntimeId =
     selectedRuntimeFilter && selectedRuntimeFilter !== "all"
       ? selectedRuntimeFilter
-      : candidateRuntimes.find((runtime) => runtime.connected)?.runtimeId ??
-        candidateRuntimes[0]?.runtimeId ??
-        null;
+      : chooseExecutorRuntime(
+          candidateRuntimes,
+          preferredExecutorRuntimeId
+        )?.runtimeId ?? null;
 
   return {
     selectedTargetId: selectedTarget.id,
@@ -794,11 +927,37 @@ function resolveSelectionState(
   };
 }
 
+function chooseExecutorRuntime(
+  runtimes: RuntimeState[],
+  preferredExecutorRuntimeId?: string | null
+): RuntimeState | null {
+  if (preferredExecutorRuntimeId) {
+    const preferred = runtimes.find(
+      (runtime) =>
+        runtime.runtimeId === preferredExecutorRuntimeId && runtime.connected
+    );
+    if (preferred) {
+      return preferred;
+    }
+  }
+  return chooseDefaultExecutorRuntime(runtimes);
+}
+
+function chooseDefaultExecutorRuntime(
+  runtimes: RuntimeState[]
+): RuntimeState | null {
+  const connected = runtimes.filter((runtime) => runtime.connected);
+  const candidates = connected.length > 0 ? connected : runtimes;
+  return (
+    candidates.find((runtime) => isProjectRuntime(runtime)) ??
+    candidates.find((runtime) => runtime.capabilities?.data?.mutate !== false) ??
+    candidates[0] ??
+    null
+  );
+}
+
 function sortRuntimes(runtimes: Record<string, RuntimeState>): RuntimeState[] {
   return Object.values(runtimes).sort((a, b) => {
-    if (isProjectRuntime(a) !== isProjectRuntime(b)) {
-      return isProjectRuntime(a) ? 1 : -1;
-    }
     if (a.connected !== b.connected) {
       return a.connected ? -1 : 1;
     }
@@ -817,8 +976,14 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   runtimes: {},
   selectedTargetId: null,
   selectedRuntimeId: null,
-  selectedRuntimeFilter: null,
-  selectedRuntimeSelectionMode: null,
+  selectedRuntimeFilter: INITIAL_RUNTIME_FILTER,
+  preferredExecutorRuntimeId: INITIAL_EXECUTOR_RUNTIME,
+  selectedRuntimeSelectionMode:
+    INITIAL_RUNTIME_FILTER === "all"
+      ? "all"
+      : INITIAL_RUNTIME_FILTER
+        ? "runtime"
+        : null,
   includeDashboardActivity: readDashboardActivityPreference(),
   hubToken: INITIAL_HUB_TOKEN,
   authRequired: INITIAL_HUB_TOKEN === null,
@@ -850,18 +1015,23 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
             runtimes,
             state.selectedTargetId,
             state.selectedRuntimeFilter,
-            state.selectedRuntimeSelectionMode
+            state.selectedRuntimeSelectionMode,
+            undefined,
+            state.preferredExecutorRuntimeId
           )
         };
       }),
 
   selectTarget: (targetId) =>
     set((state) => {
+      writeRuntimeFilterPreference(null);
       const nextSelection = resolveSelectionState(
         state.runtimes,
         targetId,
         null,
-        null
+        null,
+        undefined,
+        state.preferredExecutorRuntimeId
       );
       return {
         selectedTargetId: nextSelection.selectedTargetId,
@@ -874,11 +1044,14 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   selectRuntime: (runtimeId) =>
     set((state) => {
       if (!runtimeId) {
+        writeRuntimeFilterPreference("all");
         const nextSelection = resolveSelectionState(
           state.runtimes,
           state.selectedTargetId,
           "all",
-          "all"
+          "all",
+          undefined,
+          state.preferredExecutorRuntimeId
         );
         return {
           selectedTargetId: nextSelection.selectedTargetId,
@@ -893,10 +1066,13 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       if (!target) {
         return state;
       }
+      writeRuntimeFilterPreference(runtimeId);
+      writeExecutorRuntimePreference(runtimeId);
       return {
         selectedTargetId: target.id,
         selectedRuntimeFilter: runtimeId,
         selectedRuntimeId: runtimeId,
+        preferredExecutorRuntimeId: runtimeId,
         selectedRuntimeSelectionMode: "runtime"
       };
     }),
@@ -908,19 +1084,71 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
             (entry) => entry.id === state.selectedTargetId
           )
         : null;
-      if (!target || target.kind === "project") {
+      if (!target) {
         return state;
       }
       if (runtimeId && runtimeId !== "all" && !target.runtimeIds.includes(runtimeId)) {
         return state;
       }
+      writeRuntimeFilterPreference(runtimeId ?? "all");
+      if (runtimeId && runtimeId !== "all") {
+        writeExecutorRuntimePreference(runtimeId);
+      }
       const nextSelection = resolveSelectionState(
         state.runtimes,
         target.id,
         runtimeId ?? "all",
-        runtimeId && runtimeId !== "all" ? "runtime" : "all"
+        runtimeId && runtimeId !== "all" ? "runtime" : "all",
+        undefined,
+        state.preferredExecutorRuntimeId
       );
       return {
+        selectedTargetId: nextSelection.selectedTargetId,
+        selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
+        selectedRuntimeId: nextSelection.selectedRuntimeId,
+        selectedRuntimeSelectionMode: nextSelection.selectedRuntimeSelectionMode
+      };
+    }),
+
+  selectExecutorRuntime: (runtimeId) =>
+    set((state) => {
+      if (!runtimeId) {
+        writeExecutorRuntimePreference(null);
+        const nextSelection = resolveSelectionState(
+          state.runtimes,
+          state.selectedTargetId,
+          state.selectedRuntimeFilter,
+          state.selectedRuntimeSelectionMode,
+          undefined,
+          null
+        );
+        return {
+          preferredExecutorRuntimeId: null,
+          selectedTargetId: nextSelection.selectedTargetId,
+          selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
+          selectedRuntimeId: nextSelection.selectedRuntimeId,
+          selectedRuntimeSelectionMode: nextSelection.selectedRuntimeSelectionMode
+        };
+      }
+      const target = state.selectedTargetId
+        ? getTargetsSnapshot(state.runtimes).find(
+            (entry) => entry.id === state.selectedTargetId
+          )
+        : null;
+      if (!target?.runtimeIds.includes(runtimeId)) {
+        return state;
+      }
+      writeExecutorRuntimePreference(runtimeId);
+      const nextSelection = resolveSelectionState(
+        state.runtimes,
+        target.id,
+        state.selectedRuntimeFilter,
+        state.selectedRuntimeSelectionMode,
+        undefined,
+        runtimeId
+      );
+      return {
+        preferredExecutorRuntimeId: runtimeId,
         selectedTargetId: nextSelection.selectedTargetId,
         selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
         selectedRuntimeId: nextSelection.selectedRuntimeId,
@@ -997,6 +1225,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
                 runtimeId: msg.runtimeId,
                 platform: msg.platform,
                 ...(msg.targetKind ? { targetKind: msg.targetKind } : {}),
+                ...(msg.runtimeRole ? { runtimeRole: msg.runtimeRole } : {}),
                 ...(msg.appName ? { appName: msg.appName } : {}),
                 ...(msg.origin ? { origin: msg.origin } : {}),
                 ...(msg.sessionLabel ? { sessionLabel: msg.sessionLabel } : {}),
@@ -1028,9 +1257,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
                 state.selectedTargetId,
                 state.selectedRuntimeFilter,
                 state.selectedRuntimeSelectionMode,
-                compatibilityError || msg.targetKind === "project"
-                  ? undefined
-                  : msg.runtimeId
+                undefined,
+                state.preferredExecutorRuntimeId
               )
             };
           });
@@ -1085,7 +1313,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               state.selectedTargetId,
               state.selectedRuntimeFilter,
               state.selectedRuntimeSelectionMode,
-              e.type === "runtime.disconnected" ? undefined : runtimeId
+              undefined,
+              state.preferredExecutorRuntimeId
             )
           };
         });
@@ -1134,7 +1363,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               state.selectedTargetId,
               state.selectedRuntimeFilter,
               state.selectedRuntimeSelectionMode,
-              runtimeId
+              undefined,
+              state.preferredExecutorRuntimeId
             )
           };
         });
@@ -1181,6 +1411,9 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
               }
               if (msg.payload.summary.sessionLabel) {
                 nextRuntime.sessionLabel = msg.payload.summary.sessionLabel;
+              }
+              if (msg.payload.summary.runtimeRole) {
+                nextRuntime.runtimeRole = msg.payload.summary.runtimeRole;
               }
               if (msg.payload.summary.storageProtocol) {
                 nextRuntime.storageProtocol = msg.payload.summary.storageProtocol;
@@ -1312,9 +1545,7 @@ export function useSelectedRuntimeFilter() {
 export function useConnectedRuntimes() {
   return useDevtoolsStore(
     useShallow((state) =>
-      sortRuntimes(state.runtimes).filter(
-        (runtime) => runtime.connected && !isProjectRuntime(runtime)
-      )
+      sortRuntimes(state.runtimes).filter((runtime) => runtime.connected)
     )
   );
 }
@@ -1330,9 +1561,7 @@ export function useConnectedRuntimeCount() {
 export function useBestConnectedRuntime() {
   return useDevtoolsStore(
     (state) =>
-      sortRuntimes(state.runtimes).find(
-        (runtime) => runtime.connected && !isProjectRuntime(runtime)
-      ) ?? null
+      sortRuntimes(state.runtimes).find((runtime) => runtime.connected) ?? null
   );
 }
 
@@ -1434,15 +1663,42 @@ export function sendRequest(
   payload: SyncoreDevtoolsCommandPayload,
   options?: { targetRuntimeId?: string | null }
 ): Promise<SyncoreDevtoolsCommandResultPayload> {
+  const state = useDevtoolsStore.getState();
+  const candidates = getRequestRuntimeCandidates(state, payload, options);
+  if (candidates.length === 0) {
+    return Promise.reject(new Error("Select a runtime to run this command."));
+  }
+
+  return sendRequestWithFallback(payload, candidates);
+}
+
+async function sendRequestWithFallback(
+  payload: SyncoreDevtoolsCommandPayload,
+  runtimeIds: string[]
+): Promise<SyncoreDevtoolsCommandResultPayload> {
+  let lastError: Error | null = null;
+  for (const runtimeId of runtimeIds) {
+    try {
+      const response = await sendRequestToRuntime(payload, runtimeId);
+      if (response.kind === "error" && runtimeIds.length > 1) {
+        lastError = new Error(response.message);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError ?? new Error("Select a runtime to run this command.");
+}
+
+function sendRequestToRuntime(
+  payload: SyncoreDevtoolsCommandPayload,
+  targetRuntimeId: string
+): Promise<SyncoreDevtoolsCommandResultPayload> {
   return new Promise((resolve, reject) => {
-    const state = useDevtoolsStore.getState();
-    const targetRuntimeId = options?.targetRuntimeId ?? state.selectedRuntimeId;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       reject(new Error("Not connected to devtools hub"));
-      return;
-    }
-    if (!targetRuntimeId) {
-      reject(new Error("No runtime selected"));
       return;
     }
 
@@ -1474,6 +1730,86 @@ export function sendRequest(
 
     ws.send(JSON.stringify(request));
   });
+}
+
+function getRequestRuntimeCandidates(
+  state: DevtoolsState,
+  payload: SyncoreDevtoolsCommandPayload,
+  options?: { targetRuntimeId?: string | null }
+): string[] {
+  if (options && "targetRuntimeId" in options) {
+    return options.targetRuntimeId ? [options.targetRuntimeId] : [];
+  }
+  if (state.selectedRuntimeFilter !== "all") {
+    return state.selectedRuntimeId ? [state.selectedRuntimeId] : [];
+  }
+  const target = state.selectedTargetId
+    ? getTargetsSnapshot(state.runtimes).find(
+        (entry) => entry.id === state.selectedTargetId
+      )
+    : null;
+  if (!target) {
+    return state.selectedRuntimeId ? [state.selectedRuntimeId] : [];
+  }
+  const connected = target.runtimes.filter((runtime) => runtime.connected);
+  const candidates = connected.length > 0 ? connected : target.runtimes;
+  return [...candidates]
+    .filter((runtime) => runtimeSupportsCommand(runtime, payload))
+    .sort((left, right) => {
+      if (state.selectedRuntimeId) {
+        if (left.runtimeId === state.selectedRuntimeId) return -1;
+        if (right.runtimeId === state.selectedRuntimeId) return 1;
+      }
+      return compareExecutorCandidates(left, right);
+    })
+    .map((runtime) => runtime.runtimeId);
+}
+
+function compareExecutorCandidates(a: RuntimeState, b: RuntimeState): number {
+  if (isProjectRuntime(a) !== isProjectRuntime(b)) {
+    return isProjectRuntime(a) ? -1 : 1;
+  }
+  if (a.connected !== b.connected) {
+    return a.connected ? -1 : 1;
+  }
+  const aLast = a.events[0]?.timestamp ?? a.summary?.connectedAt ?? 0;
+  const bLast = b.events[0]?.timestamp ?? b.summary?.connectedAt ?? 0;
+  return bLast - aLast;
+}
+
+function runtimeSupportsCommand(
+  runtime: RuntimeState,
+  payload: SyncoreDevtoolsCommandPayload
+): boolean {
+  if (payload.kind.startsWith("sql.")) {
+    if (payload.kind === "sql.write") {
+      return runtime.capabilities?.sql?.write === true;
+    }
+    return runtime.capabilities?.sql?.read === true;
+  }
+  if (payload.kind.startsWith("data.")) {
+    if (payload.kind === "data.export") {
+      return runtime.capabilities?.data?.importExport !== false;
+    }
+    if (
+      payload.kind === "data.insert" ||
+      payload.kind === "data.patch" ||
+      payload.kind === "data.delete"
+    ) {
+      return runtime.capabilities?.data?.mutate !== false;
+    }
+    return runtime.capabilities?.data?.browse !== false;
+  }
+  if (payload.kind.startsWith("scheduler.")) {
+    if (
+      payload.kind === "scheduler.cancel" ||
+      payload.kind === "scheduler.update"
+    ) {
+      return runtime.capabilities?.scheduler?.edit !== false;
+    }
+    return runtime.capabilities?.scheduler?.read !== false;
+  }
+  return true;
 }
 
 /**

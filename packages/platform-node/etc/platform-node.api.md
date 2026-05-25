@@ -21,6 +21,7 @@ import { SyncoreClient } from '@syncore/core';
 import { SyncoreDataModel } from '@syncore/core';
 import { SyncoreDevtoolsCapabilities } from '@syncore/devtools-protocol';
 import { SyncoreDevtoolsEvent } from '@syncore/devtools-protocol';
+import { SyncoreExternalChangeSignal } from '@syncore/core';
 import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreRuntimeSummary } from '@syncore/devtools-protocol';
@@ -164,11 +165,13 @@ export type NodeIpcSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataM
 
 // @public (undocumented)
 export class NodeSqliteDriver implements SyncoreSqlDriver {
-    constructor(filename: string);
+    constructor(databasePath: string);
     // (undocumented)
     all<T>(sql: string, params?: unknown[]): Promise<T[]>;
     // (undocumented)
     close(): Promise<void>;
+    // (undocumented)
+    readonly databasePath: string;
     // (undocumented)
     exec(sql: string): Promise<void>;
     // (undocumented)
@@ -197,6 +200,8 @@ export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
     attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
     // (undocumented)
     dispose(): void;
+    // (undocumented)
+    externalChangeSignal?: SyncoreExternalChangeSignal;
 }
 
 // @public (undocumented)
@@ -213,6 +218,8 @@ export interface NodeWebSocketDevtoolsSinkOptions {
     origin?: string;
     // (undocumented)
     reconnectDelayMs?: number;
+    // (undocumented)
+    runtimeRole?: "app" | "project-target";
     // (undocumented)
     sessionLabel?: string;
     // (undocumented)

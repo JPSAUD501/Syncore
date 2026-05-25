@@ -8,8 +8,6 @@ import {
   useActiveRuntime,
   useConnectedTargets,
   useDevtoolsStore,
-  useProjectTargetRuntime,
-  useSelectedRuntimeConnected,
   useSelectedRuntimeFilter,
   useSelectedTarget,
   useSelectedTargetRuntimes
@@ -37,6 +35,7 @@ import {
 } from "@/components/ui/command";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -78,6 +77,15 @@ function getContextRuntimeLabel(
   return runtime ? getRuntimeLabel(runtime) : "No runtime";
 }
 
+function isProjectRuntime(runtime: {
+  targetKind?: "client" | "project";
+  runtimeRole?: "app" | "project-target";
+}) {
+  return (
+    runtime.runtimeRole === "project-target" || runtime.targetKind === "project"
+  );
+}
+
 export function Header({
   onToggleSidebar
 }: {
@@ -88,6 +96,7 @@ export function Header({
   const selectTarget = useDevtoolsStore((s) => s.selectTarget);
   const selectRuntime = useDevtoolsStore((s) => s.selectRuntime);
   const selectRuntimeFilter = useDevtoolsStore((s) => s.selectRuntimeFilter);
+  const selectExecutorRuntime = useDevtoolsStore((s) => s.selectExecutorRuntime);
   const includeDashboardActivity = useDevtoolsStore(
     (s) => s.includeDashboardActivity
   );
@@ -98,21 +107,10 @@ export function Header({
   const selectedTarget = useSelectedTarget();
   const selectedTargetRuntimes = useSelectedTargetRuntimes();
   const selectedRuntimeFilter = useSelectedRuntimeFilter();
-  const runtimeConnected = useSelectedRuntimeConnected();
   const targets = useConnectedTargets();
-  const projectTarget = useProjectTargetRuntime();
   const [contextOpen, setContextOpen] = useState(false);
 
   const title = ROUTE_TITLES[pathname] ?? "Dashboard";
-  const supportsProjectFallback = [
-    "/data",
-    "/functions",
-    "/queries",
-    "/scheduler",
-    "/sql"
-  ].includes(pathname);
-  const projectOffline =
-    supportsProjectFallback && !runtimeConnected && projectTarget?.connected;
   const contextRuntimeLabel = getContextRuntimeLabel(
     activeRuntime,
     selectedRuntimeFilter,
@@ -176,6 +174,11 @@ export function Header({
             className="max-w-[54vw] justify-start gap-2 px-2.5 sm:max-w-96"
           >
             <span
+              title={
+                selectedTarget?.connected
+                  ? "Current Data Source has connected runtimes."
+                  : "Current Data Source is disconnected."
+              }
               className={cn(
                 "size-1.5 shrink-0 rounded-full",
                 selectedTarget?.connected ? "bg-success" : "bg-text-tertiary/40"
@@ -191,7 +194,13 @@ export function Header({
               )}
             </span>
             {selectedTarget?.metadataIncomplete && (
-              <AlertTriangle size={12} className="shrink-0 text-warning" />
+              <AlertTriangle
+                size={12}
+                className="shrink-0 text-warning"
+                aria-label="Storage metadata incomplete"
+              >
+                <title>Storage metadata is incomplete.</title>
+              </AlertTriangle>
             )}
             <ChevronDown size={13} className="shrink-0 text-text-tertiary" />
           </Button>
@@ -199,12 +208,6 @@ export function Header({
           <span className="hidden rounded-md border border-dashed border-border px-2.5 py-1 text-[11px] text-text-tertiary sm:flex">
             {connected ? "Waiting for app..." : "No app connected"}
           </span>
-        )}
-
-        {projectOffline && (
-          <Badge variant="outline" className="hidden text-[10px] md:inline-flex">
-            Project Offline
-          </Badge>
         )}
 
         <Dialog>
@@ -280,10 +283,12 @@ export function Header({
         onOpenChange={setContextOpen}
         searchableTargets={searchableTargets}
         selectedTarget={selectedTarget}
+        activeRuntime={activeRuntime}
         selectedRuntimeFilter={selectedRuntimeFilter}
         selectTarget={selectTarget}
         selectRuntime={selectRuntime}
         selectRuntimeFilter={selectRuntimeFilter}
+        selectExecutorRuntime={selectExecutorRuntime}
       />
     </header>
   );
@@ -294,10 +299,12 @@ function ContextSwitcherDialog({
   onOpenChange,
   searchableTargets,
   selectedTarget,
+  activeRuntime,
   selectedRuntimeFilter,
   selectTarget,
   selectRuntime,
-  selectRuntimeFilter
+  selectRuntimeFilter,
+  selectExecutorRuntime
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -307,10 +314,12 @@ function ContextSwitcherDialog({
     search: string;
   }>;
   selectedTarget: SelectedTarget | null;
+  activeRuntime: SelectedRuntime;
   selectedRuntimeFilter: string | null;
   selectTarget: (targetId: string | null) => void;
   selectRuntime: (runtimeId: string | null) => void;
   selectRuntimeFilter: (runtimeId: string | null) => void;
+  selectExecutorRuntime: (runtimeId: string | null) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -322,9 +331,9 @@ function ContextSwitcherDialog({
         <DialogDescription className="sr-only">
           Select a data source and runtime.
         </DialogDescription>
-        <Command className="h-full w-full overflow-hidden rounded-none bg-bg-surface text-text-primary **:data-[slot=command-input-wrapper]:h-13">
+        <Command className="h-full w-full overflow-hidden rounded-none bg-bg-surface text-text-primary [&_[data-slot=command-input-wrapper]]:mx-3 [&_[data-slot=command-input-wrapper]]:mt-3 [&_[data-slot=command-input-wrapper]]:h-12 [&_[data-slot=command-input-wrapper]]:rounded-lg [&_[data-slot=command-input-wrapper]]:border [&_[data-slot=command-input-wrapper]]:border-border/70 [&_[data-slot=command-input-wrapper]]:bg-bg-base/60">
           <CommandInput placeholder="Search data sources, runtimes, ids..." />
-          <CommandList className="max-h-[65vh] scroll-py-1 p-3">
+          <CommandList className="max-h-[65vh] scroll-py-2 p-3 pt-4">
             <CommandEmpty>No results found.</CommandEmpty>
 
             <CommandGroup
@@ -339,11 +348,18 @@ function ContextSwitcherDialog({
                     value={`target:${target.id}:${search}`}
                     onSelect={() => {
                       selectTarget(target.id);
-                      onOpenChange(false);
                     }}
-                    className="items-start gap-3 rounded-md px-3 py-3"
+                    className={cn(
+                      "items-start gap-3 rounded-lg px-3 py-3",
+                      selected && "bg-bg-elevated/70"
+                    )}
                   >
                     <span
+                      title={
+                        target.connected
+                          ? "Data source has connected runtimes."
+                          : "Data source is currently disconnected."
+                      }
                       className={cn(
                         "mt-1.25 size-2 shrink-0 rounded-full",
                         target.connected ? "bg-success" : "bg-text-tertiary/25"
@@ -354,36 +370,48 @@ function ContextSwitcherDialog({
                         <span className="truncate text-sm font-medium text-text-primary">
                           {parts.name}
                         </span>
-                        {target.kind === "project" && (
-                          <span className="whitespace-nowrap rounded border border-accent/30 bg-accent/8 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                            Project
-                          </span>
-                        )}
                         {target.metadataIncomplete && (
-                          <AlertTriangle size={11} className="shrink-0 text-warning" />
+                          <AlertTriangle
+                            size={11}
+                            className="shrink-0 text-warning"
+                            aria-label="Storage metadata incomplete"
+                          >
+                            <title>Storage metadata is incomplete.</title>
+                          </AlertTriangle>
                         )}
                       </div>
                       <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-text-tertiary">
-                        {parts.technicalLabel && (
-                          <span className="max-w-md truncate">
-                            {parts.technicalLabel}
-                          </span>
-                        )}
+                        {parts.technicalLabel &&
+                          parts.technicalLabel !== parts.name && (
+                            <span className="max-w-md truncate">
+                              {parts.technicalLabel}
+                            </span>
+                          )}
                         <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]">
-                          {parts.protocol}
+                          <span title={`Storage protocol: ${parts.protocol}`}>
+                            {parts.protocol}
+                          </span>
                         </span>
-                        <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] font-mono">
+                        <span
+                          className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] font-mono"
+                          title="Stable public Data Source id used to distinguish similar storages."
+                        >
                           {parts.publicId}
                         </span>
                         {target.databaseLabel && (
-                          <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]">
+                          <span
+                            className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]"
+                            title="Logical database label announced by the runtime."
+                          >
                             db={target.databaseLabel}
                           </span>
                         )}
                       </div>
                       {target.metadataWarning && (
                         <div className="mt-1 flex items-center gap-1.5 text-[11px] text-warning">
-                          <AlertTriangle size={10} className="shrink-0" />
+                          <AlertTriangle size={10} className="shrink-0">
+                            <title>Storage metadata warning.</title>
+                          </AlertTriangle>
                           {target.metadataWarning}
                         </div>
                       )}
@@ -396,7 +424,7 @@ function ContextSwitcherDialog({
               })}
             </CommandGroup>
 
-            {selectedTarget?.kind === "client" && (
+            {selectedTarget && (
               <>
                 <CommandSeparator className="my-2" />
                 <CommandGroup
@@ -408,18 +436,38 @@ function ContextSwitcherDialog({
                       value={`runtime:all:${selectedTarget.label}:all runtimes`}
                       onSelect={() => {
                         selectRuntimeFilter("all");
-                        onOpenChange(false);
                       }}
-                      className="gap-3 rounded-md px-3 py-3"
+                      className="items-start gap-3 rounded-lg px-3 py-3"
                     >
-                      <span className="mt-1.25 size-2 shrink-0 rounded-full bg-success" />
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="text-sm font-medium text-text-primary">
-                          All runtimes
-                        </span>
-                        <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] tabular-nums text-text-tertiary">
-                          {selectedTarget.connectedRuntimes} connected
-                        </span>
+                      <span
+                        className="mt-1.25 size-2 shrink-0 rounded-full bg-success"
+                        title="At least one runtime is connected."
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="text-sm font-medium text-text-primary">
+                            All runtimes
+                          </span>
+                          <span
+                            className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] tabular-nums text-text-tertiary"
+                            title="Number of runtimes connected to this Data Source."
+                          >
+                            {
+                              selectedTarget.runtimes.filter(
+                                (runtime) => runtime.connected
+                              ).length
+                            } connected
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-text-tertiary">
+                          Shows activity from every runtime. Commands run via{" "}
+                          <span className="text-text-secondary">
+                            {activeRuntime
+                              ? getRuntimeLabel(activeRuntime)
+                              : "the best available runtime"}
+                          </span>
+                          .
+                        </div>
                       </div>
                       {selectedRuntimeFilter === "all" && (
                         <Check size={14} className="mt-0.75 shrink-0 text-accent" />
@@ -427,6 +475,7 @@ function ContextSwitcherDialog({
                     </CommandItem>
                   )}
                   {selectedTarget.runtimes.map((runtime) => {
+                    const projectRuntime = isProjectRuntime(runtime);
                     const label = getRuntimeLabel(runtime);
                     const browser = getRuntimeBrowser(runtime);
                     const runtimePublicId = getPublicRuntimeId(
@@ -437,17 +486,24 @@ function ContextSwitcherDialog({
                       selectedRuntimeFilter === runtime.runtimeId ||
                       (selectedTarget.runtimes.length === 1 &&
                         selectedRuntimeFilter !== "all");
+                    const executor =
+                      selectedRuntimeFilter === "all" &&
+                      activeRuntime?.runtimeId === runtime.runtimeId;
                     return (
                       <CommandItem
                         key={runtime.runtimeId}
                         value={`runtime:${runtime.runtimeId}:${label}:${browser ?? ""}:${runtimePublicId}`}
                         onSelect={() => {
                           selectRuntime(runtime.runtimeId);
-                          onOpenChange(false);
                         }}
-                        className="items-start gap-3 rounded-md px-3 py-3"
+                        className="items-start gap-3 rounded-lg px-3 py-3"
                       >
                         <span
+                          title={
+                            runtime.connected
+                              ? "Runtime is connected."
+                              : "Runtime is disconnected."
+                          }
                           className={cn(
                             "mt-1.25 size-2 shrink-0 rounded-full",
                             runtime.connected
@@ -460,27 +516,83 @@ function ContextSwitcherDialog({
                             {label}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-text-tertiary">
-                            {browser && <span>{browser}</span>}
-                            <span className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px] font-mono">
+                            <span
+                              className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px] font-mono"
+                              title="Stable public runtime id."
+                            >
                               {runtimePublicId}
                             </span>
-                            {runtime.platform && (
-                              <span className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]">
-                                {runtime.platform}
+                            {browser && !projectRuntime && (
+                              <span
+                                className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]"
+                                title="Browser or host runtime family."
+                              >
+                                {browser}
                               </span>
                             )}
-                          </div>
-                        </div>
-                        {selected && (
-                          <Check size={14} className="mt-0.75 shrink-0 text-accent" />
+                            {projectRuntime ? (
+                              <span
+                                className="rounded border border-accent/30 bg-accent/8 px-1 py-0.5 text-[10px] text-accent"
+                                title="Project Target runtime: local administrative runtime with project-level capabilities."
+                              >
+                                Project
+                              </span>
+                            ) : runtime.platform ? (
+                              <span
+                                className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]"
+                                title="Runtime platform."
+                              >
+                                {runtime.platform}
+                              </span>
+                            ) : null}
+                            {runtime.capabilities?.sql?.read && (
+                              <span
+                                className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]"
+                                title="This runtime supports SQL Console commands."
+                              >
+                                SQL
+                              </span>
+                            )}
+                        {executor && (
+                          <span
+                                className="rounded border border-success/30 bg-success/8 px-1 py-0.5 text-[10px] text-success"
+                                title="Commands run through this runtime while All runtimes is selected."
+                              >
+                            Executor
+                          </span>
                         )}
-                      </CommandItem>
+                      </div>
+                    </div>
+                    {selectedRuntimeFilter === "all" && !executor && (
+                      <button
+                        type="button"
+                        className="mt-0.5 shrink-0 rounded border border-border/70 px-2 py-1 text-[10px] text-text-secondary transition-colors hover:border-accent/60 hover:text-accent"
+                        title="Use this runtime as the executor for commands while keeping All runtimes selected."
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          selectExecutorRuntime(runtime.runtimeId);
+                        }}
+                      >
+                        Use as executor
+                      </button>
+                    )}
+                    {selected && (
+                      <Check size={14} className="mt-0.75 shrink-0 text-accent" />
+                    )}
+                  </CommandItem>
                     );
                   })}
                 </CommandGroup>
               </>
             )}
           </CommandList>
+          <div className="flex items-center justify-end border-t border-border bg-bg-surface/80 px-3 py-3">
+            <DialogClose asChild>
+              <Button type="button" size="sm">
+                Done
+              </Button>
+            </DialogClose>
+          </div>
         </Command>
       </DialogContent>
     </Dialog>

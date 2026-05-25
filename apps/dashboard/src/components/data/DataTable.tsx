@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Popover } from "radix-ui";
+import { PanelRightOpen } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getReferenceDisplay, type ReferenceFieldOptions } from "@/lib/dataReferences";
 import { useTrackChanges } from "@/hooks";
@@ -61,7 +62,7 @@ export function DataTable({
     <ScrollArea className={cn("h-full w-full bg-bg-base", className)}>
       <div className="min-w-full w-max border-r border-border bg-bg-base">
         <div className="sticky top-0 z-10 flex border-b border-border bg-bg-surface">
-          <div className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border px-2">
+          <div className="flex h-9 w-16 shrink-0 items-center justify-center gap-1 border-r border-border px-2">
             <RowCheckbox
               checked={allVisibleSelected}
               onChange={(checked) => onToggleAllRows?.(visibleRowIds, checked)}
@@ -94,7 +95,6 @@ export function DataTable({
             return (
               <div
                 key={rowId}
-                onClick={() => onRowClick?.(rowId)}
                 className={cn(
                   "flex border-b border-border/80 bg-bg-base transition-colors",
                   isSelected
@@ -113,7 +113,7 @@ export function DataTable({
                 )}
               >
                 <div
-                  className="flex min-h-11 w-10 shrink-0 items-center justify-center border-r border-border px-2 py-2"
+                  className="flex min-h-11 w-16 shrink-0 items-center justify-center gap-1 border-r border-border px-2 py-2"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <RowCheckbox
@@ -121,6 +121,18 @@ export function DataTable({
                     onChange={() => onToggleRowSelection?.(rowId)}
                     ariaLabel={`Select row ${rowId}`}
                   />
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex size-6 items-center justify-center rounded border border-transparent text-text-tertiary transition-colors hover:border-border-hover hover:bg-bg-elevated hover:text-text-primary",
+                      isSelected && "border-accent/30 bg-accent/10 text-accent"
+                    )}
+                    title="Inspect row"
+                    aria-label={`Inspect row ${rowId}`}
+                    onClick={() => onRowClick?.(rowId)}
+                  >
+                    <PanelRightOpen size={12} />
+                  </button>
                 </div>
                 {columns.map((col) => {
                   const isEditingThisCell =

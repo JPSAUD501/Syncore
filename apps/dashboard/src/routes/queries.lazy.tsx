@@ -16,9 +16,14 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
 import { usePreferredTarget } from "@/hooks";
-import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
+import { useDevtoolsMultiRuntimeSubscription } from "@/hooks/useReactiveData";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import type { SyncoreActiveQueryInfo } from "@syncore/devtools-protocol";
+import type {
+  SyncoreActiveQueryInfo,
+  SyncoreDevtoolsSubscriptionResultPayload
+} from "@syncore/devtools-protocol";
+
+type ActiveQueryWithRuntime = SyncoreActiveQueryInfo & { runtimeId: string };
 
 export const Route = createLazyFileRoute("/queries")({
   component: ActiveQueriesPage
@@ -27,22 +32,45 @@ export const Route = createLazyFileRoute("/queries")({
 function ActiveQueriesPage() {
   const navigate = useNavigate();
   const { queryId: initialQueryId } = Route.useSearch();
-  const { targetRuntimeId, usingProjectTarget, supportsOffline } =
+  const {
+    targetRuntimeId,
+    usingProjectTarget,
+    supportsOffline,
+    selectedTarget,
+    runtimeFilter
+  } =
     usePreferredTarget();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(initialQueryId ?? null);
 
-  const activeQueriesSubscription = useDevtoolsSubscription(
-    targetRuntimeId ? { kind: "runtime.activeQueries" } : null,
-    { enabled: Boolean(targetRuntimeId), targetRuntimeId }
+  const runtimeIds = useMemo(() => {
+    if (!selectedTarget) {
+      return targetRuntimeId ? [targetRuntimeId] : [];
+    }
+    if (runtimeFilter === "all") {
+      return selectedTarget.runtimes
+        .filter((runtime) => runtime.connected)
+        .map((runtime) => runtime.runtimeId);
+    }
+    return targetRuntimeId ? [targetRuntimeId] : [];
+  }, [runtimeFilter, selectedTarget, targetRuntimeId]);
+  const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
+    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+  >(
+    runtimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
+    runtimeIds,
+    { enabled: runtimeIds.length > 0 }
   );
 
-  const queries = useMemo(
+  const queries = useMemo<ActiveQueryWithRuntime[]>(
     () =>
-      activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
-        ? activeQueriesSubscription.data.activeQueries
-        : [],
-    [activeQueriesSubscription.data]
+      Object.entries(activeQueriesSubscription.dataByRuntime).flatMap(
+        ([runtimeId, payload]) =>
+          payload.kind === "runtime.activeQueries.result"
+            ? payload.activeQueries.map((query) => ({ ...query, runtimeId }))
+            : []
+      ),
+    [activeQueriesSubscription.dataByRuntime]
   );
 
   const filteredQueries = useMemo(() => {
@@ -65,7 +93,7 @@ function ActiveQueriesPage() {
   }, [queries, search]);
 
   const selectedQuery =
-    filteredQueries.find((query) => query.id === selectedId) ??
+    filteredQueries.find((query) => getQuerySelectionId(query) === selectedId || query.id === selectedId) ??
     filteredQueries[0] ??
     null;
 
@@ -84,7 +112,7 @@ function ActiveQueriesPage() {
           title="Active queries unavailable"
           description={
             supportsOffline
-              ? "The project target is not available right now."
+              ? "The selected Project Target runtime is not available right now."
               : "Connect a runtime to inspect live query subscriptions."
           }
           className="h-full"
@@ -103,7 +131,7 @@ function ActiveQueriesPage() {
           </h2>
           {usingProjectTarget && (
             <Badge variant="outline" className="text-[9px]">
-              Project Offline
+              Project Target
             </Badge>
           )}
           {activeQueriesSubscription.loading && (
@@ -144,10 +172,14 @@ function ActiveQueriesPage() {
             <div className="space-y-1 p-2">
               {filteredQueries.map((query) => (
                 <QueryRow
-                  key={query.id}
+                  key={getQuerySelectionId(query)}
                   query={query}
-                  selected={selectedQuery?.id === query.id}
-                  onSelect={() => setSelectedId(query.id)}
+                  selected={
+                    selectedQuery
+                      ? getQuerySelectionId(selectedQuery) === getQuerySelectionId(query)
+                      : false
+                  }
+                  onSelect={() => setSelectedId(getQuerySelectionId(query))}
                 />
               ))}
             </div>
@@ -258,7 +290,7 @@ function QueryRow({
   selected,
   onSelect
 }: {
-  query: SyncoreActiveQueryInfo;
+  query: ActiveQueryWithRuntime;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -286,6 +318,7 @@ function QueryRow({
           )}
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-[10px] text-text-tertiary">
+          <span className="font-mono">{query.runtimeId.slice(0, 8)}</span>
           <span className="font-mono">{query.dependencyKeys.length} deps</span>
           <span>{formatRelativeTime(query.lastRunAt)}</span>
         </div>
@@ -293,6 +326,10 @@ function QueryRow({
       <Clock size={12} className="shrink-0 text-text-tertiary" />
     </button>
   );
+}
+
+function getQuerySelectionId(query: ActiveQueryWithRuntime): string {
+  return `${query.runtimeId}:${query.id}`;
 }
 
 function MetricCard({

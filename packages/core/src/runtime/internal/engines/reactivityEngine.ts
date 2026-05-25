@@ -4,6 +4,7 @@ import type {
 } from "@syncore/devtools-protocol";
 import type { FunctionReference } from "../../functions.js";
 import type {
+  DevtoolsLiveQueryScope,
   ImpactScope,
   JsonObject,
   SyncoreExternalChangeApplier,
@@ -321,6 +322,7 @@ export class ReactivityEngine {
     }
 
     this.pendingExternalChangePromise = (async () => {
+      this.deps.devtools.notifyScopes(toDevtoolsScopes(changedScopes));
       await this.refreshQueriesForScopes(
         changedScopes,
         `External change touched ${[...changedScopes].join(", ")}`
@@ -375,6 +377,32 @@ function resolveChangedScopes(
   }
 
   return scopes;
+}
+
+function toDevtoolsScopes(
+  scopes: Iterable<ImpactScope>
+): DevtoolsLiveQueryScope[] {
+  const resolved = new Set<DevtoolsLiveQueryScope>();
+  for (const scope of scopes) {
+    if (scope.startsWith("row:")) {
+      const [, tableName] = scope.split(":");
+      if (tableName) {
+        resolved.add(`table:${tableName}`);
+      }
+      continue;
+    }
+    if (
+      scope === "runtime.summary" ||
+      scope === "runtime.activeQueries" ||
+      scope === "schema.tables" ||
+      scope === "scheduler.jobs" ||
+      scope.startsWith("table:") ||
+      scope.startsWith("storage:")
+    ) {
+      resolved.add(scope as DevtoolsLiveQueryScope);
+    }
+  }
+  return resolved.size > 0 ? [...resolved] : ["all"];
 }
 
 function stableStringify(value: unknown): string {

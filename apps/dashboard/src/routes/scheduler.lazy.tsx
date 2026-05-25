@@ -192,7 +192,7 @@ function SchedulerPage() {
           title="Scheduler unavailable"
           description={
             supportsOffline
-              ? "The project target is not available right now."
+              ? "The selected Project Target runtime is not available right now."
               : "Connect a runtime or configure a project target to manage scheduled jobs."
           }
           className="h-full"
@@ -212,7 +212,7 @@ function SchedulerPage() {
           </div>
           {usingProjectTarget && (
             <Badge variant="outline" className="text-[9px]">
-              Project Offline
+              Project Target
             </Badge>
           )}
           {jobsSubscription.loading && (
@@ -640,7 +640,7 @@ function JobDetailPanel({
               </div>
               {usingProjectTarget && (
                 <p className="mt-1.5 text-center text-[10px] text-text-tertiary">
-                  Running in project offline mode
+                  Running via Project Target
                 </p>
               )}
             </div>

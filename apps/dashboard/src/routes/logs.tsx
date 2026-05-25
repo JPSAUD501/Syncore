@@ -1,11 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { readDashboardAuthSearch } from "@/lib/routeSearch";
 
 export const Route = createFileRoute("/logs")({
-  validateSearch: (search): { executionId?: string } => {
-    const next: { executionId?: string } = {};
+  validateSearch: (search): {
+    executionId?: string;
+    token?: string;
+    hubToken?: string;
+  } => {
+    const next: {
+      executionId?: string;
+      token?: string;
+      hubToken?: string;
+    } = {};
     if (typeof search.executionId === "string") {
       next.executionId = search.executionId;
     }
-    return next;
+    return { ...readDashboardAuthSearch(search), ...next };
   }
 });

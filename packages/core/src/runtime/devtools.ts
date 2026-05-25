@@ -143,6 +143,7 @@ export function createDevtoolsCommandHandler(
           const id = await runDevtoolsMutation(admin, async (ctx) =>
             ctx.db.insert(payload.table as never, payload.document as never)
           , { origin: "dashboard" });
+          notifyDataMutationScopes(admin, payload.table);
           return { kind: "data.mutate.result", success: true, id };
         } catch (error) {
           return {
@@ -163,6 +164,7 @@ export function createDevtoolsCommandHandler(
             );
             return null;
           }, { origin: "dashboard" });
+          notifyDataMutationScopes(admin, payload.table);
           return {
             kind: "data.mutate.result",
             success: true,
@@ -183,6 +185,7 @@ export function createDevtoolsCommandHandler(
             await ctx.db.delete(payload.table as never, payload.id);
             return null;
           }, { origin: "dashboard" });
+          notifyDataMutationScopes(admin, payload.table);
           return { kind: "data.mutate.result", success: true };
         } catch (error) {
           return {
@@ -1015,6 +1018,13 @@ async function runDevtoolsMutation<TResult>(
   ): Promise<TResult> {
     return admin.runDevtoolsMutation(callback as never, meta);
   }
+
+function notifyDataMutationScopes(
+  admin: SyncoreRuntimeAdmin<SyncoreDataModel>,
+  tableName: string
+): void {
+  admin.notifyDevtoolsScopes(["schema.tables", `table:${tableName}`]);
+}
 
 function scopesForSubscription(
   payload: SyncoreDevtoolsSubscriptionPayload,

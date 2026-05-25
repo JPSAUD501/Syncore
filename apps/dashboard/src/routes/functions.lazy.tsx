@@ -41,10 +41,17 @@ import {
 } from "@/components/shared";
 import type { FunctionType } from "@/components/shared/FunctionBadge";
 import { useDevtools, usePreferredTarget } from "@/hooks";
-import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
+import {
+  useDevtoolsMultiRuntimeSubscription,
+  useDevtoolsSubscription
+} from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
-import type { ExecutionTrace, SyncoreActiveQueryInfo } from "@syncore/devtools-protocol";
+import type {
+  ExecutionTrace,
+  SyncoreActiveQueryInfo,
+  SyncoreDevtoolsSubscriptionResultPayload
+} from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/functions")({
   component: FunctionsPage
@@ -83,7 +90,7 @@ type FunctionListEntry = {
 
 function FunctionsPage() {
   const { functionMetrics, functionEvents, traceIndex } = useDevtools();
-  const { targetRuntimeId, usingProjectTarget } = usePreferredTarget();
+  const { targetRuntimeId, usingProjectTarget, selectedTarget, runtimeFilter } = usePreferredTarget();
   const functionSearch = useSearch({ from: "/functions" });
   const navigate = useNavigate();
   const appliedSearchRef = useRef<string | null>(null);
@@ -103,9 +110,20 @@ function FunctionsPage() {
     targetRuntimeId ? { kind: "functions.catalog" } : null,
     { enabled: Boolean(targetRuntimeId), targetRuntimeId }
   );
-  const activeQueriesSubscription = useDevtoolsSubscription(
-    targetRuntimeId ? { kind: "runtime.activeQueries" } : null,
-    { enabled: Boolean(targetRuntimeId), targetRuntimeId }
+  const activeQueryRuntimeIds = useMemo(() => {
+    if (runtimeFilter === "all" && selectedTarget) {
+      return selectedTarget.runtimes
+        .filter((runtime) => runtime.connected)
+        .map((runtime) => runtime.runtimeId);
+    }
+    return targetRuntimeId ? [targetRuntimeId] : [];
+  }, [runtimeFilter, selectedTarget, targetRuntimeId]);
+  const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
+    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+  >(
+    activeQueryRuntimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
+    activeQueryRuntimeIds,
+    { enabled: activeQueryRuntimeIds.length > 0 }
   );
 
   const registeredFunctions =
@@ -113,10 +131,15 @@ function FunctionsPage() {
       ? functionsSubscription.data.functions
       : null;
   const loadingFunctions = functionsSubscription.loading;
-  const activeQueries =
-    activeQueriesSubscription.data?.kind === "runtime.activeQueries.result"
-      ? activeQueriesSubscription.data.activeQueries
-      : [];
+  const activeQueries = useMemo(
+    () =>
+      Object.values(activeQueriesSubscription.dataByRuntime).flatMap((payload) =>
+        payload.kind === "runtime.activeQueries.result"
+          ? payload.activeQueries
+          : []
+      ),
+    [activeQueriesSubscription.dataByRuntime]
+  );
 
   const fnList = useMemo(
     () => registeredFunctions ?? [],
@@ -368,7 +391,7 @@ function FunctionsPage() {
             </h2>
             {usingProjectTarget && (
               <Badge variant="outline" className="text-[9px]">
-                Project Offline
+                Project Target
               </Badge>
             )}
             {loadingFunctions && (
@@ -397,7 +420,7 @@ function FunctionsPage() {
                 <p className="text-[11px] text-text-tertiary">
                   {targetRuntimeId
                     ? "No functions available for this target"
-                    : "Connect a runtime or configure a project target"}
+                    : "Connect a runtime"}
                 </p>
               </div>
             ) : (

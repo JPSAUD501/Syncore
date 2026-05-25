@@ -17,8 +17,10 @@ const rendererHtmlPath = path.resolve(
   "index.html"
 );
 
+const developmentDataDirectory = path.join(process.cwd(), ".syncore");
 const userDataDirectory =
-  process.env.SYNCORE_ELECTRON_USER_DATA_DIR ?? app.getPath("userData");
+  process.env.SYNCORE_ELECTRON_USER_DATA_DIR ??
+  (app.isPackaged ? app.getPath("userData") : developmentDataDirectory);
 
 app.setPath("userData", userDataDirectory);
 

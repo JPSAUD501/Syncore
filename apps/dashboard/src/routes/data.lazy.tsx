@@ -1341,8 +1341,8 @@ function TableDirectory({
                 {targetAvailable
                   ? "No tables found"
                   : usingProjectTarget
-                    ? "Project target unavailable"
-                    : "Connect a runtime or configure a project target"}
+                    ? "Selected Project Target runtime unavailable"
+                    : "Connect a runtime"}
               </p>
             </div>
           ) : (

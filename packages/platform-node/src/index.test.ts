@@ -150,6 +150,17 @@ describe("Node Syncore runtime", () => {
           args: {},
           handler: async (ctx: QueryCtx<typeof runtimeSchema>) =>
             ctx.db.query("tasks").collect()
+        }),
+        "tasks/create": mutation({
+          args: { text: s.string() },
+          handler: async (
+            ctx: MutationCtx<typeof runtimeSchema>,
+            args: { text: string }
+          ) =>
+            ctx.db.insert("tasks", {
+              text: args.text,
+              done: false
+            })
         })
       },
       devtoolsUrl: `ws://127.0.0.1:${address.port}`
@@ -165,6 +176,15 @@ describe("Node Syncore runtime", () => {
           Array<{ _id: string; text: string; done: boolean }>
         >("query", "tasks/list")
       );
+    await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<"mutation", { text: string }, string>(
+          "mutation",
+          "tasks/create"
+        ),
+        { text: "Relay change" }
+      );
     await new Promise((resolve) => setTimeout(resolve, 100));
     await runtime.stop();
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -177,14 +197,31 @@ describe("Node Syncore runtime", () => {
     );
     expect(helloPayload).toBeDefined();
     const hello = JSON.parse(helloPayload ?? "{}") as {
+      dataSourceAlias?: string;
       capabilities?: {
         sql?: { read: boolean; write: boolean; live: boolean };
       };
     };
+    expect(hello.dataSourceAlias).toEqual(expect.any(String));
+    expect(hello.dataSourceAlias?.length).toBeGreaterThan(0);
     expect(hello.capabilities?.sql).toMatchObject({
       read: true,
       write: true,
       live: true
+    });
+    const externalChangePayload = messages.find((message) =>
+      message.includes('"type":"external.change"')
+    );
+    expect(externalChangePayload).toBeDefined();
+    expect(JSON.parse(externalChangePayload ?? "{}")).toMatchObject({
+      type: "external.change",
+      storageIdentity: expect.stringContaining("devtools.db"),
+      event: {
+        scope: "database",
+        reason: "commit",
+        changedScopes: ["table:tasks"],
+        changedTables: ["tasks"]
+      }
     });
     expect(messages.some((message) => message.includes('"type":"event"'))).toBe(
       true

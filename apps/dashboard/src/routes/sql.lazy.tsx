@@ -175,6 +175,7 @@ const substrateHighlight = EditorView.baseTheme({
 function SqlPage() {
   const { isReady } = useConnection();
   const {
+    activeRuntime,
     targetRuntimeId,
     usingProjectTarget,
     selectedTarget,
@@ -195,17 +196,17 @@ function SqlPage() {
     }
   });
   const editorRef = useRef<ReactCodeMirrorRef>(null);
-  const sqlCapabilities = selectedTarget?.capabilities.sql;
+  const sqlCapabilities = activeRuntime?.capabilities?.sql;
   const allRuntimesSelected =
     selectedTarget?.kind === "client" &&
     selectedTarget.runtimes.length > 1 &&
     runtimeFilter === "all";
-  const sqlUnavailableReason = allRuntimesSelected
-    ? "Select a single runtime to use SQL Console."
-    : (sqlCapabilities?.reason ??
-      "SQL Console is not available for this data source.");
-  const canReadSql =
-    selectedTarget?.sqlAvailable === true && !allRuntimesSelected;
+  const sqlUnavailableReason =
+    sqlCapabilities?.reason ??
+    (allRuntimesSelected
+      ? "SQL Console requires an executor runtime with SQL support. The current All runtimes executor does not provide SQL."
+      : "SQL Console is not available for the selected runtime.");
+  const canReadSql = sqlCapabilities?.read === true;
   const canWriteSql = canReadSql && sqlCapabilities?.write === true;
   const canLiveSql = canReadSql && sqlCapabilities?.live === true;
 
@@ -491,7 +492,7 @@ function SqlPage() {
             </h2>
             {usingProjectTarget && (
               <Badge variant="outline" className="text-[9px]">
-                Project Offline
+                Project Target
               </Badge>
             )}
             <Badge variant="outline" className="text-[9px]">

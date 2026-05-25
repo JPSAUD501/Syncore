@@ -1104,6 +1104,8 @@ export interface SyncoreBridgeMessageEndpoint {
 
 // @public (undocumented)
 export type SyncoreBridgeRequest = {
+    type: "runtime.status.request";
+} | {
     type: "invoke";
     requestId: string;
     kind: "query";
@@ -1642,6 +1644,8 @@ export interface SyncoreRuntimeSummary {
     recentEventCount: number;
     // (undocumented)
     runtimeId: string;
+    // (undocumented)
+    runtimeRole?: "app" | "project-target";
     // (undocumented)
     sessionLabel?: string;
     // (undocumented)

@@ -6,6 +6,7 @@ import { DashboardTokenDialog } from "@/components/layout/DashboardTokenDialog";
 import { InactiveRuntimeNotice } from "@/components/layout/InactiveRuntimeNotice";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { initDevtoolsConnection, destroyDevtoolsConnection } from "@/lib/store";
+import { readDashboardAuthSearch } from "@/lib/routeSearch";
 
 function RootLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -76,5 +77,6 @@ function RootLayout() {
 }
 
 export const Route = createRootRoute({
+  validateSearch: readDashboardAuthSearch,
   component: RootLayout
 });

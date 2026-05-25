@@ -7,6 +7,8 @@ This example shows the intended desktop setup after the quickstart, with a fulle
 - SQLite and file storage stay local on disk
 - optional devtools connection goes to `ws://127.0.0.1:4311`
 - the main process uses the short-form `bindElectronWindowToSyncoreRuntime({ ipcMain, ... })` helper
+- in development, the app stores data in `.syncore/`, matching the configured project target;
+  set `SYNCORE_ELECTRON_USER_DATA_DIR` to test an isolated user-data directory
 
 ## Files
 

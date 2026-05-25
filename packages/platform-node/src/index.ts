@@ -6,6 +6,8 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire as createNodeRequire } from "node:module";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
@@ -18,6 +20,7 @@ import {
 import type {
   SyncoreDevtoolsClientMessage,
   SyncoreDevtoolsCapabilities,
+  SyncoreDevtoolsExternalChangeEvent,
   SyncoreDevtoolsMessage,
   SyncoreRuntimeSummary
 } from "@syncore/devtools-protocol";
@@ -36,6 +39,8 @@ import {
   type StorageWriteInput,
   type SyncoreCapabilities,
   type SyncoreDataModel,
+  type SyncoreExternalChangeEvent,
+  type SyncoreExternalChangeSignal,
   SyncoreRuntime,
   type SyncoreRuntimeOptions,
   type SyncoreSqlDriver,
@@ -60,6 +65,8 @@ const { Parser: NodeSqlParser } = nodeRequire("node-sql-parser") as {
   };
 };
 const nodeSqlParser = new NodeSqlParser();
+const DEVTOOLS_META_DIRECTORY = ".syncore-devtools";
+const DATA_SOURCE_ALIAS_PREFIX = "data-source-alias";
 
 type SqlAst = {
   type: string;
@@ -222,8 +229,8 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
   private readonly database: DatabaseSync;
   private transactionDepth = 0;
 
-  constructor(filename: string) {
-    this.database = new DatabaseSync(filename);
+  constructor(readonly databasePath: string) {
+    this.database = new DatabaseSync(databasePath);
     this.database.exec("PRAGMA foreign_keys = ON;");
     this.database.exec("PRAGMA journal_mode = WAL;");
   }
@@ -366,6 +373,129 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
   }
 }
 
+const SESSION_ADJECTIVES = [
+  "Acrobatic",
+  "Bold",
+  "Cosmic",
+  "Daring",
+  "Electric",
+  "Fierce",
+  "Golden",
+  "Hidden",
+  "Iron",
+  "Jade",
+  "Keen",
+  "Lunar",
+  "Mystic",
+  "Noble",
+  "Orbital",
+  "Primal",
+  "Quick",
+  "Radiant",
+  "Shadow",
+  "Turbo",
+  "Ultra",
+  "Vivid",
+  "Wicked",
+  "Xenon",
+  "Zen",
+  "Arctic",
+  "Binary",
+  "Cyber",
+  "Digital",
+  "Ember",
+  "Frozen",
+  "Galactic",
+  "Hyper",
+  "Infra",
+  "Jumbo",
+  "Kinetic",
+  "Liquid",
+  "Magnetic",
+  "Neon",
+  "Onyx",
+  "Phantom",
+  "Quantum",
+  "Rapid",
+  "Sonic",
+  "Titan",
+  "Velvet",
+  "Wild",
+  "Blazing",
+  "Crystal",
+  "Dynamic"
+] as const;
+
+const SESSION_NOUNS = [
+  "Phoenix",
+  "Dragon",
+  "Developer",
+  "Hacker",
+  "Wizard",
+  "Runner",
+  "Ranger",
+  "Maverick",
+  "Spartan",
+  "Viking",
+  "Sentinel",
+  "Guardian",
+  "Nomad",
+  "Cipher",
+  "Vector",
+  "Matrix",
+  "Prism",
+  "Nebula",
+  "Comet",
+  "Pulse",
+  "Vertex",
+  "Flux",
+  "Storm",
+  "Blaze",
+  "Frost",
+  "Thunder",
+  "Drift"
+] as const;
+
+function generateUniqueSessionName(): string {
+  const adj =
+    SESSION_ADJECTIVES[Math.floor(Math.random() * SESSION_ADJECTIVES.length)]!;
+  const noun = SESSION_NOUNS[Math.floor(Math.random() * SESSION_NOUNS.length)]!;
+  return `${adj} ${noun}`;
+}
+
+function resolvePersistedDataSourceAlias(
+  storageDirectory: string,
+  storageIdentity: string
+): string {
+  const metaDirectory = path.join(storageDirectory, DEVTOOLS_META_DIRECTORY);
+  const aliasId = createHash("sha256")
+    .update(storageIdentity)
+    .digest("hex")
+    .slice(0, 16);
+  const aliasPath = path.join(
+    metaDirectory,
+    `${DATA_SOURCE_ALIAS_PREFIX}-${aliasId}.txt`
+  );
+
+  try {
+    const existing = readFileSync(aliasPath, "utf8").trim();
+    if (existing.length > 0) {
+      return existing;
+    }
+  } catch {
+    // Missing metadata is expected for a new data source.
+  }
+
+  const nextValue = generateUniqueSessionName();
+  try {
+    mkdirSync(metaDirectory, { recursive: true });
+    writeFileSync(aliasPath, nextValue, "utf8");
+  } catch {
+    // The alias is a dashboard convenience; runtime startup must not depend on it.
+  }
+  return nextValue;
+}
+
 export interface CreateNodeRuntimeOptions<
   TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
 > {
@@ -448,6 +578,7 @@ export function createNodeSyncoreRuntime<
 ): SyncoreRuntime<TSchema> {
   const resolvedDevtoolsUrl =
     options.devtoolsUrl ?? resolveDefaultNodeDevtoolsUrl();
+  const storageIdentity = `file::${path.resolve(options.databasePath)}`;
   const websocketDevtools =
     options.devtools === undefined &&
     resolvedDevtoolsUrl &&
@@ -462,7 +593,12 @@ export function createNodeSyncoreRuntime<
           targetKind: "client",
           storageProtocol: "file",
           databaseLabel: path.basename(options.databasePath),
-          storageIdentity: `file::${path.resolve(options.databasePath)}`,
+          dataSourceAlias: resolvePersistedDataSourceAlias(
+            options.storageDirectory,
+            storageIdentity
+          ),
+          storageIdentity,
+          runtimeRole: "app",
           capabilities: createNodeDevtoolsCapabilities()
         })
       : undefined;
@@ -483,6 +619,9 @@ export function createNodeSyncoreRuntime<
       : (options.devtools ?? websocketDevtools);
   if (resolvedDevtools) {
     runtimeOptions.devtools = resolvedDevtools;
+  }
+  if (websocketDevtools?.externalChangeSignal) {
+    runtimeOptions.externalChangeSignal = websocketDevtools.externalChangeSignal;
   }
   if (options.scheduler) {
     runtimeOptions.scheduler = options.scheduler;
@@ -685,6 +824,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
   origin?: string;
   sessionLabel?: string;
   targetKind?: "client" | "project";
+  runtimeRole?: "app" | "project-target";
   storageProtocol?: string;
   databaseLabel?: string;
   dataSourceAlias?: string;
@@ -696,6 +836,7 @@ export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
   attachRuntime(runtime: SyncoreRuntime<NodeSyncoreSchema>): void;
   attachCommandHandler(handler: DevtoolsCommandHandler): void;
   attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
+  externalChangeSignal?: SyncoreExternalChangeSignal;
   dispose(): void;
 }
 
@@ -708,6 +849,9 @@ export function createNodeWebSocketDevtoolsSink(
   let getSummary: (() => SyncoreRuntimeSummary) | undefined;
   let onCommand: DevtoolsCommandHandler | undefined;
   let subscriptionHost: DevtoolsSubscriptionHost | undefined;
+  const externalChangeListeners = new Set<
+    (event: SyncoreExternalChangeEvent) => void
+  >();
   const pendingMessages: SyncoreDevtoolsMessage[] = [];
   let latestHello:
     | {
@@ -738,6 +882,7 @@ export function createNodeWebSocketDevtoolsSink(
             ? { sessionLabel: options.sessionLabel }
             : {}),
           ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.runtimeRole ? { runtimeRole: options.runtimeRole } : {}),
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
@@ -776,6 +921,10 @@ export function createNodeWebSocketDevtoolsSink(
         | SyncoreDevtoolsClientMessage;
       if (message.type === "ping") {
         send({ type: "pong" });
+      } else if (message.type === "external.change") {
+        for (const listener of externalChangeListeners) {
+          listener(message.event as SyncoreExternalChangeEvent);
+        }
       } else if (message.type === "command" && onCommand) {
         onCommand(message.payload)
           .then((responsePayload) => {
@@ -869,7 +1018,7 @@ export function createNodeWebSocketDevtoolsSink(
 
   connect();
 
-  return {
+  const sink: NodeWebSocketDevtoolsSink = {
     emit(event) {
       if (event.type === "runtime.connected") {
         latestHello = {
@@ -891,6 +1040,7 @@ export function createNodeWebSocketDevtoolsSink(
             ? { sessionLabel: options.sessionLabel }
             : {}),
           ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+          ...(options.runtimeRole ? { runtimeRole: options.runtimeRole } : {}),
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
@@ -928,6 +1078,32 @@ export function createNodeWebSocketDevtoolsSink(
       socket?.close();
     }
   };
+  if (options.storageIdentity) {
+    sink.externalChangeSignal = {
+      subscribe(listener) {
+        externalChangeListeners.add(listener);
+        return () => {
+          externalChangeListeners.delete(listener);
+        };
+      },
+      publish(event) {
+        const runtimeId = latestHello?.runtimeId ?? getSummary?.().runtimeId;
+        if (!runtimeId) {
+          return;
+        }
+        send({
+          type: "external.change",
+          runtimeId,
+          storageIdentity: options.storageIdentity!,
+          event: event as SyncoreDevtoolsExternalChangeEvent
+        });
+      },
+      close() {
+        externalChangeListeners.clear();
+      }
+    };
+  }
+  return sink;
 }
 
 function withRuntimeSummaryMeta(
@@ -940,6 +1116,7 @@ function withRuntimeSummaryMeta(
     ...(options.origin ? { origin: options.origin } : {}),
     ...(options.sessionLabel ? { sessionLabel: options.sessionLabel } : {}),
     ...(options.targetKind ? { targetKind: options.targetKind } : {}),
+    ...(options.runtimeRole ? { runtimeRole: options.runtimeRole } : {}),
     ...(options.storageProtocol
       ? { storageProtocol: options.storageProtocol }
       : {}),

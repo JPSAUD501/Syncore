@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import {
   SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
   SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
@@ -438,7 +438,8 @@ describe("devtools store runtime selection", () => {
       targets: useConnectedTargets(),
       selectedTarget: useSelectedTarget(),
       runtimeFilter: useSelectedRuntimeFilter(),
-      activeRuntime: useActiveRuntime()
+      activeRuntime: useActiveRuntime(),
+      selectedRuntimeId: useDevtoolsStore((state) => state.selectedRuntimeId)
     }));
 
     expect(result.current.targets).toHaveLength(1);
@@ -469,6 +470,123 @@ describe("devtools store runtime selection", () => {
 
     expect(result.current?.label).toBe("tasks.db");
     expect(result.current?.label).not.toContain("Random Runtime");
+  });
+
+  it("groups a project target with a client runtime that points to the same storage", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-electron",
+        platform: "electron-main",
+        targetKind: "client",
+        databaseLabel: "syncore.db",
+        storageProtocol: "file",
+        storageIdentity: "file::/tmp/syncore.db",
+        sessionLabel: "Electric Fox (Electron)"
+      })
+    );
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "syncore-project-target",
+        platform: "project",
+        targetKind: "project",
+        runtimeRole: "project-target",
+        databaseLabel: "syncore.db",
+        storageProtocol: "file",
+        storageIdentity: "file::/tmp/syncore.db"
+      })
+    );
+
+    const { result } = renderHook(() => ({
+      targets: useConnectedTargets(),
+      selectedTarget: useSelectedTarget(),
+      runtimeFilter: useSelectedRuntimeFilter(),
+      activeRuntime: useActiveRuntime(),
+      targetRuntimes: useSelectedTargetRuntimes()
+    }));
+
+    expect(result.current.targets).toHaveLength(1);
+    expect(result.current.selectedTarget?.kind).toBe("client");
+    expect(result.current.selectedTarget?.label).toBe("syncore.db");
+    expect(result.current.selectedTarget?.runtimeIds).toEqual([
+      "runtime-electron",
+      "syncore-project-target"
+    ]);
+    expect(result.current.runtimeFilter).toBe("all");
+    expect(result.current.activeRuntime?.runtimeId).toBe(
+      "syncore-project-target"
+    );
+    expect(
+      result.current.targetRuntimes.some(
+        (runtime) => runtime.runtimeId === "syncore-project-target"
+      )
+    ).toBe(true);
+
+    act(() => {
+      useDevtoolsStore.getState().selectRuntime("syncore-project-target");
+    });
+    expect(result.current.runtimeFilter).toBe("syncore-project-target");
+    expect(result.current.activeRuntime?.runtimeId).toBe(
+      "syncore-project-target"
+    );
+    expect(result.current.activeRuntime?.runtimeRole).toBe("project-target");
+
+    act(() => {
+      useDevtoolsStore.getState()._handleMessage({
+        type: "event",
+        event: {
+          type: "log",
+          runtimeId: "runtime-electron",
+          level: "info",
+          message: "app runtime event",
+          timestamp: 10
+        }
+      });
+    });
+
+    expect(result.current.runtimeFilter).toBe("syncore-project-target");
+    expect(result.current.activeRuntime?.runtimeId).toBe(
+      "syncore-project-target"
+    );
+  });
+
+  it("uses the project target as the default executor when all runtimes is selected", () => {
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-electron",
+        platform: "electron-main",
+        targetKind: "client",
+        databaseLabel: "syncore.db",
+        storageProtocol: "file",
+        storageIdentity: "file::/tmp/syncore.db",
+        sessionLabel: "electron-main"
+      })
+    );
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "syncore-project-target",
+        platform: "project",
+        targetKind: "project",
+        runtimeRole: "project-target",
+        databaseLabel: "syncore.db",
+        storageProtocol: "file",
+        storageIdentity: "file::/tmp/syncore.db",
+        sessionLabel: "Project target"
+      })
+    );
+
+    act(() => {
+      useDevtoolsStore.getState().selectRuntimeFilter("all");
+    });
+
+    const { result } = renderHook(() => ({
+      runtimeFilter: useSelectedRuntimeFilter(),
+      activeRuntime: useActiveRuntime(),
+      selectedRuntimeId: useDevtoolsStore((state) => state.selectedRuntimeId)
+    }));
+
+    expect(result.current.runtimeFilter).toBe("all");
+    expect(result.current.selectedRuntimeId).toBe("syncore-project-target");
+    expect(result.current.activeRuntime?.runtimeRole).toBe("project-target");
   });
 
   it("uses the public target id as the visible fallback when metadata is missing", () => {
@@ -593,7 +711,7 @@ describe("devtools store runtime selection", () => {
     );
   });
 
-  it("defaults to all sessions when a second session joins the same client target", () => {
+  it("defaults to all sessions while keeping a deterministic executor when a second session joins the same client target", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
       runtimeId: "runtime-a-12345678",
@@ -619,13 +737,15 @@ describe("devtools store runtime selection", () => {
       targets: useConnectedTargets(),
       selectedTarget: useSelectedTarget(),
       runtimeFilter: useSelectedRuntimeFilter(),
-      activeRuntime: useActiveRuntime()
+      activeRuntime: useActiveRuntime(),
+      selectedRuntimeId: useDevtoolsStore((state) => state.selectedRuntimeId)
     }));
 
     expect(result.current.targets).toHaveLength(1);
     expect(result.current.targets[0]?.runtimeIds).toHaveLength(2);
     expect(result.current.selectedTarget?.kind).toBe("client");
     expect(result.current.runtimeFilter).toBe("all");
+    expect(result.current.selectedRuntimeId).toBe("runtime-a-12345678");
     expect(result.current.activeRuntime?.runtimeId).toBe("runtime-a-12345678");
   });
 

@@ -53,6 +53,8 @@ import {
   type SchemaSnapshot,
   type StorageObject,
   type StorageWriteInput,
+  type SyncoreExternalChangeEvent,
+  type SyncoreExternalChangeSignal,
   type SyncoreSchema,
   type SyncoreFunctionRegistry,
   type SyncoreResolvedComponents,
@@ -1877,12 +1879,45 @@ interface ProjectTargetBackend {
   dispose(): Promise<void>;
 }
 
+class HubExternalChangeSignal implements SyncoreExternalChangeSignal {
+  private readonly listeners = new Set<
+    (event: SyncoreExternalChangeEvent) => void
+  >();
+
+  constructor(
+    private readonly publishToHub: (
+      event: SyncoreExternalChangeEvent
+    ) => void | Promise<void>
+  ) {}
+
+  subscribe(listener: (event: SyncoreExternalChangeEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  publish(event: SyncoreExternalChangeEvent): void | Promise<void> {
+    return this.publishToHub(event);
+  }
+
+  receive(event: SyncoreExternalChangeEvent): void {
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+
+  close(): void {
+    this.listeners.clear();
+  }
+}
+
 class HubSqliteDriver implements SyncoreSqlDriver {
   private readonly database: DatabaseSync;
   private transactionDepth = 0;
 
-  constructor(filename: string) {
-    this.database = new DatabaseSync(filename);
+  constructor(readonly databasePath: string) {
+    this.database = new DatabaseSync(databasePath);
     this.database.exec("PRAGMA foreign_keys = ON;");
     this.database.exec("PRAGMA journal_mode = WAL;");
   }
@@ -2103,7 +2138,8 @@ const hubDevtoolsSqlSupport: DevtoolsSqlSupport = {
 };
 
 async function createProjectTargetBackend(
-  cwd: string
+  cwd: string,
+  externalChangeSignal?: SyncoreExternalChangeSignal
 ): Promise<ProjectTargetBackend | null> {
   const config = await loadProjectConfig(cwd);
   const projectTarget = resolveProjectTargetConfig(config);
@@ -2124,9 +2160,10 @@ async function createProjectTargetBackend(
     components,
     driver,
     storage: new HubFileStorageAdapter(storageDirectory),
-    platform: "project"
+    platform: "project",
+    ...(externalChangeSignal ? { externalChangeSignal } : {})
   });
-  await runtime.prepareForDirectAccess();
+  await runtime.start();
 
   const commandHandler = createDevtoolsCommandHandler({
     driver,
@@ -2155,6 +2192,7 @@ async function createProjectTargetBackend(
       platform: "project",
       sessionLabel: "Project Target",
       targetKind: "project",
+      runtimeRole: "project-target",
       storageProtocol: "file",
       databaseLabel: path.basename(databasePath),
       storageIdentity: `file::${databasePath}`,
@@ -2517,15 +2555,6 @@ export async function startDevHub(options: {
   }
   await writeDevtoolsSessionState(options.cwd, sessionState);
 
-  let projectTargetBackend: ProjectTargetBackend | null = null;
-  try {
-    projectTargetBackend = await createProjectTargetBackend(options.cwd);
-  } catch (error) {
-    console.warn(
-      `Project target fallback unavailable: ${formatError(error)}`
-    );
-  }
-
   const httpServer = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ ok: true, wsPort: devtoolsPort }));
@@ -2546,6 +2575,30 @@ export async function startDevHub(options: {
     WebSocket,
     Map<string, { runtimeId: string; payload: SyncoreDevtoolsSubscribe }>
   >();
+  let relayExternalChange: (
+    sourceRuntimeId: string,
+    storageIdentity: string,
+    event: SyncoreExternalChangeEvent
+  ) => void = () => {};
+  const projectTargetExternalChangeSignal = new HubExternalChangeSignal(
+    (event) =>
+      relayExternalChange(
+        PROJECT_TARGET_RUNTIME_ID,
+        runtimeHellos.get(PROJECT_TARGET_RUNTIME_ID)?.storageIdentity ?? "",
+        event
+      )
+  );
+  let projectTargetBackend: ProjectTargetBackend | null = null;
+  try {
+    projectTargetBackend = await createProjectTargetBackend(
+      options.cwd,
+      projectTargetExternalChangeSignal
+    );
+  } catch (error) {
+    console.warn(
+      `Project target fallback unavailable: ${formatError(error)}`
+    );
+  }
   const hello: SyncoreDevtoolsMessage = {
     type: "hello",
     protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
@@ -2560,6 +2613,34 @@ export async function startDevHub(options: {
     runtimeHellos.set(PROJECT_TARGET_RUNTIME_ID, projectTargetBackend.hello);
     runtimeEvents.set(PROJECT_TARGET_RUNTIME_ID, []);
   }
+  relayExternalChange = (sourceRuntimeId, storageIdentity, event) => {
+    if (!storageIdentity) {
+      return;
+    }
+    const message = {
+      type: "external.change",
+      runtimeId: sourceRuntimeId,
+      storageIdentity,
+      event
+    } satisfies SyncoreDevtoolsMessage;
+
+    for (const [runtimeId, runtimeHello] of runtimeHellos) {
+      if (
+        runtimeId === sourceRuntimeId ||
+        runtimeHello.storageIdentity !== storageIdentity
+      ) {
+        continue;
+      }
+      if (runtimeId === PROJECT_TARGET_RUNTIME_ID) {
+        projectTargetExternalChangeSignal.receive(event);
+        continue;
+      }
+      const targetSocket = runtimeSockets.get(runtimeId);
+      if (targetSocket?.readyState === WebSocket.OPEN) {
+        targetSocket.send(JSON.stringify(message));
+      }
+    }
+  };
   const appendHubLog = async (
     event: Extract<SyncoreDevtoolsMessage, { type: "event" }>["event"]
   ) => {
@@ -2567,16 +2648,14 @@ export async function startDevHub(options: {
     const clientRuntimeIds = [...runtimeHellos.values()]
       .filter(
         (hello) =>
-          hello.runtimeId !== "syncore-dev-hub" &&
-          hello.targetKind !== "project"
+          hello.runtimeId !== "syncore-dev-hub"
       )
       .map((hello) => hello.runtimeId)
       .sort();
     const clientTargetKeys = [...runtimeHellos.values()]
       .filter(
         (hello) =>
-          hello.runtimeId !== "syncore-dev-hub" &&
-          hello.targetKind !== "project"
+          hello.runtimeId !== "syncore-dev-hub"
       )
       .map((hello) => hello.storageIdentity ?? `runtime::${hello.runtimeId}`)
       .sort();
@@ -2585,9 +2664,7 @@ export async function startDevHub(options: {
     const targetId =
       event.runtimeId === "syncore-dev-hub"
         ? "all"
-        : runtimeHello?.targetKind === "project"
-          ? "project"
-          : createPublicTargetId(targetIdentity, clientTargetKeys);
+        : createPublicTargetId(targetIdentity, clientTargetKeys);
     const publicRuntimeId =
       event.runtimeId === "syncore-dev-hub"
         ? undefined
@@ -2679,6 +2756,19 @@ export async function startDevHub(options: {
         socket.send(
           JSON.stringify({ type: "pong" } satisfies SyncoreDevtoolsMessage)
         );
+        return;
+      }
+      if (message.type === "external.change") {
+        const runtimeHello = runtimeHellos.get(message.runtimeId);
+        const storageIdentity =
+          runtimeHello?.storageIdentity ?? message.storageIdentity;
+        if (storageIdentity && storageIdentity === message.storageIdentity) {
+          relayExternalChange(
+            message.runtimeId,
+            storageIdentity,
+            message.event as SyncoreExternalChangeEvent
+          );
+        }
         return;
       }
       if (message.type === "command") {

@@ -192,6 +192,7 @@ export interface SyncoreRuntimeSummary {
   origin?: string;
   sessionLabel?: string;
   targetKind?: "client" | "project";
+  runtimeRole?: "app" | "project-target";
   storageProtocol?: string;
   databaseLabel?: string;
   dataSourceAlias?: string;
@@ -218,6 +219,17 @@ export interface SyncoreDevtoolsCapabilities {
     read: boolean;
     edit: boolean;
   };
+}
+
+export interface SyncoreDevtoolsExternalChangeEvent {
+  sourceId: string;
+  scope: "database" | "storage" | "all";
+  reason: "commit" | "storage-put" | "storage-delete" | "reconcile";
+  timestamp: number;
+  revision?: string;
+  changedScopes?: string[];
+  changedTables?: string[];
+  storageIds?: string[];
 }
 
 export function createBasePublicId(input: string): string {
@@ -309,6 +321,7 @@ export type SyncoreDevtoolsMessage =
       origin?: string;
       sessionLabel?: string;
       targetKind?: "client" | "project";
+      runtimeRole?: "app" | "project-target";
       storageProtocol?: string;
       databaseLabel?: string;
       dataSourceAlias?: string;
@@ -340,6 +353,12 @@ export type SyncoreDevtoolsMessage =
       subscriptionId: string;
       runtimeId: string;
       error: string;
+    }
+  | {
+      type: "external.change";
+      runtimeId: string;
+      storageIdentity: string;
+      event: SyncoreDevtoolsExternalChangeEvent;
     };
 
 /* ------------------------------------------------------------------ */

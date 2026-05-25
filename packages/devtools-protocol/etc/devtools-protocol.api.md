@@ -486,6 +486,26 @@ export type SyncoreDevtoolsEvent = (SyncoreDevtoolsEventBase & {
 export type SyncoreDevtoolsEventOrigin = "runtime" | "dashboard";
 
 // @public (undocumented)
+export interface SyncoreDevtoolsExternalChangeEvent {
+    // (undocumented)
+    changedScopes?: string[];
+    // (undocumented)
+    changedTables?: string[];
+    // (undocumented)
+    reason: "commit" | "storage-put" | "storage-delete" | "reconcile";
+    // (undocumented)
+    revision?: string;
+    // (undocumented)
+    scope: "database" | "storage" | "all";
+    // (undocumented)
+    sourceId: string;
+    // (undocumented)
+    storageIds?: string[];
+    // (undocumented)
+    timestamp: number;
+}
+
+// @public (undocumented)
 export type SyncoreDevtoolsMessage = {
     type: "hello";
     protocolVersion?: number;
@@ -498,6 +518,7 @@ export type SyncoreDevtoolsMessage = {
     origin?: string;
     sessionLabel?: string;
     targetKind?: "client" | "project";
+    runtimeRole?: "app" | "project-target";
     storageProtocol?: string;
     databaseLabel?: string;
     dataSourceAlias?: string;
@@ -529,6 +550,11 @@ export type SyncoreDevtoolsMessage = {
     subscriptionId: string;
     runtimeId: string;
     error: string;
+} | {
+    type: "external.change";
+    runtimeId: string;
+    storageIdentity: string;
+    event: SyncoreDevtoolsExternalChangeEvent;
 };
 
 // @public (undocumented)
@@ -634,6 +660,8 @@ export interface SyncoreRuntimeSummary {
     recentEventCount: number;
     // (undocumented)
     runtimeId: string;
+    // (undocumented)
+    runtimeRole?: "app" | "project-target";
     // (undocumented)
     sessionLabel?: string;
     // (undocumented)

@@ -162,6 +162,78 @@ export function useDevtoolsSubscription<
   };
 }
 
+export function useDevtoolsMultiRuntimeSubscription<
+  TResult extends SyncoreDevtoolsSubscriptionResultPayload
+>(
+  payload: SyncoreDevtoolsSubscriptionPayload | null,
+  runtimeIds: string[],
+  options?: { enabled?: boolean }
+) {
+  const enabled = options?.enabled ?? true;
+  const payloadRef = useRef<SyncoreDevtoolsSubscriptionPayload | null>(payload);
+  const payloadKey = JSON.stringify(payload);
+  const runtimeIdsKey = JSON.stringify(runtimeIds);
+  payloadRef.current = payload;
+  const [dataByRuntime, setDataByRuntime] = useState<Record<string, TResult>>({});
+  const [loading, setLoading] = useState(Boolean(payload) && enabled);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const nextPayload = payloadRef.current;
+    if (!nextPayload || !enabled || runtimeIds.length === 0) {
+      setDataByRuntime({});
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    setDataByRuntime({});
+    setLoading(true);
+    setError(null);
+    let pending = new Set(runtimeIds);
+    const unsubscribers = runtimeIds.map((runtimeId) =>
+      subscribe(
+        nextPayload,
+        (nextPayload) => {
+          setDataByRuntime((current) => ({
+            ...current,
+            [runtimeId]: nextPayload as TResult
+          }));
+          pending = new Set(pending);
+          pending.delete(runtimeId);
+          if (pending.size === 0) {
+            setLoading(false);
+          }
+        },
+        {
+          targetRuntimeId: runtimeId,
+          onError: (message) => {
+            setError(message);
+            pending = new Set(pending);
+            pending.delete(runtimeId);
+            if (pending.size === 0) {
+              setLoading(false);
+            }
+          }
+        }
+      )
+    );
+
+    return () => {
+      for (const unsubscribe of unsubscribers) {
+        unsubscribe();
+      }
+    };
+  }, [enabled, payloadKey, runtimeIdsKey]);
+
+  return {
+    dataByRuntime,
+    loading,
+    error,
+    hasData: Object.keys(dataByRuntime).length > 0
+  };
+}
+
 export function useReactiveRuntimeData<T>(
   selector: (runtime: NonNullable<ReturnType<typeof useActiveRuntime>>) => T,
   options?: { enabled?: boolean }
