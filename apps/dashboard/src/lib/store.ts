@@ -569,15 +569,22 @@ function mergeDevtoolsCapabilities(
 ): SyncoreDevtoolsCapabilities {
   const selected = runtimes.filter((runtime) => runtime.connected);
   const candidates = selected.length > 0 ? selected : runtimes;
+  const sqlRead = candidates.some((runtime) => runtime.capabilities?.sql?.read === true);
+  const sqlWrite = candidates.some((runtime) => runtime.capabilities?.sql?.write === true);
+  const sqlLive = candidates.some((runtime) => runtime.capabilities?.sql?.live === true);
   return {
     sql: {
-      read: candidates.some((runtime) => runtime.capabilities?.sql?.read === true),
-      write: candidates.some((runtime) => runtime.capabilities?.sql?.write === true),
-      live: candidates.some((runtime) => runtime.capabilities?.sql?.live === true),
-      reason:
-        candidates.find((runtime) => runtime.capabilities?.sql?.reason)
-          ?.capabilities?.sql?.reason ??
-        "SQL Console is not available for this data source."
+      read: sqlRead,
+      write: sqlWrite,
+      live: sqlLive,
+      ...(!sqlRead
+        ? {
+            reason:
+              candidates.find((runtime) => runtime.capabilities?.sql?.reason)
+                ?.capabilities?.sql?.reason ??
+              "SQL Console is not available for this data source."
+          }
+        : {})
     },
     data: {
       browse: candidates.some((runtime) => runtime.capabilities?.data?.browse !== false),

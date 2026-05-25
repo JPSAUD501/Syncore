@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { sql as sqlLang } from "@codemirror/lang-sql";
+import { SQLite, sql as sqlLang } from "@codemirror/lang-sql";
+import type { SQLNamespace } from "@codemirror/lang-sql";
 import { EditorView } from "@codemirror/view";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import { usePreferredTarget } from "@/hooks/usePreferredTarget";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
 import { cn, formatDuration } from "@/lib/utils";
+import type { TableSchema } from "@syncore/devtools-protocol";
 
 export const Route = createLazyFileRoute("/sql")({
   component: SqlPage
@@ -62,24 +64,28 @@ type SqlMode = "read" | "write" | "live";
 
 const STORAGE_KEY = "syncore-sql-history";
 
-const PRAGMA_SHORTCUTS: Array<{ label: string; query: string }> = [
+const PRAGMA_SHORTCUTS: Array<{ label: string; query: string; mode: SqlMode }> = [
   {
     label: "Table List",
-    query: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+    query: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;",
+    mode: "read"
   },
   {
     label: "Schema Info",
-    query: "SELECT sql FROM sqlite_master WHERE type='table';"
+    query: "SELECT sql FROM sqlite_master WHERE type='table';",
+    mode: "read"
   },
   {
     label: "Index List",
-    query: "SELECT name, tbl_name FROM sqlite_master WHERE type='index';"
+    query: "SELECT name, tbl_name FROM sqlite_master WHERE type='index';",
+    mode: "read"
   },
-  { label: "Database Size", query: "PRAGMA page_count; PRAGMA page_size;" },
-  { label: "Journal Mode", query: "PRAGMA journal_mode;" },
-  { label: "WAL Status", query: "PRAGMA wal_checkpoint;" },
-  { label: "Foreign Keys", query: "PRAGMA foreign_keys;" },
-  { label: "Integrity Check", query: "PRAGMA integrity_check;" }
+  { label: "Page Count", query: "PRAGMA page_count;", mode: "read" },
+  { label: "Page Size", query: "PRAGMA page_size;", mode: "read" },
+  { label: "Journal Mode", query: "PRAGMA journal_mode;", mode: "read" },
+  { label: "WAL Status", query: "PRAGMA wal_checkpoint;", mode: "read" },
+  { label: "Foreign Keys", query: "PRAGMA foreign_keys;", mode: "read" },
+  { label: "Integrity Check", query: "PRAGMA integrity_check;", mode: "read" }
 ];
 
 function getModeUnavailableReason(mode: SqlMode, fallback: string): string {
@@ -209,6 +215,24 @@ function SqlPage() {
   const canReadSql = sqlCapabilities?.read === true;
   const canWriteSql = canReadSql && sqlCapabilities?.write === true;
   const canLiveSql = canReadSql && sqlCapabilities?.live === true;
+  const schemaSubscription = useDevtoolsSubscription(
+    targetRuntimeId ? { kind: "schema.tables" } : null,
+    {
+      enabled: Boolean(targetRuntimeId),
+      targetRuntimeId
+    }
+  );
+  const schemaTables = useMemo(
+    () =>
+      schemaSubscription.data?.kind === "schema.tables.result"
+        ? schemaSubscription.data.tables
+        : [],
+    [schemaSubscription.data]
+  );
+  const sqlSchema = useMemo(
+    () => buildSqlCompletionSchema(schemaTables),
+    [schemaTables]
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Persist history                                                  */
@@ -258,20 +282,21 @@ function SqlPage() {
   /* ---------------------------------------------------------------- */
 
   const executeQuery = useCallback(
-    async (sql?: string) => {
+    async (sql?: string, modeOverride?: SqlMode) => {
       const queryText = sql ?? query.trim();
+      const executionMode = modeOverride ?? mode;
       if (!queryText || !targetRuntimeId) return;
       if (!canReadSql) {
         setResult({
           columns: [],
           rows: [],
           durationMs: 0,
-          mode,
+          mode: executionMode,
           error: sqlUnavailableReason
         });
         return;
       }
-      if (mode === "live") {
+      if (executionMode === "live") {
         if (!canLiveSql) {
           setResult({
             columns: [],
@@ -283,7 +308,7 @@ function SqlPage() {
         }
         return;
       }
-      if (mode === "write" && !canWriteSql) {
+      if (executionMode === "write" && !canWriteSql) {
         setResult({
           columns: [],
           rows: [],
@@ -299,7 +324,7 @@ function SqlPage() {
 
       try {
         const res = await sendRequest({
-          kind: mode === "write" ? "sql.write" : "sql.read",
+          kind: executionMode === "write" ? "sql.write" : "sql.read",
           query: queryText
         }, { targetRuntimeId });
         const durationMs = performance.now() - startTime;
@@ -355,7 +380,7 @@ function SqlPage() {
           columns: [],
           rows: [],
           durationMs,
-          mode,
+          mode: executionMode,
           error: errorMsg
         });
       } finally {
@@ -446,7 +471,11 @@ function SqlPage() {
 
   const extensions = useMemo(
     () => [
-      sqlLang(),
+      sqlLang({
+        dialect: SQLite,
+        schema: sqlSchema,
+        upperCaseKeywords: true
+      }),
       substrateTheme,
       substrateHighlight,
       EditorView.lineWrapping,
@@ -461,7 +490,7 @@ function SqlPage() {
         }
       })
     ],
-    [executeQuery]
+    [executeQuery, sqlSchema]
   );
 
   /* ---------------------------------------------------------------- */
@@ -645,9 +674,18 @@ function SqlPage() {
         </div>
       </div>
 
-      {/* ---- Right sidebar: PRAGMA shortcuts + history ---- */}
-      <div className="hidden w-64 shrink-0 overflow-hidden rounded-md border border-border bg-bg-surface lg:flex lg:flex-col">
-        {/* PRAGMA shortcuts */}
+      {/* ---- Right sidebar: schema, shortcuts, history ---- */}
+      <div className="hidden w-80 shrink-0 overflow-hidden rounded-md border border-border bg-bg-surface lg:flex lg:flex-col">
+        <SchemaBrowser
+          tables={schemaTables}
+          loading={schemaSubscription.loading}
+          onSelectTable={(tableName) => {
+            const nextQuery = `SELECT * FROM ${quoteSqlIdentifier(tableName)} LIMIT 50;`;
+            setMode("read");
+            setQuery(nextQuery);
+          }}
+        />
+
         <div className="border-b border-border p-3">
           <div className="mb-2 flex items-center gap-2">
             <Table2 size={12} className="text-accent" />
@@ -661,8 +699,9 @@ function SqlPage() {
                 key={shortcut.label}
                 type="button"
                 onClick={() => {
+                  setMode(shortcut.mode);
                   setQuery(shortcut.query);
-                  void executeQuery(shortcut.query);
+                  void executeQuery(shortcut.query, shortcut.mode);
                 }}
                 disabled={!targetRuntimeId || mode === "live"}
                 className={cn(
@@ -757,9 +796,10 @@ function SqlPage() {
                     key={shortcut.label}
                     type="button"
                     onClick={() => {
+                      setMode(shortcut.mode);
                       setQuery(shortcut.query);
                       setMobileHistoryOpen(false);
-                      void executeQuery(shortcut.query);
+                      void executeQuery(shortcut.query, shortcut.mode);
                     }}
                     disabled={!targetRuntimeId || mode === "live"}
                     className={cn(
@@ -813,6 +853,98 @@ function SqlPage() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Schema helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+function buildSqlCompletionSchema(tables: TableSchema[]): SQLNamespace {
+  const namespace: Record<string, readonly string[]> = {};
+  for (const table of tables) {
+    namespace[table.name] = [
+      "_id",
+      "_creationTime",
+      ...table.fields.map((field) => field.name)
+    ];
+  }
+  return namespace;
+}
+
+function quoteSqlIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function SchemaBrowser({
+  tables,
+  loading,
+  onSelectTable
+}: {
+  tables: TableSchema[];
+  loading: boolean;
+  onSelectTable: (tableName: string) => void;
+}) {
+  return (
+    <div className="max-h-72 shrink-0 border-b border-border p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Table2 size={12} className="text-accent" />
+        <span className="flex-1 text-[11px] font-semibold text-text-primary">
+          Schema
+        </span>
+        {loading ? (
+          <Loader2 size={11} className="animate-spin text-text-tertiary" />
+        ) : (
+          <span className="text-[10px] text-text-tertiary">
+            {tables.length}
+          </span>
+        )}
+      </div>
+      <ScrollArea className="max-h-60">
+        <div className="space-y-1 pr-1">
+          {tables.length === 0 ? (
+            <p className="py-4 text-center text-[10px] text-text-tertiary">
+              No schema loaded
+            </p>
+          ) : (
+            tables.map((table) => (
+              <button
+                key={table.name}
+                type="button"
+                onClick={() => onSelectTable(table.name)}
+                className="group w-full rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-border-hover hover:bg-bg-base"
+                title={`Insert SELECT for ${table.name}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] font-semibold text-text-primary">
+                    {table.name}
+                  </span>
+                  <span className="rounded border border-border px-1.5 py-0.5 text-[9px] text-text-tertiary">
+                    {table.documentCount}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {table.fields.slice(0, 5).map((field) => (
+                    <span
+                      key={field.name}
+                      className="rounded bg-bg-elevated px-1.5 py-0.5 font-mono text-[9px] text-text-tertiary"
+                      title={`${field.name}: ${field.type}`}
+                    >
+                      {field.name}
+                    </span>
+                  ))}
+                  {table.fields.length > 5 && (
+                    <span className="rounded bg-bg-elevated px-1.5 py-0.5 text-[9px] text-text-tertiary">
+                      +{table.fields.length - 5}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }
@@ -903,55 +1035,90 @@ function ResultsTable({ result }: { result: QueryResult }) {
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="min-w-full animate-fade-in bg-bg-base">
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex border-b border-border bg-bg-surface">
-          <div className="w-12 shrink-0 border-r border-border px-2 py-2 text-center text-[10px] font-semibold text-text-tertiary">
-            #
-          </div>
-          {result.columns.map((col) => (
-            <div
-              key={col}
-              className="shrink-0 min-w-30 max-w-75 w-auto border-r border-border px-3 py-2 text-[10px] font-semibold text-text-tertiary last:border-r-0"
-            >
-              {col}
-            </div>
-          ))}
-        </div>
-
-        {/* Data rows */}
-        {result.rows.map((row, rowIdx) => (
-          <div
-            key={rowIdx}
-            className="flex border-b border-border hover:bg-bg-elevated/50 transition-colors"
-          >
-            <div className="w-12 shrink-0 px-2 py-1.5 text-[10px] text-text-tertiary border-r border-border text-center font-mono">
-              {rowIdx + 1}
-            </div>
-            {row.map((cell, cellIdx) => {
-              const cellKey = `${rowIdx}:${cellIdx}`;
-              const pulse = changedCells.get(cellKey);
-              return (
-                <div
-                  key={cellIdx}
-                  className={cn(
-                    "shrink-0 min-w-30 max-w-75 w-auto px-3 py-1.5 text-[11px] font-mono border-r border-border last:border-r-0 truncate",
-                    pulse !== undefined &&
-                      (pulse % 2 === 0
-                        ? "animate-highlight-a"
-                        : "animate-highlight-b")
-                  )}
-                >
-                  <SqlCellValue value={cell} />
-                </div>
-              );
-            })}
-          </div>
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col animate-fade-in">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-bg-surface px-3 py-2">
+        <Badge variant="outline" className="text-[10px]">
+          {result.rows.length} rows
+        </Badge>
+        <Badge variant="outline" className="text-[10px]">
+          {result.columns.length} columns
+        </Badge>
+        <span className="text-[10px] text-text-tertiary">
+          {formatDuration(result.durationMs)}
+        </span>
+        {result.observedTables && result.observedTables.length > 0 && (
+          <span className="ml-auto truncate text-[10px] text-text-tertiary">
+            Watching {result.observedTables.join(", ")}
+          </span>
+        )}
       </div>
-    </ScrollArea>
+
+      <ScrollArea className="flex-1">
+        <div className="min-w-full overflow-x-auto bg-bg-base">
+          <table className="w-max min-w-full border-collapse text-left">
+            <thead className="sticky top-0 z-10 bg-bg-surface">
+              <tr className="border-b border-border">
+                <th className="sticky left-0 z-20 w-12 border-r border-border bg-bg-surface px-2 py-2 text-center text-[10px] font-semibold text-text-tertiary">
+                  #
+                </th>
+                {result.columns.map((col) => (
+                  <th
+                    key={col}
+                    className="min-w-32 max-w-80 border-r border-border px-3 py-2 font-mono text-[10px] font-semibold text-text-tertiary last:border-r-0"
+                    title={col}
+                  >
+                    <span className="block truncate">{col}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {result.rows.map((row, rowIdx) => (
+                <tr
+                  key={rowIdx}
+                  className="border-b border-border/80 transition-colors hover:bg-bg-elevated/50"
+                >
+                  <td className="sticky left-0 z-10 w-12 border-r border-border bg-bg-base px-2 py-1.5 text-center font-mono text-[10px] text-text-tertiary">
+                    {rowIdx + 1}
+                  </td>
+                  {row.map((cell, cellIdx) => {
+                    const cellKey = `${rowIdx}:${cellIdx}`;
+                    const pulse = changedCells.get(cellKey);
+                    return (
+                      <td
+                        key={cellIdx}
+                        className={cn(
+                          "max-w-80 border-r border-border px-3 py-1.5 font-mono text-[11px] last:border-r-0",
+                          pulse !== undefined &&
+                            (pulse % 2 === 0
+                              ? "animate-highlight-a"
+                              : "animate-highlight-b")
+                        )}
+                        title={formatSqlCellTitle(cell)}
+                      >
+                        <div className="max-w-72 truncate">
+                          <SqlCellValue value={cell} />
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ScrollArea>
+    </div>
   );
+}
+
+function formatSqlCellTitle(value: unknown): string {
+  if (value === null) return "NULL";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
 }
 
 function SqlCellValue({ value }: { value: unknown }) {

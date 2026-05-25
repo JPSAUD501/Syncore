@@ -1079,7 +1079,7 @@ function requireDevtoolsSqlSupport(
   sql?: DevtoolsSqlSupport
 ): DevtoolsSqlSupport {
   if (!sql) {
-    throw new Error("SQL devtools are only available in Node-hosted runtimes.");
+    throw new Error("SQL Console is not available for this runtime.");
   }
   return sql;
 }

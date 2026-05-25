@@ -124,6 +124,10 @@ export function parseEditableCellValue(
     return nextDate.toISOString();
   }
 
+  if (typeof originalValue === "string") {
+    return text;
+  }
+
   try {
     return JSON.parse(text);
   } catch {

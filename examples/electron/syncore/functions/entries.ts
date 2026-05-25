@@ -73,7 +73,10 @@ export const stats = query({
 
     return {
       entryCount: entries.length,
-      totalWords: entries.reduce((sum, entry) => sum + entry.wordCount, 0),
+      totalWords: entries.reduce(
+        (sum, entry) => sum + countWords(entry.body),
+        0
+      ),
       streak,
       moodCounts,
       lastUpdatedAt: entries[0]?.updatedAt ?? null

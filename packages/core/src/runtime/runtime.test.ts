@@ -1391,7 +1391,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
       expect(result.kind).toBe("sql.read.result");
       if (result.kind === "sql.read.result") {
-        expect(result.error).toMatch(/only available in Node-hosted runtimes/i);
+        expect(result.error).toMatch(/not available for this runtime/i);
       }
       await hostDriver.close();
     } finally {

@@ -90,6 +90,10 @@ function JournalScreen() {
   const seedDemo = useMutation(api.entries.seedDemo);
 
   useEffect(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
     if (currentEntry) {
       setBody(currentEntry.body);
       setMood(currentEntry.mood);
@@ -97,7 +101,12 @@ function JournalScreen() {
       setBody("");
       setMood("okay");
     }
-  }, [currentEntry]);
+  }, [
+    currentEntry?._id,
+    currentEntry?.body,
+    currentEntry?.mood,
+    selectedDate
+  ]);
 
   const scheduleSave = useCallback(
     (newBody: string, newMood: string) => {
@@ -259,6 +268,7 @@ function JournalScreen() {
           {visibleEntries.map((entry) => {
             const ep = formatDate(entry.date);
             const isActive = selectedDate === entry.date;
+            const entryWordCount = countWords(entry.body);
             return (
               <button
                 key={entry._id}
@@ -279,7 +289,7 @@ function JournalScreen() {
                   {entry.body.length > 64 ? "..." : ""}
                 </span>
                 <span className="entry-item-meta">
-                  {entry.wordCount} word{entry.wordCount !== 1 ? "s" : ""}
+                  {entryWordCount} word{entryWordCount !== 1 ? "s" : ""}
                 </span>
               </button>
             );

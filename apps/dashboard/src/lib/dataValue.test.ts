@@ -34,4 +34,10 @@ describe("dataValue", () => {
       "Hello world"
     );
   });
+
+  it("keeps primitive-looking edits as strings when editing a string field", () => {
+    expect(parseEditableCellValue("title", "123", "before")).toBe("123");
+    expect(parseEditableCellValue("title", "true", "before")).toBe("true");
+    expect(parseEditableCellValue("title", "null", "before")).toBe("null");
+  });
 });

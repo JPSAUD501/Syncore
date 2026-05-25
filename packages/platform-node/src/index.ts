@@ -8,7 +8,6 @@ import {
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createRequire as createNodeRequire } from "node:module";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import WebSocket from "ws";
@@ -27,11 +26,7 @@ import type {
 import {
   createDevtoolsCommandHandler,
   createDevtoolsSubscriptionHost,
-  type DevtoolsSqlAnalysis,
   type DevtoolsCommandHandler,
-  type DevtoolsSqlMode,
-  type DevtoolsSqlReadResult,
-  type DevtoolsSqlSupport,
   type DevtoolsSink,
   type DevtoolsSubscriptionHost,
   type SchedulerOptions,
@@ -58,94 +53,8 @@ export type NodeSyncoreSchema<
   TSchema extends SyncoreDataModel = SyncoreDataModel
 > = TSchema;
 
-const nodeRequire = createNodeRequire(import.meta.url);
-const { Parser: NodeSqlParser } = nodeRequire("node-sql-parser") as {
-  Parser: new () => {
-    astify(sql: string, options?: { database?: string }): unknown;
-  };
-};
-const nodeSqlParser = new NodeSqlParser();
 const DEVTOOLS_META_DIRECTORY = ".syncore-devtools";
 const DATA_SOURCE_ALIAS_PREFIX = "data-source-alias";
-
-type SqlAst = {
-  type: string;
-  from?: Array<{ table?: string; expr?: { ast?: SqlAst } }>;
-  table?: Array<{ table?: string }> | { table?: string } | null | string;
-};
-
-const nodeDevtoolsSqlSupport: DevtoolsSqlSupport = {
-  analyzeSqlStatement(query: string): DevtoolsSqlAnalysis {
-    const ast = nodeSqlParser.astify(query, {
-      database: "sqlite"
-    }) as SqlAst | SqlAst[];
-    if (Array.isArray(ast)) {
-      throw new Error("Only a single SQL statement is supported.");
-    }
-
-    switch (ast.type) {
-      case "select":
-        return buildReadAnalysis(ast);
-      case "update":
-      case "delete":
-      case "insert":
-      case "replace":
-        return buildWriteAnalysis(extractTables(ast.table), false);
-      case "create":
-      case "drop":
-      case "alter":
-        return buildWriteAnalysis(extractTables(ast.table), true);
-      default:
-        throw new Error(`Unsupported SQL statement type: ${String(ast.type)}`);
-    }
-  },
-  ensureSqlMode(
-    analysis: DevtoolsSqlAnalysis,
-    expected: DevtoolsSqlMode | "watch"
-  ): void {
-    if (expected === "watch") {
-      if (analysis.mode !== "read") {
-        throw new Error("Live mode supports read-only SQL only.");
-      }
-      return;
-    }
-
-    if (analysis.mode !== expected) {
-      if (expected === "read") {
-        throw new Error("Use SQL Write for mutating statements.");
-      }
-      throw new Error("Use SQL Read or SQL Live for read-only statements.");
-    }
-  },
-  runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult {
-    const analysis = this.analyzeSqlStatement(query);
-    this.ensureSqlMode(analysis, "read");
-
-    const database = new DatabaseSync(databasePath, { readOnly: true });
-    try {
-      const statement = database.prepare(query);
-      const rows = statement.all() as Array<Record<string, unknown>>;
-      const columnsMeta = statement.columns();
-      const columns = columnsMeta.map((column) => column.name);
-      const observedTables = Array.from(
-        new Set(
-          columnsMeta
-            .map((column) => column.table)
-            .filter((table): table is string => typeof table === "string")
-        )
-      );
-
-      return {
-        columns,
-        rows: rows.map((row) => columns.map((column) => row[column])),
-        observedTables:
-          observedTables.length > 0 ? observedTables : analysis.readTables
-      };
-    } finally {
-      database.close();
-    }
-  }
-};
 
 function normalizeData(input: StorageWriteInput["data"]): Uint8Array {
   if (typeof input === "string") {
@@ -155,70 +64,6 @@ function normalizeData(input: StorageWriteInput["data"]): Uint8Array {
     return input;
   }
   return new Uint8Array(input);
-}
-
-function buildReadAnalysis(ast: SqlAst): DevtoolsSqlAnalysis {
-  const readTables = Array.from(new Set(extractReadTables(ast)));
-  return {
-    mode: "read",
-    readTables,
-    writeTables: [],
-    schemaChanged: false,
-    observedScopes:
-      readTables.length > 0
-        ? readTables.map((table) => `table:${table}` as const)
-        : ["all"]
-  };
-}
-
-function buildWriteAnalysis(
-  tables: string[],
-  schemaChanged: boolean
-): DevtoolsSqlAnalysis {
-  const uniqueTables = Array.from(new Set(tables));
-  return {
-    mode: schemaChanged ? "ddl" : "write",
-    readTables: [],
-    writeTables: uniqueTables,
-    schemaChanged,
-    observedScopes: schemaChanged
-      ? [
-          "schema.tables",
-          ...uniqueTables.map((table) => `table:${table}` as const)
-        ]
-      : uniqueTables.length > 0
-        ? uniqueTables.map((table) => `table:${table}` as const)
-        : ["all"]
-  };
-}
-
-function extractReadTables(ast: SqlAst): string[] {
-  return (ast.from ?? [])
-    .flatMap((entry) => {
-      if (entry.table) {
-        return [entry.table];
-      }
-      if (entry.expr?.ast) {
-        return extractReadTables(entry.expr.ast);
-      }
-      return [];
-    })
-    .filter((table) => table !== "dual");
-}
-
-function extractTables(table: SqlAst["table"]): string[] {
-  if (Array.isArray(table)) {
-    return table
-      .map((entry) => entry?.table)
-      .filter((value): value is string => typeof value === "string");
-  }
-  if (table && typeof table === "object") {
-    return typeof table.table === "string" ? [table.table] : [];
-  }
-  if (typeof table === "string") {
-    return [table];
-  }
-  return [];
 }
 
 function toSqlParameters(params: unknown[]): SQLInputValue[] {
@@ -634,8 +479,7 @@ export function createNodeSyncoreRuntime<
         driver: runtimeOptions.driver,
         schema: options.schema,
         functions: options.functions,
-        admin: runtime.getAdmin(),
-        sql: nodeDevtoolsSqlSupport
+        admin: runtime.getAdmin()
       })
     );
     websocketDevtools.attachSubscriptionHost(
@@ -643,8 +487,7 @@ export function createNodeSyncoreRuntime<
         driver: runtimeOptions.driver,
         schema: options.schema,
         functions: options.functions,
-        admin: runtime.getAdmin(),
-        sql: nodeDevtoolsSqlSupport
+        admin: runtime.getAdmin()
       })
     );
     const stop = runtime.stop.bind(runtime);
@@ -1132,9 +975,10 @@ function withRuntimeSummaryMeta(
 function createNodeDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
   return {
     sql: {
-      read: true,
-      write: true,
-      live: true
+      read: false,
+      write: false,
+      live: false,
+      reason: "SQL Console is provided by the Project Target for this data source."
     },
     data: {
       browse: true,
