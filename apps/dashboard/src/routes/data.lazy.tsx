@@ -353,11 +353,20 @@ function DataPage() {
 
   const handleFieldEdit = useCallback(
     async (id: string, field: string, value: unknown) => {
-      validateReferenceValue(referenceFields[field], value);
-      await handlePatch(id, { [field]: value });
-      setFieldEditState(null);
+      try {
+        validateReferenceValue(referenceFields[field], value);
+        await handlePatch(id, { [field]: value });
+        setFieldEditState(null);
+      } catch (err) {
+        pushToast({
+          tone: "error",
+          title: "Field update failed",
+          description:
+            err instanceof Error ? err.message : "Failed to update field."
+        });
+      }
     },
-    [handlePatch, referenceFields]
+    [handlePatch, pushToast, referenceFields]
   );
 
   const handleImport = useCallback(

@@ -1,10 +1,36 @@
 import { useState, useCallback, useRef } from "react";
-import { Calendar, Check, Pipette, Search } from "lucide-react";
+import { Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import type { ReferenceFieldOptions, ReferenceOption } from "@/lib/dataReferences";
 import { parseEditableCellValue, toEditableCellText, inferColorValue, inferDateValue } from "@/lib/dataValue";
 import { cn } from "@/lib/utils";
+
+type CellEditorMode =
+  | "reference"
+  | "text"
+  | "json"
+  | "number"
+  | "boolean"
+  | "date"
+  | "color";
+
+const MODE_LABELS: Record<CellEditorMode, string> = {
+  reference: "Reference",
+  text: "Text",
+  json: "JSON",
+  number: "Number",
+  boolean: "Boolean",
+  date: "Date",
+  color: "Color"
+};
 
 interface CellEditorProps {
   value: unknown;
@@ -21,67 +47,78 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
   );
   const colorInfo = inferColorValue(field, value);
   const dateInfo = inferDateValue(field, value);
-  const isNumericToggleable = typeof value === "number" && !colorInfo && !reference;
-  const isColorToggleable = colorInfo !== null;
-  const [asDatetime, setAsDatetime] = useState(() => !!dateInfo);
-  const [asColor, setAsColor] = useState(() => !!colorInfo);
+  const availableModes = resolveCellEditorModes(field, value, reference);
+  const [mode, setMode] = useState<CellEditorMode>(() =>
+    resolveInitialCellEditorMode(field, value, reference)
+  );
+  const [booleanValue, setBooleanValue] = useState(() =>
+    typeof value === "boolean" ? value : text.trim().toLowerCase() === "true"
+  );
 
   const isMultiline =
-    !(colorInfo && asColor) &&
-    !asDatetime &&
-    (typeof value === "object" || text.includes("\n") || text.length > 80);
+    mode === "json" ||
+    (mode === "text" && (text.includes("\n") || text.length > 80));
 
-  const handleToggleDatetime = useCallback(() => {
-    if (!asDatetime) {
-      const num = parseFloat(text);
-      if (!isNaN(num)) {
-        const ms = num >= 1_000_000_000_000 ? num : num * 1000;
-        setText(new Date(ms).toISOString());
+  const handleModeChange = useCallback(
+    (nextMode: CellEditorMode) => {
+      if (nextMode === "date") {
+        const iso = dateInfo?.iso ?? coerceTextToIsoDate(text);
+        if (iso) setText(iso);
       }
-    } else {
-      const d = new Date(text);
-      if (!isNaN(d.getTime())) {
-        const ms = d.getTime();
-        const result =
-          typeof value === "number" && value < 1_000_000_000_000
-            ? Math.floor(ms / 1000)
-            : ms;
-        setText(String(result));
+      if (nextMode === "number" && typeof value === "number") {
+        setText(String(value));
       }
+      if (nextMode === "boolean") {
+        setBooleanValue(
+          typeof value === "boolean" ? value : text.trim().toLowerCase() === "true"
+        );
+      }
+      setMode(nextMode);
+    },
+    [dateInfo?.iso, text, value]
+  );
+
+  const saveDateValue = useCallback(() => {
+    const d = new Date(text);
+    if (Number.isNaN(d.getTime())) return false;
+    const ms = d.getTime();
+    if (typeof value === "number") {
+      onSave(value < 1_000_000_000_000 ? Math.floor(ms / 1000) : ms);
+      return true;
     }
-    setAsDatetime((prev) => !prev);
-  }, [asDatetime, text, value]);
-
-  const handleToggleColor = useCallback(() => setAsColor((prev) => !prev), []);
+    onSave(d.toISOString());
+    return true;
+  }, [onSave, text, value]);
 
   const handleSave = useCallback(() => {
     if (reference) {
       onSave(referenceValue === "" && reference.field.optional ? undefined : referenceValue);
       return;
     }
-    // User manually toggled to datetime for a plain number field
-    if (asDatetime && isNumericToggleable && !dateInfo) {
-      const d = new Date(text);
-      if (!isNaN(d.getTime())) {
-        const ms = d.getTime();
-        const result =
-          typeof value === "number" && value < 1_000_000_000_000
-            ? Math.floor(ms / 1000)
-            : ms;
-        onSave(result);
-        return;
-      }
+    if (mode === "boolean") {
+      onSave(booleanValue);
+      return;
     }
-    // Auto-detected date field but user toggled back to raw number
-    if (!asDatetime && dateInfo) {
+    if (mode === "date" && saveDateValue()) {
+      return;
+    }
+    if (mode === "number") {
       const num = Number(text);
-      if (!isNaN(num)) {
+      if (Number.isFinite(num)) {
         onSave(num);
         return;
       }
     }
+    if (mode === "text") {
+      onSave(text);
+      return;
+    }
+    if (mode === "color") {
+      onSave(text);
+      return;
+    }
     onSave(parseEditableCellValue(field, text, value));
-  }, [asDatetime, isNumericToggleable, dateInfo, field, onSave, reference, referenceValue, text, value]);
+  }, [booleanValue, field, mode, onSave, reference, referenceValue, saveDateValue, text, value]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -97,55 +134,35 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
     [handleSave, isMultiline, onCancel]
   );
 
-  const typeLabel = colorInfo && asColor
-    ? "color"
-    : reference
-      ? `id -> ${reference.tableName}`
-      : asDatetime
-        ? "datetime"
-        : isMultiline
-          ? "json"
-          : typeof value;
-
   return (
     <div className={cn("overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xl shadow-black/40 max-w-[calc(100vw-1rem)]", reference ? "w-120" : "w-72")}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="font-mono text-[11px] font-medium text-text-primary">{field}</span>
-        <div className="flex items-center gap-1.5">
-          {isColorToggleable && (
-            <button
-              type="button"
-              title={asColor ? "Edit as plain text" : "Edit as color"}
-              onClick={handleToggleColor}
-              className={cn(
-                "rounded p-0.5 transition-colors",
-                asColor
-                  ? "text-accent hover:text-accent/80"
-                  : "text-text-tertiary hover:text-text-secondary"
-              )}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-text-tertiary">Edit as</span>
+          <Select
+            value={mode}
+            onValueChange={(nextMode) => handleModeChange(nextMode as CellEditorMode)}
+            disabled={availableModes.length === 1}
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label="Edit as"
+              className="h-7 min-w-24 px-2 py-1 text-[11px]"
             >
-              <Pipette size={11} />
-            </button>
-          )}
-          {isNumericToggleable && (
-            <button
-              type="button"
-              title={asDatetime ? "Edit as number" : "Edit as datetime"}
-              onClick={handleToggleDatetime}
-              className={cn(
-                "rounded p-0.5 transition-colors",
-                asDatetime
-                  ? "text-accent hover:text-accent/80"
-                  : "text-text-tertiary hover:text-text-secondary"
-              )}
-            >
-              <Calendar size={11} />
-            </button>
-          )}
-          <span className="rounded bg-bg-base px-1.5 py-0.5 text-[10px] text-text-tertiary">
-            {typeLabel}
-          </span>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {availableModes.map((availableMode) => (
+                <SelectItem key={availableMode} value={availableMode}>
+                  {availableMode === "reference" && reference
+                    ? `Reference -> ${reference.tableName}`
+                    : MODE_LABELS[availableMode]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -158,11 +175,13 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
             onChange={setReferenceValue}
             onKeyDown={handleKeyDown}
           />
-        ) : colorInfo && asColor ? (
+        ) : mode === "boolean" ? (
+          <BooleanEditor value={booleanValue} onChange={setBooleanValue} />
+        ) : mode === "color" && colorInfo ? (
           <ColorEditor text={text} onTextChange={setText} onKeyDown={handleKeyDown} />
-        ) : asDatetime ? (
+        ) : mode === "date" ? (
           <DateEditor text={text} onTextChange={setText} />
-        ) : isMultiline ? (
+        ) : mode === "json" || isMultiline ? (
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -193,6 +212,98 @@ export function CellEditor({ value, field, reference, onSave, onCancel }: CellEd
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+function resolveInitialCellEditorMode(
+  field: string,
+  value: unknown,
+  reference?: ReferenceFieldOptions | undefined
+): CellEditorMode {
+  if (reference) return "reference";
+  if (typeof value === "boolean") return "boolean";
+  if (inferDateValue(field, value)) return "date";
+  if (inferColorValue(field, value)) return "color";
+  if (value === null || typeof value === "object") return "json";
+  if (typeof value === "number") return "number";
+  return "text";
+}
+
+function resolveCellEditorModes(
+  field: string,
+  value: unknown,
+  reference?: ReferenceFieldOptions | undefined
+): CellEditorMode[] {
+  if (reference) return ["reference"];
+  const modes: CellEditorMode[] = [];
+  const add = (mode: CellEditorMode) => {
+    if (!modes.includes(mode)) modes.push(mode);
+  };
+
+  add(resolveInitialCellEditorMode(field, value));
+
+  if (typeof value === "boolean") {
+    return modes;
+  }
+
+  if (typeof value === "number") {
+    add("number");
+    add("date");
+    add("text");
+    return modes;
+  }
+
+  if (typeof value === "string") {
+    if (inferColorValue(field, value)) add("color");
+    if (inferDateValue(field, value)) add("date");
+    add("text");
+    add("json");
+    return modes;
+  }
+
+  add("json");
+  add("text");
+  return modes;
+}
+
+function coerceTextToIsoDate(text: string): string | null {
+  const num = Number(text);
+  if (Number.isFinite(num) && num > 0) {
+    const ms = num >= 1_000_000_000_000 ? num : num * 1000;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function BooleanEditor({
+  value,
+  onChange
+}: {
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-bg-base p-1">
+      {[true, false].map((option) => (
+        <button
+          key={String(option)}
+          type="button"
+          onClick={() => onChange(option)}
+          className={cn(
+            "h-8 rounded px-3 font-mono text-[12px] transition-colors",
+            value === option
+              ? "bg-accent text-white"
+              : "text-text-secondary hover:bg-bg-elevated hover:text-text-primary"
+          )}
+          aria-pressed={value === option}
+        >
+          {String(option)}
+        </button>
+      ))}
     </div>
   );
 }
