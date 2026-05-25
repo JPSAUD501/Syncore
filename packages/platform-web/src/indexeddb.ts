@@ -106,7 +106,7 @@ export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
   }
 
   private async getDatabase(): Promise<IDBDatabase> {
-    const indexedDb = globalThis.indexedDB;
+    const indexedDb = (globalThis as { indexedDB?: IDBFactory }).indexedDB;
     if (!indexedDb) {
       throw new Error("IndexedDB is not available in this environment.");
     }
@@ -137,9 +137,12 @@ export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
       return await new Promise<TRecord | null>((resolve, reject) => {
         const transaction = database.transaction(storeName, "readonly");
         const request = transaction.objectStore(storeName).get(key);
-        request.onsuccess = () => resolve((request.result as TRecord | undefined) ?? null);
+        request.onsuccess = () =>
+          resolve((request.result as TRecord | undefined) ?? null);
         request.onerror = () =>
-          reject(request.error ?? new Error(`Failed to read ${storeName}/${key}.`));
+          reject(
+            request.error ?? new Error(`Failed to read ${storeName}/${key}.`)
+          );
       });
     } finally {
       database.close();
@@ -156,7 +159,10 @@ export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
         const transaction = database.transaction(storeName, "readwrite");
         transaction.oncomplete = () => resolve();
         transaction.onerror = () =>
-          reject(transaction.error ?? new Error(`Failed to write ${storeName}/${record.key}.`));
+          reject(
+            transaction.error ??
+              new Error(`Failed to write ${storeName}/${record.key}.`)
+          );
         transaction.objectStore(storeName).put(record);
       });
     } finally {
@@ -174,7 +180,10 @@ export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
         const transaction = database.transaction(storeName, "readwrite");
         transaction.oncomplete = () => resolve();
         transaction.onerror = () =>
-          reject(transaction.error ?? new Error(`Failed to delete ${storeName}/${key}.`));
+          reject(
+            transaction.error ??
+              new Error(`Failed to delete ${storeName}/${key}.`)
+          );
         transaction.objectStore(storeName).delete(key);
       });
     } finally {
@@ -190,9 +199,13 @@ export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
       return await new Promise<TRecord[]>((resolve, reject) => {
         const transaction = database.transaction(storeName, "readonly");
         const request = transaction.objectStore(storeName).getAll();
-        request.onsuccess = () => resolve((request.result as TRecord[] | undefined) ?? []);
+        request.onsuccess = () =>
+          resolve((request.result as TRecord[] | undefined) ?? []);
         request.onerror = () =>
-          reject(request.error ?? new Error(`Failed to list records from ${storeName}.`));
+          reject(
+            request.error ??
+              new Error(`Failed to list records from ${storeName}.`)
+          );
       });
     } finally {
       database.close();

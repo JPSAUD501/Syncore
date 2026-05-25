@@ -48,7 +48,6 @@ export function SyncoreWebProvider({
   const [client, setClient] = useState<SyncoreClient>(bootingClient);
 
   useEffect(() => {
-    let disposed = false;
     let managedClient: ManagedWebWorkerClient | undefined;
 
     setClient(bootingClient);
@@ -59,23 +58,18 @@ export function SyncoreWebProvider({
         ...(workerType ? { workerType } : {}),
         ...(workerName ? { workerName } : {})
       });
-      if (!disposed) {
-        setClient(managedClient.client);
-      }
+      setClient(managedClient.client);
     } catch (error) {
-      if (!disposed) {
-        setClient(
-          createUnavailableSyncoreClient({
-            kind: "unavailable",
-            reason: "worker-unavailable",
-            ...(error instanceof Error ? { error } : {})
-          })
-        );
-      }
+      setClient(
+        createUnavailableSyncoreClient({
+          kind: "unavailable",
+          reason: "worker-unavailable",
+          ...(error instanceof Error ? { error } : {})
+        })
+      );
     }
 
     return () => {
-      disposed = true;
       managedClient?.dispose();
     };
   }, [bootingClient, workerName, workerType, workerUrl]);
