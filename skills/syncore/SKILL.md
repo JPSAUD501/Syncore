@@ -1,6 +1,6 @@
 ---
 name: syncore
-description: Unified Syncore skill for local-first backend, offline runtime, schema, migrations, generated APIs, React hooks, CLI workflows, platform adapters, scheduler, storage, and project quickstarts. Use when building, debugging, documenting, or reviewing any Syncore app, package, runtime integration, or developer workflow.
+description: Unified Syncore skill for local-first apps. Use when starting a new project, adding Syncore to an existing codebase, migrating from Convex or another data layer, or working on any aspect of a Syncore app — runtime, schema, migrations, generated APIs, React/Svelte hooks, CLI workflows, platform adapters (browser worker, Electron, Expo, Next, Node), scheduler, storage, and reusable components.
 ---
 
 # Syncore
@@ -11,7 +11,14 @@ retrieval-led: inspect the current app, generated outputs, and installed
 
 ## Start Here
 
-Inspect these project-local sources first:
+First, determine the task category:
+
+- **New project from scratch** → read the matching quickstart under `references/quickstarts/`.
+- **Adding Syncore to an existing project** → read `references/guides/migrating-to-syncore.md`.
+- **Migrating from Convex** → read `references/guides/syncore-vs-convex.md`, then `references/guides/migrating-to-syncore.md`.
+- **Working inside an existing Syncore app** → inspect the project files below first.
+
+For any task in an existing Syncore app, inspect these project-local sources before making changes:
 
 - `package.json`
 - `tsconfig.json`
@@ -156,8 +163,9 @@ Why this is the default recommendation:
 
 Do not recommend ad-hoc parallel shell commands first when the project already
 uses Turborepo. Prefer the `dev`/`dev:app`/`dev:syncore` split above so the app
-and dashboard come up together in a repeatable workspace-native flow.
-unless their repo actually needs that wiring.
+and dashboard come up together in a repeatable workspace-native flow. Only add
+this wiring when the project actually uses Turborepo and long-running processes
+need to run together.
 
 ## Syncore vs Convex
 
@@ -285,6 +293,7 @@ Pick the narrowest reference set that matches the task:
 - Conceptual guides:
   - [references/guides/syncore-vs-convex.md](references/guides/syncore-vs-convex.md)
   - [references/guides/cli-product-contract.md](references/guides/cli-product-contract.md)
+  - [references/guides/migrating-to-syncore.md](references/guides/migrating-to-syncore.md)
 - Maintainer policy: [references/project/open-source-guidelines.md](references/project/open-source-guidelines.md)
 
 ## Recommended Reading Order
@@ -303,11 +312,16 @@ Choose an order based on the task:
    `architecture` -> `functions` -> `scheduler-storage`
 6. Reusable component or plugin feature:
    `best-practices` -> `components` -> `component-authoring` or `component-integration`
+7. New project from scratch:
+   relevant quickstart -> `cli-codegen` -> `platform-adapters` -> `react-realtime` or Svelte equivalent
+8. Adding Syncore to an existing project or migrating from another solution:
+   `guides/migrating-to-syncore` -> relevant quickstart -> `schema-migrations` -> `platform-adapters`
 
 ## Quick Decisions
 
 - Need the runtime mental model or system tables: read `references/architecture.md`
 - Need to explain which product problems Syncore solves versus Convex: read `references/guides/syncore-vs-convex.md`
+- Need to add Syncore to an existing project or migrate from another stack: read `references/guides/migrating-to-syncore.md`
 - Need the monorepo workflow or release rules: read `references/development.md`
 - Need file layout, source-of-truth rules, or generated-file guardrails: read `references/best-practices.md`
 - Need function authoring patterns or schema-builder guidance: read `references/functions.md`

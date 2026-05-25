@@ -147,6 +147,12 @@ Use `syncorejs/svelte` when the app host is Svelte or SvelteKit:
 - `createPaginatedQueryStore(...)` exposes app-ready pagination state
 - `createSyncoreStatusStore()` mirrors `watchRuntimeStatus()`
 
+`npx syncorejs init --template svelte` scaffolds `src/syncore.worker.ts` (the
+browser worker runtime) and `src/SyncoreProvider.svelte` (a Svelte 5 component
+that creates the worker client, calls `setSyncoreClient`, and disposes on
+destroy). Mount `SyncoreProvider` at the root of the app so all descendant
+components can use stores.
+
 The capability target should match React even though the ergonomics are store
 based instead of hook based.
 
@@ -164,6 +170,6 @@ based instead of hook based.
 
 1. running Electron storage or SQLite directly in the renderer
 2. forgetting to pass generated `resolvedComponents` when components are installed
-3. missing environment-specific assets such as SQL.js wasm files or worker config
+3. adding host-specific asset overrides to snippets without an app-host reason
 4. solving adapter typing issues with app-level casts instead of checking the installed package surface
 5. mixing app runtime concerns into shared business logic

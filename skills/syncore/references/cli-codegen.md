@@ -25,6 +25,36 @@ Common generator and local-data workflows also include:
 - `npx syncorejs import <directory-or-zip>`
 - `npx syncorejs export --path <directory-or-zip>`
 
+## init
+
+`syncorejs init` scaffolds Syncore files, scripts, and generated types into the
+current directory. Use it as the first step when adding Syncore to any project,
+new or existing:
+
+```bash
+# Auto-detect the project type and prompt interactively
+npx syncorejs init
+
+# Scaffold for a specific host (no prompt)
+npx syncorejs init --template react-web
+npx syncorejs init --template svelte
+npx syncorejs init --template node
+npx syncorejs init --template expo
+npx syncorejs init --template electron
+npx syncorejs init --template next
+npx syncorejs init --template minimal
+```
+
+Available templates: `minimal`, `node`, `react-web`, `svelte`, `expo`, `electron`, `next`.
+
+The `--template auto` flag (the default) detects the project type from
+`package.json` and installed dependencies, and prompts when the result is
+ambiguous. Use `--yes` to accept detected values without a prompt.
+
+When `syncorejs dev` runs in a directory that has no Syncore project, it
+scaffolds automatically using the same template detection. Use `syncorejs init`
+explicitly when you need predictable scaffolding without starting the dev loop.
+
 ## Product Contract
 
 `syncorejs dev` is the main happy path.

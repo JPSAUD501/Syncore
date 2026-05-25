@@ -18,7 +18,16 @@ npm install syncorejs
 npm install -D tsx typescript @types/node
 ```
 
-## 3. Start the Syncore dev loop
+## 3. Scaffold Syncore
+
+```bash
+npx syncorejs init --template node
+```
+
+This creates `syncore/schema.ts`, `syncore/functions/`, `syncore.config.ts`, and
+the initial `syncore/_generated/*` outputs.
+
+## 4. Start the Syncore dev loop
 
 ```bash
 npx syncorejs dev
@@ -26,7 +35,7 @@ npx syncorejs dev
 
 Project-local operational commands typically target `project`.
 
-## 4. Create the script
+## 5. Create the script
 
 `script.ts`
 
@@ -53,7 +62,7 @@ await withNodeSyncoreClient(
 );
 ```
 
-## 5. Run the script
+## 6. Run the script
 
 ```bash
 npx tsx script.ts

@@ -37,6 +37,8 @@ Quick reference to the Syncore skill documents in this directory.
 | [syncore/references/quickstarts/expo.md](syncore/references/quickstarts/expo.md)           | Expo quickstart                |
 | [syncore/references/quickstarts/electron.md](syncore/references/quickstarts/electron.md)   | Electron quickstart            |
 | [syncore/references/quickstarts/node-script.md](syncore/references/quickstarts/node-script.md) | Node script quickstart     |
+| [syncore/references/quickstarts/svelte.md](syncore/references/quickstarts/svelte.md)           | Svelte / SvelteKit quickstart |
 | [syncore/references/guides/syncore-vs-convex.md](syncore/references/guides/syncore-vs-convex.md) | Conceptual comparison    |
 | [syncore/references/guides/cli-product-contract.md](syncore/references/guides/cli-product-contract.md) | CLI UX contract      |
+| [syncore/references/guides/migrating-to-syncore.md](syncore/references/guides/migrating-to-syncore.md) | Adding Syncore to an existing project or migrating from another stack |
 | [syncore/references/project/open-source-guidelines.md](syncore/references/project/open-source-guidelines.md) | Maintainer policy |

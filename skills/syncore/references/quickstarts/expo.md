@@ -16,7 +16,17 @@ cd my-syncore-expo
 npm install syncorejs expo expo-sqlite expo-file-system react react-native
 ```
 
-## 3. Start the Syncore dev loop
+## 3. Scaffold Syncore
+
+```bash
+npx syncorejs init --template expo
+```
+
+This creates `syncore/schema.ts`, `syncore/functions/`, `syncore.config.ts`, and
+the initial `syncore/_generated/*` outputs. Skip individual file creation steps
+below if `init` already generated them.
+
+## 4. Start the Syncore dev loop
 
 ```bash
 npx syncorejs dev
@@ -24,7 +34,7 @@ npx syncorejs dev
 
 For Expo apps, operational commands use connected `client:<id>` targets.
 
-## 4. Create the Expo bootstrap
+## 5. Create the Expo bootstrap
 
 `lib/syncore.ts`
 
@@ -43,7 +53,7 @@ export const syncore = createExpoSyncoreBootstrap({
 });
 ```
 
-## 5. Mount the client
+## 6. Mount the client
 
 `App.tsx`
 
@@ -88,7 +98,7 @@ function NotesScreen() {
 Expo boot should be modeled as runtime lifecycle from the provider, not as a
 separate app-local loading system.
 
-## 6. Run the app
+## 7. Run the app
 
 ```bash
 npm start

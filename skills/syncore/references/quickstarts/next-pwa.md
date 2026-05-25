@@ -13,16 +13,26 @@ cd my-syncore-next
 ## 2. Install packages
 
 ```bash
-npm install syncorejs next react react-dom sql.js
+npm install syncorejs next react react-dom
 ```
 
-## 3. Start the Syncore dev loop
+## 3. Scaffold Syncore
+
+```bash
+npx syncorejs init --template next
+```
+
+This creates `syncore/schema.ts`, `syncore/functions/`, `syncore.config.ts`, and
+the initial `syncore/_generated/*` outputs. Skip individual file creation steps
+below if `init` already generated them.
+
+## 4. Start the Syncore dev loop
 
 ```bash
 npx syncorejs dev
 ```
 
-## 4. Enable the Next integration
+## 5. Enable the Next integration
 
 `next.config.ts`
 
@@ -34,7 +44,7 @@ export default withSyncoreNext({
 });
 ```
 
-## 5. Add the worker runtime
+## 6. Add the worker runtime
 
 `app/syncore.worker.ts`
 
@@ -54,12 +64,11 @@ void createBrowserWorkerRuntime({
   storageNamespace: "my-syncore-next-storage",
   // IndexedDB is more stable than OPFS during Next dev and HMR churn.
   persistenceMode: "indexeddb",
-  locateFile: () => "/sql-wasm.wasm",
   platform: "browser-worker"
 });
 ```
 
-## 6. Use the generated API
+## 7. Use the generated API
 
 `app/page.tsx`
 
@@ -103,12 +112,6 @@ export default function Page() {
 `SyncoreNextProvider` should mount cleanly during SSR and only start the worker
 after hydration. App shells should read runtime lifecycle through
 `useSyncoreStatus()`.
-
-## 7. Serve the wasm asset and service worker
-
-Copy `node_modules/sql.js/dist/sql-wasm.wasm` into `public/sql-wasm.wasm` and
-add a simple `public/sw.js`. Keep the worker asset client-only and let
-`SyncoreNextProvider` own the browser bootstrap.
 
 ## 8. Run the app
 

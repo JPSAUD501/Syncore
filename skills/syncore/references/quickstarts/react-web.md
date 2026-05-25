@@ -13,10 +13,20 @@ cd my-syncore-web
 ## 2. Install packages
 
 ```bash
-npm install syncorejs react react-dom sql.js
+npm install syncorejs react react-dom
 ```
 
-## 3. Start the Syncore dev loop
+## 3. Scaffold Syncore
+
+```bash
+npx syncorejs init --template react-web
+```
+
+This creates `syncore/schema.ts`, `syncore/functions/`, `syncore.config.ts`, and
+the initial `syncore/_generated/*` outputs. Skip individual file creation steps
+if `init` already generated them.
+
+## 4. Start the Syncore dev loop
 
 ```bash
 npx syncorejs dev
@@ -24,10 +34,6 @@ npx syncorejs dev
 
 For web apps, operational commands run against connected `client:<id>` targets,
 not a project-local database.
-
-## 4. Copy the SQL.js wasm asset
-
-Copy `node_modules/sql.js/dist/sql-wasm.wasm` into `public/sql-wasm.wasm`.
 
 ## 5. Add the worker runtime
 
@@ -49,7 +55,6 @@ void createBrowserWorkerRuntime({
   databaseName: "my-syncore-web",
   persistenceDatabaseName: "my-syncore-web",
   persistenceMode: "opfs",
-  locateFile: () => "/sql-wasm.wasm",
   platform: "browser-worker"
 });
 ```

@@ -129,6 +129,46 @@ describe("syncore CLI", () => {
     expect(configSource.trim()).toBe("export default {};");
   });
 
+  test("svelte init scaffolds worker and provider component", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const result = await runCli(cwd, ["init", "--template", "svelte", "--yes"]);
+    expect(result.exitCode).toBe(0);
+
+    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    expect(configSource).not.toContain("projectTarget");
+    expect(configSource.trim()).toBe("export default {};");
+
+    const workerSource = await readFile(path.join(cwd, "src", "syncore.worker.ts"), "utf8");
+    expect(workerSource).toContain("createBrowserWorkerRuntime");
+    expect(workerSource).toContain("syncorejs/browser");
+
+    const providerSource = await readFile(path.join(cwd, "src", "SyncoreProvider.svelte"), "utf8");
+    expect(providerSource).toContain("createBrowserWorkerClient");
+    expect(providerSource).toContain("setSyncoreClient");
+    expect(providerSource).toContain("syncorejs/svelte");
+    expect(providerSource).toContain("{@render children?.()}");
+  });
+
+  test("svelte init detection from package.json dependencies", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await writeFile(
+      path.join(cwd, "package.json"),
+      `${JSON.stringify({ type: "module", dependencies: { svelte: "^5.0.0" } }, null, 2)}\n`
+    );
+
+    const result = await runCli(cwd, ["init", "--yes"]);
+    expect(result.exitCode).toBe(0);
+
+    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    expect(configSource.trim()).toBe("export default {};");
+
+    const workerSource = await readFile(path.join(cwd, "src", "syncore.worker.ts"), "utf8");
+    expect(workerSource).toContain("createBrowserWorkerRuntime");
+  });
+
   test("codegen emits .js relative imports for NodeNext projects", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);

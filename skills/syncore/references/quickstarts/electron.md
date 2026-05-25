@@ -17,7 +17,17 @@ Start from an Electron app that already builds:
 npm install syncorejs react react-dom electron
 ```
 
-## 3. Start the Syncore dev loop
+## 3. Scaffold Syncore
+
+```bash
+npx syncorejs init --template electron
+```
+
+This creates `syncore/schema.ts`, `syncore/functions/`, `syncore.config.ts`, and
+the initial `syncore/_generated/*` outputs. Skip individual file creation steps
+below if `init` already generated them.
+
+## 4. Start the Syncore dev loop
 
 ```bash
 npx syncorejs dev
@@ -25,7 +35,7 @@ npx syncorejs dev
 
 Project-local operational commands typically target `project`.
 
-## 4. Start the runtime in the main process
+## 5. Start the runtime in the main process
 
 `src/main.ts`
 
@@ -74,7 +84,7 @@ async function createWindow() {
 void app.whenReady().then(createWindow);
 ```
 
-## 5. Keep preload narrow
+## 6. Keep preload narrow
 
 `src/preload.cjs`
 
@@ -84,7 +94,7 @@ const { installSyncoreWindowBridge } = require("syncorejs/node/ipc");
 eval(installSyncoreWindowBridge());
 ```
 
-## 6. Use the renderer provider
+## 7. Use the renderer provider
 
 `src/renderer/App.tsx`
 
@@ -114,7 +124,7 @@ function Tasks() {
 If the preload bridge is missing or invalid, treat that as runtime lifecycle
 state in the renderer rather than inventing a second IPC boot flag.
 
-## 7. Run the app
+## 8. Run the app
 
 Start your renderer dev server, then Electron. Keep all SQLite and file-storage
 access in the main process and let the renderer talk only through the Syncore

@@ -34,6 +34,6 @@ Brief description of each file in the Syncore skills directory.
 
 | Path                           | Description                                  |
 | ------------------------------ | -------------------------------------------- |
-| `syncore/references/quickstarts/` | App-host quickstarts by platform          |
-| `syncore/references/guides/`      | Conceptual and product-contract guides     |
+| `syncore/references/quickstarts/` | App-host quickstarts by platform (`react-web`, `next-pwa`, `expo`, `electron`, `svelte`, `node-script`) |
+| `syncore/references/guides/`      | Conceptual guides: `syncore-vs-convex`, `cli-product-contract`, `migrating-to-syncore` |
 | `syncore/references/project/`     | Maintainer and open-source policy          |

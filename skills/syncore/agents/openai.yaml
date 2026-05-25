@@ -1,4 +1,18 @@
 interface:
   display_name: "Syncore"
-  short_description: "Unified Syncore skill covering docs, quickstarts, runtime, CLI, hooks, adapters, migrations, scheduler, and storage"
-  default_prompt: "Use this skill for any Syncore task, then load only the domain references that match the current app, package, or workflow."
+  short_description: "Unified Syncore skill for local-first apps: new projects, migrations from existing codebases, runtime, schema, CLI, React/Svelte hooks, platform adapters, scheduler, storage, and components."
+  default_prompt: |
+    Use this skill for any task involving Syncore or syncorejs.
+
+    Common entry points:
+    - Starting a new project: read SKILL.md → pick the quickstart for your host (react-web, next-pwa, expo, electron, svelte, node-script).
+    - Adding Syncore to an existing project: read SKILL.md → read references/guides/migrating-to-syncore.md.
+    - Migrating from Convex: read references/guides/syncore-vs-convex.md, then references/guides/migrating-to-syncore.md.
+    - Schema or data model work: read references/schema-migrations.md and references/functions.md.
+    - React or Svelte UI wiring: read references/react-realtime.md and the relevant quickstart.
+    - CLI commands, codegen, or migrations: read references/cli-codegen.md.
+    - Platform adapters (browser worker, Electron, Expo, Next, Node): read references/platform-adapters.md.
+    - Scheduler or file storage: read references/scheduler-storage.md.
+    - Reusable components or plugins: read references/components.md and references/component-authoring.md.
+
+    Always inspect the current project's syncore.config.ts, syncore/schema.ts, and syncore/_generated/* before generating or modifying code.

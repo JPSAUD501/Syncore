@@ -86,6 +86,7 @@ export type SyncoreTemplateName =
   | "minimal"
   | "node"
   | "react-web"
+  | "svelte"
   | "expo"
   | "electron"
   | "next";
@@ -93,7 +94,12 @@ export type SyncoreTemplateName =
 export function templateUsesConnectedClients(
   template: SyncoreTemplateName
 ): boolean {
-  return template === "react-web" || template === "expo" || template === "next";
+  return (
+    template === "react-web" ||
+    template === "svelte" ||
+    template === "expo" ||
+    template === "next"
+  );
 }
 
 interface SyncoreTemplateFile {
@@ -146,6 +152,7 @@ export const VALID_SYNCORE_TEMPLATES: SyncoreTemplateName[] = [
   "minimal",
   "node",
   "react-web",
+  "svelte",
   "expo",
   "electron",
   "next"
@@ -860,6 +867,53 @@ export function createAppSyncoreRuntime() {
 `
       });
       break;
+    case "svelte":
+      files.push(
+        {
+          path: path.join("src", "syncore.worker.ts"),
+          content: `/// <reference lib="webworker" />
+
+import { createBrowserWorkerRuntime } from "syncorejs/browser";
+import schema from "../syncore/_generated/schema";
+import { functions } from "../syncore/_generated/functions";
+
+void createBrowserWorkerRuntime({
+  endpoint: self,
+  schema,
+  functions
+});
+`
+        },
+        {
+          path: path.join("src", "SyncoreProvider.svelte"),
+          content: `<script lang="ts">
+  import { onDestroy } from "svelte";
+  import type { Snippet } from "svelte";
+  import { createBrowserWorkerClient } from "syncorejs/browser";
+  import { setSyncoreClient } from "syncorejs/svelte";
+
+  interface Props {
+    children?: Snippet;
+  }
+
+  const { children }: Props = $props();
+
+  const managed = createBrowserWorkerClient({
+    workerUrl: new URL("./syncore.worker.ts", import.meta.url)
+  });
+
+  setSyncoreClient(managed.client);
+
+  onDestroy(() => {
+    void managed.dispose();
+  });
+</script>
+
+{@render children?.()}
+`
+        }
+      );
+      break;
     case "minimal":
       break;
   }
@@ -957,6 +1011,14 @@ export async function detectProjectTemplate(
   }
   if ("next" in dependencies) {
     return "next";
+  }
+  if (
+    "svelte" in dependencies ||
+    "@sveltejs/vite-plugin-svelte" in dependencies ||
+    "@sveltejs/kit" in dependencies ||
+    (await fileExists(path.join(cwd, "src", "SyncoreProvider.svelte")))
+  ) {
+    return "svelte";
   }
   if (
     "vite" in dependencies ||
@@ -1078,7 +1140,10 @@ function maybeAddManagedDevScripts(
 
 function supportsManagedCombinedDev(template: SyncoreTemplateName): boolean {
   return (
-    template === "next" || template === "react-web" || template === "electron"
+    template === "next" ||
+    template === "react-web" ||
+    template === "svelte" ||
+    template === "electron"
   );
 }
 
