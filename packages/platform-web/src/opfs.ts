@@ -1,4 +1,9 @@
-import type { SyncoreWebPersistence, StoredWebFile } from "./persistence.js";
+import type {
+  SyncoreWebPersistence,
+  StoredWebFile,
+  StoredWebFileMetadata,
+  StoredWebFileRange
+} from "./persistence.js";
 
 /** Options for constructing a {@link SyncoreOpfsPersistence}. */
 export interface OpfsPersistenceOptions {
@@ -53,14 +58,20 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
   }
 
   async getFile(namespace: string, id: string): Promise<StoredWebFile | null> {
-    const directory = await this.getOptionalDirectory(["files", encodePathComponent(namespace)]);
+    const directory = await this.getOptionalDirectory([
+      "files",
+      encodePathComponent(namespace)
+    ]);
     if (!directory) {
       return null;
     }
 
     const fileName = `${encodePathComponent(id)}.bin`;
     const metadataName = `${encodePathComponent(id)}.meta.json`;
-    const fileHandle = await this.getOptionalFileHandleFromDirectory(directory, fileName);
+    const fileHandle = await this.getOptionalFileHandleFromDirectory(
+      directory,
+      fileName
+    );
     if (!fileHandle) {
       return null;
     }
@@ -78,13 +89,58 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
     };
   }
 
+  async getFileRange(
+    namespace: string,
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<StoredWebFileRange | null> {
+    const directory = await this.getOptionalDirectory([
+      "files",
+      encodePathComponent(namespace)
+    ]);
+    if (!directory) {
+      return null;
+    }
+
+    const encodedId = encodePathComponent(id);
+    const fileHandle = await this.getOptionalFileHandleFromDirectory(
+      directory,
+      `${encodedId}.bin`
+    );
+    if (!fileHandle) {
+      return null;
+    }
+
+    const [file, metadata] = await Promise.all([
+      fileHandle.getFile(),
+      this.readMetadata(directory, `${encodedId}.meta.json`)
+    ]);
+    const normalizedOffset = Math.max(offset, 0);
+    const normalizedLength = Math.max(length, 0);
+    const slice = file.slice(
+      normalizedOffset,
+      normalizedOffset + normalizedLength
+    );
+    return {
+      id,
+      bytes: new Uint8Array(await slice.arrayBuffer()),
+      size: file.size,
+      contentType: metadata?.contentType ?? null,
+      offset: normalizedOffset
+    };
+  }
+
   async putFile(
     namespace: string,
     id: string,
     bytes: Uint8Array,
     contentType: string | null
   ): Promise<void> {
-    const directory = await this.ensureDirectory(["files", encodePathComponent(namespace)]);
+    const directory = await this.ensureDirectory([
+      "files",
+      encodePathComponent(namespace)
+    ]);
     const encodedId = encodePathComponent(id);
 
     await writeBytes(
@@ -98,7 +154,10 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
   }
 
   async deleteFile(namespace: string, id: string): Promise<void> {
-    const directory = await this.getOptionalDirectory(["files", encodePathComponent(namespace)]);
+    const directory = await this.getOptionalDirectory([
+      "files",
+      encodePathComponent(namespace)
+    ]);
     if (!directory) {
       return;
     }
@@ -109,12 +168,25 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
   }
 
   async listFiles(namespace: string): Promise<StoredWebFile[]> {
-    const directory = await this.getOptionalDirectory(["files", encodePathComponent(namespace)]);
+    const metadata = await this.listFileMetadata(namespace);
+    return Promise.all(
+      metadata.map(async (file) => {
+        const fullFile = await this.getFile(namespace, file.id);
+        return fullFile ?? { ...file, bytes: new Uint8Array() };
+      })
+    );
+  }
+
+  async listFileMetadata(namespace: string): Promise<StoredWebFileMetadata[]> {
+    const directory = await this.getOptionalDirectory([
+      "files",
+      encodePathComponent(namespace)
+    ]);
     if (!directory) {
       return [];
     }
 
-    const files: StoredWebFile[] = [];
+    const files: StoredWebFileMetadata[] = [];
     const iterableDirectory = directory as FileSystemDirectoryHandle & {
       entries(): AsyncIterable<[string, FileSystemHandle]>;
     };
@@ -124,12 +196,14 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
       }
       const encodedId = name.slice(0, -4);
       const id = decodeURIComponent(encodedId);
-      const bytes = await readFileBytes(handle as FileSystemFileHandle);
-      const metadata = await this.readMetadata(directory, `${encodedId}.meta.json`);
+      const file = await (handle as FileSystemFileHandle).getFile();
+      const metadata = await this.readMetadata(
+        directory,
+        `${encodedId}.meta.json`
+      );
       files.push({
         id,
-        bytes,
-        size: bytes.byteLength,
+        size: file.size,
         contentType: metadata?.contentType ?? null
       });
     }
@@ -192,7 +266,10 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
     directory: FileSystemDirectoryHandle,
     fileName: string
   ): Promise<StoredFileMetadata | null> {
-    const handle = await this.getOptionalFileHandleFromDirectory(directory, fileName);
+    const handle = await this.getOptionalFileHandleFromDirectory(
+      directory,
+      fileName
+    );
     if (!handle) {
       return null;
     }
@@ -219,7 +296,9 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
   }
 }
 
-async function readFileBytes(handle: FileSystemFileHandle): Promise<Uint8Array> {
+async function readFileBytes(
+  handle: FileSystemFileHandle
+): Promise<Uint8Array> {
   const file = await handle.getFile();
   return new Uint8Array(await file.arrayBuffer());
 }

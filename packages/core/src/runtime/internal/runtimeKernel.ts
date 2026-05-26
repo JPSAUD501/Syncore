@@ -6,6 +6,7 @@ import type {
   SyncoreResolvedComponents,
   SyncoreCapabilities,
   SyncoreClient,
+  SyncoreRuntimeCapabilities,
   SyncoreRuntime,
   SyncoreRuntimeAdmin,
   SyncoreRuntimeOptions,
@@ -37,14 +38,13 @@ type DevtoolsEventMeta = {
   schedulerRun?: boolean;
 };
 
-export class RuntimeKernel<
-  TSchema extends SyncoreDataModel
-> {
+export class RuntimeKernel<TSchema extends SyncoreDataModel> {
   readonly runtimeId = generateId();
   readonly platform: string;
   readonly externalChangeSourceId = generateId();
   readonly driverDatabasePath: string | undefined;
   readonly capabilities: Readonly<SyncoreCapabilities>;
+  readonly runtimeCapabilities: Readonly<SyncoreRuntimeCapabilities>;
   readonly capabilityDescriptors: ReadonlyArray<CapabilityDescriptor>;
   readonly devtoolsEngine: DevtoolsEngine;
   readonly schemaEngine: SchemaEngine<TSchema>;
@@ -69,6 +69,16 @@ export class RuntimeKernel<
     this.capabilities = Object.freeze({
       ...(options.capabilities ?? {})
     });
+    this.runtimeCapabilities = Object.freeze(
+      options.runtimeCapabilities ?? {
+        storage: {
+          available: true,
+          ...(options.storage.supportsRange
+            ? { supportsRange: options.storage.supportsRange() !== false }
+            : {})
+        }
+      }
+    );
     this.driverDatabasePath = inferDriverDatabasePath(
       options.driver as { filename?: string; databasePath?: string }
     );
@@ -94,7 +104,8 @@ export class RuntimeKernel<
     this.transactionCoordinator = new TransactionCoordinator(options.driver);
     this.runtimeStatus = new RuntimeStatusController({
       kind: "starting",
-      reason: "booting"
+      reason: "booting",
+      capabilities: this.runtimeCapabilities
     });
     this.schedulerEngine = new SchedulerEngine({
       driver: options.driver,
@@ -157,7 +168,8 @@ export class RuntimeKernel<
         this.devtoolsEngine.subscribeEvents(listener),
       subscribeToDevtoolsInvalidations: (listener) =>
         this.devtoolsEngine.subscribeInvalidations(listener),
-      notifyDevtoolsScopes: (scopes) => this.devtoolsEngine.notifyScopes(scopes),
+      notifyDevtoolsScopes: (scopes) =>
+        this.devtoolsEngine.notifyScopes(scopes),
       forceRefreshDevtools: async (reason, scopes, meta) => {
         const resolvedScopes = new Set(scopes ?? []);
         if (resolvedScopes.size > 0) {
@@ -179,6 +191,30 @@ export class RuntimeKernel<
           resolvedScopes
         );
       },
+      listStorageObjects: async (options) => {
+        await this.prepareForDirectAccess();
+        return this.storageEngine.listObjects(options);
+      },
+      getStorageObjectAccessInfo: async (id) => {
+        await this.prepareForDirectAccess();
+        return this.storageEngine.getObjectAccessInfo(id);
+      },
+      readStorageObjectRange: async (id, offset, length) => {
+        await this.prepareForDirectAccess();
+        return this.storageEngine.readObjectRange(id, offset, length);
+      },
+      deleteStorageObject: async (id, meta) => {
+        await this.prepareForDirectAccess();
+        const deleted = await this.storageEngine.deleteObject(id, meta);
+        if (deleted) {
+          this.devtoolsEngine.notifyScopes([
+            "runtime.summary",
+            "storage.objects",
+            `storage:${id}`
+          ]);
+        }
+        return deleted;
+      },
       cancelScheduledJob: async (id) => {
         await this.prepareForDirectAccess();
         return this.schedulerEngine.cancelScheduledJob(id);
@@ -197,7 +233,8 @@ export class RuntimeKernel<
     }
     this.runtimeStatus.setStatus({
       kind: "starting",
-      reason: "booting"
+      reason: "booting",
+      capabilities: this.runtimeCapabilities
     });
     await this.prepareForDirectAccess();
     try {
@@ -206,7 +243,8 @@ export class RuntimeKernel<
       this.schedulerEngine.startPolling();
       this.started = true;
       this.runtimeStatus.setStatus({
-        kind: "ready"
+        kind: "ready",
+        capabilities: this.runtimeCapabilities
       });
       this.devtoolsEngine.emit({
         type: "runtime.connected",
@@ -222,6 +260,7 @@ export class RuntimeKernel<
       this.runtimeStatus.setStatus({
         kind: "error",
         reason: "runtime-unavailable",
+        capabilities: this.runtimeCapabilities,
         ...(error instanceof Error ? { error } : {})
       });
       throw error;
@@ -264,7 +303,8 @@ export class RuntimeKernel<
     this.started = false;
     this.runtimeStatus.setStatus({
       kind: "unavailable",
-      reason: "disposed"
+      reason: "disposed",
+      capabilities: this.runtimeCapabilities
     });
     if (stopError) {
       throw stopError;
@@ -282,9 +322,7 @@ export class RuntimeKernel<
     return this.executionEngine.watchQuery(reference, args);
   }
 
-  private async runComponentHooks(
-    hook: "onStart" | "onStop"
-  ): Promise<void> {
+  private async runComponentHooks(hook: "onStart" | "onStop"): Promise<void> {
     for (const component of this.options.components ?? []) {
       await this.runComponentHookTree(component, hook);
     }

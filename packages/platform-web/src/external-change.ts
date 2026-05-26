@@ -16,7 +16,7 @@ export interface BroadcastChannelExternalChangeSignalOptions {
 }
 
 /**
- * A `BroadcastChannel`-based {@link SyncoreExternalChangeSignal} that
+ * A `BroadcastChannel`-based SyncoreExternalChangeSignal that
  * propagates database-mutation events across all browser tabs sharing the same
  * Syncore database.
  *
@@ -83,7 +83,7 @@ export interface SqlJsExternalChangeApplierOptions {
 }
 
 /**
- * A {@link SyncoreExternalChangeApplier} for sql.js (in-memory) databases.
+ * A SyncoreExternalChangeApplier for sql.js (in-memory) databases.
  *
  * When another tab commits a mutation and broadcasts the change event, this
  * applier loads the latest database snapshot from web persistence (OPFS or

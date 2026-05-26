@@ -65,10 +65,10 @@ export class CodecValidator<TValue, TStored, TStorageFieldValidator extends Vali
 // @public (undocumented)
 export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(schema: SyncoreSchema<TTables>): SchemaSnapshot;
 
-// @public (undocumented)
+// @public
 export function defineSchema<const TTables extends SyncoreSchemaDefinition>(tables: TTables): SyncoreSchema<TTables>;
 
-// @public (undocumented)
+// @public
 export function defineTable<const TShape extends ObjectValidatorShape>(validator: TShape): TableDefinition<ObjectValidator<TShape>>;
 
 // @public (undocumented)
@@ -316,7 +316,7 @@ export class StringValidator extends BaseValidator<string> {
     parse(value: unknown, path?: string): string;
 }
 
-// @public (undocumented)
+// @public
 export class SyncoreSchema<TTables> {
     constructor(tables: TTables);
     // (undocumented)
@@ -333,7 +333,7 @@ export interface SyncoreSchemaDefinition {
     [tableName: string]: AnyTableDefinition;
 }
 
-// @public (undocumented)
+// @public
 export class TableDefinition<TValidator extends Validator<Record<string, unknown>, Record<string, unknown>, string>, TIndexes = Record<never, never>, TSearchIndexes = Record<never, never>> {
     constructor(validator: TValidator, options?: TableDefinitionOptions);
     // (undocumented)
@@ -345,8 +345,6 @@ export class TableDefinition<TValidator extends Validator<Record<string, unknown
     // (undocumented)
     readonly fieldPaths: FieldPaths<TValidator>;
     // Warning: (ae-forgotten-export) The symbol "Expand" needs to be exported by the entry point index.d.ts
-    //
-    // (undocumented)
     index<const TIndexName extends string, TFirstField extends FieldPaths<TValidator>, TRestFields extends FieldPaths<TValidator>[]>(name: TIndexName, fields: [TFirstField, ...TRestFields]): TableDefinition<TValidator, Expand<TIndexes & Record<TIndexName, readonly [TFirstField, ...TRestFields]>>, TSearchIndexes>;
     // (undocumented)
     readonly indexes: IndexDefinition[];
@@ -358,7 +356,6 @@ export class TableDefinition<TValidator extends Validator<Record<string, unknown
     parse(value: unknown): Infer<TValidator>;
     // (undocumented)
     parseAndSerialize(value: unknown): InferStorage<TValidator>;
-    // (undocumented)
     searchIndex<const TIndexName extends string, TSearchField extends FieldPaths<TValidator>, TFilterField extends FieldPaths<TValidator> = never>(name: TIndexName, config: {
         searchField: TSearchField;
         filterFields?: TFilterField[];
@@ -388,7 +385,7 @@ export interface TableDefinitionOptions {
     tableName?: string;
 }
 
-// @public (undocumented)
+// @public
 export interface TableDocumentSystemFields {
     // (undocumented)
     _creationTime: number;
@@ -499,39 +496,24 @@ export interface Validator<TValue = unknown, TStorage = TValue, TFieldPaths exte
 
 // @public
 export interface ValidatorBuilderApi {
-    // (undocumented)
     any(): AnyValidator;
-    // (undocumented)
     array<TItem, TItemStorage, TValidator extends Validator<TItem, TItemStorage, string>>(itemValidator: TValidator): ArrayValidator<TItem, TItemStorage, TValidator>;
-    // (undocumented)
     boolean(): BooleanValidator;
-    // (undocumented)
     codec<TValue, TStored, TStorageFieldValidator extends Validator<TStored, unknown, string>, TValueFieldValidator extends Validator<TValue, unknown, string>>(valueValidator: TValueFieldValidator, config: {
         storage: TStorageFieldValidator;
         serialize(value: TValue): TStored;
         deserialize(value: TStored): TValue;
     }): CodecValidator<TValue, TStored, TStorageFieldValidator, TValueFieldValidator>;
-    // (undocumented)
     enum<TValues extends readonly [string, ...string[]]>(values: TValues): EnumValidator<TValues>;
-    // (undocumented)
     id<TTableName extends string>(tableName: TTableName): IdValidator<TTableName>;
-    // (undocumented)
     literal<TValue extends string | number | boolean | null>(literalValue: TValue): LiteralValidator<TValue>;
-    // (undocumented)
     null(): NullValidator;
-    // (undocumented)
     nullable<TValue, TStorage, TFieldPaths extends string>(inner: Validator<TValue, TStorage, TFieldPaths>): UnionValidator<readonly [Validator<TValue, TStorage, TFieldPaths>, NullValidator]>;
-    // (undocumented)
     number(): NumberValidator;
-    // (undocumented)
     object<TShape extends ObjectValidatorShape>(shape: TShape): ObjectValidator<TShape>;
-    // (undocumented)
     optional<TValue, TStorage, TFieldPaths extends string>(inner: Validator<TValue, TStorage, TFieldPaths>): OptionalValidator<TValue, TStorage, TFieldPaths>;
-    // (undocumented)
     record<TKey extends string, TValue, TStorage, TKeyValidator extends Validator<TKey, string, string>, TValueValidator extends Validator<TValue, TStorage, string>>(keyValidator: TKeyValidator, valueValidator: TValueValidator): RecordValidator<TKey, TValue, TStorage, TKeyValidator, TValueValidator>;
-    // (undocumented)
     string(): StringValidator;
-    // (undocumented)
     union<TMembers extends readonly Validator<unknown, unknown, string>[]>(...members: TMembers): UnionValidator<TMembers>;
 }
 

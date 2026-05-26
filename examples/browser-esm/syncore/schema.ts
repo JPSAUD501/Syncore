@@ -10,5 +10,15 @@ export default defineSchema({
     createdAt: s.number()
   })
     .index("by_created", ["createdAt"])
-    .searchIndex("search_name", { searchField: "name" })
+    .searchIndex("search_name", { searchField: "name" }),
+  contactAttachments: defineTable({
+    contactId: s.id("contacts"),
+    fileName: s.string(),
+    contentType: s.string(),
+    size: s.number(),
+    storageId: s.string(),
+    createdAt: s.number()
+  })
+    .index("by_contact", ["contactId", "createdAt"])
+    .index("by_created", ["createdAt"])
 });

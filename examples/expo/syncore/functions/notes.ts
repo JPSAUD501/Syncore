@@ -43,6 +43,43 @@ export const get = query({
   handler: async (ctx, args) => ctx.db.get("notes", args.id)
 });
 
+function decodeBase64(base64: string): Uint8Array {
+  const binary =
+    typeof atob === "function"
+      ? atob(base64)
+      : (
+          globalThis as {
+            Buffer?: { from(value: string, encoding: "base64"): Uint8Array };
+          }
+        ).Buffer?.from(base64, "base64");
+  if (binary instanceof Uint8Array) {
+    return binary;
+  }
+  if (typeof binary !== "string") {
+    throw new Error("Base64 decoding is not available in this runtime.");
+  }
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  if (typeof btoa === "function") {
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  }
+  const buffer = (
+    globalThis as {
+      Buffer?: { from(value: Uint8Array): { toString(encoding: "base64"): string } };
+    }
+  ).Buffer;
+  if (!buffer) {
+    throw new Error("Base64 encoding is not available in this runtime.");
+  }
+  return buffer.from(bytes).toString("base64");
+}
+
 export const search = query({
   args: { query: s.string() },
   handler: async (ctx, args) => {
@@ -168,8 +205,72 @@ export const remove = mutation({
   args: { id: s.string() },
   returns: s.null(),
   handler: async (ctx, args) => {
+    const note = await ctx.db.get("notes", args.id);
+    if (note?.photoStorageId) {
+      await ctx.storage.delete(note.photoStorageId).catch(() => undefined);
+    }
     await ctx.db.delete("notes", args.id);
     return null;
+  }
+});
+
+export const attachPhoto = mutation({
+  args: {
+    id: s.string(),
+    fileName: s.string(),
+    contentType: s.string(),
+    base64: s.string()
+  },
+  returns: s.null(),
+  handler: async (ctx, args) => {
+    const note = await ctx.db.get("notes", args.id);
+    if (!note) return null;
+    if (note.photoStorageId) {
+      await ctx.storage.delete(note.photoStorageId).catch(() => undefined);
+    }
+    const bytes = decodeBase64(args.base64);
+    const storageId = await ctx.storage.put({
+      data: bytes,
+      fileName: args.fileName,
+      contentType: args.contentType || "image/jpeg"
+    });
+    await ctx.db.patch("notes", args.id, {
+      photoStorageId: storageId,
+      photoContentType: args.contentType || "image/jpeg",
+      photoSize: bytes.byteLength,
+      photoFileName: args.fileName,
+      updatedAt: Date.now()
+    });
+    return null;
+  }
+});
+
+export const removePhoto = mutation({
+  args: { id: s.string() },
+  returns: s.null(),
+  handler: async (ctx, args) => {
+    const note = await ctx.db.get("notes", args.id);
+    if (!note?.photoStorageId) return null;
+    await ctx.storage.delete(note.photoStorageId).catch(() => undefined);
+    await ctx.db.patch("notes", args.id, {
+      photoStorageId: undefined,
+      photoContentType: undefined,
+      photoSize: undefined,
+      photoFileName: undefined,
+      updatedAt: Date.now()
+    });
+    return null;
+  }
+});
+
+export const getPhoto = query({
+  args: { id: s.string() },
+  handler: async (ctx, args) => {
+    const note = await ctx.db.get("notes", args.id);
+    if (!note?.photoStorageId || !note.photoContentType) return null;
+    const bytes = await ctx.storage.read(note.photoStorageId);
+    if (!bytes) return null;
+    return `data:${note.photoContentType};base64,${encodeBase64(bytes)}`;
   }
 });
 

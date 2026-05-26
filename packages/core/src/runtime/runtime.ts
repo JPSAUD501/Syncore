@@ -1,5 +1,6 @@
 import type {
   DocumentChangePreview,
+  StorageEntry,
   SyncoreActiveQueryInfo,
   SyncoreDevtoolsEvent,
   SyncoreDevtoolsEventOrigin,
@@ -152,16 +153,17 @@ export interface CapabilityDescriptor {
  * mutation that writes to the `tasks` table.
  *
  * - `"runtime.summary"` / `"runtime.activeQueries"` / `"schema.tables"` /
- *   `"scheduler.jobs"` — runtime-level state consumed by devtools.
- * - `` `table:${string}` `` — every document in a specific table.
- * - `` `row:${string}:${string}` `` — a single document (table + id).
- * - `` `storage:${string}` `` — a specific storage object.
+ *   `"scheduler.jobs"` / `"storage.objects"` - runtime-level state consumed by devtools.
+ * - `table:${string}` - every document in a specific table.
+ * - `row:${string}:${string}` - a single document (table + id).
+ * - `storage:${string}` - a specific storage object.
  */
 export type ImpactScope =
   | "runtime.summary"
   | "runtime.activeQueries"
   | "schema.tables"
   | "scheduler.jobs"
+  | "storage.objects"
   | `table:${string}`
   | `row:${string}:${string}`
   | `storage:${string}`;
@@ -175,7 +177,10 @@ export interface ExecutionResult<TResult = unknown> {
   documentChanges: DocumentChangePreview[];
   storageChanges: Array<{
     storageId: string;
-    reason: Extract<SyncoreExternalChangeReason, "storage-put" | "storage-delete">;
+    reason: Extract<
+      SyncoreExternalChangeReason,
+      "storage-put" | "storage-delete"
+    >;
   }>;
   scheduledJobs: string[];
   devtoolsEvents: SyncoreDevtoolsEvent[];
@@ -413,6 +418,22 @@ export interface SyncoreStorageAdapter {
    */
   read(id: string): Promise<Uint8Array | null>;
   /**
+   * Return a byte range for a stored object, or `null` if it does not exist.
+   *
+   * Adapters that can seek without loading the whole object should implement
+   * this so devtools preview and download endpoints can stream large files.
+   */
+  readRange?(
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<Uint8Array | null>;
+  /**
+   * Return `false` when `readRange` is intentionally unavailable for this
+   * adapter instance.
+   */
+  supportsRange?(): boolean;
+  /**
    * Permanently remove a stored object. A no-op if the object does not exist.
    */
   delete(id: string): Promise<void>;
@@ -478,6 +499,7 @@ export type DevtoolsLiveQueryScope =
   | "runtime.activeQueries"
   | "schema.tables"
   | "scheduler.jobs"
+  | "storage.objects"
   | `table:${string}`
   | `storage:${string}`;
 
@@ -589,9 +611,7 @@ export interface SyncoreDataModel<
  * Only reach for `SyncoreRuntimeOptions` when you need full control over the
  * underlying SQLite driver or storage backend.
  */
-export interface SyncoreRuntimeOptions<
-  TSchema extends SyncoreDataModel
-> {
+export interface SyncoreRuntimeOptions<TSchema extends SyncoreDataModel> {
   /** The data model that defines the available tables, indexes, and schemas. */
   schema: TSchema;
   /**
@@ -643,6 +663,13 @@ export interface SyncoreRuntimeOptions<
    * every function handler. See {@link SyncoreCapabilities}.
    */
   capabilities?: SyncoreCapabilities;
+  /**
+   * Capabilities exposed to clients through `watchRuntimeStatus()`.
+   *
+   * Platform adapters fill this with feature availability that app UIs should
+   * honor, such as whether `ctx.storage` is usable in the current environment.
+   */
+  runtimeCapabilities?: SyncoreRuntimeCapabilities;
   /** Structured capability descriptors validated at start-up. */
   capabilityDescriptors?: CapabilityDescriptor[];
   /**
@@ -741,6 +768,23 @@ export type SyncoreRuntimeStatusReason =
   | "runtime-unavailable"
   | "disposed";
 
+/** Runtime-visible storage capability for app UIs and adapters. */
+export interface SyncoreRuntimeStorageCapability {
+  /** Whether `ctx.storage` can read/write objects in this runtime. */
+  available: boolean;
+  /** Short reason to show when storage is unavailable. */
+  reason?: string;
+  /** Storage protocol used by the adapter, such as `"file"` or `"opfs"`. */
+  protocol?: string;
+  /** Whether the adapter can read byte ranges without loading the full object. */
+  supportsRange?: boolean;
+}
+
+/** Runtime capabilities exposed through `watchRuntimeStatus()`. */
+export interface SyncoreRuntimeCapabilities {
+  storage: SyncoreRuntimeStorageCapability;
+}
+
 /**
  * Snapshot of the runtime’s current lifecycle state.
  *
@@ -760,6 +804,8 @@ export interface SyncoreRuntimeStatus {
   reason?: SyncoreRuntimeStatusReason;
   /** The underlying error when `kind` is `"error"`. */
   error?: Error;
+  /** Runtime capabilities that app UIs can use to enable or hide affordances. */
+  capabilities?: SyncoreRuntimeCapabilities;
 }
 
 /**
@@ -771,11 +817,7 @@ export interface SyncoreRuntimeStatus {
  *   stale value from a prior successful run.
  * - `"skipped"` — The subscription was suppressed with the `skip` sentinel.
  */
-export type SyncoreQueryStatus =
-  | "loading"
-  | "success"
-  | "error"
-  | "skipped";
+export type SyncoreQueryStatus = "loading" | "success" | "error" | "skipped";
 
 /**
  * The full reactive state of a Syncore query subscription.
@@ -945,9 +987,7 @@ export interface SearchIndexBuilder<
   build(): SearchQuery;
 }
 
-export type TableNames<
-  TSchema extends SyncoreDataModel
-> = Extract<
+export type TableNames<TSchema extends SyncoreDataModel> = Extract<
   keyof TSchema["tables"],
   string
 >;
@@ -1241,9 +1281,7 @@ export interface SchedulerApi {
  * });
  * ```
  */
-export interface QueryCtx<
-  TSchema extends SyncoreDataModel = SyncoreDataModel
-> {
+export interface QueryCtx<TSchema extends SyncoreDataModel = SyncoreDataModel> {
   /** Read-only access to the local SQLite database. */
   db: SyncoreDatabaseReader<TSchema>;
   /** Blob storage access for reading files and images. */
@@ -1496,6 +1534,28 @@ export interface SyncoreRuntimeAdmin<
     scopes?: Iterable<ImpactScope>,
     meta?: DevtoolsEventMeta
   ): Promise<void>;
+  listStorageObjects(options?: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+  }): Promise<{ entries: StorageEntry[]; totalCount: number }>;
+  getStorageObjectAccessInfo(id: string): Promise<{
+    entry: StorageEntry;
+    supportsRange: boolean;
+  } | null>;
+  readStorageObjectRange(
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<{
+    entry: StorageEntry;
+    bytes: Uint8Array;
+    offset: number;
+    bytesRead: number;
+    done: boolean;
+    supportsRange: boolean;
+  } | null>;
+  deleteStorageObject(id: string, meta?: DevtoolsEventMeta): Promise<boolean>;
   cancelScheduledJob(id: string): Promise<boolean>;
   updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean>;
 }
@@ -1653,9 +1713,7 @@ export interface QueryBuilder<
  * const client = runtime.createClient();
  * ```
  */
-export class SyncoreRuntime<
-  TSchema extends SyncoreDataModel
-> {
+export class SyncoreRuntime<TSchema extends SyncoreDataModel> {
   private readonly kernel: RuntimeKernel<TSchema>;
 
   constructor(private readonly options: SyncoreRuntimeOptions<TSchema>) {

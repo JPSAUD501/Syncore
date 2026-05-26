@@ -5,5 +5,6 @@ import { functions } from "../syncore/_generated/functions";
 void createBrowserWorkerRuntime({
   endpoint: self,
   schema,
-  functions
+  functions,
+  persistenceMode: "opfs"
 });

@@ -10,8 +10,8 @@ import { ReactNode } from 'react';
 
 // @public
 export function createNextSyncoreClient(options: {
-    createWorker?: () => Worker; /** Optional explicit module URL for an already-public worker asset. */
-    workerUrl?: URL | string; /** Optional public worker asset path for production builds. */
+    createWorker?: () => Worker; /** Explicit module URL for an already-public worker script. */
+    workerUrl?: URL | string; /** Public asset path for the compiled worker file. Defaults to `"/syncore.worker.js"`. */
     workerAssetUrl?: string;
 }): ManagedWebWorkerClient;
 
@@ -24,7 +24,7 @@ export function getSyncoreWorkerUrl(): string;
 // @public
 export function registerSyncoreServiceWorker(options?: SyncoreNextOptions): Promise<SyncoreServiceWorkerRegistration | null>;
 
-// @public (undocumented)
+// @public
 export interface SyncoreNextOptions {
     serviceWorkerUrl?: string;
     workerAssetUrl?: string;
@@ -33,16 +33,16 @@ export interface SyncoreNextOptions {
 // @public
 export function SyncoreNextProvider(input: {
     children: ReactNode;
-    createWorker?: () => Worker; /** Optional service worker URL used to cache the application shell. */
-    serviceWorkerUrl?: string; /** Optional explicit module URL for an already-public worker asset. */
-    workerUrl?: URL | string; /** Optional public worker asset path for production builds. */
+    createWorker?: () => Worker; /** URL of the PWA service worker script. Omit to skip service worker registration. */
+    serviceWorkerUrl?: string; /** Explicit module URL for an already-public worker asset. */
+    workerUrl?: URL | string; /** Public asset path for the compiled worker file. Defaults to `"/syncore.worker.js"`. */
     workerAssetUrl?: string;
 }): JSX.Element;
 
 // @public
 export function SyncoreServiceWorker(input: {
-    children: ReactNode;
-    serviceWorkerUrl?: string;
+    children: ReactNode; /** URL of the service worker script. Defaults to `"/sw.js"`. */
+    serviceWorkerUrl?: string; /** Called after the service worker is successfully registered. */
     onRegistered?: (registration: ServiceWorkerRegistration) => void;
 }): ReactNode;
 

@@ -1,7 +1,21 @@
 #!/usr/bin/env node
 
-import { appendFile, readdir, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import {
+  appendFile,
+  readdir,
+  mkdir,
+  open,
+  readFile,
+  rm,
+  stat,
+  writeFile
+} from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse
+} from "node:http";
 import { connect as connectToNet } from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -18,7 +32,8 @@ import type {
   SyncoreDevtoolsSubscriptionPayload,
   SyncoreDevtoolsSubscriptionResultPayload,
   SyncoreDevtoolsSubscribe,
-  SyncoreDevtoolsUnsubscribe
+  SyncoreDevtoolsUnsubscribe,
+  StorageEntry
 } from "@syncore/devtools-protocol";
 import {
   SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
@@ -160,6 +175,9 @@ export const VALID_SYNCORE_TEMPLATES: SyncoreTemplateName[] = [
 let pendingDevBootstrap: ReturnType<typeof setTimeout> | undefined;
 let devBootstrapInFlight = false;
 const PROJECT_TARGET_RUNTIME_ID = "syncore-project-target";
+const STORAGE_ACCESS_TICKET_TTL_MS = 5 * 60 * 1000;
+const STORAGE_ACCESS_CHUNK_BYTES = 1024 * 1024;
+const STORAGE_ACCESS_MAX_PREVIEW_BYTES = 80_000;
 
 program
   .name("syncorejs")
@@ -517,7 +535,9 @@ export async function runCodegen(cwd: string): Promise<void> {
     `import schema from "./schema${functionImportExtension}";`,
     `import { functions } from "./functions${functionImportExtension}";`,
     ...(hasComponentsManifest
-      ? [`import { resolvedComponents } from "./components${functionImportExtension}";`]
+      ? [
+          `import { resolvedComponents } from "./components${functionImportExtension}";`
+        ]
       : [`const resolvedComponents = [] as const;`]),
     ``,
     `export { functions, schema };`,
@@ -630,12 +650,18 @@ export async function runCodegen(cwd: string): Promise<void> {
     path.join(generatedDir, "functions.ts"),
     functionsSource
   );
-  await writeGeneratedFile(path.join(generatedDir, "runtime.ts"), runtimeSource);
+  await writeGeneratedFile(
+    path.join(generatedDir, "runtime.ts"),
+    runtimeSource
+  );
   await writeGeneratedFile(path.join(generatedDir, "schema.ts"), schemaSource);
   await writeGeneratedFile(path.join(generatedDir, "server.ts"), serverSource);
 }
 
-async function writeGeneratedFile(filePath: string, source: string): Promise<void> {
+async function writeGeneratedFile(
+  filePath: string,
+  source: string
+): Promise<void> {
   try {
     if ((await readFile(filePath, "utf8")) === source) {
       return;
@@ -1537,15 +1563,15 @@ function renderGeneratedManifestImportLines(
   if (!hasComponentsManifest) {
     return [];
   }
-  return [
-    `import componentsManifest from "../components${extension}";`
-  ];
+  return [`import componentsManifest from "../components${extension}";`];
 }
 
 function renderGeneratedManifestDeclarationLines(
   hasComponentsManifest: boolean
 ): string[] {
-  return hasComponentsManifest ? [] : [`const componentsManifest = {} as const;`];
+  return hasComponentsManifest
+    ? []
+    : [`const componentsManifest = {} as const;`];
 }
 
 function renderApiInterfaceName(node: ApiModuleNode): string {
@@ -1785,7 +1811,9 @@ async function loadNamedExport<TValue>(
       `File ${path.relative(process.cwd(), filePath)} must export ${exportName}.`
     );
   }
-  const resolvedValue = unwrapDefaultExport(loaded[exportName] ?? defaultExport);
+  const resolvedValue = unwrapDefaultExport(
+    loaded[exportName] ?? defaultExport
+  );
   if (resolvedValue === undefined) {
     throw new Error(
       `File ${path.relative(process.cwd(), filePath)} exported undefined for ${exportName}.`
@@ -1794,7 +1822,9 @@ async function loadNamedExport<TValue>(
   return resolvedValue;
 }
 
-async function hasNonEmptyComponentsManifest(filePath: string): Promise<boolean> {
+async function hasNonEmptyComponentsManifest(
+  filePath: string
+): Promise<boolean> {
   if (!(await fileExists(filePath))) {
     return false;
   }
@@ -1918,12 +1948,26 @@ interface ProjectTargetBackend {
   subscribe(
     subscriptionId: string,
     payload: SyncoreDevtoolsSubscriptionPayload,
-    listener: (
-      payload: SyncoreDevtoolsSubscriptionResultPayload
-    ) => void
+    listener: (payload: SyncoreDevtoolsSubscriptionResultPayload) => void
   ): Promise<void>;
   unsubscribe(subscriptionId: string): void;
   dispose(): Promise<void>;
+}
+
+interface StorageAccessTicket {
+  id: string;
+  runtimeId: string;
+  storageId: string;
+  purpose: "preview" | "download";
+  entry: StorageEntry;
+  supportsRange: boolean;
+  expiresAt: number;
+}
+
+interface PendingHubCommand {
+  resolve(payload: SyncoreDevtoolsCommandResultPayload): void;
+  reject(error: Error): void;
+  timeout: ReturnType<typeof setTimeout>;
 }
 
 class HubExternalChangeSignal implements SyncoreExternalChangeSignal {
@@ -2077,6 +2121,29 @@ class HubFileStorageAdapter implements SyncoreStorageAdapter {
     }
   }
 
+  async readRange(
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<Uint8Array | null> {
+    let handle;
+    try {
+      handle = await open(this.filePath(id), "r");
+      const buffer = Buffer.alloc(Math.max(length, 0));
+      const result = await handle.read(
+        buffer,
+        0,
+        buffer.byteLength,
+        Math.max(offset, 0)
+      );
+      return buffer.subarray(0, result.bytesRead);
+    } catch {
+      return null;
+    } finally {
+      await handle?.close();
+    }
+  }
+
   async delete(id: string): Promise<void> {
     await rm(this.filePath(id), { force: true });
   }
@@ -2149,7 +2216,9 @@ const hubDevtoolsSqlSupport: DevtoolsSqlSupport = {
         observedScopes: ["all", "schema.tables"]
       };
     }
-    throw new Error(`Unsupported SQL statement type: ${firstKeyword || "unknown"}`);
+    throw new Error(
+      `Unsupported SQL statement type: ${firstKeyword || "unknown"}`
+    );
   },
   ensureSqlMode(analysis, expected): void {
     if (expected === "watch") {
@@ -2208,6 +2277,13 @@ async function createProjectTargetBackend(
     driver,
     storage: new HubFileStorageAdapter(storageDirectory),
     platform: "project",
+    runtimeCapabilities: {
+      storage: {
+        available: true,
+        protocol: "file",
+        supportsRange: true
+      }
+    },
     ...(externalChangeSignal ? { externalChangeSignal } : {})
   });
   await runtime.start();
@@ -2270,6 +2346,13 @@ function createProjectDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
       browse: true,
       mutate: true,
       importExport: true
+    },
+    storage: {
+      browse: true,
+      download: true,
+      readRange: true,
+      delete: true,
+      maxPreviewBytes: 80_000
     },
     scheduler: {
       read: true,
@@ -2341,9 +2424,7 @@ export async function getNextMigrationNumber(
   return Math.max(...migrationNumbers) + 1;
 }
 
-export async function applyProjectMigrations(
-  cwd: string
-): Promise<number> {
+export async function applyProjectMigrations(cwd: string): Promise<number> {
   const config = await loadProjectConfig(cwd);
   const projectTarget = requireProjectTargetConfig(config);
   const databasePath = path.resolve(cwd, projectTarget.databasePath);
@@ -2401,13 +2482,14 @@ export async function applyProjectMigrations(
 }
 
 function ensureCliMigrationTrackingTable(database: DatabaseSync): void {
-  const tableExists = (
-    database
-      .prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_syncore_migrations'`
-      )
-      .get() as { name?: string } | undefined
-  )?.name === "_syncore_migrations";
+  const tableExists =
+    (
+      database
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_syncore_migrations'`
+        )
+        .get() as { name?: string } | undefined
+    )?.name === "_syncore_migrations";
 
   if (!tableExists) {
     database.exec(`
@@ -2472,7 +2554,9 @@ async function resolveFunctionImportExtension(
   cwd: string
 ): Promise<"" | ".js"> {
   const tsconfigFiles = (await readdir(cwd, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && /^tsconfig(\..+)?\.json$/u.test(entry.name))
+    .filter(
+      (entry) => entry.isFile() && /^tsconfig(\..+)?\.json$/u.test(entry.name)
+    )
     .map((entry) => path.join(cwd, entry.name))
     .sort();
 
@@ -2485,7 +2569,8 @@ async function resolveFunctionImportExtension(
           moduleResolution?: string;
         };
       };
-      const moduleResolution = parsed.compilerOptions?.moduleResolution?.toLowerCase();
+      const moduleResolution =
+        parsed.compilerOptions?.moduleResolution?.toLowerCase();
       const moduleKind = parsed.compilerOptions?.module?.toLowerCase();
       if (
         moduleResolution === "nodenext" ||
@@ -2602,11 +2687,18 @@ export async function startDevHub(options: {
   }
   await writeDevtoolsSessionState(options.cwd, sessionState);
 
-  const httpServer = createServer((_request, response) => {
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ ok: true, wsPort: devtoolsPort }));
+  const httpServer = createServer((request, response) => {
+    void handleStorageAccessHttpRequest(request, response).catch((error) => {
+      if (!response.headersSent) {
+        writeJsonResponse(response, 500, { error: formatError(error) });
+      } else {
+        response.destroy(error instanceof Error ? error : undefined);
+      }
+    });
   });
   const websocketServer = new WebSocketServer({ server: httpServer });
+  const storageAccessTickets = new Map<string, StorageAccessTicket>();
+  const pendingHubCommands = new Map<string, PendingHubCommand>();
   const runtimeSockets = new Map<string, WebSocket>();
   const runtimeHellos = new Map<
     string,
@@ -2642,9 +2734,7 @@ export async function startDevHub(options: {
       projectTargetExternalChangeSignal
     );
   } catch (error) {
-    console.warn(
-      `Project target fallback unavailable: ${formatError(error)}`
-    );
+    console.warn(`Project target fallback unavailable: ${formatError(error)}`);
   }
   const hello: SyncoreDevtoolsMessage = {
     type: "hello",
@@ -2693,17 +2783,11 @@ export async function startDevHub(options: {
   ) => {
     const runtimeHello = runtimeHellos.get(event.runtimeId);
     const clientRuntimeIds = [...runtimeHellos.values()]
-      .filter(
-        (hello) =>
-          hello.runtimeId !== "syncore-dev-hub"
-      )
+      .filter((hello) => hello.runtimeId !== "syncore-dev-hub")
       .map((hello) => hello.runtimeId)
       .sort();
     const clientTargetKeys = [...runtimeHellos.values()]
-      .filter(
-        (hello) =>
-          hello.runtimeId !== "syncore-dev-hub"
-      )
+      .filter((hello) => hello.runtimeId !== "syncore-dev-hub")
       .map((hello) => hello.storageIdentity ?? `runtime::${hello.runtimeId}`)
       .sort();
     const targetIdentity =
@@ -2747,6 +2831,201 @@ export async function startDevHub(options: {
         event
       })}\n`
     );
+  };
+
+  const requestRuntimeCommand = async (
+    targetRuntimeId: string,
+    payload: SyncoreDevtoolsCommandPayload,
+    timeoutMs = 30_000
+  ): Promise<SyncoreDevtoolsCommandResultPayload> => {
+    if (targetRuntimeId === PROJECT_TARGET_RUNTIME_ID && projectTargetBackend) {
+      return projectTargetBackend.handleCommand(payload);
+    }
+    const target = runtimeSockets.get(targetRuntimeId);
+    if (!target || target.readyState !== WebSocket.OPEN) {
+      throw new Error(`Runtime ${targetRuntimeId} is not connected.`);
+    }
+    const commandId = `hub:${randomUUID()}`;
+    return await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pendingHubCommands.delete(commandId);
+        reject(new Error(`Runtime command ${payload.kind} timed out.`));
+      }, timeoutMs);
+      pendingHubCommands.set(commandId, {
+        resolve,
+        reject,
+        timeout
+      });
+      target.send(
+        JSON.stringify({
+          type: "command",
+          commandId,
+          targetRuntimeId,
+          payload
+        } satisfies SyncoreDevtoolsClientMessage)
+      );
+    });
+  };
+
+  const createStorageAccessTicket = async (
+    targetRuntimeId: string,
+    id: string,
+    purpose: "preview" | "download"
+  ): Promise<
+    Extract<
+      SyncoreDevtoolsCommandResultPayload,
+      { kind: "storage.access.create.result" }
+    >
+  > => {
+    const metadata = await requestRuntimeCommand(targetRuntimeId, {
+      kind: "storage.readRange",
+      id,
+      offset: 0,
+      length: 0
+    });
+    if (metadata.kind !== "storage.readRange.result") {
+      return {
+        kind: "storage.access.create.result",
+        error: "Runtime returned an unexpected storage access response."
+      };
+    }
+    if (metadata.error || !metadata.entry) {
+      return {
+        kind: "storage.access.create.result",
+        error: metadata.error ?? "Storage object could not be accessed."
+      };
+    }
+    const ticket = randomUUID();
+    const expiresAt = Date.now() + STORAGE_ACCESS_TICKET_TTL_MS;
+    storageAccessTickets.set(ticket, {
+      id: ticket,
+      runtimeId: targetRuntimeId,
+      storageId: id,
+      purpose,
+      entry: metadata.entry,
+      supportsRange: metadata.supportsRange,
+      expiresAt
+    });
+    cleanupExpiredStorageTickets();
+    return {
+      kind: "storage.access.create.result",
+      entry: metadata.entry,
+      url: `http://127.0.0.1:${devtoolsPort}/storage/access/${ticket}`,
+      expiresAt,
+      supportsRange: metadata.supportsRange,
+      maxPreviewBytes: STORAGE_ACCESS_MAX_PREVIEW_BYTES
+    };
+  };
+
+  const cleanupExpiredStorageTickets = () => {
+    const now = Date.now();
+    for (const [ticket, access] of storageAccessTickets) {
+      if (access.expiresAt <= now) {
+        storageAccessTickets.delete(ticket);
+      }
+    }
+  };
+
+  const handleStorageAccessHttpRequest = async (
+    request: IncomingMessage,
+    response: ServerResponse
+  ): Promise<void> => {
+    setStorageCorsHeaders(response);
+    if (request.method === "OPTIONS") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+    const requestUrl = new URL(
+      request.url ?? "/",
+      `http://127.0.0.1:${devtoolsPort}`
+    );
+    const match = /^\/storage\/access\/([^/]+)$/.exec(requestUrl.pathname);
+    if (!match) {
+      writeJsonResponse(response, 200, { ok: true, wsPort: devtoolsPort });
+      return;
+    }
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      writeTextResponse(response, 405, "Method not allowed.");
+      return;
+    }
+    cleanupExpiredStorageTickets();
+    const ticket = storageAccessTickets.get(match[1]!);
+    if (!ticket || ticket.expiresAt <= Date.now()) {
+      writeTextResponse(
+        response,
+        401,
+        "Storage access ticket is invalid or expired."
+      );
+      return;
+    }
+
+    const range = parseStorageRangeHeader(
+      request.headers.range,
+      ticket.entry.size
+    );
+    if ("error" in range) {
+      writeTextResponse(response, range.status, range.error);
+      return;
+    }
+    const start = range.start;
+    const end = range.end;
+    const byteLength = end >= start ? end - start + 1 : 0;
+    if (
+      !ticket.supportsRange &&
+      ticket.entry.size > STORAGE_ACCESS_CHUNK_BYTES
+    ) {
+      writeTextResponse(
+        response,
+        409,
+        "This storage backend does not support streaming large files."
+      );
+      return;
+    }
+
+    writeStorageAccessHeaders(response, ticket, {
+      status: range.partial ? 206 : 200,
+      start,
+      end,
+      byteLength
+    });
+    if (request.method === "HEAD") {
+      response.end();
+      return;
+    }
+
+    let offset = start;
+    while (offset <= end) {
+      const chunkLength = Math.min(
+        STORAGE_ACCESS_CHUNK_BYTES,
+        end - offset + 1
+      );
+      const chunk = await requestRuntimeCommand(
+        ticket.runtimeId,
+        {
+          kind: "storage.readRange",
+          id: ticket.storageId,
+          offset,
+          length: chunkLength
+        },
+        60_000
+      );
+      if (chunk.kind !== "storage.readRange.result") {
+        throw new Error(
+          "Runtime returned an unexpected storage chunk response."
+        );
+      }
+      if (chunk.error || !chunk.base64) {
+        throw new Error(chunk.error ?? "Storage chunk could not be read.");
+      }
+      const bytes = Buffer.from(chunk.base64, "base64");
+      if (bytes.byteLength === 0) {
+        break;
+      }
+      await writeResponseChunk(response, bytes);
+      offset += bytes.byteLength;
+    }
+    response.end();
   };
 
   websocketServer.on("connection", (socket: WebSocket, request) => {
@@ -2826,6 +3105,43 @@ export async function startDevHub(options: {
         if (!targetRuntimeId) {
           return;
         }
+        if (message.payload.kind === "storage.access.create") {
+          void createStorageAccessTicket(
+            targetRuntimeId,
+            message.payload.id,
+            message.payload.purpose
+          )
+            .then((payload) => {
+              if (socket.readyState !== WebSocket.OPEN) {
+                return;
+              }
+              socket.send(
+                JSON.stringify({
+                  type: "command.result",
+                  commandId: message.commandId,
+                  runtimeId: targetRuntimeId,
+                  payload
+                } satisfies SyncoreDevtoolsMessage)
+              );
+            })
+            .catch((error) => {
+              if (socket.readyState !== WebSocket.OPEN) {
+                return;
+              }
+              socket.send(
+                JSON.stringify({
+                  type: "command.result",
+                  commandId: message.commandId,
+                  runtimeId: targetRuntimeId,
+                  payload: {
+                    kind: "storage.access.create.result",
+                    error: formatError(error)
+                  }
+                } satisfies SyncoreDevtoolsMessage)
+              );
+            });
+          return;
+        }
         if (
           targetRuntimeId === PROJECT_TARGET_RUNTIME_ID &&
           projectTargetBackend
@@ -2864,7 +3180,10 @@ export async function startDevHub(options: {
         }
         const subscriptions =
           dashboardSubscriptions.get(socket) ??
-          new Map<string, { runtimeId: string; payload: SyncoreDevtoolsSubscribe }>();
+          new Map<
+            string,
+            { runtimeId: string; payload: SyncoreDevtoolsSubscribe }
+          >();
         subscriptions.set(message.subscriptionId, {
           runtimeId: targetRuntimeId,
           payload: message
@@ -2977,7 +3296,10 @@ export async function startDevHub(options: {
       ) {
         runtimeHellos.delete(message.event.runtimeId);
       }
-      if (message.type === "event" && message.event.runtimeId !== "syncore-dev-hub") {
+      if (
+        message.type === "event" &&
+        message.event.runtimeId !== "syncore-dev-hub"
+      ) {
         const history = runtimeEvents.get(message.event.runtimeId) ?? [];
         history.push(message.event);
         runtimeEvents.set(message.event.runtimeId, history.slice(-200));
@@ -2993,6 +3315,15 @@ export async function startDevHub(options: {
         message.type === "subscription.data" ||
         message.type === "subscription.error"
       ) {
+        if (message.type === "command.result") {
+          const pending = pendingHubCommands.get(message.commandId);
+          if (pending) {
+            clearTimeout(pending.timeout);
+            pendingHubCommands.delete(message.commandId);
+            pending.resolve(message.payload);
+            return;
+          }
+        }
         for (const client of dashboardSockets) {
           if (client.readyState === WebSocket.OPEN) {
             client.send(encoded);
@@ -3123,6 +3454,118 @@ export async function startDevHub(options: {
   process.on("SIGINT", close);
   process.on("SIGTERM", close);
   return sessionState;
+}
+
+function setStorageCorsHeaders(response: ServerResponse): void {
+  response.setHeader("Access-Control-Allow-Origin", "*");
+  response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Range");
+  response.setHeader(
+    "Access-Control-Expose-Headers",
+    "Accept-Ranges, Content-Disposition, Content-Length, Content-Range, Content-Type"
+  );
+}
+
+function writeJsonResponse(
+  response: ServerResponse,
+  status: number,
+  payload: unknown
+): void {
+  response.writeHead(status, { "content-type": "application/json" });
+  response.end(JSON.stringify(payload));
+}
+
+function writeTextResponse(
+  response: ServerResponse,
+  status: number,
+  message: string
+): void {
+  response.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
+  response.end(message);
+}
+
+function parseStorageRangeHeader(
+  header: string | undefined,
+  size: number
+):
+  | { start: number; end: number; partial: boolean }
+  | {
+      error: string;
+      status: number;
+    } {
+  if (size === 0) {
+    if (!header) {
+      return { start: 0, end: -1, partial: false };
+    }
+    return { error: "Requested range is not satisfiable.", status: 416 };
+  }
+  if (!header) {
+    return { start: 0, end: size - 1, partial: false };
+  }
+  if (header.includes(",")) {
+    return { error: "Multi-range requests are not supported.", status: 416 };
+  }
+  const match = /^bytes=(\d+)-(\d*)$/.exec(header);
+  if (!match) {
+    return { error: "Only simple byte ranges are supported.", status: 416 };
+  }
+  const start = Number(match[1]);
+  const end = match[2] ? Number(match[2]) : size - 1;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    end < start ||
+    start >= size
+  ) {
+    return { error: "Requested range is not satisfiable.", status: 416 };
+  }
+  return { start, end: Math.min(end, size - 1), partial: true };
+}
+
+function writeStorageAccessHeaders(
+  response: ServerResponse,
+  ticket: StorageAccessTicket,
+  range: { status: number; start: number; end: number; byteLength: number }
+): void {
+  const headers: Record<string, string | number> = {
+    "content-type": ticket.entry.contentType ?? "application/octet-stream",
+    "content-length": range.byteLength,
+    "accept-ranges": ticket.supportsRange ? "bytes" : "none",
+    "content-disposition": renderStorageContentDisposition(ticket)
+  };
+  if (range.status === 206) {
+    headers["content-range"] =
+      `bytes ${range.start}-${range.end}/${ticket.entry.size}`;
+  }
+  response.writeHead(range.status, headers);
+}
+
+function renderStorageContentDisposition(ticket: StorageAccessTicket): string {
+  const mode = ticket.purpose === "download" ? "attachment" : "inline";
+  const fallback = sanitizeHeaderFilename(
+    ticket.entry.fileName ?? ticket.entry.id
+  );
+  const encoded = encodeURIComponent(
+    ticket.entry.fileName ?? `${ticket.entry.id}.bin`
+  );
+  return `${mode}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function sanitizeHeaderFilename(value: string): string {
+  return value.replaceAll(/["\\\r\n]/g, "_");
+}
+
+async function writeResponseChunk(
+  response: ServerResponse,
+  chunk: Buffer
+): Promise<void> {
+  if (response.write(chunk)) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    response.once("drain", resolve);
+  });
 }
 
 async function writeDevtoolsSessionState(

@@ -13,5 +13,13 @@ export default defineSchema({
     .searchIndex("search_body", {
       searchField: "body",
       filterFields: ["mood"]
-    })
+    }),
+  entryAttachments: defineTable({
+    entryId: s.id("entries"),
+    fileName: s.string(),
+    contentType: s.string(),
+    size: s.number(),
+    storageId: s.string(),
+    createdAt: s.number()
+  }).index("by_entry", ["entryId", "createdAt"])
 });

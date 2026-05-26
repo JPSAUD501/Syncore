@@ -38,6 +38,12 @@ export function SyncoreElectronProvider({
         return createUnavailableSyncoreClient({
           kind: "unavailable",
           reason: "ipc-unavailable",
+          capabilities: {
+            storage: {
+              available: false,
+              reason: "Syncore IPC bridge is unavailable."
+            }
+          },
           ...(error instanceof Error ? { error } : {})
         });
       }

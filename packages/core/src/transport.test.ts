@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { attachRuntimeBridge, type SyncoreBridgeMessageEndpoint } from "./transport.js";
-import type { SyncoreRuntime, SyncoreWatch } from "./runtime/runtime.js";
+import {
+  SyncoreBridgeClient,
+  attachRuntimeBridge,
+  type SyncoreBridgeMessageEndpoint
+} from "./transport.js";
+import type {
+  SyncoreRuntime,
+  SyncoreRuntimeStatus,
+  SyncoreWatch
+} from "./runtime/runtime.js";
 
 class TestEndpoint implements SyncoreBridgeMessageEndpoint {
   readonly posted: unknown[] = [];
@@ -32,14 +40,49 @@ class TestEndpoint implements SyncoreBridgeMessageEndpoint {
 }
 
 describe("attachRuntimeBridge", () => {
+  it("preserves runtime status capabilities when the ready event arrives", () => {
+    const endpoint = new TestEndpoint();
+    const client = new SyncoreBridgeClient(endpoint);
+    const status: SyncoreRuntimeStatus = {
+      kind: "ready",
+      capabilities: {
+        storage: {
+          available: true,
+          protocol: "opfs",
+          supportsRange: true
+        }
+      }
+    };
+
+    endpoint.receive({
+      type: "runtime.status",
+      status
+    });
+    endpoint.receive({
+      type: "runtime.ready"
+    });
+
+    expect(
+      client.watchRuntimeStatus().localQueryResult()?.capabilities?.storage
+    ).toEqual({
+      available: true,
+      protocol: "opfs",
+      supportsRange: true
+    });
+  });
+
   it("disposes query watches when bridge subscriptions unsubscribe", async () => {
     const endpoint = new TestEndpoint();
     const { watch, unsubscribe, dispose } = createTestWatch();
+    const { watch: runtimeStatusWatch } = createTestWatch({
+      kind: "ready"
+    });
     const runtime = {
       start: vi.fn(async () => undefined),
       stop: vi.fn(async () => undefined),
       createClient: vi.fn(() => ({
-        watchQuery: vi.fn(() => watch)
+        watchQuery: vi.fn(() => watch),
+        watchRuntimeStatus: vi.fn(() => runtimeStatusWatch)
       }))
     } as unknown as SyncoreRuntime<any>;
 
@@ -70,11 +113,15 @@ describe("attachRuntimeBridge", () => {
   it("disposes remaining query watches when the bridge is disposed", async () => {
     const endpoint = new TestEndpoint();
     const { watch, unsubscribe, dispose } = createTestWatch();
+    const { watch: runtimeStatusWatch } = createTestWatch({
+      kind: "ready"
+    });
     const runtime = {
       start: vi.fn(async () => undefined),
       stop: vi.fn(async () => undefined),
       createClient: vi.fn(() => ({
-        watchQuery: vi.fn(() => watch)
+        watchQuery: vi.fn(() => watch),
+        watchRuntimeStatus: vi.fn(() => runtimeStatusWatch)
       }))
     } as unknown as SyncoreRuntime<any>;
 
@@ -99,19 +146,21 @@ describe("attachRuntimeBridge", () => {
   });
 });
 
-function createTestWatch(): {
-  watch: SyncoreWatch<unknown>;
+function createTestWatch<TValue = unknown>(
+  result?: TValue
+): {
+  watch: SyncoreWatch<TValue>;
   unsubscribe: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
 } {
   const unsubscribe = vi.fn();
   const dispose = vi.fn();
-  const watch: SyncoreWatch<unknown> = {
+  const watch: SyncoreWatch<TValue> = {
     onUpdate: vi.fn((callback: () => void) => {
       callback();
       return unsubscribe;
     }),
-    localQueryResult: vi.fn(() => undefined),
+    localQueryResult: vi.fn(() => result),
     localQueryError: vi.fn(() => undefined),
     dispose
   };

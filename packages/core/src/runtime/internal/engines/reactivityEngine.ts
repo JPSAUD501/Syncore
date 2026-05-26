@@ -396,6 +396,7 @@ function toDevtoolsScopes(
       scope === "runtime.activeQueries" ||
       scope === "schema.tables" ||
       scope === "scheduler.jobs" ||
+      scope === "storage.objects" ||
       scope.startsWith("table:") ||
       scope.startsWith("storage:")
     ) {

@@ -14,7 +14,9 @@ export interface VersionHandshake {
 export function isCompatibleVersionHandshake(
   handshake: Pick<
     VersionHandshake,
-    "protocolVersion" | "minSupportedProtocolVersion" | "maxSupportedProtocolVersion"
+    | "protocolVersion"
+    | "minSupportedProtocolVersion"
+    | "maxSupportedProtocolVersion"
   >
 ): boolean {
   return (
@@ -215,6 +217,14 @@ export interface SyncoreDevtoolsCapabilities {
     mutate: boolean;
     importExport: boolean;
   };
+  storage?: {
+    browse: boolean;
+    download: boolean;
+    readRange?: boolean;
+    delete: boolean;
+    maxPreviewBytes?: number;
+    reason?: string;
+  };
   scheduler?: {
     read: boolean;
     edit: boolean;
@@ -236,10 +246,7 @@ export function createBasePublicId(input: string): string {
   return stablePublicId(input, 0);
 }
 
-export function createPublicId(
-  key: string,
-  keys: Iterable<string>
-): string {
+export function createPublicId(key: string, keys: Iterable<string>): string {
   return createPublicIdWithFormatter(key, keys, stablePublicId);
 }
 
@@ -418,6 +425,25 @@ export type SyncoreDevtoolsCommandPayload =
   /* SQL */
   | { kind: "sql.read"; query: string }
   | { kind: "sql.write"; query: string }
+  /* Storage */
+  | {
+      kind: "storage.list";
+      limit?: number;
+      offset?: number;
+      search?: string;
+    }
+  | {
+      kind: "storage.access.create";
+      id: string;
+      purpose: "preview" | "download";
+    }
+  | {
+      kind: "storage.readRange";
+      id: string;
+      offset: number;
+      length: number;
+    }
+  | { kind: "storage.delete"; id: string }
   /* Scheduler */
   | { kind: "scheduler.cancel"; jobId: string }
   | {
@@ -448,6 +474,12 @@ export type SyncoreDevtoolsSubscriptionPayload =
     }
   | { kind: "scheduler.jobs" }
   | { kind: "functions.catalog" }
+  | {
+      kind: "storage.list";
+      limit?: number;
+      offset?: number;
+      search?: string;
+    }
   | { kind: "sql.watch"; query: string };
 
 export interface DataFilter {
@@ -512,6 +544,39 @@ export type SyncoreDevtoolsCommandResultPayload =
       invalidationScopes: string[];
     }
   | {
+      kind: "storage.list.result";
+      entries: StorageEntry[];
+      totalCount: number;
+      offset: number;
+      hasMore: boolean;
+      error?: string;
+    }
+  | {
+      kind: "storage.access.create.result";
+      entry?: StorageEntry;
+      url?: string;
+      expiresAt?: number;
+      supportsRange?: boolean;
+      maxPreviewBytes?: number;
+      error?: string;
+    }
+  | {
+      kind: "storage.readRange.result";
+      entry?: StorageEntry;
+      offset: number;
+      bytesRead: number;
+      done: boolean;
+      supportsRange: boolean;
+      base64?: string;
+      error?: string;
+    }
+  | {
+      kind: "storage.delete.result";
+      success: boolean;
+      deleted: boolean;
+      error?: string;
+    }
+  | {
       kind: "scheduler.cancel.result";
       success: boolean;
       cancelled: boolean;
@@ -546,6 +611,14 @@ export type SyncoreDevtoolsSubscriptionResultPayload =
     }
   | { kind: "scheduler.jobs.result"; jobs: SchedulerJob[] }
   | { kind: "functions.catalog.result"; functions: FunctionDefinition[] }
+  | {
+      kind: "storage.list.result";
+      entries: StorageEntry[];
+      totalCount: number;
+      offset: number;
+      hasMore: boolean;
+      error?: string;
+    }
   | {
       kind: "sql.watch.result";
       columns: string[];
@@ -597,6 +670,15 @@ export interface TableIndex {
   name: string;
   fields: string[];
   unique: boolean;
+}
+
+export interface StorageEntry {
+  id: string;
+  createdAt: number;
+  fileName?: string;
+  contentType?: string;
+  size: number;
+  path: string;
 }
 
 export interface SchedulerJob {

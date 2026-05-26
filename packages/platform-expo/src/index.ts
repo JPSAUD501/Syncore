@@ -185,7 +185,7 @@ export interface ExpoSyncoreBootstrap<
  * Create a Syncore runtime for Expo (React Native and Expo web) backed by
  * `expo-sqlite` on native platforms and SQL.js on web.
  *
- * Returns an unstarted {@link SyncoreRuntime}. Call `await runtime.start()`
+ * Returns an unstarted SyncoreRuntime. Call `await runtime.start()`
  * before using the client:
  *
  * ```ts
@@ -264,6 +264,13 @@ export function createExpoSyncoreRuntime<
         : {}),
     platform: options.platform ?? "expo",
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
+    runtimeCapabilities: {
+      storage: {
+        available: true,
+        protocol: "file",
+        supportsRange: false
+      }
+    },
     ...(options.devtools ? { devtools: options.devtools } : {}),
     ...(options.scheduler ? { scheduler: options.scheduler } : {})
   });

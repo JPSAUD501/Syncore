@@ -241,7 +241,10 @@ export function SyncoreNextProvider({
     () =>
       createUnavailableSyncoreClient({
         kind: "starting",
-        reason: "booting"
+        reason: "booting",
+        capabilities: {
+          storage: { available: false, reason: "Syncore worker is booting." }
+        }
       }),
     []
   );
@@ -276,6 +279,12 @@ export function SyncoreNextProvider({
         createUnavailableSyncoreClient({
           kind: "unavailable",
           reason: "worker-unavailable",
+          capabilities: {
+            storage: {
+              available: false,
+              reason: "Syncore worker is unavailable."
+            }
+          },
           ...(error instanceof Error ? { error } : {})
         })
       );

@@ -212,6 +212,10 @@
         background: rgba(255, 255, 255, 0.04);
       }
 
+      .contact-card--active {
+        background: rgba(93, 228, 199, 0.08);
+      }
+
       .contact-avatar {
         width: 36px;
         height: 36px;
@@ -305,6 +309,80 @@
         font-size: 14px;
       }
 
+      .attachment-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 24px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .attachment-title {
+        font-size: 13px;
+        color: #e2ddd3;
+        font-weight: 600;
+      }
+
+      #attachment-label {
+        cursor: pointer;
+        border: 1px solid rgba(93, 228, 199, 0.18);
+        background: rgba(93, 228, 199, 0.08);
+        color: #5de4c7;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      #attachment-input:disabled + #attachment-label {
+        cursor: not-allowed;
+        color: #6b7280;
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      #attachment-panel {
+        max-height: 190px;
+        overflow-y: auto;
+        padding: 8px 24px 16px;
+      }
+
+      .attachment-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .attachment-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .attachment-meta {
+        color: #6b7280;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        margin-top: 2px;
+      }
+
+      .attachment-remove {
+        border: none;
+        background: transparent;
+        color: #e06c75;
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      .attachment-empty {
+        padding: 18px 0;
+      }
+
       /* ─── Responsive ─── */
       @media (max-width: 720px) {
         .layout {
@@ -339,6 +417,16 @@
         </div>
         <div id="contact-list">
           <div class="empty">Booting Syncore...</div>
+        </div>
+        <div class="attachment-bar">
+          <span class="attachment-title">Files</span>
+          <div>
+            <input id="attachment-input" type="file" hidden />
+            <label id="attachment-label" for="attachment-input">Storage is not ready</label>
+          </div>
+        </div>
+        <div id="attachment-panel">
+          <div class="empty attachment-empty">Select a contact to manage files.</div>
         </div>
       </div>
     </div>

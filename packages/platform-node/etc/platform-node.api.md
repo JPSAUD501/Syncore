@@ -58,13 +58,10 @@ export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridge
     dispose(): void;
 };
 
-// @public (undocumented)
+// @public
 export interface CreateElectronSyncoreBridgeOptions {
-    // (undocumented)
     channel?: string;
-    // (undocumented)
     onRendererMessage(listener: (message: unknown) => void): () => void;
-    // (undocumented)
     window: SyncoreElectronBridgeWindow;
 }
 
@@ -76,33 +73,20 @@ export function createNodeIpcMessageEndpoint(bridge: SyncoreMainProcessBridge): 
     dispose(): void;
 };
 
-// @public (undocumented)
+// @public
 export interface CreateNodeRuntimeOptions<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> {
-    // (undocumented)
     appName?: string;
-    // (undocumented)
     capabilities?: SyncoreCapabilities;
-    // (undocumented)
     components?: SyncoreRuntimeOptions<TSchema>["components"];
-    // (undocumented)
     databasePath: string;
-    // (undocumented)
     devtools?: DevtoolsSink | false;
-    // (undocumented)
     devtoolsUrl?: string;
-    // (undocumented)
     functions: SyncoreRuntimeOptions<TSchema>["functions"];
-    // (undocumented)
     origin?: string;
-    // (undocumented)
     platform?: string;
-    // (undocumented)
     scheduler?: SchedulerOptions;
-    // (undocumented)
     schema: TSchema;
-    // (undocumented)
     sessionLabel?: string;
-    // (undocumented)
     storageDirectory: string;
 }
 
@@ -124,9 +108,8 @@ export function createRendererSyncoreClient(endpoint: SyncoreIpcMessageEndpoint)
 // @public
 export function createRendererSyncoreWindowClient(windowObject: Window & typeof globalThis, bridgeName?: string): SyncoreRendererClient;
 
-// @public (undocumented)
+// @public
 export interface CreateSyncoreRendererWindowClientOptions {
-    // (undocumented)
     bridgeName?: string;
 }
 
@@ -137,15 +120,12 @@ export function installSyncoreWindowBridge(options?: {
 
 // @public
 export interface ManagedNodeSyncoreClient<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> {
-    // (undocumented)
     client: ReturnType<SyncoreRuntime<TSchema>["createClient"]>;
-    // (undocumented)
     dispose(): Promise<void>;
-    // (undocumented)
     runtime: SyncoreRuntime<TSchema>;
 }
 
-// @public (undocumented)
+// @public
 export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
     constructor(directory: string);
     // (undocumented)
@@ -158,12 +138,14 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
     put(id: string, input: StorageWriteInput): Promise<StorageObject>;
     // (undocumented)
     read(id: string): Promise<Uint8Array | null>;
+    // (undocumented)
+    readRange(id: string, offset: number, length: number): Promise<Uint8Array | null>;
 }
 
 // @public (undocumented)
 export type NodeIpcSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
-// @public (undocumented)
+// @public
 export class NodeSqliteDriver implements SyncoreSqlDriver {
     constructor(databasePath: string);
     // (undocumented)
@@ -239,7 +221,7 @@ export { SyncoreActiveQueryInfo }
 
 export { SyncoreDevtoolsEvent }
 
-// @public (undocumented)
+// @public
 export interface SyncoreElectronBridgeWindow {
     // (undocumented)
     isDestroyed(): boolean;
@@ -249,7 +231,7 @@ export interface SyncoreElectronBridgeWindow {
     };
 }
 
-// @public (undocumented)
+// @public
 export interface SyncoreElectronIpcBinding {
     // (undocumented)
     dispose(): Promise<void>;

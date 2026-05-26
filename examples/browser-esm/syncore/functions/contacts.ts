@@ -9,6 +9,24 @@ const COLORS = [
   "#57C785"
 ] as const;
 
+function decodeBase64(base64: string): Uint8Array {
+  const binary =
+    typeof atob === "function"
+      ? atob(base64)
+      : (
+          globalThis as {
+            Buffer?: { from(value: string, encoding: "base64"): Uint8Array };
+          }
+        ).Buffer?.from(base64, "base64");
+  if (binary instanceof Uint8Array) {
+    return binary;
+  }
+  if (typeof binary !== "string") {
+    throw new Error("Base64 decoding is not available in this runtime.");
+  }
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
 export const list = query({
   args: {},
   handler: async (ctx) =>
@@ -121,7 +139,69 @@ export const remove = mutation({
   args: { id: s.string() },
   returns: s.null(),
   handler: async (ctx, args) => {
+    const attachments = await ctx.db
+      .query("contactAttachments")
+      .withIndex("by_contact", (q) => q.eq("contactId", args.id))
+      .collect();
+    for (const attachment of attachments) {
+      await ctx.storage.delete(attachment.storageId).catch(() => undefined);
+      await ctx.db.delete("contactAttachments", attachment._id);
+    }
     await ctx.db.delete("contacts", args.id);
+    return null;
+  }
+});
+
+export const listAttachments = query({
+  args: { contactId: s.string() },
+  handler: async (ctx, args) =>
+    ctx.db
+      .query("contactAttachments")
+      .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
+      .order("desc")
+      .collect()
+});
+
+export const attachFile = mutation({
+  args: {
+    contactId: s.string(),
+    fileName: s.string(),
+    contentType: s.string(),
+    base64: s.string()
+  },
+  returns: s.string(),
+  handler: async (ctx, args) => {
+    const contact = await ctx.db.get("contacts", args.contactId);
+    if (!contact) {
+      throw new Error("Contact not found.");
+    }
+    const bytes = decodeBase64(args.base64);
+    const storageId = await ctx.storage.put({
+      data: bytes,
+      fileName: args.fileName,
+      contentType: args.contentType || "application/octet-stream"
+    });
+    return ctx.db.insert("contactAttachments", {
+      contactId: args.contactId,
+      fileName: args.fileName,
+      contentType: args.contentType || "application/octet-stream",
+      size: bytes.byteLength,
+      storageId,
+      createdAt: Date.now()
+    });
+  }
+});
+
+export const removeAttachment = mutation({
+  args: { id: s.string() },
+  returns: s.null(),
+  handler: async (ctx, args) => {
+    const attachment = await ctx.db.get("contactAttachments", args.id);
+    if (!attachment) {
+      return null;
+    }
+    await ctx.storage.delete(attachment.storageId).catch(() => undefined);
+    await ctx.db.delete("contactAttachments", args.id);
     return null;
   }
 });

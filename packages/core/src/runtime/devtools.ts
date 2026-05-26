@@ -9,10 +9,7 @@ import type {
   TableSchema
 } from "@syncore/devtools-protocol";
 import { describeValidator } from "@syncore/schema";
-import type {
-  TableDefinition,
-  Validator
-} from "@syncore/schema";
+import type { TableDefinition, Validator } from "@syncore/schema";
 import type {
   DevtoolsLiveQueryScope,
   ImpactScope,
@@ -140,9 +137,12 @@ export function createDevtoolsCommandHandler(
 
       case "data.insert": {
         try {
-          const id = await runDevtoolsMutation(admin, async (ctx) =>
-            ctx.db.insert(payload.table as never, payload.document as never)
-          , { origin: "dashboard" });
+          const id = await runDevtoolsMutation(
+            admin,
+            async (ctx) =>
+              ctx.db.insert(payload.table as never, payload.document as never),
+            { origin: "dashboard" }
+          );
           notifyDataMutationScopes(admin, payload.table);
           return { kind: "data.mutate.result", success: true, id };
         } catch (error) {
@@ -156,14 +156,18 @@ export function createDevtoolsCommandHandler(
 
       case "data.patch": {
         try {
-          await runDevtoolsMutation(admin, async (ctx) => {
-            await ctx.db.patch(
-              payload.table as never,
-              payload.id,
-              payload.fields as never
-            );
-            return null;
-          }, { origin: "dashboard" });
+          await runDevtoolsMutation(
+            admin,
+            async (ctx) => {
+              await ctx.db.patch(
+                payload.table as never,
+                payload.id,
+                payload.fields as never
+              );
+              return null;
+            },
+            { origin: "dashboard" }
+          );
           notifyDataMutationScopes(admin, payload.table);
           return {
             kind: "data.mutate.result",
@@ -181,10 +185,14 @@ export function createDevtoolsCommandHandler(
 
       case "data.delete": {
         try {
-          await runDevtoolsMutation(admin, async (ctx) => {
-            await ctx.db.delete(payload.table as never, payload.id);
-            return null;
-          }, { origin: "dashboard" });
+          await runDevtoolsMutation(
+            admin,
+            async (ctx) => {
+              await ctx.db.delete(payload.table as never, payload.id);
+              return null;
+            },
+            { origin: "dashboard" }
+          );
           notifyDataMutationScopes(admin, payload.table);
           return { kind: "data.mutate.result", success: true };
         } catch (error) {
@@ -311,6 +319,116 @@ export function createDevtoolsCommandHandler(
             kind: "sql.write.result",
             rowsAffected: 0,
             invalidationScopes: [],
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
+      case "storage.list": {
+        const limit = normalizeStorageLimit(payload.limit);
+        const offset = Math.max(payload.offset ?? 0, 0);
+        try {
+          const result = await admin.listStorageObjects({
+            limit,
+            offset,
+            ...(payload.search ? { search: payload.search } : {})
+          });
+          return {
+            kind: "storage.list.result",
+            entries: result.entries,
+            totalCount: result.totalCount,
+            offset,
+            hasMore: offset + result.entries.length < result.totalCount
+          };
+        } catch (error) {
+          return {
+            kind: "storage.list.result",
+            entries: [],
+            totalCount: 0,
+            offset,
+            hasMore: false,
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
+      case "storage.access.create": {
+        try {
+          const object = await admin.getStorageObjectAccessInfo(payload.id);
+          if (!object) {
+            return {
+              kind: "storage.access.create.result",
+              error: `Storage object ${JSON.stringify(payload.id)} was not found.`
+            };
+          }
+          return {
+            kind: "storage.access.create.result",
+            entry: object.entry,
+            supportsRange: object.supportsRange,
+            error:
+              "Storage access URLs must be created by the Syncore devtools hub."
+          };
+        } catch (error) {
+          return {
+            kind: "storage.access.create.result",
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
+      case "storage.readRange": {
+        try {
+          const object = await admin.readStorageObjectRange(
+            payload.id,
+            payload.offset,
+            payload.length
+          );
+          if (!object) {
+            return {
+              kind: "storage.readRange.result",
+              offset: payload.offset,
+              bytesRead: 0,
+              done: true,
+              supportsRange: false,
+              error: `Storage object ${JSON.stringify(payload.id)} was not found.`
+            };
+          }
+          return {
+            kind: "storage.readRange.result",
+            entry: object.entry,
+            offset: object.offset,
+            bytesRead: object.bytesRead,
+            done: object.done,
+            supportsRange: object.supportsRange,
+            base64: bytesToBase64(object.bytes)
+          };
+        } catch (error) {
+          return {
+            kind: "storage.readRange.result",
+            offset: payload.offset,
+            bytesRead: 0,
+            done: true,
+            supportsRange: false,
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      }
+
+      case "storage.delete": {
+        try {
+          const deleted = await admin.deleteStorageObject(payload.id, {
+            origin: "dashboard"
+          });
+          return {
+            kind: "storage.delete.result",
+            success: true,
+            deleted
+          };
+        } catch (error) {
+          return {
+            kind: "storage.delete.result",
+            success: false,
+            deleted: false,
             error: error instanceof Error ? error.message : String(error)
           };
         }
@@ -502,7 +620,9 @@ async function resolveSubscriptionPayload(
         activeQueries: admin.getActiveQueryInfos()
       };
     case "fn.watch":
-      throw new Error("Function watches are pushed incrementally and have no snapshot payload.");
+      throw new Error(
+        "Function watches are pushed incrementally and have no snapshot payload."
+      );
     case "schema.tables": {
       const tables = await getSchemaTables(driver, schema);
       console.debug("[devtools] schema.tables", {
@@ -550,6 +670,33 @@ async function resolveSubscriptionPayload(
         kind: "functions.catalog.result",
         functions: listFunctions(functions)
       };
+    case "storage.list": {
+      const limit = normalizeStorageLimit(payload.limit);
+      const offset = Math.max(payload.offset ?? 0, 0);
+      try {
+        const result = await admin.listStorageObjects({
+          limit,
+          offset,
+          ...(payload.search ? { search: payload.search } : {})
+        });
+        return {
+          kind: "storage.list.result",
+          entries: result.entries,
+          totalCount: result.totalCount,
+          offset,
+          hasMore: offset + result.entries.length < result.totalCount
+        };
+      } catch (error) {
+        return {
+          kind: "storage.list.result",
+          entries: [],
+          totalCount: 0,
+          offset,
+          hasMore: false,
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
+    }
     case "sql.watch": {
       const sqlSupport = requireDevtoolsSqlSupport(deps.sql);
       const databasePath = admin.getDriverDatabasePath();
@@ -637,9 +784,7 @@ async function queryReferenceOptions(
   let sql = `SELECT _id, _creationTime, _json FROM ${quoteIdentifier(table)}`;
   const params: unknown[] = [];
   const trimmedSearch = search?.trim();
-  const whereClause = trimmedSearch
-    ? " WHERE _id LIKE ? OR _json LIKE ?"
-    : "";
+  const whereClause = trimmedSearch ? " WHERE _id LIKE ? OR _json LIKE ?" : "";
   if (trimmedSearch) {
     const like = `%${trimmedSearch}%`;
     params.push(like, like);
@@ -708,8 +853,12 @@ async function getSchemaTables(
 
       return {
         name,
-        ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
-        owner: table.options.componentPath ? ("component" as const) : ("root" as const),
+        ...(table.options.tableName
+          ? { displayName: table.options.tableName }
+          : {}),
+        owner: table.options.componentPath
+          ? ("component" as const)
+          : ("root" as const),
         ...(table.options.componentPath
           ? { componentPath: table.options.componentPath }
           : {}),
@@ -750,7 +899,9 @@ async function listSchedulerJobs(
 
     return rows.map((row) => {
       const schedule = safeReadRecurringSchedule(row.schedule_json);
-      const scheduleLabel = schedule ? formatScheduleLabel(schedule) : undefined;
+      const scheduleLabel = schedule
+        ? formatScheduleLabel(schedule)
+        : undefined;
       const functionComponent = parseCanonicalComponentFunctionName(
         row.function_name
       );
@@ -759,7 +910,9 @@ async function listSchedulerJobs(
         id: row.id,
         functionName: row.function_name,
         owner:
-          functionComponent || idComponent ? ("component" as const) : ("root" as const),
+          functionComponent || idComponent
+            ? ("component" as const)
+            : ("root" as const),
         ...(functionComponent
           ? {
               componentPath: functionComponent.componentPath
@@ -778,7 +931,9 @@ async function listSchedulerJobs(
           : {}),
         ...(row.recurring_name ? { recurringName: row.recurring_name } : {}),
         ...(schedule ? { schedule } : {}),
-        ...(scheduleLabel ? { scheduleLabel, cronSchedule: scheduleLabel } : {}),
+        ...(scheduleLabel
+          ? { scheduleLabel, cronSchedule: scheduleLabel }
+          : {}),
         ...(row.timezone ? { timezone: row.timezone } : {}),
         ...(row.last_run_at !== null ? { lastRunAt: row.last_run_at } : {}),
         ...(row.updated_at ? { updatedAt: row.updated_at } : {}),
@@ -1011,19 +1166,44 @@ async function runDevtoolsMutation<TResult>(
         id: string,
         value: Record<string, unknown>
       ): Promise<void>;
-        delete(tableName: string, id: string): Promise<void>;
-      };
-    }) => Promise<TResult>,
+      delete(tableName: string, id: string): Promise<void>;
+    };
+  }) => Promise<TResult>,
   meta?: { origin?: "dashboard" }
-  ): Promise<TResult> {
-    return admin.runDevtoolsMutation(callback as never, meta);
-  }
+): Promise<TResult> {
+  return admin.runDevtoolsMutation(callback as never, meta);
+}
 
 function notifyDataMutationScopes(
   admin: SyncoreRuntimeAdmin<SyncoreDataModel>,
   tableName: string
 ): void {
   admin.notifyDevtoolsScopes(["schema.tables", `table:${tableName}`]);
+}
+
+function normalizeStorageLimit(limit: number | undefined): number {
+  return Math.min(Math.max(limit ?? 100, 1), 500);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const binaryChunkSize = 0x8000;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += binaryChunkSize) {
+    const chunk = bytes.slice(offset, offset + binaryChunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  if (typeof btoa === "function") {
+    return btoa(binary);
+  }
+  const buffer = globalThis as typeof globalThis & {
+    Buffer?: {
+      from(input: Uint8Array): { toString(encoding: "base64"): string };
+    };
+  };
+  if (buffer.Buffer) {
+    return buffer.Buffer.from(bytes).toString("base64");
+  }
+  throw new Error("Base64 encoding is not available in this environment.");
 }
 
 function scopesForSubscription(
@@ -1045,6 +1225,8 @@ function scopesForSubscription(
       return new Set(["scheduler.jobs"]);
     case "functions.catalog":
       return new Set(["all"]);
+    case "storage.list":
+      return new Set(["storage.objects"]);
     case "sql.watch": {
       try {
         const sqlSupport = requireDevtoolsSqlSupport(sql);

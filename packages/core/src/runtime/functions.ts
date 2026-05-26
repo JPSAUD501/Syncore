@@ -195,10 +195,10 @@ export type FunctionReferenceFor<TDefinition> =
  * Configuration object accepted by {@link query}, {@link mutation}, and
  * {@link action}.
  *
- * @template TContext - The execution context injected by the runtime
+ * @typeParam TContext - The execution context injected by the runtime
  *   (`QueryCtx`, `MutationCtx`, or `ActionCtx`).
- * @template TArgs   - The validated argument shape after parsing.
- * @template TResult - The return type of the handler.
+ * @typeParam TArgs - The validated argument shape after parsing.
+ * @typeParam TResult - The return type of the handler.
  */
 export interface FunctionConfig<TContext, TArgs, TResult> {
   /**

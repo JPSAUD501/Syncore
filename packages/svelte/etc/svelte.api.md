@@ -23,14 +23,14 @@ export function createAction<TReference extends FunctionReference<"action">>(ref
 // Warning: (ae-forgotten-export) The symbol "Skip" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "PaginatedQueryItem" needs to be exported by the entry point index.d.ts
 //
-// @public (undocumented)
+// @public
 export function createClientPaginatedQueryStore<TReference extends PaginatedQueryReference>(client: SyncoreClient, reference: TReference, args: PaginatedQueryArgs<TReference> | Skip, options: {
     initialNumItems: number;
 }): Readable<UsePaginatedQueryResult<PaginatedQueryItem<TReference>>>;
 
 // Warning: (ae-forgotten-export) The symbol "QueriesRequestInput" needs to be exported by the entry point index.d.ts
 //
-// @public (undocumented)
+// @public
 export function createClientQueriesStore<TEntries extends QueriesRequestInput>(client: SyncoreClient, entries: TEntries): Readable<CreateQueriesStoreResult<TEntries>>;
 
 // @public
@@ -39,18 +39,18 @@ export function createClientQueryStore<TReference extends FunctionReference<"que
 // @public
 export function createClientQueryValueStore<TReference extends FunctionReference<"query">>(client: SyncoreClient, reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>> | [Skip]): Readable<FunctionResult<TReference> | undefined>;
 
-// @public (undocumented)
+// @public
 export function createClientSyncoreStatusStore(client: SyncoreClient): Readable<SyncoreRuntimeStatus>;
 
 // @public
 export function createMutation<TReference extends FunctionReference<"mutation">>(reference: TReference): (...args: OptionalArgsTuple<FunctionArgs<TReference>>) => Promise<FunctionResult<TReference>>;
 
-// @public (undocumented)
+// @public
 export function createPaginatedQueryStore<TReference extends PaginatedQueryReference>(reference: TReference, args: PaginatedQueryArgs<TReference> | Skip, options: {
     initialNumItems: number;
 }): Readable<UsePaginatedQueryResult<PaginatedQueryItem<TReference>>>;
 
-// @public (undocumented)
+// @public
 export function createQueriesStore<TEntries extends QueriesRequestInput>(entries: TEntries): Readable<CreateQueriesStoreResult<TEntries>>;
 
 // Warning: (ae-forgotten-export) The symbol "QueryStateForEntry" needs to be exported by the entry point index.d.ts
@@ -64,7 +64,7 @@ export function createQueryStore<TReference extends FunctionReference<"query">>(
 // @public
 export function createQueryValueStore<TReference extends FunctionReference<"query">>(reference: TReference, ...args: OptionalArgsTuple<FunctionArgs<TReference>> | [Skip]): Readable<FunctionResult<TReference> | undefined>;
 
-// @public (undocumented)
+// @public
 export function createSyncoreStatusStore(): Readable<SyncoreRuntimeStatus>;
 
 // @public
@@ -76,7 +76,7 @@ export type OptionalArgsTuple<TArgs> = Record<never, never> extends TArgs ? [arg
 // @public
 export function setSyncoreClient(client: SyncoreClient): SyncoreClient;
 
-// @public (undocumented)
+// @public
 export const skip: "skip";
 
 // @public

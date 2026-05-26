@@ -91,6 +91,7 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
 // @public
 export interface ExpoSyncoreBootstrap<TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema> {
     getClient(): Promise<ReturnType<SyncoreRuntime<TSchema>["createClient"]>>;
+    // @deprecated (undocumented)
     getRuntime(): never;
     reset(): Promise<void>;
     stop(): Promise<void>;

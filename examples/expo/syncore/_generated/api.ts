@@ -11,11 +11,14 @@ import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
 export { components } from "./components";
 
+import type { attachPhoto as notes__attachPhoto } from "../functions/notes";
 import type { byColor as notes__byColor } from "../functions/notes";
 import type { create as notes__create } from "../functions/notes";
 import type { get as notes__get } from "../functions/notes";
+import type { getPhoto as notes__getPhoto } from "../functions/notes";
 import type { list as notes__list } from "../functions/notes";
 import type { remove as notes__remove } from "../functions/notes";
+import type { removePhoto as notes__removePhoto } from "../functions/notes";
 import type { scheduleAutoSave as notes__scheduleAutoSave } from "../functions/notes";
 import type { search as notes__search } from "../functions/notes";
 import type { seedDemo as notes__seedDemo } from "../functions/notes";
@@ -29,6 +32,10 @@ import type { update as notes__update } from "../functions/notes";
  */
 export interface SyncoreApi__notes {
   /**
+   * Reference to the public Syncore mutation `notes/attachPhoto`.
+   */
+  readonly attachPhoto: FunctionReferenceFor<typeof notes__attachPhoto>;
+  /**
    * Reference to the public Syncore query `notes/byColor`.
    */
   readonly byColor: FunctionReferenceFor<typeof notes__byColor>;
@@ -41,6 +48,10 @@ export interface SyncoreApi__notes {
    */
   readonly get: FunctionReferenceFor<typeof notes__get>;
   /**
+   * Reference to the public Syncore query `notes/getPhoto`.
+   */
+  readonly getPhoto: FunctionReferenceFor<typeof notes__getPhoto>;
+  /**
    * Reference to the public Syncore query `notes/list`.
    */
   readonly list: FunctionReferenceFor<typeof notes__list>;
@@ -48,6 +59,10 @@ export interface SyncoreApi__notes {
    * Reference to the public Syncore mutation `notes/remove`.
    */
   readonly remove: FunctionReferenceFor<typeof notes__remove>;
+  /**
+   * Reference to the public Syncore mutation `notes/removePhoto`.
+   */
+  readonly removePhoto: FunctionReferenceFor<typeof notes__removePhoto>;
   /**
    * Reference to the public Syncore mutation `notes/scheduleAutoSave`.
    */
@@ -95,4 +110,4 @@ export interface SyncoreApi {
  * const listTasks = api.tasks.list;
  * ```
  */
-export const api: SyncoreApi = { notes: { byColor: createFunctionReferenceFor<typeof notes__byColor>("query", "notes/byColor"), create: createFunctionReferenceFor<typeof notes__create>("mutation", "notes/create"), get: createFunctionReferenceFor<typeof notes__get>("query", "notes/get"), list: createFunctionReferenceFor<typeof notes__list>("query", "notes/list"), remove: createFunctionReferenceFor<typeof notes__remove>("mutation", "notes/remove"), scheduleAutoSave: createFunctionReferenceFor<typeof notes__scheduleAutoSave>("mutation", "notes/scheduleAutoSave"), search: createFunctionReferenceFor<typeof notes__search>("query", "notes/search"), seedDemo: createFunctionReferenceFor<typeof notes__seedDemo>("mutation", "notes/seedDemo"), setColor: createFunctionReferenceFor<typeof notes__setColor>("mutation", "notes/setColor"), stats: createFunctionReferenceFor<typeof notes__stats>("query", "notes/stats"), togglePin: createFunctionReferenceFor<typeof notes__togglePin>("mutation", "notes/togglePin"), update: createFunctionReferenceFor<typeof notes__update>("mutation", "notes/update") } } as const;
+export const api: SyncoreApi = { notes: { attachPhoto: createFunctionReferenceFor<typeof notes__attachPhoto>("mutation", "notes/attachPhoto"), byColor: createFunctionReferenceFor<typeof notes__byColor>("query", "notes/byColor"), create: createFunctionReferenceFor<typeof notes__create>("mutation", "notes/create"), get: createFunctionReferenceFor<typeof notes__get>("query", "notes/get"), getPhoto: createFunctionReferenceFor<typeof notes__getPhoto>("query", "notes/getPhoto"), list: createFunctionReferenceFor<typeof notes__list>("query", "notes/list"), remove: createFunctionReferenceFor<typeof notes__remove>("mutation", "notes/remove"), removePhoto: createFunctionReferenceFor<typeof notes__removePhoto>("mutation", "notes/removePhoto"), scheduleAutoSave: createFunctionReferenceFor<typeof notes__scheduleAutoSave>("mutation", "notes/scheduleAutoSave"), search: createFunctionReferenceFor<typeof notes__search>("query", "notes/search"), seedDemo: createFunctionReferenceFor<typeof notes__seedDemo>("mutation", "notes/seedDemo"), setColor: createFunctionReferenceFor<typeof notes__setColor>("mutation", "notes/setColor"), stats: createFunctionReferenceFor<typeof notes__stats>("query", "notes/stats"), togglePin: createFunctionReferenceFor<typeof notes__togglePin>("mutation", "notes/togglePin"), update: createFunctionReferenceFor<typeof notes__update>("mutation", "notes/update") } } as const;

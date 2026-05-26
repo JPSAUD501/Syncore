@@ -388,7 +388,9 @@ class TestExternalChangeApplier implements SyncoreExternalChangeApplier {
       changedScopes:
         event.changedScopes ??
         ([
-          ...(event.changedTables ?? []).map((tableName) => `table:${tableName}`),
+          ...(event.changedTables ?? []).map(
+            (tableName) => `table:${tableName}`
+          ),
           ...(event.storageIds ?? []).map((storageId) => `storage:${storageId}`)
         ] as ImpactScope[])
     };
@@ -413,6 +415,38 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
   afterEach(async () => {
     await rm(rootDirectory, { recursive: true, force: true });
+  });
+
+  it("exposes runtime storage capabilities through status", async () => {
+    const databasePath = path.join(rootDirectory, "status-capabilities.db");
+    const storagePath = path.join(rootDirectory, "status-capabilities-storage");
+    const runtime = new SyncoreRuntime({
+      schema: defineSchema({}),
+      functions: {},
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath),
+      runtimeCapabilities: {
+        storage: {
+          available: true,
+          protocol: "file",
+          supportsRange: false
+        }
+      }
+    });
+
+    await runtime.start();
+    try {
+      expect(
+        runtime.createClient().watchRuntimeStatus().localQueryResult()
+          ?.capabilities?.storage
+      ).toEqual({
+        available: true,
+        protocol: "file",
+        supportsRange: false
+      });
+    } finally {
+      await runtime.stop();
+    }
   });
 
   it("fails fast when destructive schema changes are detected", async () => {
@@ -888,7 +922,12 @@ describe("SyncoreRuntime schema + scheduler", () => {
     );
 
     const mutationEvent = events.find(
-      (event): event is Extract<SyncoreDevtoolsEvent, { type: "mutation.committed" }> =>
+      (
+        event
+      ): event is Extract<
+        SyncoreDevtoolsEvent,
+        { type: "mutation.committed" }
+      > =>
         event.type === "mutation.committed" &&
         event.functionName === "tasks/create"
     );
@@ -909,8 +948,12 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
 
     const invalidationEvent = events.find(
-      (event): event is Extract<SyncoreDevtoolsEvent, { type: "query.invalidated" }> =>
-        event.type === "query.invalidated"
+      (
+        event
+      ): event is Extract<
+        SyncoreDevtoolsEvent,
+        { type: "query.invalidated" }
+      > => event.type === "query.invalidated"
     );
     expect(invalidationEvent).toMatchObject({
       causedByExecutionId: mutationEvent?.executionId,
@@ -923,7 +966,9 @@ describe("SyncoreRuntime schema + scheduler", () => {
     );
 
     const rerunEvent = events.find(
-      (event): event is Extract<SyncoreDevtoolsEvent, { type: "query.executed" }> =>
+      (
+        event
+      ): event is Extract<SyncoreDevtoolsEvent, { type: "query.executed" }> =>
         event.type === "query.executed" &&
         event.executionId === invalidationEvent?.rerunExecutionId
     );
@@ -940,9 +985,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
     expect(invalidationEvent?.sequence).toBeGreaterThan(
       mutationEvent?.sequence ?? 0
     );
-    expect(rerunEvent?.sequence).toBeGreaterThan(
-      mutationEvent?.sequence ?? 0
-    );
+    expect(rerunEvent?.sequence).toBeGreaterThan(mutationEvent?.sequence ?? 0);
 
     watch.dispose?.();
     expect(runtime.getAdmin().getActiveQueryInfos()).toHaveLength(0);
@@ -1094,6 +1137,159 @@ describe("SyncoreRuntime schema + scheduler", () => {
     await runtime.stop();
   });
 
+  it("serves storage devtools list, read, delete, and subscriptions", async () => {
+    const databasePath = path.join(rootDirectory, "storage-devtools.db");
+    const storagePath = path.join(rootDirectory, "storage-devtools");
+    const schema = defineSchema({
+      files: defineTable({
+        title: s.string(),
+        storageId: s.string()
+      })
+    });
+
+    const functions = {
+      "files/write": mutation({
+        args: {
+          title: s.string(),
+          body: s.string()
+        },
+        returns: s.string(),
+        handler: async (ctx, args) => {
+          const typedArgs = args as { title: string; body: string };
+          const storageId = await (ctx as MutationCtx).storage.put({
+            fileName: `${typedArgs.title}.txt`,
+            contentType: "text/plain",
+            data: typedArgs.body
+          });
+          await (ctx as MutationCtx).db.insert("files", {
+            title: typedArgs.title,
+            storageId
+          });
+          return storageId;
+        }
+      })
+    };
+
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath)
+    });
+
+    await runtime.start();
+    const hostDriver = new TestSqliteDriver(databasePath);
+    const handler = createDevtoolsCommandHandler({
+      driver: hostDriver,
+      schema,
+      functions,
+      admin: runtime.getAdmin()
+    });
+    const host = createDevtoolsSubscriptionHost({
+      driver: hostDriver,
+      schema,
+      functions,
+      admin: runtime.getAdmin()
+    });
+    const storageUpdates: Array<{ entries: unknown[]; totalCount: number }> =
+      [];
+
+    await host.subscribe(
+      "storage-sub",
+      { kind: "storage.list", limit: 100 },
+      (payload) => {
+        if (payload.kind === "storage.list.result") {
+          storageUpdates.push({
+            entries: payload.entries,
+            totalCount: payload.totalCount
+          });
+        }
+      }
+    );
+
+    const storageId = await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<
+          "mutation",
+          { title: string; body: string },
+          string
+        >("mutation", "files/write"),
+        { title: "note", body: "hello storage" }
+      );
+
+    await waitFor(
+      () => (storageUpdates.at(-1)?.totalCount ?? 0) === 1,
+      "storage subscription should refresh"
+    );
+
+    const listResult = await handler({ kind: "storage.list", limit: 100 });
+    expect(listResult.kind).toBe("storage.list.result");
+    if (listResult.kind === "storage.list.result") {
+      expect(listResult.totalCount).toBe(1);
+      expect(listResult.entries[0]).toMatchObject({
+        id: storageId,
+        fileName: "note.txt",
+        contentType: "text/plain"
+      });
+    }
+
+    const readResult = await handler({
+      kind: "storage.readRange",
+      id: storageId,
+      offset: 0,
+      length: 64
+    });
+    expect(readResult.kind).toBe("storage.readRange.result");
+    if (readResult.kind === "storage.readRange.result") {
+      expect(readResult.entry).toMatchObject({ id: storageId });
+      expect(Buffer.from(readResult.base64 ?? "", "base64").toString()).toBe(
+        "hello storage"
+      );
+      expect(readResult.bytesRead).toBe(13);
+    }
+
+    const missingRead = await handler({
+      kind: "storage.readRange",
+      id: "missing",
+      offset: 0,
+      length: 64
+    });
+    expect(missingRead.kind).toBe("storage.readRange.result");
+    if (missingRead.kind === "storage.readRange.result") {
+      expect(missingRead.error).toContain("not found");
+    }
+
+    const deleteResult = await handler({
+      kind: "storage.delete",
+      id: storageId
+    });
+    expect(deleteResult).toEqual({
+      kind: "storage.delete.result",
+      success: true,
+      deleted: true
+    });
+
+    await waitFor(
+      () => (storageUpdates.at(-1)?.totalCount ?? 1) === 0,
+      "storage subscription should refresh after delete"
+    );
+
+    const secondDelete = await handler({
+      kind: "storage.delete",
+      id: storageId
+    });
+    expect(secondDelete).toEqual({
+      kind: "storage.delete.result",
+      success: true,
+      deleted: false
+    });
+
+    host.dispose();
+    await hostDriver.close();
+    await runtime.stop();
+  });
+
   it("lists recurring scheduler metadata and supports update/cancel no-ops", async () => {
     const databasePath = path.join(rootDirectory, "scheduler-devtools.db");
     const storagePath = path.join(rootDirectory, "storage");
@@ -1168,10 +1364,12 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
 
     await runtime.start();
-    await runtime.createClient().mutation(
-      createFunctionReference("mutation", "tasks/scheduleCreate"),
-      { text: "one-shot", delayMs: 60_000 }
-    );
+    await runtime
+      .createClient()
+      .mutation(createFunctionReference("mutation", "tasks/scheduleCreate"), {
+        text: "one-shot",
+        delayMs: 60_000
+      });
     const hostDriver = new TestSqliteDriver(databasePath);
     const handler = createDevtoolsCommandHandler({
       driver: hostDriver,
@@ -1189,11 +1387,15 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
     const schedulerSnapshots: SchedulerJob[][] = [];
 
-    await host.subscribe("scheduler-jobs", { kind: "scheduler.jobs" }, (payload) => {
-      if (payload.kind === "scheduler.jobs.result") {
-        schedulerSnapshots.push(payload.jobs);
+    await host.subscribe(
+      "scheduler-jobs",
+      { kind: "scheduler.jobs" },
+      (payload) => {
+        if (payload.kind === "scheduler.jobs.result") {
+          schedulerSnapshots.push(payload.jobs);
+        }
       }
-    });
+    );
 
     const initialJobs = schedulerSnapshots.at(-1) ?? [];
     expect(initialJobs).toHaveLength(4);
@@ -1202,14 +1404,12 @@ describe("SyncoreRuntime schema + scheduler", () => {
         .filter((job) => job.recurringName)
         .map((job) => job.recurringName)
         .sort()
-    ).toEqual([
-      "cleanup",
-      "digest",
-      "report"
-    ]);
+    ).toEqual(["cleanup", "digest", "report"]);
     const oneShotJob = initialJobs.find((job) => !job.recurringName);
     expect(oneShotJob?.functionName).toBe("tasks/create");
-    expect(initialJobs.find((job) => job.recurringName === "cleanup")?.schedule).toEqual({
+    expect(
+      initialJobs.find((job) => job.recurringName === "cleanup")?.schedule
+    ).toEqual({
       type: "interval",
       minutes: 5
     });
@@ -1572,4 +1772,3 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
-

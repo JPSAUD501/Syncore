@@ -17,6 +17,34 @@ export interface StoredWebFile {
 }
 
 /**
+ * A byte range from a web persistence file, plus total object metadata.
+ */
+export interface StoredWebFileRange {
+  /** Unique file identifier within its namespace. */
+  id: string;
+  /** Raw bytes for the requested range. */
+  bytes: Uint8Array;
+  /** MIME type, or `null` if none was recorded at write time. */
+  contentType: string | null;
+  /** Total file size in bytes. */
+  size: number;
+  /** Offset used for this range. */
+  offset: number;
+}
+
+/**
+ * Metadata for a web persistence file without the raw bytes.
+ */
+export interface StoredWebFileMetadata {
+  /** Unique file identifier within its namespace. */
+  id: string;
+  /** MIME type, or `null` if none was recorded at write time. */
+  contentType: string | null;
+  /** Total file size in bytes. */
+  size: number;
+}
+
+/**
  * Abstraction over browser storage backends (OPFS or IndexedDB).
  *
  * Handles both the SQLite database blob and binary file objects. All
@@ -34,6 +62,13 @@ export interface SyncoreWebPersistence {
   saveDatabase(key: string, bytes: Uint8Array): Promise<void>;
   /** Retrieve a stored file from `namespace` by `id`, or `null` if not found. */
   getFile(namespace: string, id: string): Promise<StoredWebFile | null>;
+  /** Retrieve a byte range without loading the whole file when supported. */
+  getFileRange?(
+    namespace: string,
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<StoredWebFileRange | null>;
   /** Write a file into `namespace` under `id`, replacing any existing entry. */
   putFile(
     namespace: string,
@@ -45,6 +80,8 @@ export interface SyncoreWebPersistence {
   deleteFile(namespace: string, id: string): Promise<void>;
   /** List all stored files in `namespace`. */
   listFiles(namespace: string): Promise<StoredWebFile[]>;
+  /** List stored file metadata without loading file bytes when supported. */
+  listFileMetadata?(namespace: string): Promise<StoredWebFileMetadata[]>;
 }
 
 /**

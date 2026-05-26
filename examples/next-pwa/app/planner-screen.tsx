@@ -9,7 +9,13 @@ import {
   type FormEvent,
   type KeyboardEvent
 } from "react";
-import { skip, useAction, useMutation, useQuery } from "syncorejs/react";
+import {
+  skip,
+  useAction,
+  useMutation,
+  useQuery,
+  useSyncoreStatus
+} from "syncorejs/react";
 import { api } from "../syncore/_generated/api";
 
 const SECTIONS = [
@@ -68,6 +74,7 @@ function fromDateTimeInputValue(value: string): number | undefined {
 }
 
 export function PlannerScreen() {
+  const runtimeStatus = useSyncoreStatus();
   const [activeSection, setActiveSection] =
     useState<(typeof SECTIONS)[number]["key"]>("today");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -146,6 +153,18 @@ export function PlannerScreen() {
   const activeProject = projects.find((p) => p._id === activeProjectId) ?? null;
   const activeSectionLabel =
     SECTIONS.find((s) => s.key === activeSection)?.label ?? "Today";
+  const storageCapability = runtimeStatus.capabilities?.storage;
+  const storageStatusKnown =
+    runtimeStatus.kind === "ready" ||
+    runtimeStatus.kind === "error" ||
+    runtimeStatus.kind === "unavailable" ||
+    storageCapability !== undefined;
+  const storageAvailable = storageCapability?.available === true;
+  const canGenerateArtifacts = storageStatusKnown && storageAvailable;
+  const storageUnavailableReason =
+    storageStatusKnown
+      ? (storageCapability?.reason ?? "Storage is unavailable in this browser.")
+      : "Storage is starting...";
   const headingTitle = deferredSearchQuery
     ? `"${deferredSearchQuery}"`
     : activeProject?.name ?? activeSectionLabel;
@@ -357,11 +376,14 @@ export function PlannerScreen() {
   }
 
   async function handleGenerateArtifact(kind: string) {
-    if (!task) return;
+    if (!task || !canGenerateArtifacts) return;
     setIsGeneratingKind(kind);
-    const result = await generateArtifact({ taskId: task._id, kind });
-    setPreviewArtifactId(result.artifactId);
-    setIsGeneratingKind(null);
+    try {
+      const result = await generateArtifact({ taskId: task._id, kind });
+      setPreviewArtifactId(result.artifactId);
+    } finally {
+      setIsGeneratingKind(null);
+    }
   }
 
   async function handleRemoveArtifact(id: string) {
@@ -857,14 +879,21 @@ export function PlannerScreen() {
                     <button
                       key={artifact.key}
                       className="button button--quiet"
-                      disabled={isGeneratingKind !== null}
+                      disabled={isGeneratingKind !== null || !canGenerateArtifacts}
                       onClick={() => void handleGenerateArtifact(artifact.key)}
                       type="button"
+                      title={canGenerateArtifacts ? undefined : storageUnavailableReason}
                     >
                       {isGeneratingKind === artifact.key ? "Generating…" : `+ ${artifact.label}`}
                     </button>
                   ))}
                 </div>
+
+                {!canGenerateArtifacts ? (
+                  <p className="rail-empty" style={{ marginTop: 8 }}>
+                    {storageUnavailableReason}
+                  </p>
+                ) : null}
 
                 {artifacts.length > 0 ? (
                   <div className="artifact-list">

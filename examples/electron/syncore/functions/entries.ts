@@ -11,6 +11,24 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function decodeBase64(base64: string): Uint8Array {
+  const binary =
+    typeof atob === "function"
+      ? atob(base64)
+      : (
+          globalThis as {
+            Buffer?: { from(value: string, encoding: "base64"): Uint8Array };
+          }
+        ).Buffer?.from(base64, "base64");
+  if (binary instanceof Uint8Array) {
+    return binary;
+  }
+  if (typeof binary !== "string") {
+    throw new Error("Base64 decoding is not available in this runtime.");
+  }
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
 /** All entries, newest first. */
 export const list = query({
   args: {},
@@ -199,7 +217,67 @@ export const remove = mutation({
   args: { id: s.string() },
   returns: s.null(),
   handler: async (ctx, args) => {
+    const attachments = await ctx.db
+      .query("entryAttachments")
+      .withIndex("by_entry", (q) => q.eq("entryId", args.id))
+      .collect();
+    for (const attachment of attachments) {
+      await ctx.storage.delete(attachment.storageId).catch(() => undefined);
+      await ctx.db.delete("entryAttachments", attachment._id);
+    }
     await ctx.db.delete("entries", args.id);
+    return null;
+  }
+});
+
+export const listAttachments = query({
+  args: { entryId: s.string() },
+  handler: async (ctx, args) =>
+    ctx.db
+      .query("entryAttachments")
+      .withIndex("by_entry", (q) => q.eq("entryId", args.entryId))
+      .order("desc")
+      .collect()
+});
+
+export const attachFile = mutation({
+  args: {
+    entryId: s.string(),
+    fileName: s.string(),
+    contentType: s.string(),
+    base64: s.string()
+  },
+  returns: s.string(),
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get("entries", args.entryId);
+    if (!entry) {
+      throw new Error("Entry not found.");
+    }
+    const bytes = decodeBase64(args.base64);
+    const storageId = await ctx.storage.put({
+      data: bytes,
+      fileName: args.fileName,
+      contentType: args.contentType || "application/octet-stream"
+    });
+    return ctx.db.insert("entryAttachments", {
+      entryId: args.entryId,
+      fileName: args.fileName,
+      contentType: args.contentType || "application/octet-stream",
+      size: bytes.byteLength,
+      storageId,
+      createdAt: Date.now()
+    });
+  }
+});
+
+export const removeAttachment = mutation({
+  args: { id: s.string() },
+  returns: s.null(),
+  handler: async (ctx, args) => {
+    const attachment = await ctx.db.get("entryAttachments", args.id);
+    if (!attachment) return null;
+    await ctx.storage.delete(attachment.storageId).catch(() => undefined);
+    await ctx.db.delete("entryAttachments", args.id);
     return null;
   }
 });

@@ -467,6 +467,83 @@ describe("platform-web sql.js runtime", () => {
     }
   });
 
+  it("disables default file storage when web persistence uses IndexedDB", async () => {
+    const runtime = await createWebSyncoreRuntime({
+      databaseName: "idb-no-file-storage",
+      persistenceDatabaseName: "syncore-web-test",
+      persistenceMode: "indexeddb",
+      schema: storageSchema,
+      functions: storageFunctions,
+      locateFile: () => wasmFilePath
+    });
+    await runtime.start();
+    try {
+      const status = runtime
+        .createClient()
+        .watchRuntimeStatus()
+        .localQueryResult();
+      expect(status?.capabilities?.storage).toMatchObject({
+        available: false,
+        protocol: "idb"
+      });
+      await expect(
+        runtime
+          .createClient()
+          .mutation(createFunctionReference("mutation", "files/write"), {
+            label: "blocked",
+            body: "nope"
+          })
+      ).rejects.toThrow("Browser file storage requires OPFS");
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("uses OPFS-backed browser storage when OPFS persistence is provided", async () => {
+    const runtime = await createWebSyncoreRuntime({
+      databaseName: "opfs-file-storage",
+      persistence: createMockWebPersistence(),
+      schema: storageSchema,
+      functions: storageFunctions,
+      locateFile: () => wasmFilePath
+    });
+    await runtime.start();
+    try {
+      const client = runtime.createClient();
+      expect(
+        client.watchRuntimeStatus().localQueryResult()?.capabilities?.storage
+      ).toMatchObject({
+        available: true,
+        protocol: "opfs",
+        supportsRange: true
+      });
+      const id = await client.mutation(
+        createFunctionReference("mutation", "files/write"),
+        { label: "ok", body: "hello" }
+      );
+      const metadata = await client.query(
+        createFunctionReference("query", "files/get"),
+        { id }
+      );
+      expect(metadata).toMatchObject({
+        id,
+        contentType: "text/plain",
+        size: 5
+      });
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("rejects IndexedDB persistence in BrowserFileStorageAdapter", () => {
+    const persistence = new SyncoreIndexedDbPersistence({
+      databaseName: "syncore-web-test"
+    });
+    expect(() => new BrowserFileStorageAdapter(persistence, "files")).toThrow(
+      "Browser file storage requires OPFS"
+    );
+  });
+
   it("attaches command handlers for explicit browser devtools sinks", async () => {
     const sentMessages: string[] = [];
     let latestSocket:
@@ -796,7 +873,10 @@ describe("platform-web sql.js runtime", () => {
       schema: storageSchema,
       functions: storageFunctions,
       driver: secondDriver,
-      storage: new BrowserFileStorageAdapter(persistence, "storage-sync"),
+      storage: new BrowserFileStorageAdapter(
+        createMockWebPersistence(),
+        "storage-sync"
+      ),
       externalChangeSignal: secondSignal,
       externalChangeApplier: new SqlJsExternalChangeApplier({
         databaseName: "storage-sync",
@@ -912,6 +992,24 @@ function createMockWebPersistence(): SyncoreWebPersistence {
       return {
         id,
         bytes: record.bytes.slice(),
+        contentType: record.contentType,
+        size: record.bytes.byteLength
+      };
+    },
+    async getFileRange(
+      namespace: string,
+      id: string,
+      offset: number,
+      length: number
+    ) {
+      const record = files.get(`${namespace}:${id}`);
+      if (!record) {
+        return null;
+      }
+      return {
+        id,
+        bytes: record.bytes.slice(offset, offset + length),
+        offset,
         contentType: record.contentType,
         size: record.bytes.byteLength
       };

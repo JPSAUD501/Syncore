@@ -5,7 +5,9 @@ import type {
   SyncoreStorageApi,
   StorageWriteInput
 } from "../../runtime.js";
+import type { StorageEntry } from "@syncore/devtools-protocol";
 import {
+  type DevtoolsEventMeta,
   type RuntimeExecutionState,
   type StorageMetadataRow,
   type StoragePendingRow
@@ -19,6 +21,8 @@ type StorageEngineDeps = {
   runtimeId: string;
   devtools: DevtoolsEngine;
 };
+
+const STORAGE_RANGE_FALLBACK_LIMIT_BYTES = 8 * 1024 * 1024;
 
 export class StorageEngine {
   constructor(private readonly deps: StorageEngineDeps) {}
@@ -71,9 +75,9 @@ export class StorageEngine {
       return;
     }
 
-    const storedRows = await this.deps.driver.all<Pick<StorageMetadataRow, "_id">>(
-      `SELECT _id FROM "_storage"`
-    );
+    const storedRows = await this.deps.driver.all<
+      Pick<StorageMetadataRow, "_id">
+    >(`SELECT _id FROM "_storage"`);
     const knownIds = new Set(storedRows.map((row) => row._id));
     const physicalObjects = await this.deps.storage.list();
     for (const object of physicalObjects) {
@@ -89,6 +93,141 @@ export class StorageEngine {
         timestamp: Date.now()
       });
     }
+  }
+
+  async listObjects(
+    options: {
+      limit?: number;
+      offset?: number;
+      search?: string;
+    } = {}
+  ): Promise<{ entries: StorageEntry[]; totalCount: number }> {
+    const limit = Math.min(Math.max(options.limit ?? 100, 1), 500);
+    const offset = Math.max(options.offset ?? 0, 0);
+    const search = options.search?.trim();
+    const params: unknown[] = [];
+    const whereClauses: string[] = [];
+
+    if (search) {
+      const pattern = `%${search}%`;
+      whereClauses.push(
+        `(_id LIKE ? OR file_name LIKE ? OR content_type LIKE ?)`
+      );
+      params.push(pattern, pattern, pattern);
+    }
+
+    const whereSql =
+      whereClauses.length > 0 ? ` WHERE ${whereClauses.join(" AND ")}` : "";
+    const rows = await this.deps.driver.all<StorageMetadataRow>(
+      `SELECT _id, _creationTime, file_name, content_type, size, path FROM "_storage"${whereSql} ORDER BY _creationTime DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+    const countRow = await this.deps.driver.get<{ count: number }>(
+      `SELECT COUNT(*) as count FROM "_storage"${whereSql}`,
+      params
+    );
+
+    return {
+      entries: rows.map(storageEntryFromRow),
+      totalCount: countRow?.count ?? 0
+    };
+  }
+
+  async getObjectAccessInfo(
+    id: string
+  ): Promise<{ entry: StorageEntry; supportsRange: boolean } | null> {
+    const row = await this.deps.driver.get<StorageMetadataRow>(
+      `SELECT _id, _creationTime, file_name, content_type, size, path FROM "_storage" WHERE _id = ?`,
+      [id]
+    );
+    if (!row) {
+      return null;
+    }
+    return {
+      entry: storageEntryFromRow(row),
+      supportsRange: storageSupportsRange(this.deps.storage)
+    };
+  }
+
+  async readObjectRange(
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<{
+    entry: StorageEntry;
+    bytes: Uint8Array;
+    offset: number;
+    bytesRead: number;
+    done: boolean;
+    supportsRange: boolean;
+  } | null> {
+    const row = await this.deps.driver.get<StorageMetadataRow>(
+      `SELECT _id, _creationTime, file_name, content_type, size, path FROM "_storage" WHERE _id = ?`,
+      [id]
+    );
+    if (!row) {
+      return null;
+    }
+
+    const normalizedOffset = Math.max(Math.floor(offset), 0);
+    const normalizedLength = Math.max(Math.floor(length), 0);
+    const entry = storageEntryFromRow(row);
+    const supportsRange = storageSupportsRange(this.deps.storage);
+    if (normalizedLength === 0) {
+      return {
+        entry,
+        bytes: new Uint8Array(),
+        offset: normalizedOffset,
+        bytesRead: 0,
+        done: normalizedOffset >= row.size,
+        supportsRange
+      };
+    }
+
+    let bytes: Uint8Array | null;
+    if (supportsRange && this.deps.storage.readRange) {
+      bytes = await this.deps.storage.readRange(
+        id,
+        normalizedOffset,
+        normalizedLength
+      );
+    } else {
+      if (row.size > STORAGE_RANGE_FALLBACK_LIMIT_BYTES) {
+        throw new Error(
+          "This storage backend does not support ranged reads for large files."
+        );
+      }
+      const fullBytes = await this.deps.storage.read(id);
+      bytes = fullBytes
+        ? fullBytes.slice(normalizedOffset, normalizedOffset + normalizedLength)
+        : null;
+    }
+    if (!bytes) {
+      return null;
+    }
+    return {
+      entry,
+      bytes,
+      offset: normalizedOffset,
+      bytesRead: bytes.byteLength,
+      done: normalizedOffset + bytes.byteLength >= row.size,
+      supportsRange
+    };
+  }
+
+  async deleteObject(
+    id: string,
+    meta: DevtoolsEventMeta = {}
+  ): Promise<boolean> {
+    const row = await this.deps.driver.get<Pick<StorageMetadataRow, "_id">>(
+      `SELECT _id FROM "_storage" WHERE _id = ?`,
+      [id]
+    );
+    if (!row) {
+      return false;
+    }
+    await this.deleteCommittedObject(id, undefined, meta);
+    return true;
   }
 
   createStorageApi(state: RuntimeExecutionState): SyncoreStorageApi {
@@ -182,27 +321,7 @@ export class StorageEngine {
       },
       delete: async (id: string) => {
         ensureStorageCapability();
-        await this.deps.storage.delete(id);
-        await this.deps.driver.withTransaction(async () => {
-          await this.deps.driver.run(
-            `DELETE FROM "_storage" WHERE _id = ?`,
-            [id]
-          );
-          await this.deps.driver.run(
-            `DELETE FROM "_storage_pending" WHERE _id = ?`,
-            [id]
-          );
-        });
-        this.deps.devtools.emit({
-          type: "storage.updated",
-          runtimeId: this.deps.runtimeId,
-          storageId: id,
-          ...(componentMetadata
-            ? { componentPath: componentMetadata.componentPath }
-            : {}),
-          operation: "delete",
-          timestamp: Date.now()
-        });
+        await this.deleteCommittedObject(id, componentMetadata?.componentPath);
         state.storageChanges.push({
           storageId: id,
           reason: "storage-delete"
@@ -210,4 +329,43 @@ export class StorageEngine {
       }
     };
   }
+
+  private async deleteCommittedObject(
+    id: string,
+    componentPath?: string,
+    meta: DevtoolsEventMeta = {}
+  ): Promise<void> {
+    await this.deps.storage.delete(id);
+    await this.deps.driver.withTransaction(async () => {
+      await this.deps.driver.run(`DELETE FROM "_storage" WHERE _id = ?`, [id]);
+      await this.deps.driver.run(
+        `DELETE FROM "_storage_pending" WHERE _id = ?`,
+        [id]
+      );
+    });
+    this.deps.devtools.emit({
+      type: "storage.updated",
+      runtimeId: this.deps.runtimeId,
+      storageId: id,
+      ...(componentPath ? { componentPath } : {}),
+      operation: "delete",
+      timestamp: Date.now(),
+      ...(meta.origin ? { origin: meta.origin } : {})
+    });
+  }
+}
+
+function storageEntryFromRow(row: StorageMetadataRow): StorageEntry {
+  return {
+    id: row._id,
+    createdAt: row._creationTime,
+    ...(row.file_name ? { fileName: row.file_name } : {}),
+    ...(row.content_type ? { contentType: row.content_type } : {}),
+    size: row.size,
+    path: row.path
+  };
+}
+
+function storageSupportsRange(storage: SyncoreStorageAdapter): boolean {
+  return Boolean(storage.readRange) && storage.supportsRange?.() !== false;
 }

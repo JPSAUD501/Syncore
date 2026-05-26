@@ -62,8 +62,8 @@ void createBrowserWorkerRuntime({
   databaseName: "my-syncore-next",
   persistenceDatabaseName: "my-syncore-next",
   storageNamespace: "my-syncore-next-storage",
-  // IndexedDB is more stable than OPFS during Next dev and HMR churn.
-  persistenceMode: "indexeddb",
+  // File storage in browser runtimes is OPFS-only.
+  persistenceMode: "opfs",
   platform: "browser-worker"
 });
 ```

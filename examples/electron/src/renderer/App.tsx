@@ -54,6 +54,25 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Could not read file."));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      resolve(result.includes(",") ? result.slice(result.indexOf(",") + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function App() {
   return (
     <SyncoreElectronProvider>
@@ -72,6 +91,7 @@ function JournalScreen() {
   const [moodFilter, setMoodFilter] = useState<string | null>(null);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const allEntries = useQuery(api.entries.list) ?? [];
   const stats = useQuery(api.entries.stats);
@@ -84,10 +104,20 @@ function JournalScreen() {
     api.entries.byMood,
     moodFilter ? { mood: moodFilter } : skip
   );
+  const attachments =
+    useQuery(
+      api.entries.listAttachments,
+      currentEntry ? { entryId: currentEntry._id } : skip
+    ) ?? [];
 
   const upsertEntry = useMutation(api.entries.upsert);
   const removeEntry = useMutation(api.entries.remove);
   const seedDemo = useMutation(api.entries.seedDemo);
+  const attachFile = useMutation(api.entries.attachFile);
+  const removeAttachment = useMutation(api.entries.removeAttachment);
+  const storageAvailable = runtimeStatus.capabilities?.storage.available === true;
+  const storageUnavailableReason =
+    runtimeStatus.capabilities?.storage.reason ?? "Storage is unavailable.";
 
   useEffect(() => {
     if (saveTimerRef.current) {
@@ -154,6 +184,20 @@ function JournalScreen() {
     await removeEntry({ id: currentEntry._id });
     setBody("");
     setMood("okay");
+  };
+
+  const handleAttachFile = async (file: File | undefined) => {
+    if (!file || !currentEntry || !storageAvailable) return;
+    const base64 = await fileToBase64(file);
+    await attachFile({
+      entryId: currentEntry._id,
+      fileName: file.name,
+      contentType: file.type || "application/octet-stream",
+      base64
+    });
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = "";
+    }
   };
 
   const entryDates = new Set(allEntries.map((e) => e.date));
@@ -389,6 +433,51 @@ function JournalScreen() {
           onChange={(e) => handleBodyChange(e.target.value)}
           placeholder="What happened today? How are you feeling?"
         />
+
+        <section className="attachments-panel">
+          <div className="attachments-header">
+            <span>Attachments</span>
+            <label
+              className={`attachment-picker ${!currentEntry || !storageAvailable ? "attachment-picker--disabled" : ""}`}
+            >
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                disabled={!currentEntry || !storageAvailable}
+                onChange={(event) =>
+                  void handleAttachFile(event.currentTarget.files?.[0])
+                }
+              />
+              Add file
+            </label>
+          </div>
+          {!storageAvailable ? (
+            <p className="attachments-empty">{storageUnavailableReason}</p>
+          ) : !currentEntry ? (
+            <p className="attachments-empty">Save this entry before adding files.</p>
+          ) : attachments.length === 0 ? (
+            <p className="attachments-empty">No files attached.</p>
+          ) : (
+            <div className="attachments-list">
+              {attachments.map((attachment) => (
+                <div className="attachment-item" key={attachment._id}>
+                  <div>
+                    <strong>{attachment.fileName}</strong>
+                    <span>
+                      {attachment.contentType} / {formatBytes(attachment.size)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void removeAttachment({ id: attachment._id })}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         <div className="editor-footer">
           <span>

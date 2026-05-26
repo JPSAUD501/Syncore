@@ -9,6 +9,7 @@ import {
   SyncoreRuntime,
   type SchedulerOptions,
   type SyncoreCapabilities,
+  type SyncoreRuntimeCapabilities,
   type SyncoreRuntimeOptions,
   type SyncoreStorageAdapter,
   type StorageObject,
@@ -119,7 +120,8 @@ export interface CreateWebRuntimeOptions<
 
   /**
    * Custom blob storage adapter. Defaults to `BrowserFileStorageAdapter`
-   * backed by the same persistence layer as the SQL driver.
+   * only when the resolved persistence layer is OPFS. IndexedDB persistence is
+   * data-only unless a custom adapter is provided explicitly.
    *
    * Override when you want to store files in a different location (e.g. an
    * in-memory adapter for tests).
@@ -280,8 +282,8 @@ export interface WebExternalChangeSupport {
  * Create a full Syncore runtime directly in the browser (main thread or
  * shared worker).
  *
- * This function sets up SQL.js, the OPFS/IndexedDB persistence layer, blob
- * storage, cross-tab change synchronisation via `BroadcastChannel`, and
+ * This function sets up SQL.js, the OPFS/IndexedDB persistence layer,
+ * OPFS-backed blob storage when available, cross-tab change synchronisation via `BroadcastChannel`, and
  * auto-connects to the devtools server in development.
  *
  * @remarks
@@ -296,9 +298,7 @@ export interface WebExternalChangeSupport {
  * const client = runtime.createClient();
  * ```
  */
-export async function createWebSyncoreRuntime<
-  TSchema extends WebSyncoreSchema
->(
+export async function createWebSyncoreRuntime<TSchema extends WebSyncoreSchema>(
   options: CreateWebRuntimeOptions<TSchema>
 ): Promise<SyncoreRuntime<TSchema>> {
   const persistence =
@@ -324,12 +324,20 @@ export async function createWebSyncoreRuntime<
       ...(wasmUrl ? { wasmUrl } : {}),
       ...(options.locateFile ? { locateFile: options.locateFile } : {})
     }));
+  const storageNamespace =
+    options.storageNamespace ?? options.databaseName ?? "syncore";
   const storage =
     options.storage ??
-    new BrowserFileStorageAdapter(
-      persistence,
-      options.storageNamespace ?? options.databaseName ?? "syncore"
-    );
+    (persistence.storageProtocol === "opfs"
+      ? new BrowserFileStorageAdapter(persistence, storageNamespace)
+      : new UnavailableBrowserStorageAdapter(
+          BROWSER_STORAGE_UNAVAILABLE_REASON
+        ));
+  const runtimeCapabilities = createBrowserRuntimeCapabilities(
+    persistence,
+    storage,
+    Boolean(options.storage)
+  );
   const externalChangeSupport = createWebExternalChangeSupport({
     databaseName: options.databaseName ?? "syncore",
     persistence,
@@ -363,7 +371,7 @@ export async function createWebSyncoreRuntime<
             databaseLabel,
             dataSourceAlias,
             storageIdentity,
-            capabilities: createBrowserDevtoolsCapabilities()
+            capabilities: createBrowserDevtoolsCapabilities(runtimeCapabilities)
           };
           if (appName) {
             sinkOptions.appName = appName;
@@ -388,7 +396,7 @@ export async function createWebSyncoreRuntime<
     devtoolsUrl:
       options.devtools && typeof options.devtools === "object"
         ? undefined
-        : options.devtoolsUrl ?? resolveDefaultDevtoolsUrl()
+        : (options.devtoolsUrl ?? resolveDefaultDevtoolsUrl())
   });
 
   const runtime = new SyncoreRuntime({
@@ -403,6 +411,7 @@ export async function createWebSyncoreRuntime<
       : {}),
     platform: options.platform ?? "browser",
     ...(options.capabilities ? { capabilities: options.capabilities } : {}),
+    runtimeCapabilities,
     ...(resolvedDevtools ? { devtools: resolvedDevtools } : {}),
     ...(options.scheduler ? { scheduler: options.scheduler } : {})
   });
@@ -435,7 +444,8 @@ function isAttachableBrowserDevtoolsSink(
 ): sink is BrowserWebSocketDevtoolsSink {
   return (
     !!sink &&
-    typeof (sink as BrowserWebSocketDevtoolsSink).attachRuntime === "function" &&
+    typeof (sink as BrowserWebSocketDevtoolsSink).attachRuntime ===
+      "function" &&
     typeof (sink as BrowserWebSocketDevtoolsSink).attachCommandHandler ===
       "function" &&
     typeof (sink as BrowserWebSocketDevtoolsSink).attachSubscriptionHost ===
@@ -489,7 +499,7 @@ export function createWebExternalChangeSupport(options: {
  *
  * Behaves identically to {@link createWebExternalChangeSupport} but accepts
  * the same options shape used by `createExpoSyncoreRuntime`, making it easy
- * to share config when bootstrapping an Expo web runtime.\
+ * to share config when bootstrapping an Expo web runtime.
  *
  * Called internally by the Expo platform adapter. Use directly only when
  * constructing the runtime outside of `createExpoSyncoreRuntime`.
@@ -552,9 +562,9 @@ export async function createExpoWebExternalChangeSupport(options: {
  * On the main thread, connect with `createManagedWebWorkerClient()` or
  * `SyncoreNextProvider` (Next.js).
  */
-export function createWebWorkerRuntime<
-  TSchema extends WebSyncoreSchema
->(options: CreateWebWorkerRuntimeOptions<TSchema>) {
+export function createWebWorkerRuntime<TSchema extends WebSyncoreSchema>(
+  options: CreateWebWorkerRuntimeOptions<TSchema>
+) {
   return attachWebWorkerRuntime({
     endpoint: options.endpoint,
     createRuntime: () =>
@@ -589,9 +599,9 @@ export function createBrowserWorkerRuntime(
  * const client = createWebSyncoreClient(runtime);
  * ```
  */
-export function createWebSyncoreClient<
-  TSchema extends WebSyncoreSchema
->(runtime: SyncoreRuntime<TSchema>) {
+export function createWebSyncoreClient<TSchema extends WebSyncoreSchema>(
+  runtime: SyncoreRuntime<TSchema>
+) {
   return runtime.createClient();
 }
 
@@ -676,7 +686,7 @@ function isBrowserLikeRuntime(): boolean {
 }
 
 /**
- * A {@link DevtoolsSink} that forwards runtime events to the Syncore devtools
+ * A DevtoolsSink that forwards runtime events to the Syncore devtools
  * dashboard over a persistent WebSocket connection with auto-reconnect.
  *
  * Returned by {@link createBrowserWebSocketDevtoolsSink}. You typically do not
@@ -756,14 +766,17 @@ export function createBrowserWebSocketDevtoolsSink(
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
-          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.databaseLabel
+            ? { databaseLabel: options.databaseLabel }
+            : {}),
           ...(options.dataSourceAlias
             ? { dataSourceAlias: options.dataSourceAlias }
             : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
             : {}),
-          capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
+          capabilities:
+            options.capabilities ?? createBrowserDevtoolsCapabilities()
         });
       }
       flushPendingMessages();
@@ -896,14 +909,17 @@ export function createBrowserWebSocketDevtoolsSink(
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
-          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.databaseLabel
+            ? { databaseLabel: options.databaseLabel }
+            : {}),
           ...(options.dataSourceAlias
             ? { dataSourceAlias: options.dataSourceAlias }
             : {}),
           ...(options.storageIdentity
             ? { storageIdentity: options.storageIdentity }
             : {}),
-          capabilities: options.capabilities ?? createBrowserDevtoolsCapabilities()
+          capabilities:
+            options.capabilities ?? createBrowserDevtoolsCapabilities()
         });
       }
       send({ type: "event", event });
@@ -943,7 +959,9 @@ function withRuntimeSummaryMeta(
       ? { storageProtocol: options.storageProtocol }
       : {}),
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
-    ...(options.dataSourceAlias ? { dataSourceAlias: options.dataSourceAlias } : {}),
+    ...(options.dataSourceAlias
+      ? { dataSourceAlias: options.dataSourceAlias }
+      : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
       : {}),
@@ -951,7 +969,37 @@ function withRuntimeSummaryMeta(
   };
 }
 
-function createBrowserDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
+function createBrowserRuntimeCapabilities(
+  persistence: SyncoreWebPersistence,
+  storage: SyncoreStorageAdapter,
+  hasExplicitStorage: boolean
+): SyncoreRuntimeCapabilities {
+  if (!hasExplicitStorage && persistence.storageProtocol !== "opfs") {
+    return {
+      storage: {
+        available: false,
+        reason: BROWSER_STORAGE_UNAVAILABLE_REASON,
+        protocol: persistence.storageProtocol,
+        supportsRange: false
+      }
+    };
+  }
+  return {
+    storage: {
+      available: true,
+      protocol: hasExplicitStorage ? "custom" : persistence.storageProtocol,
+      ...(storage.supportsRange
+        ? { supportsRange: storage.supportsRange() !== false }
+        : {})
+    }
+  };
+}
+
+function createBrowserDevtoolsCapabilities(
+  runtimeCapabilities?: SyncoreRuntimeCapabilities
+): SyncoreDevtoolsCapabilities {
+  const storageCapability = runtimeCapabilities?.storage;
+  const storageAvailable = storageCapability?.available !== false;
   return {
     sql: {
       read: false,
@@ -963,6 +1011,16 @@ function createBrowserDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
       browse: true,
       mutate: true,
       importExport: true
+    },
+    storage: {
+      browse: storageAvailable,
+      download: storageAvailable,
+      readRange: storageCapability?.supportsRange === true,
+      delete: storageAvailable,
+      maxPreviewBytes: 80_000,
+      ...(!storageAvailable && storageCapability?.reason
+        ? { reason: storageCapability.reason }
+        : {})
     },
     scheduler: {
       read: true,
@@ -1371,6 +1429,9 @@ const SESSION_NOUNS = [
   "Drift"
 ] as const;
 
+const BROWSER_STORAGE_UNAVAILABLE_REASON =
+  "Browser file storage requires OPFS. IndexedDB is used for data only.";
+
 function generateUniqueSessionName(): string {
   const adj =
     SESSION_ADJECTIVES[Math.floor(Math.random() * SESSION_ADJECTIVES.length)]!;
@@ -1381,8 +1442,8 @@ function generateUniqueSessionName(): string {
 /**
  * Browser file/blob storage adapter backed by `SyncoreWebPersistence`.
  *
- * Stores binary blobs (images, documents, etc.) in the same OPFS or
- * IndexedDB store as the SQLite database. Pass an instance to
+ * Stores binary blobs (images, documents, etc.) in OPFS alongside the SQLite
+ * database. Pass an instance to
  * `CreateWebRuntimeOptions.storage` to enable Syncore's Storage API
  * (`ctx.storage.put`, `ctx.storage.get`, etc.) in browser functions.
  *
@@ -1390,7 +1451,7 @@ function generateUniqueSessionName(): string {
  * const runtime = await createWebSyncoreRuntime({
  *   schema,
  *   functions,
- *   storage: (persistence) => new BrowserFileStorageAdapter(persistence, "files"),
+ *   storage: new BrowserFileStorageAdapter(persistence, "files"),
  * });
  * ```
  */
@@ -1398,7 +1459,11 @@ export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
   constructor(
     private readonly persistence: SyncoreWebPersistence,
     private readonly namespace: string
-  ) {}
+  ) {
+    if (persistence.storageProtocol !== "opfs") {
+      throw new Error(BROWSER_STORAGE_UNAVAILABLE_REASON);
+    }
+  }
 
   async put(id: string, input: StorageWriteInput): Promise<StorageObject> {
     const bytes = normalizeBinary(input.data);
@@ -1434,18 +1499,65 @@ export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
     return file?.bytes ?? null;
   }
 
+  supportsRange(): boolean {
+    return Boolean(this.persistence.getFileRange);
+  }
+
+  async readRange(
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<Uint8Array | null> {
+    if (!this.persistence.getFileRange) {
+      return null;
+    }
+    const file = await this.persistence.getFileRange(
+      this.namespace,
+      id,
+      offset,
+      length
+    );
+    return file?.bytes ?? null;
+  }
+
   async delete(id: string): Promise<void> {
     await this.persistence.deleteFile(this.namespace, id);
   }
 
   async list(): Promise<StorageObject[]> {
-    const files = await this.persistence.listFiles(this.namespace);
+    const files = this.persistence.listFileMetadata
+      ? await this.persistence.listFileMetadata(this.namespace)
+      : await this.persistence.listFiles(this.namespace);
     return files.map((file) => ({
       id: file.id,
       path: `${this.persistence.storageProtocol}://${this.namespace}/${file.id}`,
       size: file.size,
       contentType: file.contentType
     }));
+  }
+}
+
+class UnavailableBrowserStorageAdapter implements SyncoreStorageAdapter {
+  constructor(private readonly reason: string) {}
+
+  async put(): Promise<StorageObject> {
+    throw new Error(this.reason);
+  }
+
+  async get(): Promise<StorageObject | null> {
+    throw new Error(this.reason);
+  }
+
+  async read(): Promise<Uint8Array | null> {
+    throw new Error(this.reason);
+  }
+
+  supportsRange(): boolean {
+    return false;
+  }
+
+  async delete(): Promise<void> {
+    throw new Error(this.reason);
   }
 }
 

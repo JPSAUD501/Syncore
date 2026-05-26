@@ -1,5 +1,6 @@
 import {
   mkdir,
+  open,
   readdir,
   readFile,
   rm,
@@ -14,7 +15,7 @@ import WebSocket from "ws";
 import {
   SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
   SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
-  SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+  SYNCORE_DEVTOOLS_PROTOCOL_VERSION
 } from "@syncore/devtools-protocol";
 import type {
   SyncoreDevtoolsClientMessage,
@@ -213,6 +214,29 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
       return await readFile(this.filePath(id));
     } catch {
       return null;
+    }
+  }
+
+  async readRange(
+    id: string,
+    offset: number,
+    length: number
+  ): Promise<Uint8Array | null> {
+    let handle;
+    try {
+      handle = await open(this.filePath(id), "r");
+      const buffer = Buffer.alloc(Math.max(length, 0));
+      const result = await handle.read(
+        buffer,
+        0,
+        buffer.byteLength,
+        Math.max(offset, 0)
+      );
+      return buffer.subarray(0, result.bytesRead);
+    } catch {
+      return null;
+    } finally {
+      await handle?.close();
     }
   }
 
@@ -573,12 +597,10 @@ export interface CreateSyncoreRendererWindowClientOptions {
  * ```
  *
  * @param options - Configuration object. See {@link CreateNodeRuntimeOptions}.
- * @returns A configured (but not yet started) {@link SyncoreRuntime}. Call
+ * @returns A configured (but not yet started) SyncoreRuntime. Call
  *   `await runtime.start()` before using the client.
  */
-export function createNodeSyncoreRuntime<
-  TSchema extends NodeSyncoreSchema
->(
+export function createNodeSyncoreRuntime<TSchema extends NodeSyncoreSchema>(
   options: CreateNodeRuntimeOptions<TSchema>
 ): SyncoreRuntime<TSchema> {
   const resolvedDevtoolsUrl =
@@ -613,6 +635,13 @@ export function createNodeSyncoreRuntime<
     ...(options.components ? { components: options.components } : {}),
     driver: new NodeSqliteDriver(options.databasePath),
     storage: new NodeFileStorageAdapter(options.storageDirectory),
+    runtimeCapabilities: {
+      storage: {
+        available: true,
+        protocol: "file",
+        supportsRange: true
+      }
+    },
     platform: options.platform ?? "node"
   };
   if (options.capabilities) {
@@ -626,7 +655,8 @@ export function createNodeSyncoreRuntime<
     runtimeOptions.devtools = resolvedDevtools;
   }
   if (websocketDevtools?.externalChangeSignal) {
-    runtimeOptions.externalChangeSignal = websocketDevtools.externalChangeSignal;
+    runtimeOptions.externalChangeSignal =
+      websocketDevtools.externalChangeSignal;
   }
   if (options.scheduler) {
     runtimeOptions.scheduler = options.scheduler;
@@ -662,9 +692,9 @@ export function createNodeSyncoreRuntime<
 /**
  * Create a same-process Syncore client from a started Node runtime.
  */
-export function createNodeSyncoreClient<
-  TSchema extends NodeSyncoreSchema
->(runtime: SyncoreRuntime<TSchema>) {
+export function createNodeSyncoreClient<TSchema extends NodeSyncoreSchema>(
+  runtime: SyncoreRuntime<TSchema>
+) {
   return runtime.createClient();
 }
 
@@ -889,7 +919,9 @@ export function createNodeWebSocketDevtoolsSink(
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
-          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.databaseLabel
+            ? { databaseLabel: options.databaseLabel }
+            : {}),
           ...(options.dataSourceAlias
             ? { dataSourceAlias: options.dataSourceAlias }
             : {}),
@@ -1047,7 +1079,9 @@ export function createNodeWebSocketDevtoolsSink(
           ...(options.storageProtocol
             ? { storageProtocol: options.storageProtocol }
             : {}),
-          ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
+          ...(options.databaseLabel
+            ? { databaseLabel: options.databaseLabel }
+            : {}),
           ...(options.dataSourceAlias
             ? { dataSourceAlias: options.dataSourceAlias }
             : {}),
@@ -1124,7 +1158,9 @@ function withRuntimeSummaryMeta(
       ? { storageProtocol: options.storageProtocol }
       : {}),
     ...(options.databaseLabel ? { databaseLabel: options.databaseLabel } : {}),
-    ...(options.dataSourceAlias ? { dataSourceAlias: options.dataSourceAlias } : {}),
+    ...(options.dataSourceAlias
+      ? { dataSourceAlias: options.dataSourceAlias }
+      : {}),
     ...(options.storageIdentity
       ? { storageIdentity: options.storageIdentity }
       : {}),
@@ -1138,12 +1174,20 @@ function createNodeDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
       read: false,
       write: false,
       live: false,
-      reason: "SQL Console is provided by the Project Target for this data source."
+      reason:
+        "SQL Console is provided by the Project Target for this data source."
     },
     data: {
       browse: true,
       mutate: true,
       importExport: true
+    },
+    storage: {
+      browse: true,
+      download: true,
+      readRange: true,
+      delete: true,
+      maxPreviewBytes: 80_000
     },
     scheduler: {
       read: true,

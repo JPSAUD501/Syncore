@@ -490,6 +490,90 @@ textarea {
   border-radius: 2px;
 }
 
+.attachments-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  flex-shrink: 0;
+}
+
+.attachments-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.attachment-picker {
+  border: 1px solid rgba(200, 155, 60, 0.35);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--amber);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.attachment-picker input {
+  display: none;
+}
+
+.attachment-picker--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.attachments-empty {
+  margin-top: 10px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.attachments-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.attachment-item strong,
+.attachment-item span {
+  display: block;
+}
+
+.attachment-item strong {
+  font-size: 13px;
+  color: var(--paper);
+}
+
+.attachment-item span {
+  margin-top: 2px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.attachment-item button {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+
 /* Footer */
 .editor-footer {
   display: flex;

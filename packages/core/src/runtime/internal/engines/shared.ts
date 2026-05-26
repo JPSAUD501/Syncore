@@ -411,7 +411,11 @@ export function devtoolsScopesForEvent(
     case "scheduler.tick":
       return new Set(["scheduler.jobs", "runtime.summary"]);
     case "storage.updated":
-      return new Set(["runtime.summary"]);
+      return new Set<DevtoolsLiveQueryScope>([
+        "runtime.summary",
+        "storage.objects",
+        `storage:${event.storageId}` as const
+      ]);
     case "action.completed":
     case "log":
       return new Set(["runtime.summary"]);

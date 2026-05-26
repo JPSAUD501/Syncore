@@ -1,8 +1,10 @@
 import { SyncoreExpoProvider } from "syncorejs/expo/react";
-import { skip, useMutation, useQuery } from "syncorejs/react";
+import { skip, useMutation, useQuery, useSyncoreStatus } from "syncorejs/react";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   SafeAreaView,
@@ -47,6 +49,7 @@ export default function App() {
 }
 
 function NotesScreen() {
+  const runtimeStatus = useSyncoreStatus();
   const [showComposer, setShowComposer] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [colorFilter, setColorFilter] = useState<string | null>(null);
@@ -62,7 +65,12 @@ function NotesScreen() {
   const togglePin = useMutation(api.notes.togglePin);
   const removeNote = useMutation(api.notes.remove);
   const seedDemo = useMutation(api.notes.seedDemo);
+  const attachPhoto = useMutation(api.notes.attachPhoto);
+  const removePhoto = useMutation(api.notes.removePhoto);
   const allNotes = useMemo(() => allNotesQuery ?? [], [allNotesQuery]);
+  const storageAvailable = runtimeStatus.capabilities?.storage.available === true;
+  const storageUnavailableReason =
+    runtimeStatus.capabilities?.storage.reason ?? "Storage is unavailable.";
 
   const notes = useMemo(() => {
     if (searchText.trim() && searchResults) return searchResults;
@@ -82,6 +90,27 @@ function NotesScreen() {
       setShowComposer(false);
     },
     [createNote]
+  );
+
+  const handlePickPhoto = useCallback(
+    async (noteId: string) => {
+      if (!storageAvailable) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        base64: true
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.base64) return;
+      await attachPhoto({
+        id: noteId,
+        fileName: asset.fileName ?? `note-${noteId}.jpg`,
+        contentType: asset.mimeType ?? "image/jpeg",
+        base64: asset.base64
+      });
+    },
+    [attachPhoto, storageAvailable]
   );
 
   return (
@@ -178,6 +207,10 @@ function NotesScreen() {
                 note={note}
                 onTogglePin={() => void togglePin({ id: note._id })}
                 onDelete={() => void removeNote({ id: note._id })}
+                onPickPhoto={() => void handlePickPhoto(note._id)}
+                onRemovePhoto={() => void removePhoto({ id: note._id })}
+                storageAvailable={storageAvailable}
+                storageUnavailableReason={storageUnavailableReason}
               />
             ))}
           </View>
@@ -194,6 +227,10 @@ function NotesScreen() {
                 note={note}
                 onTogglePin={() => void togglePin({ id: note._id })}
                 onDelete={() => void removeNote({ id: note._id })}
+                onPickPhoto={() => void handlePickPhoto(note._id)}
+                onRemovePhoto={() => void removePhoto({ id: note._id })}
+                storageAvailable={storageAvailable}
+                storageUnavailableReason={storageUnavailableReason}
               />
             ))}
           </View>
@@ -269,13 +306,31 @@ interface NoteCardProps {
     body: string;
     color: string;
     pinned: boolean;
+    photoStorageId?: string;
+    photoFileName?: string;
     updatedAt: number;
   };
   onTogglePin: () => void;
   onDelete: () => void;
+  onPickPhoto: () => void;
+  onRemovePhoto: () => void;
+  storageAvailable: boolean;
+  storageUnavailableReason: string;
 }
 
-function NoteCard({ note, onTogglePin, onDelete }: NoteCardProps) {
+function NoteCard({
+  note,
+  onTogglePin,
+  onDelete,
+  onPickPhoto,
+  onRemovePhoto,
+  storageAvailable,
+  storageUnavailableReason
+}: NoteCardProps) {
+  const photoUri = useQuery(
+    api.notes.getPhoto,
+    note.photoStorageId ? { id: note._id } : skip
+  );
   const timeAgo = useMemo(() => {
     const diff = Date.now() - note.updatedAt;
     const mins = Math.floor(diff / 60000);
@@ -290,6 +345,9 @@ function NoteCard({ note, onTogglePin, onDelete }: NoteCardProps) {
   return (
     <View style={[styles.card, { borderLeftColor: note.color }]}>
       <View style={styles.cardContent}>
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={styles.cardPhoto} />
+        ) : null}
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle} numberOfLines={1}>
             {note.title}
@@ -312,7 +370,29 @@ function NoteCard({ note, onTogglePin, onDelete }: NoteCardProps) {
         <Text style={styles.cardBody} numberOfLines={2}>
           {note.body}
         </Text>
-        <Text style={styles.cardMeta}>{timeAgo}</Text>
+        <View style={styles.photoActions}>
+          <Pressable
+            onPress={onPickPhoto}
+            disabled={!storageAvailable}
+            style={[
+              styles.photoButton,
+              !storageAvailable && styles.photoButtonDisabled
+            ]}
+          >
+            <Text style={styles.photoButtonText}>
+              {note.photoStorageId ? "Replace photo" : "Add photo"}
+            </Text>
+          </Pressable>
+          {note.photoStorageId ? (
+            <Pressable onPress={onRemovePhoto} style={styles.photoButton}>
+              <Text style={styles.photoButtonText}>Remove photo</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <Text style={styles.cardMeta}>
+          {timeAgo}
+          {!storageAvailable ? ` / ${storageUnavailableReason}` : ""}
+        </Text>
       </View>
     </View>
   );
@@ -535,6 +615,13 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 6
   },
+  cardPhoto: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: "#EEE"
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -565,6 +652,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#BBB",
     marginTop: 2
+  },
+  photoActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4
+  },
+  photoButton: {
+    backgroundColor: "#F0F0F0",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 9
+  },
+  photoButtonDisabled: {
+    opacity: 0.45
+  },
+  photoButtonText: {
+    color: "#444",
+    fontSize: 12,
+    fontWeight: "700"
   },
 
   emptyState: {

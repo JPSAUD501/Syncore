@@ -182,7 +182,7 @@ export function useSyncore(): SyncoreClient {
 /**
  * Subscribe to the runtime’s lifecycle status.
  *
- * Returns a {@link SyncoreRuntimeStatus} that updates whenever the underlying
+ * Returns a SyncoreRuntimeStatus that updates whenever the underlying
  * runtime changes state (e.g. starting, ready, error). Use it to gate your UI
  * on the runtime being ready or to display an error boundary:
  *
@@ -262,7 +262,7 @@ export function useQuery<TArgs, TResult>(
 
 /**
  * Subscribe to a reactive Syncore query and return the full
- * {@link SyncoreQueryState} including loading, error, and runtime status.
+ * SyncoreQueryState including loading, error, and runtime status.
  *
  * Use this instead of {@link useQuery} when you need to:
  * - Differentiate between `undefined` data and an error.
@@ -386,7 +386,7 @@ export function useAction<TArgs, TResult>(
  *
  * @param entries - A record of named query requests. Each entry can include
  *   `args: skip` to suppress that specific subscription.
- * @returns A record with the same keys, each holding a {@link SyncoreQueryState}.
+ * @returns A record with the same keys, each holding a SyncoreQueryState.
  */
 export function useQueries<TEntries extends QueriesRequestInput>(
   entries: TEntries
@@ -479,8 +479,9 @@ export function useQueries<TEntries extends QueriesRequestInput>(
  *   `ctx.db.query(…).paginate(paginationOpts)`.
  * @param args               - Arguments for the query (excluding
  *   `paginationOpts`, which is managed internally), or `skip`.
- * @param options.initialNumItems - Number of items to load on the first page.
- * @returns A {@link UsePaginatedQueryResult} with the accumulated results and
+ * @param options - Pagination options. `initialNumItems` controls the number
+ *   of items to load on the first page.
+ * @returns A UsePaginatedQueryResult with the accumulated results and
  *   a `loadMore` callback.
  */
 export function usePaginatedQuery<TReference extends PaginatedQueryReference>(

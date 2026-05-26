@@ -226,6 +226,22 @@ export interface SchedulerRecurringWeeklySchedule {
 }
 
 // @public (undocumented)
+export interface StorageEntry {
+    // (undocumented)
+    contentType?: string;
+    // (undocumented)
+    createdAt: number;
+    // (undocumented)
+    fileName?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    path: string;
+    // (undocumented)
+    size: number;
+}
+
+// @public (undocumented)
 export const SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION = 1;
 
 // @public (undocumented)
@@ -274,6 +290,15 @@ export interface SyncoreDevtoolsCapabilities {
         read: boolean;
         write: boolean;
         live: boolean;
+        reason?: string;
+    };
+    // (undocumented)
+    storage?: {
+        browse: boolean;
+        download: boolean;
+        readRange?: boolean;
+        delete: boolean;
+        maxPreviewBytes?: number;
         reason?: string;
     };
 }
@@ -330,6 +355,23 @@ export type SyncoreDevtoolsCommandPayload = {
     kind: "sql.write";
     query: string;
 } | {
+    kind: "storage.list";
+    limit?: number;
+    offset?: number;
+    search?: string;
+} | {
+    kind: "storage.access.create";
+    id: string;
+    purpose: "preview" | "download";
+} | {
+    kind: "storage.readRange";
+    id: string;
+    offset: number;
+    length: number;
+} | {
+    kind: "storage.delete";
+    id: string;
+} | {
     kind: "scheduler.cancel";
     jobId: string;
 } | {
@@ -378,6 +420,35 @@ export type SyncoreDevtoolsCommandResultPayload = {
     rowsAffected: number;
     error?: string;
     invalidationScopes: string[];
+} | {
+    kind: "storage.list.result";
+    entries: StorageEntry[];
+    totalCount: number;
+    offset: number;
+    hasMore: boolean;
+    error?: string;
+} | {
+    kind: "storage.access.create.result";
+    entry?: StorageEntry;
+    url?: string;
+    expiresAt?: number;
+    supportsRange?: boolean;
+    maxPreviewBytes?: number;
+    error?: string;
+} | {
+    kind: "storage.readRange.result";
+    entry?: StorageEntry;
+    offset: number;
+    bytesRead: number;
+    done: boolean;
+    supportsRange: boolean;
+    base64?: string;
+    error?: string;
+} | {
+    kind: "storage.delete.result";
+    success: boolean;
+    deleted: boolean;
+    error?: string;
 } | {
     kind: "scheduler.cancel.result";
     success: boolean;
@@ -592,6 +663,11 @@ export type SyncoreDevtoolsSubscriptionPayload = {
 } | {
     kind: "functions.catalog";
 } | {
+    kind: "storage.list";
+    limit?: number;
+    offset?: number;
+    search?: string;
+} | {
     kind: "sql.watch";
     query: string;
 };
@@ -621,6 +697,13 @@ export type SyncoreDevtoolsSubscriptionResultPayload = {
 } | {
     kind: "functions.catalog.result";
     functions: FunctionDefinition[];
+} | {
+    kind: "storage.list.result";
+    entries: StorageEntry[];
+    totalCount: number;
+    offset: number;
+    hasMore: boolean;
+    error?: string;
 } | {
     kind: "sql.watch.result";
     columns: string[];

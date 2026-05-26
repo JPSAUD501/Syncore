@@ -3,6 +3,7 @@ import {
   Activity,
   Database,
   Code2,
+  HardDrive,
   Radio,
   ScrollText,
   Clock,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 const NAV_ITEMS = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/data", label: "Data", icon: Database },
+  { to: "/storage", label: "Storage", icon: HardDrive },
   { to: "/functions", label: "Functions", icon: Code2 },
   { to: "/queries", label: "Active Queries", icon: Radio },
   { to: "/logs", label: "Logs", icon: ScrollText },

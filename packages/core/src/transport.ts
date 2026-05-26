@@ -124,15 +124,24 @@ export class SyncoreBridgeClient implements SyncoreClient {
     }
 
     switch (message.type) {
-      case "runtime.ready":
+      case "runtime.ready": {
+        const currentStatus = this.runtimeStatus.getStatus();
         this.runtimeStatus.setStatus({
-          kind: "ready"
+          kind: "ready",
+          ...(currentStatus.capabilities
+            ? { capabilities: currentStatus.capabilities }
+            : {})
         });
         return;
-      case "runtime.error":
+      }
+      case "runtime.error": {
+        const statusBeforeError = this.runtimeStatus.getStatus();
         this.runtimeStatus.setStatus({
           kind: "error",
           reason: "runtime-unavailable",
+          ...(statusBeforeError.capabilities
+            ? { capabilities: statusBeforeError.capabilities }
+            : {}),
           error: new Error(message.error)
         });
         for (const watchRecord of this.watchRecordsByKey.values()) {
@@ -142,6 +151,7 @@ export class SyncoreBridgeClient implements SyncoreClient {
         }
         this.rejectAllPending(new Error(message.error));
         return;
+      }
       case "runtime.status":
         this.runtimeStatus.setStatus(message.status);
         for (const watchRecord of this.watchRecordsByKey.values()) {
@@ -517,6 +527,8 @@ export function attachRuntimeBridge<
     kind: "starting",
     reason: "booting"
   };
+  let runtimeStatusWatch: SyncoreWatch<SyncoreRuntimeStatus> | undefined;
+  let detachRuntimeStatus: (() => void) | undefined;
 
   const sendStatus = (status: SyncoreRuntimeStatus) => {
     latestStatus = status;
@@ -533,13 +545,30 @@ export function attachRuntimeBridge<
     }
   );
 
-  const clientPromise = runtimePromise.then((runtime) => runtime.createClient());
+  const clientPromise = runtimePromise.then((runtime) => {
+    const client = runtime.createClient();
+    runtimeStatusWatch = client.watchRuntimeStatus();
+    const forwardRuntimeStatus = () => {
+      const status = runtimeStatusWatch?.localQueryResult();
+      if (status) {
+        sendStatus(status);
+      }
+    };
+    forwardRuntimeStatus();
+    detachRuntimeStatus = runtimeStatusWatch.onUpdate(forwardRuntimeStatus);
+    return client;
+  });
 
   const ready = clientPromise
     .then(() => {
-      sendStatus({
-        kind: "ready"
-      });
+      if (latestStatus.kind !== "ready") {
+        sendStatus({
+          kind: "ready",
+          ...(latestStatus.capabilities
+            ? { capabilities: latestStatus.capabilities }
+            : {})
+        });
+      }
       options.endpoint.postMessage({
         type: "runtime.ready"
       } satisfies SyncoreBridgeResponse);
@@ -667,6 +696,8 @@ export function attachRuntimeBridge<
         subscription.watch.dispose?.();
       }
       subscriptions.clear();
+      detachRuntimeStatus?.();
+      runtimeStatusWatch?.dispose?.();
       const runtime = await runtimePromise;
       await runtime.stop();
     }

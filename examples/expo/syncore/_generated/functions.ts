@@ -9,11 +9,14 @@
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
 import { composeProjectFunctionRegistry } from "syncorejs";
+import { attachPhoto as notes__attachPhoto } from "../functions/notes";
 import { byColor as notes__byColor } from "../functions/notes";
 import { create as notes__create } from "../functions/notes";
 import { get as notes__get } from "../functions/notes";
+import { getPhoto as notes__getPhoto } from "../functions/notes";
 import { list as notes__list } from "../functions/notes";
 import { remove as notes__remove } from "../functions/notes";
+import { removePhoto as notes__removePhoto } from "../functions/notes";
 import { scheduleAutoSave as notes__scheduleAutoSave } from "../functions/notes";
 import { search as notes__search } from "../functions/notes";
 import { seedDemo as notes__seedDemo } from "../functions/notes";
@@ -29,6 +32,10 @@ const componentsManifest = {} as const;
  */
 export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
   /**
+   * Runtime definition for the public Syncore mutation `notes/attachPhoto`.
+   */
+  readonly "notes/attachPhoto": typeof notes__attachPhoto;
+  /**
    * Runtime definition for the public Syncore query `notes/byColor`.
    */
   readonly "notes/byColor": typeof notes__byColor;
@@ -41,6 +48,10 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
    */
   readonly "notes/get": typeof notes__get;
   /**
+   * Runtime definition for the public Syncore query `notes/getPhoto`.
+   */
+  readonly "notes/getPhoto": typeof notes__getPhoto;
+  /**
    * Runtime definition for the public Syncore query `notes/list`.
    */
   readonly "notes/list": typeof notes__list;
@@ -48,6 +59,10 @@ export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
    * Runtime definition for the public Syncore mutation `notes/remove`.
    */
   readonly "notes/remove": typeof notes__remove;
+  /**
+   * Runtime definition for the public Syncore mutation `notes/removePhoto`.
+   */
+  readonly "notes/removePhoto": typeof notes__removePhoto;
   /**
    * Runtime definition for the public Syncore mutation `notes/scheduleAutoSave`.
    */
@@ -95,6 +110,9 @@ const rootFunctions: SyncoreRootFunctionsRegistry = {
   "notes/togglePin": notes__togglePin,
   "notes/seedDemo": notes__seedDemo,
   "notes/remove": notes__remove,
+  "notes/attachPhoto": notes__attachPhoto,
+  "notes/removePhoto": notes__removePhoto,
+  "notes/getPhoto": notes__getPhoto,
   "notes/scheduleAutoSave": notes__scheduleAutoSave,
 } as const;
 

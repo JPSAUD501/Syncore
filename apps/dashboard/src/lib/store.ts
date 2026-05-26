@@ -124,7 +124,10 @@ export function syncDashboardTokenInUrl(token: string | null): void {
     url.searchParams.delete("hubToken");
   }
   const nextUrl = `${url.pathname}${url.search}${url.hash}`;
-  if (nextUrl === `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+  if (
+    nextUrl ===
+    `${window.location.pathname}${window.location.search}${window.location.hash}`
+  ) {
     return;
   }
   syncingDashboardTokenUrl = true;
@@ -208,7 +211,9 @@ function installDashboardTokenUrlSync(): void {
     scheduleSync();
     return result;
   };
-  window.history.replaceState = function replaceStateWithDashboardToken(...args) {
+  window.history.replaceState = function replaceStateWithDashboardToken(
+    ...args
+  ) {
     const result = replaceState.apply(this, args);
     scheduleSync();
     return result;
@@ -419,14 +424,10 @@ function ensureRuntime(
     ...(meta.appName ? { appName: meta.appName } : {}),
     ...(meta.origin ? { origin: meta.origin } : {}),
     ...(meta.sessionLabel ? { sessionLabel: meta.sessionLabel } : {}),
-    ...(meta.storageProtocol
-      ? { storageProtocol: meta.storageProtocol }
-      : {}),
+    ...(meta.storageProtocol ? { storageProtocol: meta.storageProtocol } : {}),
     ...(meta.databaseLabel ? { databaseLabel: meta.databaseLabel } : {}),
     ...(meta.dataSourceAlias ? { dataSourceAlias: meta.dataSourceAlias } : {}),
-    ...(meta.storageIdentity
-      ? { storageIdentity: meta.storageIdentity }
-      : {}),
+    ...(meta.storageIdentity ? { storageIdentity: meta.storageIdentity } : {}),
     ...(meta.capabilities ? { capabilities: meta.capabilities } : {})
   };
 }
@@ -434,7 +435,9 @@ function ensureRuntime(
 function isProjectRuntime(
   runtime: Pick<RuntimeState, "targetKind" | "runtimeRole">
 ): boolean {
-  return runtime.runtimeRole === "project-target" || runtime.targetKind === "project";
+  return (
+    runtime.runtimeRole === "project-target" || runtime.targetKind === "project"
+  );
 }
 
 export function getPublicRuntimeId(
@@ -449,7 +452,9 @@ export interface ParsedSessionLabel {
   browser?: string;
 }
 
-export function parseSessionLabel(label: string | undefined): ParsedSessionLabel | undefined {
+export function parseSessionLabel(
+  label: string | undefined
+): ParsedSessionLabel | undefined {
   if (!label) return undefined;
   const match = label.match(/^(.+?)(?:\s*\(([^)]+)\))?$/);
   if (!match) return { name: label };
@@ -473,10 +478,7 @@ export function getRuntimeBrowser(
   return parsed?.browser;
 }
 
-function createPublicTargetId(
-  key: string,
-  keys: string[]
-): string {
+function createPublicTargetId(key: string, keys: string[]): string {
   return createSharedPublicTargetId(key, keys);
 }
 
@@ -491,7 +493,9 @@ function getTargetGroupKey(runtime: RuntimeState): string {
   return `runtime::${runtime.runtimeId}`;
 }
 
-function normalizeStorageProtocol(protocol: string | undefined): string | undefined {
+function normalizeStorageProtocol(
+  protocol: string | undefined
+): string | undefined {
   return protocol === "idb" ? "indexeddb" : protocol;
 }
 
@@ -503,10 +507,7 @@ function getTargetTechnicalLabel(runtime: RuntimeState): string {
   if (storageProtocol === "file") {
     return runtime.databaseLabel ?? "File database";
   }
-  if (
-    storageProtocol === "opfs" ||
-    storageProtocol === "indexeddb"
-  ) {
+  if (storageProtocol === "opfs" || storageProtocol === "indexeddb") {
     const databaseLabel = runtime.databaseLabel ?? "syncore";
     const originHost = getOriginHost(runtime.origin);
     return originHost
@@ -524,7 +525,10 @@ function getTargetLabel(
   if (runtime.dataSourceAlias) {
     return runtime.dataSourceAlias;
   }
-  if (isProjectRuntime(runtime) || normalizeStorageProtocol(runtime.storageProtocol) === "file") {
+  if (
+    isProjectRuntime(runtime) ||
+    normalizeStorageProtocol(runtime.storageProtocol) === "file"
+  ) {
     return technicalLabel;
   }
   return `Data source ${getPublicTargetDisplayId(publicId)}`;
@@ -569,9 +573,15 @@ function mergeDevtoolsCapabilities(
 ): SyncoreDevtoolsCapabilities {
   const selected = runtimes.filter((runtime) => runtime.connected);
   const candidates = selected.length > 0 ? selected : runtimes;
-  const sqlRead = candidates.some((runtime) => runtime.capabilities?.sql?.read === true);
-  const sqlWrite = candidates.some((runtime) => runtime.capabilities?.sql?.write === true);
-  const sqlLive = candidates.some((runtime) => runtime.capabilities?.sql?.live === true);
+  const sqlRead = candidates.some(
+    (runtime) => runtime.capabilities?.sql?.read === true
+  );
+  const sqlWrite = candidates.some(
+    (runtime) => runtime.capabilities?.sql?.write === true
+  );
+  const sqlLive = candidates.some(
+    (runtime) => runtime.capabilities?.sql?.live === true
+  );
   return {
     sql: {
       read: sqlRead,
@@ -587,15 +597,48 @@ function mergeDevtoolsCapabilities(
         : {})
     },
     data: {
-      browse: candidates.some((runtime) => runtime.capabilities?.data?.browse !== false),
-      mutate: candidates.some((runtime) => runtime.capabilities?.data?.mutate !== false),
+      browse: candidates.some(
+        (runtime) => runtime.capabilities?.data?.browse !== false
+      ),
+      mutate: candidates.some(
+        (runtime) => runtime.capabilities?.data?.mutate !== false
+      ),
       importExport: candidates.some(
         (runtime) => runtime.capabilities?.data?.importExport !== false
       )
     },
+    storage: {
+      browse: candidates.some(
+        (runtime) => runtime.capabilities?.storage?.browse !== false
+      ),
+      download: candidates.some(
+        (runtime) => runtime.capabilities?.storage?.download !== false
+      ),
+      readRange: candidates.some(
+        (runtime) => runtime.capabilities?.storage?.readRange === true
+      ),
+      delete: candidates.some(
+        (runtime) => runtime.capabilities?.storage?.delete !== false
+      ),
+      ...(!candidates.some(
+        (runtime) => runtime.capabilities?.storage?.browse !== false
+      )
+        ? {
+            reason:
+              candidates.find(
+                (runtime) => runtime.capabilities?.storage?.reason
+              )?.capabilities?.storage?.reason ??
+              "Storage Browser is not available for this data source."
+          }
+        : {})
+    },
     scheduler: {
-      read: candidates.some((runtime) => runtime.capabilities?.scheduler?.read !== false),
-      edit: candidates.some((runtime) => runtime.capabilities?.scheduler?.edit !== false)
+      read: candidates.some(
+        (runtime) => runtime.capabilities?.scheduler?.read !== false
+      ),
+      edit: candidates.some(
+        (runtime) => runtime.capabilities?.scheduler?.edit !== false
+      )
     }
   };
 }
@@ -615,7 +658,9 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
       const sorted = [...group];
       const kind: TargetState["kind"] = "client";
       const primary = sorted.find((runtime) => runtime.connected) ?? sorted[0]!;
-      const connectedRuntimes = sorted.filter((runtime) => runtime.connected).length;
+      const connectedRuntimes = sorted.filter(
+        (runtime) => runtime.connected
+      ).length;
       const capabilities = mergeDevtoolsCapabilities(sorted);
       const sqlAvailable = capabilities.sql?.read === true;
       const id = createPublicTargetId(key, keys);
@@ -634,8 +679,12 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
         ...(primary.appName ? { appName: primary.appName } : {}),
         ...(primary.origin ? { origin: primary.origin } : {}),
         ...(storageProtocol ? { storageProtocol } : {}),
-        ...(primary.databaseLabel ? { databaseLabel: primary.databaseLabel } : {}),
-        ...(primary.dataSourceAlias ? { dataSourceAlias: primary.dataSourceAlias } : {}),
+        ...(primary.databaseLabel
+          ? { databaseLabel: primary.databaseLabel }
+          : {}),
+        ...(primary.dataSourceAlias
+          ? { dataSourceAlias: primary.dataSourceAlias }
+          : {}),
         ...(primary.storageIdentity
           ? { storageIdentity: primary.storageIdentity }
           : {}),
@@ -834,10 +883,9 @@ function resolveSelectionState(
     };
   }
 
-  const preferredTarget =
-    preferredRuntimeId
-      ? targets.find((target) => target.runtimeIds.includes(preferredRuntimeId))
-      : undefined;
+  const preferredTarget = preferredRuntimeId
+    ? targets.find((target) => target.runtimeIds.includes(preferredRuntimeId))
+    : undefined;
   const currentTarget = currentSelectedTargetId
     ? targets.find((target) => target.id === currentSelectedTargetId)
     : undefined;
@@ -868,11 +916,11 @@ function resolveSelectionState(
     currentSelectedRuntimeSelectionMode === "runtime" &&
     typeof currentSelectedRuntimeFilter === "string" &&
     currentSelectedRuntimeFilter !== "all"
-      ? selectedTarget.runtimes.find(
+      ? (selectedTarget.runtimes.find(
           (runtime) =>
             runtime.runtimeId === currentSelectedRuntimeFilter &&
             runtime.connected
-        ) ?? null
+        ) ?? null)
       : null;
   if (explicitRuntime) {
     return {
@@ -884,9 +932,7 @@ function resolveSelectionState(
   }
 
   const candidateRuntimes =
-    availableRuntimes.length > 0
-      ? availableRuntimes
-      : selectedTarget.runtimes;
+    availableRuntimes.length > 0 ? availableRuntimes : selectedTarget.runtimes;
 
   if (candidateRuntimes.length === 1) {
     const singleRuntimeId = candidateRuntimes[0]?.runtimeId ?? null;
@@ -901,9 +947,9 @@ function resolveSelectionState(
   const filteredRuntime =
     typeof currentSelectedRuntimeFilter === "string" &&
     currentSelectedRuntimeFilter !== "all"
-      ? candidateRuntimes.find(
+      ? (candidateRuntimes.find(
           (runtime) => runtime.runtimeId === currentSelectedRuntimeFilter
-        ) ?? null
+        ) ?? null)
       : null;
   const hasExplicitRuntimeFilter =
     currentSelectedRuntimeSelectionMode === "runtime" &&
@@ -916,10 +962,8 @@ function resolveSelectionState(
   const selectedRuntimeId =
     selectedRuntimeFilter && selectedRuntimeFilter !== "all"
       ? selectedRuntimeFilter
-      : chooseExecutorRuntime(
-          candidateRuntimes,
-          preferredExecutorRuntimeId
-        )?.runtimeId ?? null;
+      : (chooseExecutorRuntime(candidateRuntimes, preferredExecutorRuntimeId)
+          ?.runtimeId ?? null);
 
   return {
     selectedTargetId: selectedTarget.id,
@@ -957,7 +1001,9 @@ function chooseDefaultExecutorRuntime(
   const candidates = connected.length > 0 ? connected : runtimes;
   return (
     candidates.find((runtime) => isProjectRuntime(runtime)) ??
-    candidates.find((runtime) => runtime.capabilities?.data?.mutate !== false) ??
+    candidates.find(
+      (runtime) => runtime.capabilities?.data?.mutate !== false
+    ) ??
     candidates[0] ??
     null
   );
@@ -994,9 +1040,10 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   includeDashboardActivity: readDashboardActivityPreference(),
   hubToken: INITIAL_HUB_TOKEN,
   authRequired: INITIAL_HUB_TOKEN === null,
-  authError: INITIAL_HUB_TOKEN === null
-    ? "Paste the devtools token printed by `syncorejs dev`."
-    : null,
+  authError:
+    INITIAL_HUB_TOKEN === null
+      ? "Paste the devtools token printed by `syncorejs dev`."
+      : null,
 
   _setConnected: (v) =>
     set((state) => (state.connected === v ? state : { connected: v })),
@@ -1016,18 +1063,18 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       if (!changed) {
         return state;
       }
-        return {
+      return {
+        runtimes,
+        ...resolveSelectionState(
           runtimes,
-          ...resolveSelectionState(
-            runtimes,
-            state.selectedTargetId,
-            state.selectedRuntimeFilter,
-            state.selectedRuntimeSelectionMode,
-            undefined,
-            state.preferredExecutorRuntimeId
-          )
-        };
-      }),
+          state.selectedTargetId,
+          state.selectedRuntimeFilter,
+          state.selectedRuntimeSelectionMode,
+          undefined,
+          state.preferredExecutorRuntimeId
+        )
+      };
+    }),
 
   selectTarget: (targetId) =>
     set((state) => {
@@ -1064,7 +1111,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
           selectedTargetId: nextSelection.selectedTargetId,
           selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
           selectedRuntimeId: nextSelection.selectedRuntimeId,
-          selectedRuntimeSelectionMode: nextSelection.selectedRuntimeSelectionMode
+          selectedRuntimeSelectionMode:
+            nextSelection.selectedRuntimeSelectionMode
         };
       }
       const target = getTargetsSnapshot(state.runtimes).find((entry) =>
@@ -1094,7 +1142,11 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       if (!target) {
         return state;
       }
-      if (runtimeId && runtimeId !== "all" && !target.runtimeIds.includes(runtimeId)) {
+      if (
+        runtimeId &&
+        runtimeId !== "all" &&
+        !target.runtimeIds.includes(runtimeId)
+      ) {
         return state;
       }
       writeRuntimeFilterPreference(runtimeId ?? "all");
@@ -1134,7 +1186,8 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
           selectedTargetId: nextSelection.selectedTargetId,
           selectedRuntimeFilter: nextSelection.selectedRuntimeFilter,
           selectedRuntimeId: nextSelection.selectedRuntimeId,
-          selectedRuntimeSelectionMode: nextSelection.selectedRuntimeSelectionMode
+          selectedRuntimeSelectionMode:
+            nextSelection.selectedRuntimeSelectionMode
         };
       }
       const target = state.selectedTargetId
@@ -1206,8 +1259,7 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       connected: false,
       hubToken: null,
       authRequired: true,
-      authError:
-        error ?? "Paste the devtools token printed by `syncorejs dev`."
+      authError: error ?? "Paste the devtools token printed by `syncorejs dev`."
     });
   },
 
@@ -1423,16 +1475,19 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
                 nextRuntime.runtimeRole = msg.payload.summary.runtimeRole;
               }
               if (msg.payload.summary.storageProtocol) {
-                nextRuntime.storageProtocol = msg.payload.summary.storageProtocol;
+                nextRuntime.storageProtocol =
+                  msg.payload.summary.storageProtocol;
               }
               if (msg.payload.summary.databaseLabel) {
                 nextRuntime.databaseLabel = msg.payload.summary.databaseLabel;
               }
               if (msg.payload.summary.dataSourceAlias) {
-                nextRuntime.dataSourceAlias = msg.payload.summary.dataSourceAlias;
+                nextRuntime.dataSourceAlias =
+                  msg.payload.summary.dataSourceAlias;
               }
               if (msg.payload.summary.storageIdentity) {
-                nextRuntime.storageIdentity = msg.payload.summary.storageIdentity;
+                nextRuntime.storageIdentity =
+                  msg.payload.summary.storageIdentity;
               }
               if (msg.payload.summary.capabilities) {
                 nextRuntime.capabilities = msg.payload.summary.capabilities;
@@ -1523,9 +1578,11 @@ export function useSelectedTarget() {
     if (!state.selectedTargetId) {
       return null;
     }
-    return getTargetsSnapshot(state.runtimes).find(
-      (target) => target.id === state.selectedTargetId
-    ) ?? null;
+    return (
+      getTargetsSnapshot(state.runtimes).find(
+        (target) => target.id === state.selectedTargetId
+      ) ?? null
+    );
   });
 }
 
@@ -1536,9 +1593,8 @@ export function useSelectedTargetRuntimes() {
         return [];
       }
       return (
-        getTargetsSnapshot(state.runtimes).find(
-          (target) => target.id === state.selectedTargetId
-        )
+        getTargetsSnapshot(state.runtimes)
+          .find((target) => target.id === state.selectedTargetId)
           ?.runtimes.filter((runtime) => runtime.connected) ?? []
       );
     })
@@ -1597,7 +1653,9 @@ export function useSelectedTargetEvents(): SyncoreDevtoolsEvent[] {
         return [];
       }
       const targets = getTargetsSnapshot(state.runtimes);
-      const target = targets.find((entry) => entry.id === state.selectedTargetId);
+      const target = targets.find(
+        (entry) => entry.id === state.selectedTargetId
+      );
       if (!target) {
         return [];
       }
@@ -1816,6 +1874,18 @@ function runtimeSupportsCommand(
     }
     return runtime.capabilities?.scheduler?.read !== false;
   }
+  if (payload.kind.startsWith("storage.")) {
+    if (payload.kind === "storage.delete") {
+      return runtime.capabilities?.storage?.delete !== false;
+    }
+    if (payload.kind === "storage.access.create") {
+      return runtime.capabilities?.storage?.download !== false;
+    }
+    if (payload.kind === "storage.readRange") {
+      return runtime.capabilities?.storage?.readRange === true;
+    }
+    return runtime.capabilities?.storage?.browse !== false;
+  }
   return true;
 }
 
@@ -1960,9 +2030,9 @@ function connect() {
       subscription.sent = false;
     }
     if (unauthorized) {
-      useDevtoolsStore.getState().requestHubToken(
-        "The devtools token was missing or invalid."
-      );
+      useDevtoolsStore
+        .getState()
+        .requestHubToken("The devtools token was missing or invalid.");
       return;
     }
     if (connectionStarted) {
@@ -2047,4 +2117,3 @@ function getHelloCompatibilityError(
 
   return `Runtime ${msg.runtimeId} uses devtools protocol ${protocolVersion} (supports ${minSupportedProtocolVersion}-${maxSupportedProtocolVersion}), but the dashboard supports ${SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION}-${SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION}.`;
 }
-

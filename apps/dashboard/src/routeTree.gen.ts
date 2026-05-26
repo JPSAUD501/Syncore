@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from "./routes/__root"
+import { Route as StorageRouteImport } from "./routes/storage"
 import { Route as SqlRouteImport } from "./routes/sql"
 import { Route as SchedulerRouteImport } from "./routes/scheduler"
 import { Route as QueriesRouteImport } from "./routes/queries"
@@ -17,6 +18,11 @@ import { Route as FunctionsRouteImport } from "./routes/functions"
 import { Route as DataRouteImport } from "./routes/data"
 import { Route as IndexRouteImport } from "./routes/index"
 
+const StorageRoute = StorageRouteImport.update({
+  id: "/storage",
+  path: "/storage",
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import("./routes/storage.lazy").then((d) => d.Route))
 const SqlRoute = SqlRouteImport.update({
   id: "/sql",
   path: "/sql",
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   "/queries": typeof QueriesRoute
   "/scheduler": typeof SchedulerRoute
   "/sql": typeof SqlRoute
+  "/storage": typeof StorageRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   "/queries": typeof QueriesRoute
   "/scheduler": typeof SchedulerRoute
   "/sql": typeof SqlRoute
+  "/storage": typeof StorageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   "/queries": typeof QueriesRoute
   "/scheduler": typeof SchedulerRoute
   "/sql": typeof SqlRoute
+  "/storage": typeof StorageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | "/queries"
     | "/scheduler"
     | "/sql"
+    | "/storage"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | "/queries"
     | "/scheduler"
     | "/sql"
+    | "/storage"
   id:
     | "__root__"
     | "/"
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | "/queries"
     | "/scheduler"
     | "/sql"
+    | "/storage"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,10 +131,18 @@ export interface RootRouteChildren {
   QueriesRoute: typeof QueriesRoute
   SchedulerRoute: typeof SchedulerRoute
   SqlRoute: typeof SqlRoute
+  StorageRoute: typeof StorageRoute
 }
 
 declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
+    "/storage": {
+      id: "/storage"
+      path: "/storage"
+      fullPath: "/storage"
+      preLoaderRoute: typeof StorageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     "/sql": {
       id: "/sql"
       path: "/sql"
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   QueriesRoute: QueriesRoute,
   SchedulerRoute: SchedulerRoute,
   SqlRoute: SqlRoute,
+  StorageRoute: StorageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

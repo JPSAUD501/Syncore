@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Overview",
   "/data": "Data Browser",
+  "/storage": "Storage Browser",
   "/functions": "Functions",
   "/queries": "Active Queries",
   "/logs": "Logs",

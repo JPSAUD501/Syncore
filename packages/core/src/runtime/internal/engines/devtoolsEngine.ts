@@ -128,7 +128,8 @@ function toDevtoolsScopes(
         scope !== "runtime.summary" &&
         scope !== "runtime.activeQueries" &&
         scope !== "schema.tables" &&
-        scope !== "scheduler.jobs"
+        scope !== "scheduler.jobs" &&
+        scope !== "storage.objects"
     ) {
       continue;
     }

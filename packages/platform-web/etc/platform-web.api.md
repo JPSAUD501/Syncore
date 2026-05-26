@@ -28,16 +28,16 @@ import { SyncoreRuntime } from '@syncore/core';
 import { SyncoreRuntimeOptions } from '@syncore/core';
 import { SyncoreStorageAdapter } from '@syncore/core';
 
-// @public (undocumented)
+// @public
 export type AttachedWebWorkerRuntime = AttachedRuntimeBridge;
 
 // @public
 export function attachWebWorkerRuntime(options: AttachWebWorkerRuntimeOptions): AttachedWebWorkerRuntime;
 
-// @public (undocumented)
+// @public
 export type AttachWebWorkerRuntimeOptions<TSchema extends WebWorkerSyncoreSchema = WebWorkerSyncoreSchema> = AttachRuntimeBridgeOptions<TSchema>;
 
-// @public (undocumented)
+// @public
 export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChangeSignal {
     constructor(options: BroadcastChannelExternalChangeSignalOptions);
     // (undocumented)
@@ -48,9 +48,8 @@ export class BroadcastChannelExternalChangeSignal implements SyncoreExternalChan
     subscribe(listener: (event: SyncoreExternalChangeEvent) => void): () => void;
 }
 
-// @public (undocumented)
+// @public
 export interface BroadcastChannelExternalChangeSignalOptions {
-    // (undocumented)
     channelName: string;
 }
 
@@ -67,46 +66,35 @@ export class BrowserFileStorageAdapter implements SyncoreStorageAdapter {
     put(id: string, input: StorageWriteInput): Promise<StorageObject>;
     // (undocumented)
     read(id: string): Promise<Uint8Array | null>;
+    // (undocumented)
+    readRange(id: string, offset: number, length: number): Promise<Uint8Array | null>;
+    // (undocumented)
+    supportsRange(): boolean;
 }
 
-// @public (undocumented)
+// @public
 export type BrowserSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = WebSyncoreSchema<TSchema>;
 
-// @public (undocumented)
+// @public
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
-    // (undocumented)
     attachCommandHandler(handler: DevtoolsCommandHandler): void;
-    // (undocumented)
     attachRuntime(runtime: SyncoreRuntime<WebSyncoreSchema>): void;
-    // (undocumented)
     attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
-    // (undocumented)
     dispose(): void;
 }
 
-// @public (undocumented)
+// @public
 export interface BrowserWebSocketDevtoolsSinkOptions {
-    // (undocumented)
     appName?: string;
-    // (undocumented)
     capabilities?: SyncoreDevtoolsCapabilities;
-    // (undocumented)
     databaseLabel?: string;
-    // (undocumented)
     dataSourceAlias?: string;
-    // (undocumented)
     origin?: string;
-    // (undocumented)
     reconnectDelayMs?: number;
-    // (undocumented)
     sessionLabel?: string;
-    // (undocumented)
     storageIdentity?: string;
-    // (undocumented)
     storageProtocol?: string;
-    // (undocumented)
     targetKind?: "client";
-    // (undocumented)
     url: string;
 }
 
@@ -119,7 +107,7 @@ export function createBrowserSyncoreClient<TSchema extends BrowserSyncoreSchema>
 // @public
 export function createBrowserSyncoreRuntime<TSchema extends BrowserSyncoreSchema>(options: CreateBrowserRuntimeOptions<TSchema>): Promise<SyncoreRuntime<TSchema>>;
 
-// @public (undocumented)
+// @public
 export function createBrowserWebSocketDevtoolsSink(options: BrowserWebSocketDevtoolsSinkOptions): BrowserWebSocketDevtoolsSink;
 
 // @public
@@ -128,10 +116,10 @@ export function createBrowserWorkerRuntime(options: CreateBrowserWorkerRuntimeOp
 // @public
 export type CreateBrowserWorkerRuntimeOptions<TSchema extends BrowserSyncoreSchema = BrowserSyncoreSchema> = CreateWebWorkerRuntimeOptions<TSchema>;
 
-// @public (undocumented)
+// @public
 export function createDefaultSyncChannelName(databaseName: string): string;
 
-// @public (undocumented)
+// @public
 export function createExpoWebExternalChangeSupport(options: {
     databaseName: string;
     locateFile?: (fileName: string) => string;
@@ -149,32 +137,31 @@ export function createManagedWebWorkerClient(options: {
 // @public
 export function createSyncoreWebWorkerClient(options: CreateWebWorkerClientProviderOptions): ManagedWebWorkerClient;
 
-// @public (undocumented)
+// @public
 export function createWebExternalChangeSupport(options: {
     databaseName: string;
     persistence: SyncoreWebPersistence;
     driver: CreateWebRuntimeOptions<SyncoreDataModel>["driver"] | undefined;
 }): WebExternalChangeSupport;
 
-// @public (undocumented)
+// @public
 export function createWebPersistence(options?: CreateWebPersistenceOptions): Promise<SyncoreWebPersistence>;
 
-// @public (undocumented)
+// @public
 export interface CreateWebPersistenceOptions {
-    // (undocumented)
     indexedDbDatabaseName?: string;
-    // (undocumented)
     mode?: WebPersistenceMode;
-    // (undocumented)
     opfsRootDirectoryName?: string;
 }
 
 // @public
 export interface CreateWebRuntimeOptions<TSchema extends WebSyncoreSchema = WebSyncoreSchema> {
+    appName?: string;
     capabilities?: SyncoreCapabilities;
     components?: SyncoreRuntimeOptions<TSchema>["components"];
     databaseName?: string;
     devtools?: DevtoolsSink | false;
+    devtoolsUrl?: string;
     driver?: SyncoreRuntimeOptions<TSchema>["driver"];
     functions: SyncoreRuntimeOptions<TSchema>["functions"];
     locateFile?: (fileName: string) => string;
@@ -214,32 +201,27 @@ export interface CreateWebWorkerRuntimeOptions<TSchema extends WebSyncoreSchema 
     endpoint: SyncoreWorkerMessageEndpoint;
 }
 
-// @public (undocumented)
+// @public
 export interface IndexedDbPersistenceOptions {
-    // (undocumented)
     databaseName?: string;
 }
 
-// @public (undocumented)
+// @public
 export function isOpfsAvailable(): boolean;
 
 // @public
 export interface ManagedWebWorkerClient {
-    // (undocumented)
     client: SyncoreWebWorkerClient;
-    // (undocumented)
     dispose(): void;
-    // (undocumented)
     worker: Worker;
 }
 
-// @public (undocumented)
+// @public
 export interface OpfsPersistenceOptions {
-    // (undocumented)
     rootDirectoryName?: string;
 }
 
-// @public (undocumented)
+// @public
 export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier {
     constructor(options: SqlJsExternalChangeApplierOptions);
     // (undocumented)
@@ -250,33 +232,40 @@ export class SqlJsExternalChangeApplier implements SyncoreExternalChangeApplier 
     }>;
 }
 
-// @public (undocumented)
+// @public
 export interface SqlJsExternalChangeApplierOptions {
     // Warning: (ae-forgotten-export) The symbol "SqlJsDatabase" needs to be exported by the entry point index.d.ts
-    //
-    // (undocumented)
     createDatabase: (bytes?: Uint8Array) => SqlJsDatabase;
-    // (undocumented)
     databaseName: string;
-    // (undocumented)
     persistence: SyncoreWebPersistence;
-    // (undocumented)
     replaceDatabase(database: SqlJsDatabase): void;
 }
 
-// @public (undocumented)
+// @public
 export interface StoredWebFile {
-    // (undocumented)
     bytes: Uint8Array;
-    // (undocumented)
     contentType: string | null;
-    // (undocumented)
     id: string;
-    // (undocumented)
     size: number;
 }
 
-// @public (undocumented)
+// @public
+export interface StoredWebFileMetadata {
+    contentType: string | null;
+    id: string;
+    size: number;
+}
+
+// @public
+export interface StoredWebFileRange {
+    bytes: Uint8Array;
+    contentType: string | null;
+    id: string;
+    offset: number;
+    size: number;
+}
+
+// @public
 export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
     constructor(options?: IndexedDbPersistenceOptions);
     // (undocumented)
@@ -295,13 +284,17 @@ export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
     readonly storageProtocol: "idb";
 }
 
-// @public (undocumented)
+// @public
 export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
     constructor(options?: OpfsPersistenceOptions);
     // (undocumented)
     deleteFile(namespace: string, id: string): Promise<void>;
     // (undocumented)
     getFile(namespace: string, id: string): Promise<StoredWebFile | null>;
+    // (undocumented)
+    getFileRange(namespace: string, id: string, offset: number, length: number): Promise<StoredWebFileRange | null>;
+    // (undocumented)
+    listFileMetadata(namespace: string): Promise<StoredWebFileMetadata[]>;
     // (undocumented)
     listFiles(namespace: string): Promise<StoredWebFile[]>;
     // (undocumented)
@@ -314,25 +307,20 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
     readonly storageProtocol: "opfs";
 }
 
-// @public (undocumented)
+// @public
 export interface SyncoreWebPersistence {
-    // (undocumented)
     deleteFile(namespace: string, id: string): Promise<void>;
-    // (undocumented)
     getFile(namespace: string, id: string): Promise<StoredWebFile | null>;
-    // (undocumented)
+    getFileRange?(namespace: string, id: string, offset: number, length: number): Promise<StoredWebFileRange | null>;
+    listFileMetadata?(namespace: string): Promise<StoredWebFileMetadata[]>;
     listFiles(namespace: string): Promise<StoredWebFile[]>;
-    // (undocumented)
     loadDatabase(key: string): Promise<Uint8Array | null>;
-    // (undocumented)
     putFile(namespace: string, id: string, bytes: Uint8Array, contentType: string | null): Promise<void>;
-    // (undocumented)
     saveDatabase(key: string, bytes: Uint8Array): Promise<void>;
-    // (undocumented)
     readonly storageProtocol: "idb" | "opfs";
 }
 
-// @public (undocumented)
+// @public
 export class SyncoreWebWorkerClient extends SyncoreBridgeClient {
     // (undocumented)
     action: SyncoreBridgeClient["action"];
@@ -344,10 +332,10 @@ export class SyncoreWebWorkerClient extends SyncoreBridgeClient {
     watchQuery: SyncoreBridgeClient["watchQuery"];
 }
 
-// @public (undocumented)
+// @public
 export type SyncoreWorkerMessageEndpoint = SyncoreBridgeMessageEndpoint;
 
-// @public (undocumented)
+// @public
 export interface WebExternalChangeSupport {
     // (undocumented)
     applier?: SqlJsExternalChangeApplier;
@@ -355,16 +343,16 @@ export interface WebExternalChangeSupport {
     signal: BroadcastChannelExternalChangeSignal;
 }
 
-// @public (undocumented)
+// @public
 export type WebPersistenceMode = "auto" | "indexeddb" | "opfs";
 
-// @public (undocumented)
+// @public
 export type WebSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
-// @public (undocumented)
+// @public
 export type WebWorkerSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataModel> = TSchema;
 
-// @public (undocumented)
+// @public
 export type WorkerQueryWatch<TValue> = BridgeQueryWatch<TValue>;
 
 // (No @packageDocumentation comment for this package)

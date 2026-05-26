@@ -77,7 +77,7 @@ type PaginatedQueryInternalState = {
 /**
  * The reactive query state shape emitted by Syncore's Svelte store factories.
  *
- * Extends {@link SyncoreQueryState} with the same fields (`data`, `error`,
+ * Extends SyncoreQueryState with the same fields (`data`, `error`,
  * `status`, `runtimeStatus`, `isLoading`, `isError`, `isReady`). Returned as
  * the value of stores created by {@link createQueryStore} and
  * {@link createClientQueryStore}.
@@ -257,7 +257,7 @@ export function createClientQueryValueStore<
 }
 
 /**
- * Create a reactive Svelte store that emits the full {@link SyncoreQueryState}
+ * Create a reactive Svelte store that emits the full SyncoreQueryState
  * for a query, including `data`, `error`, `status`, and `isPending`.
  *
  * Uses the client from Svelte context (set via {@link setSyncoreClient}).
@@ -287,7 +287,7 @@ export function createQueryStore<TReference extends FunctionReference<"query">>(
 }
 
 /**
- * Create a reactive Svelte store that emits the full {@link SyncoreQueryState}
+ * Create a reactive Svelte store that emits the full SyncoreQueryState
  * for a query, including `data`, `error`, `status`, and `isPending`.
  *
  * Accepts an explicit `client` instead of reading from Svelte context.
@@ -432,7 +432,7 @@ export function createClientQueriesStore<TEntries extends QueriesRequestInput>(
  * can implement “Load More” UIs without manual cursor management.
  *
  * The query referenced by `reference` must accept a `paginationOpts`
- * argument and return a {@link PaginationResult}.
+ * argument and return a PaginationResult.
  *
  * ```svelte
  * <script>
@@ -454,7 +454,8 @@ export function createClientQueriesStore<TEntries extends QueriesRequestInput>(
  *
  * @param reference - A paginated query function reference.
  * @param args - Query arguments excluding `paginationOpts`, or `skip`.
- * @param options.initialNumItems - Number of items to fetch on the first page.
+ * @param options - Pagination options. `initialNumItems` controls the number
+ *   of items to fetch on the first page.
  */
 export function createPaginatedQueryStore<
   TReference extends PaginatedQueryReference
@@ -481,7 +482,8 @@ export function createPaginatedQueryStore<
  * @param client - The Syncore client to query against.
  * @param reference - A paginated query function reference.
  * @param args - Query arguments excluding `paginationOpts`, or `skip`.
- * @param options.initialNumItems - Number of items to fetch on the first page.
+ * @param options - Pagination options. `initialNumItems` controls the number
+ *   of items to fetch on the first page.
  */
 export function createClientPaginatedQueryStore<
   TReference extends PaginatedQueryReference
