@@ -914,9 +914,12 @@ void createBrowserWorkerRuntime({
         {
           path: path.join("src", "SyncoreProvider.svelte"),
           content: `<script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import type { Snippet } from "svelte";
-  import { createBrowserWorkerClient } from "syncorejs/browser";
+  import {
+    createBrowserWorkerClient,
+    type ManagedWebWorkerClient
+  } from "syncorejs/browser";
   import { setSyncoreClient } from "syncorejs/svelte";
 
   interface Props {
@@ -925,18 +928,25 @@ void createBrowserWorkerRuntime({
 
   const { children }: Props = $props();
 
-  const managed = createBrowserWorkerClient({
-    workerUrl: new URL("./syncore.worker.ts", import.meta.url)
+  let managed: ManagedWebWorkerClient | undefined = $state();
+  let ready = $state(false);
+
+  onMount(() => {
+    managed = createBrowserWorkerClient({
+      workerUrl: new URL("./syncore.worker.ts", import.meta.url)
+    });
+    setSyncoreClient(managed.client);
+    ready = true;
   });
 
-  setSyncoreClient(managed.client);
-
   onDestroy(() => {
-    void managed.dispose();
+    managed?.dispose();
   });
 </script>
 
-{@render children?.()}
+{#if ready}
+  {@render children?.()}
+{/if}
 `
         }
       );
@@ -2083,7 +2093,7 @@ class HubFileStorageAdapter implements SyncoreStorageAdapter {
   constructor(private readonly directory: string) {}
 
   private filePath(id: string): string {
-    return path.join(this.directory, id);
+    return resolveHubStorageFilePath(this.directory, id);
   }
 
   async put(id: string, input: StorageWriteInput): Promise<StorageObject> {
@@ -2115,8 +2125,9 @@ class HubFileStorageAdapter implements SyncoreStorageAdapter {
   }
 
   async read(id: string): Promise<Uint8Array | null> {
+    const filePath = this.filePath(id);
     try {
-      return await readFile(this.filePath(id));
+      return await readFile(filePath);
     } catch {
       return null;
     }
@@ -2127,9 +2138,10 @@ class HubFileStorageAdapter implements SyncoreStorageAdapter {
     offset: number,
     length: number
   ): Promise<Uint8Array | null> {
+    const filePath = this.filePath(id);
     let handle;
     try {
-      handle = await open(this.filePath(id), "r");
+      handle = await open(filePath, "r");
       const buffer = Buffer.alloc(Math.max(length, 0));
       const result = await handle.read(
         buffer,
@@ -2170,6 +2182,31 @@ class HubFileStorageAdapter implements SyncoreStorageAdapter {
       return [];
     }
   }
+}
+
+function resolveHubStorageFilePath(directory: string, id: string): string {
+  if (
+    id.length === 0 ||
+    id === "." ||
+    id === ".." ||
+    id.includes("/") ||
+    id.includes("\\") ||
+    id.includes("\0") ||
+    path.isAbsolute(id)
+  ) {
+    throw new Error(`Invalid storage id ${JSON.stringify(id)}.`);
+  }
+  const root = path.resolve(directory);
+  const filePath = path.resolve(root, id);
+  const relative = path.relative(root, filePath);
+  if (
+    relative.length === 0 ||
+    relative.startsWith("..") ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(`Invalid storage id ${JSON.stringify(id)}.`);
+  }
+  return filePath;
 }
 
 const hubDevtoolsSqlSupport: DevtoolsSqlSupport = {
@@ -2599,6 +2636,40 @@ export function formatError(error: unknown): string {
   return String(error);
 }
 
+const HUB_LOG_REDACTED_VALUE = "[redacted]";
+const HUB_LOG_SENSITIVE_KEY_PATTERN =
+  /(?:password|passphrase|token|secret|authorization|cookie|credential|api[-_]?key|session)/iu;
+
+function sanitizeHubDevtoolsEvent<
+  TEvent extends Extract<SyncoreDevtoolsMessage, { type: "event" }>["event"]
+>(event: TEvent): TEvent {
+  return redactHubValue(event) as TEvent;
+}
+
+function redactHubValue(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[circular]";
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    const items = value.map((item) => redactHubValue(item, seen));
+    seen.delete(value);
+    return items;
+  }
+  const source = value as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(source)) {
+    result[key] = HUB_LOG_SENSITIVE_KEY_PATTERN.test(key)
+      ? HUB_LOG_REDACTED_VALUE
+      : redactHubValue(nested, seen);
+  }
+  seen.delete(value);
+  return result;
+}
+
 export async function isLocalPortInUse(port: number): Promise<boolean> {
   return await new Promise((resolve) => {
     let settled = false;
@@ -2687,7 +2758,9 @@ export async function startDevHub(options: {
       `Syncore devtools hub already running at ws://localhost:${devtoolsPort}. Reusing existing hub/dashboard.`
     );
     console.log(`Devtools dashboard token: ${activeSessionState.token}`);
-    console.log(`Dashboard shell: ${activeSessionState.authenticatedDashboardUrl}`);
+    console.log(
+      `Dashboard shell: ${activeSessionState.authenticatedDashboardUrl}`
+    );
     return activeSessionState;
   }
   await writeDevtoolsSessionState(options.cwd, sessionState);
@@ -2786,7 +2859,8 @@ export async function startDevHub(options: {
   const appendHubLog = async (
     event: Extract<SyncoreDevtoolsMessage, { type: "event" }>["event"]
   ) => {
-    const runtimeHello = runtimeHellos.get(event.runtimeId);
+    const sanitizedEvent = sanitizeHubDevtoolsEvent(event);
+    const runtimeHello = runtimeHellos.get(sanitizedEvent.runtimeId);
     const clientRuntimeIds = [...runtimeHellos.values()]
       .filter((hello) => hello.runtimeId !== "syncore-dev-hub")
       .map((hello) => hello.runtimeId)
@@ -2796,44 +2870,44 @@ export async function startDevHub(options: {
       .map((hello) => hello.storageIdentity ?? `runtime::${hello.runtimeId}`)
       .sort();
     const targetIdentity =
-      runtimeHello?.storageIdentity ?? `runtime::${event.runtimeId}`;
+      runtimeHello?.storageIdentity ?? `runtime::${sanitizedEvent.runtimeId}`;
     const targetId =
-      event.runtimeId === "syncore-dev-hub"
+      sanitizedEvent.runtimeId === "syncore-dev-hub"
         ? "all"
         : createPublicTargetId(targetIdentity, clientTargetKeys);
     const publicRuntimeId =
-      event.runtimeId === "syncore-dev-hub"
+      sanitizedEvent.runtimeId === "syncore-dev-hub"
         ? undefined
-        : createPublicRuntimeId(event.runtimeId, clientRuntimeIds);
+        : createPublicRuntimeId(sanitizedEvent.runtimeId, clientRuntimeIds);
     const category =
-      event.type === "query.executed"
+      sanitizedEvent.type === "query.executed"
         ? "query"
-        : event.type === "mutation.committed"
+        : sanitizedEvent.type === "mutation.committed"
           ? "mutation"
-          : event.type === "action.completed"
+          : sanitizedEvent.type === "action.completed"
             ? "action"
             : "system";
     const message =
-      event.type === "log"
-        ? event.message
-        : event.type === "query.executed" ||
-            event.type === "mutation.committed" ||
-            event.type === "action.completed"
-          ? event.functionName
-          : event.type;
+      sanitizedEvent.type === "log"
+        ? sanitizedEvent.message
+        : sanitizedEvent.type === "query.executed" ||
+            sanitizedEvent.type === "mutation.committed" ||
+            sanitizedEvent.type === "action.completed"
+          ? sanitizedEvent.functionName
+          : sanitizedEvent.type;
     await appendFile(
       logFilePath,
       `${JSON.stringify({
         version: 2,
-        timestamp: event.timestamp,
-        runtimeId: event.runtimeId,
+        timestamp: sanitizedEvent.timestamp,
+        runtimeId: sanitizedEvent.runtimeId,
         targetId,
         ...(publicRuntimeId ? { publicRuntimeId } : {}),
         ...(runtimeHello?.platform ? { platform: runtimeHello.platform } : {}),
-        eventType: event.type,
+        eventType: sanitizedEvent.type,
         category,
         message,
-        event
+        event: sanitizedEvent
       })}\n`
     );
   };
@@ -3038,37 +3112,37 @@ export async function startDevHub(options: {
       request.headers.origin,
       dashboardPort
     );
-    const isAuthorizedDashboardClient =
-      !isBrowserDashboardClient ||
-      isAuthorizedDashboardRequest({
-        requestUrl: request.url,
-        originHeader: request.headers.origin,
-        dashboardPort,
-        expectedToken: hubAccessToken
-      });
+    const isAuthorizedDashboardClient = isAuthorizedDashboardRequest({
+      requestUrl: request.url,
+      originHeader: request.headers.origin,
+      dashboardPort,
+      expectedToken: hubAccessToken
+    });
     if (isBrowserDashboardClient && !isAuthorizedDashboardClient) {
       socket.close(1008, "Unauthorized devtools client");
       return;
     }
-    dashboardSockets.add(socket);
-    socket.send(JSON.stringify(hello));
-    for (const runtimeHello of runtimeHellos.values()) {
-      socket.send(JSON.stringify(runtimeHello));
-    }
-    for (const [runtimeId, history] of runtimeEvents) {
-      if (!runtimeHellos.has(runtimeId)) {
-        continue;
+    if (isAuthorizedDashboardClient) {
+      dashboardSockets.add(socket);
+      socket.send(JSON.stringify(hello));
+      for (const runtimeHello of runtimeHellos.values()) {
+        socket.send(JSON.stringify(runtimeHello));
       }
-      if (history.length === 0) {
-        continue;
+      for (const [runtimeId, history] of runtimeEvents) {
+        if (!runtimeHellos.has(runtimeId)) {
+          continue;
+        }
+        if (history.length === 0) {
+          continue;
+        }
+        socket.send(
+          JSON.stringify({
+            type: "event.batch",
+            runtimeId,
+            events: [...history]
+          })
+        );
       }
-      socket.send(
-        JSON.stringify({
-          type: "event.batch",
-          runtimeId,
-          events: [...history]
-        })
-      );
     }
 
     socket.on("message", (payload) => {
@@ -3090,9 +3164,12 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "external.change") {
+        const socketRuntimeIdsForMessage = socketRuntimeIds.get(socket);
+        if (!socketRuntimeIdsForMessage?.has(message.runtimeId)) {
+          return;
+        }
         const runtimeHello = runtimeHellos.get(message.runtimeId);
-        const storageIdentity =
-          runtimeHello?.storageIdentity ?? message.storageIdentity;
+        const storageIdentity = runtimeHello?.storageIdentity;
         if (storageIdentity && storageIdentity === message.storageIdentity) {
           relayExternalChange(
             message.runtimeId,
@@ -3294,32 +3371,65 @@ export async function startDevHub(options: {
         }
         return;
       }
-      const encoded = JSON.stringify(message);
       if (
         message.type === "event" &&
         message.event.type === "runtime.disconnected"
       ) {
+        if (!socketRuntimeIds.get(socket)?.has(message.event.runtimeId)) {
+          return;
+        }
         runtimeHellos.delete(message.event.runtimeId);
       }
       if (
         message.type === "event" &&
         message.event.runtimeId !== "syncore-dev-hub"
       ) {
+        if (!socketRuntimeIds.get(socket)?.has(message.event.runtimeId)) {
+          return;
+        }
+        const sanitizedEvent = sanitizeHubDevtoolsEvent(message.event);
         const history = runtimeEvents.get(message.event.runtimeId) ?? [];
-        history.push(message.event);
+        history.push(sanitizedEvent);
         runtimeEvents.set(message.event.runtimeId, history.slice(-200));
         if (message.event.type === "runtime.disconnected") {
           runtimeEvents.delete(message.event.runtimeId);
         }
-        void appendHubLog(message.event);
+        void appendHubLog(sanitizedEvent);
+        const encoded = JSON.stringify({
+          type: "event",
+          event: sanitizedEvent
+        } satisfies SyncoreDevtoolsMessage);
+        for (const client of dashboardSockets) {
+          if (client === socket || client.readyState !== WebSocket.OPEN) {
+            continue;
+          }
+          client.send(encoded);
+        }
+        return;
       } else if (message.type === "event") {
-        void appendHubLog(message.event);
+        const sanitizedEvent = sanitizeHubDevtoolsEvent(message.event);
+        void appendHubLog(sanitizedEvent);
+        const encoded = JSON.stringify({
+          type: "event",
+          event: sanitizedEvent
+        } satisfies SyncoreDevtoolsMessage);
+        for (const client of dashboardSockets) {
+          if (client === socket || client.readyState !== WebSocket.OPEN) {
+            continue;
+          }
+          client.send(encoded);
+        }
+        return;
       }
       if (
         message.type === "command.result" ||
         message.type === "subscription.data" ||
         message.type === "subscription.error"
       ) {
+        const encoded = JSON.stringify(message);
+        if (!socketRuntimeIds.get(socket)?.has(message.runtimeId)) {
+          return;
+        }
         if (message.type === "command.result") {
           const pending = pendingHubCommands.get(message.commandId);
           if (pending) {
@@ -3336,6 +3446,7 @@ export async function startDevHub(options: {
         }
         return;
       }
+      const encoded = JSON.stringify(message);
       for (const client of dashboardSockets) {
         if (client === socket || client.readyState !== WebSocket.OPEN) {
           continue;
@@ -3377,11 +3488,11 @@ export async function startDevHub(options: {
           if (runtimeHellos.has(runtimeId)) {
             const disconnectedEvent: SyncoreDevtoolsMessage = {
               type: "event",
-              event: {
+              event: sanitizeHubDevtoolsEvent({
                 type: "runtime.disconnected",
                 runtimeId,
                 timestamp: Date.now()
-              }
+              })
             };
             const payload = JSON.stringify(disconnectedEvent);
             void appendHubLog(disconnectedEvent.event);
@@ -3438,7 +3549,8 @@ export async function startDevHub(options: {
     console.log(`Dashboard shell: ${sessionState.authenticatedDashboardUrl}`);
   } catch (error) {
     throw new Error(
-      `Syncore Dashboard shell could not start: ${formatError(error)}`, { cause: error }
+      `Syncore Dashboard shell could not start: ${formatError(error)}`,
+      { cause: error }
     );
   }
 

@@ -5,7 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createNodeSyncoreRuntime } from "@syncore/platform-node";
-import { createWebSyncoreRuntime } from "@syncore/platform-web";
+import {
+  createWebSyncoreRuntime,
+  type SyncoreWebPersistence
+} from "@syncore/platform-web";
 import {
   createFunctionReference,
   defineSchema,
@@ -358,6 +361,7 @@ function createWebFactory(): WebFactory {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const databaseName = `syncore-contract-web-${suffix}`;
   const persistenceDatabaseName = `syncore-contract-idb-${suffix}`;
+  const persistence = createMockWebPersistence();
 
   return {
     label: "web",
@@ -369,7 +373,7 @@ function createWebFactory(): WebFactory {
         persistenceDatabaseName,
         schema,
         functions,
-        persistenceMode: "indexeddb",
+        persistence,
         locateFile: () => wasmFilePath,
         platform: "contract-web",
         scheduler: {
@@ -383,7 +387,7 @@ function createWebFactory(): WebFactory {
         persistenceDatabaseName,
         schema: destructiveSchema,
         functions,
-        persistenceMode: "indexeddb",
+        persistence,
         locateFile: () => wasmFilePath,
         platform: "contract-web",
         scheduler: {
@@ -394,6 +398,79 @@ function createWebFactory(): WebFactory {
     async dispose() {
       await deleteIndexedDbDatabase(databaseName);
       await deleteIndexedDbDatabase(persistenceDatabaseName);
+    }
+  };
+}
+
+function createMockWebPersistence(): SyncoreWebPersistence {
+  const databases = new Map<string, Uint8Array>();
+  const files = new Map<
+    string,
+    { bytes: Uint8Array; contentType: string | null }
+  >();
+
+  return {
+    storageProtocol: "opfs",
+    async loadDatabase(key: string) {
+      return databases.get(key) ?? null;
+    },
+    async saveDatabase(key: string, bytes: Uint8Array) {
+      databases.set(key, bytes.slice());
+    },
+    async getFile(namespace: string, id: string) {
+      const record = files.get(`${namespace}:${id}`);
+      if (!record) {
+        return null;
+      }
+      return {
+        id,
+        bytes: record.bytes.slice(),
+        contentType: record.contentType,
+        size: record.bytes.byteLength
+      };
+    },
+    async getFileRange(
+      namespace: string,
+      id: string,
+      offset: number,
+      length: number
+    ) {
+      const record = files.get(`${namespace}:${id}`);
+      if (!record) {
+        return null;
+      }
+      return {
+        id,
+        bytes: record.bytes.slice(offset, offset + length),
+        offset,
+        contentType: record.contentType,
+        size: record.bytes.byteLength
+      };
+    },
+    async putFile(
+      namespace: string,
+      id: string,
+      bytes: Uint8Array,
+      contentType: string | null
+    ) {
+      files.set(`${namespace}:${id}`, {
+        bytes: bytes.slice(),
+        contentType
+      });
+    },
+    async deleteFile(namespace: string, id: string) {
+      files.delete(`${namespace}:${id}`);
+    },
+    async listFiles(namespace: string) {
+      const prefix = `${namespace}:`;
+      return [...files.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, record]) => ({
+          id: key.slice(prefix.length),
+          bytes: record.bytes.slice(),
+          contentType: record.contentType,
+          size: record.bytes.byteLength
+        }));
     }
   };
 }

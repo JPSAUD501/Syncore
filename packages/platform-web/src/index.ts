@@ -209,6 +209,13 @@ export interface CreateWebRuntimeOptions<
   devtoolsUrl?: string;
 
   /**
+   * Allow the connected devtools WebSocket endpoint to send privileged
+   * commands/subscriptions to this runtime. Defaults to `true` only for the
+   * trusted loopback devtools URL used by Syncore's automatic devtools setup.
+   */
+  devtoolsRemoteControl?: boolean;
+
+  /**
    * Devtools event sink. Pass `false` to disable devtools entirely
    * (recommended for production builds). Omit to auto-connect to the local
    * devtools server when running in development.
@@ -366,6 +373,11 @@ export async function createWebSyncoreRuntime<TSchema extends WebSyncoreSchema>(
       ? (() => {
           const sinkOptions: BrowserWebSocketDevtoolsSinkOptions = {
             url: options.devtoolsUrl ?? resolveDefaultDevtoolsUrl(),
+            allowRemoteControl:
+              options.devtoolsRemoteControl ??
+              isTrustedLoopbackWebSocketUrl(
+                options.devtoolsUrl ?? resolveDefaultDevtoolsUrl()
+              ),
             targetKind: "client",
             storageProtocol: persistence.storageProtocol,
             databaseLabel,
@@ -444,6 +456,9 @@ function isAttachableBrowserDevtoolsSink(
 ): sink is BrowserWebSocketDevtoolsSink {
   return (
     !!sink &&
+    typeof (sink as BrowserWebSocketDevtoolsSink).acceptsRemoteControl ===
+      "function" &&
+    (sink as BrowserWebSocketDevtoolsSink).acceptsRemoteControl() &&
     typeof (sink as BrowserWebSocketDevtoolsSink).attachRuntime ===
       "function" &&
     typeof (sink as BrowserWebSocketDevtoolsSink).attachCommandHandler ===
@@ -660,6 +675,11 @@ export interface BrowserWebSocketDevtoolsSinkOptions {
   storageIdentity?: string;
   /** Capability flags advertising what devtools features this runtime supports. */
   capabilities?: SyncoreDevtoolsCapabilities;
+  /**
+   * Allow this WebSocket endpoint to send privileged commands and
+   * subscriptions. Omit to keep explicitly-created sinks event-only.
+   */
+  allowRemoteControl?: boolean;
 }
 
 async function resolveDefaultWebWasmUrl(): Promise<string | undefined> {
@@ -694,6 +714,8 @@ function isBrowserLikeRuntime(): boolean {
  * the sink automatically when running in development.
  */
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
+  /** Whether this sink may receive privileged command/subscription handlers. */
+  acceptsRemoteControl(): boolean;
   /** Attach the runtime so the sink can pull metadata for devtools messages. */
   attachRuntime(runtime: SyncoreRuntime<WebSyncoreSchema>): void;
   /** Attach the command handler that processes devtools RPC commands. */
@@ -734,6 +756,7 @@ export function createBrowserWebSocketDevtoolsSink(
   let onCommand: DevtoolsCommandHandler | undefined;
   let subscriptionHost: DevtoolsSubscriptionHost | undefined;
   const pendingMessages: SyncoreDevtoolsMessage[] = [];
+  const remoteControlAllowed = options.allowRemoteControl === true;
   let latestHello:
     | {
         runtimeId: string;
@@ -790,7 +813,12 @@ export function createBrowserWebSocketDevtoolsSink(
         | SyncoreDevtoolsClientMessage;
       if (message.type === "ping") {
         send({ type: "pong" });
-      } else if (message.type === "command" && onCommand) {
+      } else if (
+        message.type === "command" &&
+        onCommand &&
+        message.targetRuntimeId ===
+          (latestHello?.runtimeId ?? getSummary?.().runtimeId)
+      ) {
         onCommand(message.payload)
           .then((responsePayload) => {
             const runtimeId =
@@ -821,7 +849,12 @@ export function createBrowserWebSocketDevtoolsSink(
               }
             });
           });
-      } else if (message.type === "subscribe" && subscriptionHost) {
+      } else if (
+        message.type === "subscribe" &&
+        subscriptionHost &&
+        message.targetRuntimeId ===
+          (latestHello?.runtimeId ?? getSummary?.().runtimeId)
+      ) {
         void subscriptionHost.subscribe(
           message.subscriptionId,
           message.payload,
@@ -839,7 +872,11 @@ export function createBrowserWebSocketDevtoolsSink(
             });
           }
         );
-      } else if (message.type === "unsubscribe") {
+      } else if (
+        message.type === "unsubscribe" &&
+        message.targetRuntimeId ===
+          (latestHello?.runtimeId ?? getSummary?.().runtimeId)
+      ) {
         subscriptionHost?.unsubscribe(message.subscriptionId);
       }
     };
@@ -885,6 +922,9 @@ export function createBrowserWebSocketDevtoolsSink(
   connect();
 
   return {
+    acceptsRemoteControl() {
+      return remoteControlAllowed;
+    },
     emit(event) {
       if (event.type === "runtime.connected") {
         latestHello = {
@@ -1043,6 +1083,24 @@ function shouldAutoConnectDevtools(): boolean {
 
 function resolveDefaultDevtoolsUrl(): string {
   return "ws://127.0.0.1:4311";
+}
+
+function isTrustedLoopbackWebSocketUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+      return false;
+    }
+    const hostname = url.hostname.toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function resolveLocationString(

@@ -80,6 +80,7 @@ export interface CreateNodeRuntimeOptions<TSchema extends NodeSyncoreSchema = No
     components?: SyncoreRuntimeOptions<TSchema>["components"];
     databasePath: string;
     devtools?: DevtoolsSink | false;
+    devtoolsRemoteControl?: boolean;
     devtoolsUrl?: string;
     functions: SyncoreRuntimeOptions<TSchema>["functions"];
     origin?: string;
@@ -175,6 +176,8 @@ export type NodeSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataMode
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
     // (undocumented)
+    acceptsRemoteControl(): boolean;
+    // (undocumented)
     attachCommandHandler(handler: DevtoolsCommandHandler): void;
     // (undocumented)
     attachRuntime(runtime: SyncoreRuntime<NodeSyncoreSchema>): void;
@@ -188,6 +191,8 @@ export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
 
 // @public (undocumented)
 export interface NodeWebSocketDevtoolsSinkOptions {
+    // (undocumented)
+    allowRemoteControl?: boolean;
     // (undocumented)
     appName?: string;
     // (undocumented)

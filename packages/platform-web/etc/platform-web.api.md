@@ -77,6 +77,7 @@ export type BrowserSyncoreSchema<TSchema extends SyncoreDataModel = SyncoreDataM
 
 // @public
 export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
+    acceptsRemoteControl(): boolean;
     attachCommandHandler(handler: DevtoolsCommandHandler): void;
     attachRuntime(runtime: SyncoreRuntime<WebSyncoreSchema>): void;
     attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
@@ -85,6 +86,7 @@ export interface BrowserWebSocketDevtoolsSink extends DevtoolsSink {
 
 // @public
 export interface BrowserWebSocketDevtoolsSinkOptions {
+    allowRemoteControl?: boolean;
     appName?: string;
     capabilities?: SyncoreDevtoolsCapabilities;
     databaseLabel?: string;
@@ -161,6 +163,7 @@ export interface CreateWebRuntimeOptions<TSchema extends WebSyncoreSchema = WebS
     components?: SyncoreRuntimeOptions<TSchema>["components"];
     databaseName?: string;
     devtools?: DevtoolsSink | false;
+    devtoolsRemoteControl?: boolean;
     devtoolsUrl?: string;
     driver?: SyncoreRuntimeOptions<TSchema>["driver"];
     functions: SyncoreRuntimeOptions<TSchema>["functions"];

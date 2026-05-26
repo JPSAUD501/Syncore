@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./assets.d.ts" />
 
 import { Directory, File, Paths } from "expo-file-system";
@@ -112,7 +113,7 @@ export interface CreateExpoRuntimeOptions<
    * Devtools event sink. Omit to disable devtools. On-device devtools
    * connections require pointing to your development machine’s IP address.
    */
-  devtools?: DevtoolsSink;
+  devtools?: DevtoolsSink | false;
 
   /** Scheduler configuration for background and recurring jobs. */
   scheduler?: SchedulerOptions;
@@ -167,9 +168,7 @@ export interface ExpoSyncoreBootstrap<
    * Start the runtime on first call, then return the same client on subsequent
    * calls. Safe to call from multiple places concurrently.
    */
-  getClient(): Promise<
-    ReturnType<SyncoreRuntime<TSchema>["createClient"]>
-  >;
+  getClient(): Promise<ReturnType<SyncoreRuntime<TSchema>["createClient"]>>;
 
   /** Stop the running runtime instance if one is active. */
   stop(): Promise<void>;
@@ -201,9 +200,7 @@ export interface ExpoSyncoreBootstrap<
  * For managed lifecycle in React components, prefer
  * {@link createExpoSyncoreBootstrap} instead.
  */
-export function createExpoSyncoreRuntime<
-  TSchema extends ExpoSyncoreSchema
->(
+export function createExpoSyncoreRuntime<TSchema extends ExpoSyncoreSchema>(
   options: CreateExpoRuntimeOptions<TSchema>
 ): SyncoreRuntime<TSchema> {
   const databaseDirectory =
@@ -288,9 +285,9 @@ export function createExpoSyncoreRuntime<
  * await client.mutation(api.todos.create, { text: "Buy milk" });
  * ```
  */
-export function createExpoSyncoreClient<
-  TSchema extends ExpoSyncoreSchema
->(runtime: SyncoreRuntime<TSchema>) {
+export function createExpoSyncoreClient<TSchema extends ExpoSyncoreSchema>(
+  runtime: SyncoreRuntime<TSchema>
+) {
   return runtime.createClient();
 }
 
@@ -316,9 +313,7 @@ export function createExpoSyncoreClient<
  * const client = await syncoreBootstrap.getClient();
  * ```
  */
-export function createExpoSyncoreBootstrap<
-  TSchema extends ExpoSyncoreSchema
->(
+export function createExpoSyncoreBootstrap<TSchema extends ExpoSyncoreSchema>(
   options: CreateExpoRuntimeOptions<TSchema>
 ): ExpoSyncoreBootstrap<TSchema> {
   let runtime: SyncoreRuntime<TSchema> | null = null;
@@ -497,7 +492,9 @@ class ExpoWebExternalChangeApplier implements SyncoreExternalChangeApplier {
       changedScopes:
         event.changedScopes ??
         ([
-          ...(event.changedTables ?? []).map((tableName) => `table:${tableName}`),
+          ...(event.changedTables ?? []).map(
+            (tableName) => `table:${tableName}`
+          ),
           ...(event.storageIds ?? []).map((storageId) => `storage:${storageId}`)
         ] as ImpactScope[])
     };
@@ -612,7 +609,7 @@ async function createExpoWebSyncoreRuntime<TSchema extends ExpoSyncoreSchema>(
     ...(wasmUrl ? { wasmUrl } : {}),
     ...(options.locateFile ? { locateFile: options.locateFile } : {}),
     platform: options.platform ?? "expo-web",
-    ...(options.devtools !== undefined ? { devtools: options.devtools } : {}),
+    devtools: options.devtools ?? false,
     ...(options.scheduler ? { scheduler: options.scheduler } : {})
   });
 }

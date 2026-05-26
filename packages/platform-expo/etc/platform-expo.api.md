@@ -25,7 +25,7 @@ export interface CreateExpoRuntimeOptions<TSchema extends ExpoSyncoreSchema = Ex
     components?: SyncoreRuntimeOptions<TSchema>["components"];
     databaseDirectory?: string;
     databaseName?: string;
-    devtools?: DevtoolsSink;
+    devtools?: DevtoolsSink | false;
     driver?: SyncoreSqlDriver;
     externalChangeApplier?: SyncoreExternalChangeApplier;
     externalChangeSignal?: SyncoreExternalChangeSignal;

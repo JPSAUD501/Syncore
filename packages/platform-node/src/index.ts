@@ -178,7 +178,7 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
   constructor(private readonly directory: string) {}
 
   private filePath(id: string): string {
-    return path.join(this.directory, id);
+    return resolveStorageFilePath(this.directory, id);
   }
 
   async put(id: string, input: StorageWriteInput): Promise<StorageObject> {
@@ -210,8 +210,9 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
   }
 
   async read(id: string): Promise<Uint8Array | null> {
+    const filePath = this.filePath(id);
     try {
-      return await readFile(this.filePath(id));
+      return await readFile(filePath);
     } catch {
       return null;
     }
@@ -222,9 +223,10 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
     offset: number,
     length: number
   ): Promise<Uint8Array | null> {
+    const filePath = this.filePath(id);
     let handle;
     try {
-      handle = await open(this.filePath(id), "r");
+      handle = await open(filePath, "r");
       const buffer = Buffer.alloc(Math.max(length, 0));
       const result = await handle.read(
         buffer,
@@ -266,6 +268,31 @@ export class NodeFileStorageAdapter implements SyncoreStorageAdapter {
       return [];
     }
   }
+}
+
+function resolveStorageFilePath(directory: string, id: string): string {
+  if (
+    id.length === 0 ||
+    id === "." ||
+    id === ".." ||
+    id.includes("/") ||
+    id.includes("\\") ||
+    id.includes("\0") ||
+    path.isAbsolute(id)
+  ) {
+    throw new Error(`Invalid storage id ${JSON.stringify(id)}.`);
+  }
+  const root = path.resolve(directory);
+  const filePath = path.resolve(root, id);
+  const relative = path.relative(root, filePath);
+  if (
+    relative.length === 0 ||
+    relative.startsWith("..") ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(`Invalid storage id ${JSON.stringify(id)}.`);
+  }
+  return filePath;
 }
 
 const SESSION_ADJECTIVES = [
@@ -462,6 +489,12 @@ export interface CreateNodeRuntimeOptions<
    * `ws://localhost:3099` (the Syncore devtools default port).
    */
   devtoolsUrl?: string;
+  /**
+   * Allow the connected devtools WebSocket endpoint to send privileged
+   * commands/subscriptions to this runtime. Defaults to `true` only for trusted
+   * loopback devtools URLs used by Syncore's automatic devtools setup.
+   */
+  devtoolsRemoteControl?: boolean;
   /** Scheduler configuration for background and recurring jobs. */
   scheduler?: SchedulerOptions;
 }
@@ -612,6 +645,9 @@ export function createNodeSyncoreRuntime<TSchema extends NodeSyncoreSchema>(
     shouldAutoConnectNodeDevtools()
       ? createNodeWebSocketDevtoolsSink({
           url: resolvedDevtoolsUrl,
+          allowRemoteControl:
+            options.devtoolsRemoteControl ??
+            isTrustedLoopbackWebSocketUrl(resolvedDevtoolsUrl),
           ...(options.appName ? { appName: options.appName } : {}),
           ...(options.origin ? { origin: options.origin } : {}),
           ...(options.sessionLabel
@@ -663,7 +699,7 @@ export function createNodeSyncoreRuntime<TSchema extends NodeSyncoreSchema>(
   }
   const runtime = new SyncoreRuntime(runtimeOptions);
   websocketDevtools?.attachRuntime(runtime);
-  if (websocketDevtools) {
+  if (websocketDevtools?.acceptsRemoteControl()) {
     websocketDevtools.attachCommandHandler(
       createDevtoolsCommandHandler({
         driver: runtimeOptions.driver,
@@ -680,6 +716,8 @@ export function createNodeSyncoreRuntime<TSchema extends NodeSyncoreSchema>(
         admin: runtime.getAdmin()
       })
     );
+  }
+  if (websocketDevtools) {
     const stop = runtime.stop.bind(runtime);
     runtime.stop = async () => {
       websocketDevtools.dispose();
@@ -852,6 +890,7 @@ export function bindElectronWindowToSyncoreRuntime(options: {
 
 export interface NodeWebSocketDevtoolsSinkOptions {
   url: string;
+  allowRemoteControl?: boolean;
   reconnectDelayMs?: number;
   appName?: string;
   origin?: string;
@@ -866,6 +905,7 @@ export interface NodeWebSocketDevtoolsSinkOptions {
 }
 
 export interface NodeWebSocketDevtoolsSink extends DevtoolsSink {
+  acceptsRemoteControl(): boolean;
   attachRuntime(runtime: SyncoreRuntime<NodeSyncoreSchema>): void;
   attachCommandHandler(handler: DevtoolsCommandHandler): void;
   attachSubscriptionHost(host: DevtoolsSubscriptionHost): void;
@@ -886,6 +926,7 @@ export function createNodeWebSocketDevtoolsSink(
     (event: SyncoreExternalChangeEvent) => void
   >();
   const pendingMessages: SyncoreDevtoolsMessage[] = [];
+  const remoteControlAllowed = options.allowRemoteControl === true;
   let latestHello:
     | {
         runtimeId: string;
@@ -956,11 +997,16 @@ export function createNodeWebSocketDevtoolsSink(
         | SyncoreDevtoolsClientMessage;
       if (message.type === "ping") {
         send({ type: "pong" });
-      } else if (message.type === "external.change") {
+      } else if (message.type === "external.change" && remoteControlAllowed) {
         for (const listener of externalChangeListeners) {
           listener(message.event as SyncoreExternalChangeEvent);
         }
-      } else if (message.type === "command" && onCommand) {
+      } else if (
+        message.type === "command" &&
+        onCommand &&
+        message.targetRuntimeId ===
+          (latestHello?.runtimeId ?? getSummary?.().runtimeId)
+      ) {
         onCommand(message.payload)
           .then((responsePayload) => {
             const runtimeId =
@@ -991,7 +1037,12 @@ export function createNodeWebSocketDevtoolsSink(
               }
             });
           });
-      } else if (message.type === "subscribe" && subscriptionHost) {
+      } else if (
+        message.type === "subscribe" &&
+        subscriptionHost &&
+        message.targetRuntimeId ===
+          (latestHello?.runtimeId ?? getSummary?.().runtimeId)
+      ) {
         void subscriptionHost.subscribe(
           message.subscriptionId,
           message.payload,
@@ -1009,7 +1060,11 @@ export function createNodeWebSocketDevtoolsSink(
             });
           }
         );
-      } else if (message.type === "unsubscribe") {
+      } else if (
+        message.type === "unsubscribe" &&
+        message.targetRuntimeId ===
+          (latestHello?.runtimeId ?? getSummary?.().runtimeId)
+      ) {
         subscriptionHost?.unsubscribe(message.subscriptionId);
       }
     });
@@ -1054,6 +1109,9 @@ export function createNodeWebSocketDevtoolsSink(
   connect();
 
   const sink: NodeWebSocketDevtoolsSink = {
+    acceptsRemoteControl() {
+      return remoteControlAllowed;
+    },
     emit(event) {
       if (event.type === "runtime.connected") {
         latestHello = {
@@ -1205,4 +1263,22 @@ function resolveDefaultNodeDevtoolsUrl(): string | undefined {
     return undefined;
   }
   return process.env.SYNCORE_DEVTOOLS_URL ?? "ws://127.0.0.1:4311";
+}
+
+function isTrustedLoopbackWebSocketUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+      return false;
+    }
+    const hostname = url.hostname.toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
 }

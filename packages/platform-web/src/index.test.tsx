@@ -375,7 +375,12 @@ describe("platform-web sql.js runtime", () => {
       const hello = JSON.parse(helloPayload ?? "{}") as {
         dataSourceAlias?: string;
         capabilities?: {
-          sql?: { read: boolean; write: boolean; live: boolean; reason?: string };
+          sql?: {
+            read: boolean;
+            write: boolean;
+            live: boolean;
+            reason?: string;
+          };
         };
       };
       expect(hello.dataSourceAlias).toEqual(expect.any(String));
@@ -544,14 +549,34 @@ describe("platform-web sql.js runtime", () => {
     );
   });
 
-  it("attaches command handlers for explicit browser devtools sinks", async () => {
+  it("keeps explicit browser devtools sinks event-only by default", () => {
+    class MockWebSocket {
+      static OPEN = 1;
+      readyState = MockWebSocket.OPEN;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public readonly url: string) {}
+      send() {}
+      close() {}
+    }
+
+    vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
+    try {
+      const sink = createBrowserWebSocketDevtoolsSink({
+        url: "ws://attacker.example:4311"
+      });
+      expect(sink.acceptsRemoteControl()).toBe(false);
+      sink.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("attaches command handlers for opted-in browser devtools sinks", async () => {
     const sentMessages: string[] = [];
-    let latestSocket:
-      | {
-          onopen: (() => void) | null;
-          onmessage: ((event: MessageEvent<unknown>) => void) | null;
-        }
-      | undefined;
+    let sendToRuntime: ((payload: string) => void) | undefined;
 
     class MockWebSocket {
       static OPEN = 1;
@@ -563,7 +588,9 @@ describe("platform-web sql.js runtime", () => {
 
       constructor(public readonly url: string) {
         expect(url).toBe("ws://127.0.0.1:4311");
-        latestSocket = this;
+        sendToRuntime = (payload: string) => {
+          this.onmessage?.({ data: payload } as MessageEvent<string>);
+        };
         queueMicrotask(() => this.onopen?.());
       }
 
@@ -597,7 +624,8 @@ describe("platform-web sql.js runtime", () => {
         functions,
         locateFile: () => wasmFilePath,
         devtools: createBrowserWebSocketDevtoolsSink({
-          url: "ws://127.0.0.1:4311"
+          url: "ws://127.0.0.1:4311",
+          allowRemoteControl: true
         })
       });
 
@@ -609,14 +637,14 @@ describe("platform-web sql.js runtime", () => {
       const hello = JSON.parse(helloPayload ?? "{}") as { runtimeId: string };
       expect(hello.runtimeId).toEqual(expect.any(String));
 
-      latestSocket?.onmessage?.({
-        data: JSON.stringify({
+      sendToRuntime?.(
+        JSON.stringify({
           type: "command",
           commandId: "export-1",
           targetRuntimeId: hello.runtimeId,
           payload: { kind: "data.export" }
         })
-      } as MessageEvent<string>);
+      );
 
       await vi.waitFor(() => {
         expect(
@@ -1041,4 +1069,3 @@ function createMockWebPersistence(): SyncoreWebPersistence {
     }
   };
 }
-

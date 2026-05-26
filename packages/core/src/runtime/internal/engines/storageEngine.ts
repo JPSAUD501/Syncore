@@ -136,6 +136,7 @@ export class StorageEngine {
   async getObjectAccessInfo(
     id: string
   ): Promise<{ entry: StorageEntry; supportsRange: boolean } | null> {
+    assertSafeStorageId(id);
     const row = await this.deps.driver.get<StorageMetadataRow>(
       `SELECT _id, _creationTime, file_name, content_type, size, path FROM "_storage" WHERE _id = ?`,
       [id]
@@ -161,6 +162,7 @@ export class StorageEngine {
     done: boolean;
     supportsRange: boolean;
   } | null> {
+    assertSafeStorageId(id);
     const row = await this.deps.driver.get<StorageMetadataRow>(
       `SELECT _id, _creationTime, file_name, content_type, size, path FROM "_storage" WHERE _id = ?`,
       [id]
@@ -219,6 +221,7 @@ export class StorageEngine {
     id: string,
     meta: DevtoolsEventMeta = {}
   ): Promise<boolean> {
+    assertSafeStorageId(id);
     const row = await this.deps.driver.get<Pick<StorageMetadataRow, "_id">>(
       `SELECT _id FROM "_storage" WHERE _id = ?`,
       [id]
@@ -251,6 +254,7 @@ export class StorageEngine {
       put: async (input: StorageWriteInput) => {
         ensureStorageCapability();
         const id = scopedId(generateId());
+        assertSafeStorageId(id);
         const createdAt = Date.now();
         await this.deps.driver.run(
           `INSERT OR REPLACE INTO "_storage_pending" (_id, _creationTime, file_name, content_type) VALUES (?, ?, ?, ?)`,
@@ -292,6 +296,7 @@ export class StorageEngine {
       },
       get: async (id: string): Promise<StorageObject | null> => {
         ensureStorageCapability();
+        assertSafeStorageId(id);
         state.dependencyCollector?.add(`storage:${id}`);
         const row = await this.deps.driver.get<StorageMetadataRow>(
           `SELECT _id, _creationTime, file_name, content_type, size, path FROM "_storage" WHERE _id = ?`,
@@ -309,6 +314,7 @@ export class StorageEngine {
       },
       read: async (id: string) => {
         ensureStorageCapability();
+        assertSafeStorageId(id);
         state.dependencyCollector?.add(`storage:${id}`);
         const row = await this.deps.driver.get<Pick<StorageMetadataRow, "_id">>(
           `SELECT _id FROM "_storage" WHERE _id = ?`,
@@ -321,6 +327,14 @@ export class StorageEngine {
       },
       delete: async (id: string) => {
         ensureStorageCapability();
+        assertSafeStorageId(id);
+        const row = await this.deps.driver.get<Pick<StorageMetadataRow, "_id">>(
+          `SELECT _id FROM "_storage" WHERE _id = ?`,
+          [id]
+        );
+        if (!row) {
+          return;
+        }
         await this.deleteCommittedObject(id, componentMetadata?.componentPath);
         state.storageChanges.push({
           storageId: id,
@@ -368,4 +382,17 @@ function storageEntryFromRow(row: StorageMetadataRow): StorageEntry {
 
 function storageSupportsRange(storage: SyncoreStorageAdapter): boolean {
   return Boolean(storage.readRange) && storage.supportsRange?.() !== false;
+}
+
+function assertSafeStorageId(id: string): void {
+  if (
+    id.length === 0 ||
+    id === "." ||
+    id === ".." ||
+    id.includes("/") ||
+    id.includes("\\") ||
+    id.includes("\0")
+  ) {
+    throw new Error(`Invalid storage id ${JSON.stringify(id)}.`);
+  }
 }

@@ -122,6 +122,9 @@ const PREVIEW_MAX_DEPTH = 5;
 const PREVIEW_MAX_ARRAY_ITEMS = 50;
 const PREVIEW_MAX_OBJECT_KEYS = 80;
 const PREVIEW_MAX_STRING_LENGTH = 4000;
+const REDACTED_VALUE = "[redacted]";
+const SENSITIVE_PREVIEW_KEY_PATTERN =
+  /(?:password|passphrase|token|secret|authorization|cookie|credential|api[-_]?key|session)/iu;
 
 export function createDevtoolsPreview(value: unknown): DevtoolsPreview {
   const seen = new WeakSet<object>();
@@ -159,8 +162,7 @@ export function createDevtoolsPreview(value: unknown): DevtoolsPreview {
     if (input instanceof Error) {
       return {
         name: input.name,
-        message: input.message,
-        ...(input.stack ? { stack: input.stack } : {})
+        message: input.message
       };
     }
     if (input instanceof Date) {
@@ -194,7 +196,9 @@ export function createDevtoolsPreview(value: unknown): DevtoolsPreview {
     const entries = Object.entries(input as Record<string, unknown>);
     const result: Record<string, unknown> = {};
     for (const [key, nested] of entries.slice(0, PREVIEW_MAX_OBJECT_KEYS)) {
-      result[key] = preview(nested, depth + 1);
+      result[key] = isSensitivePreviewKey(key)
+        ? REDACTED_VALUE
+        : preview(nested, depth + 1);
     }
     if (entries.length > PREVIEW_MAX_OBJECT_KEYS) {
       truncated = true;
@@ -217,6 +221,10 @@ export function createDevtoolsPreview(value: unknown): DevtoolsPreview {
       truncated: true
     };
   }
+}
+
+function isSensitivePreviewKey(key: string): boolean {
+  return SENSITIVE_PREVIEW_KEY_PATTERN.test(key);
 }
 
 export function fieldExpression(tableAlias: string, field: string): string {
@@ -369,7 +377,9 @@ export function parseCanonicalComponentFunctionName(functionName: string):
       localName: string;
     }
   | undefined {
-  const match = /^components\/(.+)\/(public|internal)\/(.+)$/.exec(functionName);
+  const match = /^components\/(.+)\/(public|internal)\/(.+)$/.exec(
+    functionName
+  );
   if (!match) {
     return undefined;
   }
@@ -425,9 +435,7 @@ export function devtoolsScopesForEvent(
   }
 }
 
-export function getTableDefinition<
-  TSchema extends SyncoreDataModel
->(
+export function getTableDefinition<TSchema extends SyncoreDataModel>(
   schema: TSchema,
   tableName: string
 ): TableDefinition<

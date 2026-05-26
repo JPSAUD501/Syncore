@@ -21,4 +21,32 @@ describe("createDevtoolsPreview", () => {
     });
     expect((preview.value as { items: unknown[] }).items).toHaveLength(51);
   });
+
+  it("redacts sensitive field names and omits error stacks", () => {
+    const preview = createDevtoolsPreview({
+      password: "secret",
+      nested: {
+        apiKey: "key",
+        value: "visible"
+      },
+      error: Object.assign(new Error("boom"), { stack: "hidden stack" })
+    });
+
+    expect(preview.kind).toBe("value");
+    if (preview.kind !== "value") {
+      return;
+    }
+    expect(preview.value).toMatchObject({
+      password: "[redacted]",
+      nested: {
+        apiKey: "[redacted]",
+        value: "visible"
+      },
+      error: {
+        name: "Error",
+        message: "boom"
+      }
+    });
+    expect(JSON.stringify(preview.value)).not.toContain("hidden stack");
+  });
 });

@@ -1408,6 +1408,29 @@ describe("SyncoreRuntime schema + scheduler", () => {
       deleted: false
     });
 
+    await expect(
+      runtime
+        .createClient()
+        .mutation(
+          createFunctionReference<"mutation", { id: string }, null>(
+            "mutation",
+            "files/remove"
+          ),
+          { id: "../outside.txt" }
+        )
+    ).rejects.toThrow("Invalid storage id");
+
+    const invalidDevtoolsDelete = await handler({
+      kind: "storage.delete",
+      id: "../outside.txt"
+    });
+    expect(invalidDevtoolsDelete).toMatchObject({
+      kind: "storage.delete.result",
+      success: false,
+      deleted: false,
+      error: expect.stringContaining("Invalid storage id")
+    });
+
     host.dispose();
     await hostDriver.close();
     await runtime.stop();

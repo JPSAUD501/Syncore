@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -16,7 +23,13 @@ import { resolveClientRuntime } from "./targets.js";
 
 const cliRoot = import.meta.dirname;
 const workspaceRoot = path.resolve(cliRoot, "..", "..", "..");
-const cliEntryPath = path.resolve(workspaceRoot, "packages", "cli", "src", "index.ts");
+const cliEntryPath = path.resolve(
+  workspaceRoot,
+  "packages",
+  "cli",
+  "src",
+  "index.ts"
+);
 const cliPackagePath = path.resolve(cliRoot, "..", "package.json");
 const tsxRegisterPath = pathToFileURL(
   path.resolve(workspaceRoot, "node_modules", "tsx", "dist", "loader.mjs")
@@ -54,7 +67,12 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
 
-    const initResult = await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    const initResult = await runCli(cwd, [
+      "init",
+      "--template",
+      "node",
+      "--yes"
+    ]);
     expect(initResult.exitCode).toBe(0);
 
     const generatedApiPath = path.join(cwd, "syncore", "_generated", "api.ts");
@@ -64,17 +82,30 @@ describe("syncore CLI", () => {
       "_generated",
       "components.ts"
     );
-    const generatedFunctionsPath = path.join(cwd, "syncore", "_generated", "functions.ts");
+    const generatedFunctionsPath = path.join(
+      cwd,
+      "syncore",
+      "_generated",
+      "functions.ts"
+    );
     const generatedSchemaPath = path.join(
       cwd,
       "syncore",
       "_generated",
       "schema.ts"
     );
-    const generatedServerPath = path.join(cwd, "syncore", "_generated", "server.ts");
+    const generatedServerPath = path.join(
+      cwd,
+      "syncore",
+      "_generated",
+      "server.ts"
+    );
     const configPath = path.join(cwd, "syncore.config.ts");
     const firstGeneratedApi = await readFile(generatedApiPath, "utf8");
-    const firstGeneratedFunctions = await readFile(generatedFunctionsPath, "utf8");
+    const firstGeneratedFunctions = await readFile(
+      generatedFunctionsPath,
+      "utf8"
+    );
     const firstGeneratedServer = await readFile(generatedServerPath, "utf8");
     const configSource = await readFile(configPath, "utf8");
 
@@ -82,7 +113,9 @@ describe("syncore CLI", () => {
     expect(await exists(generatedComponentsPath)).toBe(true);
     expect(firstGeneratedFunctions).toContain('"tasks/create"');
     expect(await exists(generatedSchemaPath)).toBe(true);
-    expect(firstGeneratedServer).toContain("export const query = baseQuery as {");
+    expect(firstGeneratedServer).toContain(
+      "export const query = baseQuery as {"
+    );
     expect(configSource).toContain("projectTarget");
     expect(configSource).toContain('databasePath: ".syncore/syncore.db"');
 
@@ -102,16 +135,12 @@ describe("syncore CLI", () => {
     await writeWorkspaceTsconfig(cwd);
     await writeFile(path.join(cwd, "placeholder.txt"), "keep me\n");
 
-    const result = await runCli(
-      cwd,
-      ["init", "--template", "node"],
-      {
-        stdin: "n\n",
-        env: {
-          SYNCORE_FORCE_INTERACTIVE: "1"
-        }
+    const result = await runCli(cwd, ["init", "--template", "node"], {
+      stdin: "n\n",
+      env: {
+        SYNCORE_FORCE_INTERACTIVE: "1"
       }
-    );
+    });
 
     expect(result.exitCode).toBe(1);
     expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(false);
@@ -121,10 +150,18 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
 
-    const result = await runCli(cwd, ["init", "--template", "react-web", "--yes"]);
+    const result = await runCli(cwd, [
+      "init",
+      "--template",
+      "react-web",
+      "--yes"
+    ]);
     expect(result.exitCode).toBe(0);
 
-    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    const configSource = await readFile(
+      path.join(cwd, "syncore.config.ts"),
+      "utf8"
+    );
     expect(configSource).not.toContain("projectTarget");
     expect(configSource.trim()).toBe("export default {};");
   });
@@ -133,10 +170,18 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
 
-    const result = await runCli(cwd, ["init", "--template", "electron", "--yes"]);
+    const result = await runCli(cwd, [
+      "init",
+      "--template",
+      "electron",
+      "--yes"
+    ]);
     expect(result.exitCode).toBe(0);
 
-    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    const configSource = await readFile(
+      path.join(cwd, "syncore.config.ts"),
+      "utf8"
+    );
     expect(configSource).not.toContain("projectTarget");
     expect(configSource.trim()).toBe("export default {};");
   });
@@ -148,18 +193,29 @@ describe("syncore CLI", () => {
     const result = await runCli(cwd, ["init", "--template", "svelte", "--yes"]);
     expect(result.exitCode).toBe(0);
 
-    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    const configSource = await readFile(
+      path.join(cwd, "syncore.config.ts"),
+      "utf8"
+    );
     expect(configSource).not.toContain("projectTarget");
     expect(configSource.trim()).toBe("export default {};");
 
-    const workerSource = await readFile(path.join(cwd, "src", "syncore.worker.ts"), "utf8");
+    const workerSource = await readFile(
+      path.join(cwd, "src", "syncore.worker.ts"),
+      "utf8"
+    );
     expect(workerSource).toContain("createBrowserWorkerRuntime");
     expect(workerSource).toContain("syncorejs/browser");
 
-    const providerSource = await readFile(path.join(cwd, "src", "SyncoreProvider.svelte"), "utf8");
+    const providerSource = await readFile(
+      path.join(cwd, "src", "SyncoreProvider.svelte"),
+      "utf8"
+    );
     expect(providerSource).toContain("createBrowserWorkerClient");
+    expect(providerSource).toContain("onMount(() =>");
     expect(providerSource).toContain("setSyncoreClient");
     expect(providerSource).toContain("syncorejs/svelte");
+    expect(providerSource).toContain("{#if ready}");
     expect(providerSource).toContain("{@render children?.()}");
   });
 
@@ -174,10 +230,16 @@ describe("syncore CLI", () => {
     const result = await runCli(cwd, ["init", "--yes"]);
     expect(result.exitCode).toBe(0);
 
-    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    const configSource = await readFile(
+      path.join(cwd, "syncore.config.ts"),
+      "utf8"
+    );
     expect(configSource.trim()).toBe("export default {};");
 
-    const workerSource = await readFile(path.join(cwd, "src", "syncore.worker.ts"), "utf8");
+    const workerSource = await readFile(
+      path.join(cwd, "src", "syncore.worker.ts"),
+      "utf8"
+    );
     expect(workerSource).toContain("createBrowserWorkerRuntime");
   });
 
@@ -215,9 +277,9 @@ describe("syncore CLI", () => {
       "utf8"
     );
 
-    expect(generatedApi).toContain('../functions/tasks.js');
-    expect(generatedFunctions).toContain('../functions/tasks.js');
-    expect(generatedServer).toContain('../schema.js');
+    expect(generatedApi).toContain("../functions/tasks.js");
+    expect(generatedFunctions).toContain("../functions/tasks.js");
+    expect(generatedServer).toContain("../schema.js");
   });
 
   test("doctor reports workspace-root context in the monorepo root", async () => {
@@ -252,14 +314,19 @@ describe("syncore CLI", () => {
       };
     };
     expect(payload.data.status).toBe("waiting-for-client");
-    expect(payload.data.suggestions.some((entry) => entry.includes("targets"))).toBe(true);
+    expect(
+      payload.data.suggestions.some((entry) => entry.includes("targets"))
+    ).toBe(true);
   });
 
   test("doctor JSON exposes primaryIssue and diagnostics for incomplete projects", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
     await mkdir(path.join(cwd, "syncore", "functions"), { recursive: true });
-    await writeFile(path.join(cwd, "syncore.config.ts"), "export default {};\n");
+    await writeFile(
+      path.join(cwd, "syncore.config.ts"),
+      "export default {};\n"
+    );
 
     const result = await runCli(cwd, ["doctor", "--json"]);
     expect(result.exitCode).toBe(0);
@@ -274,12 +341,15 @@ describe("syncore CLI", () => {
     };
     expect(payload.data.status).toBe("missing-project");
     expect(payload.data.primaryIssue.code).toBe("missing-project");
-    expect(payload.data.diagnostics.some((entry) => entry.id === "project.structure")).toBe(
-      true
-    );
+    expect(
+      payload.data.diagnostics.some((entry) => entry.id === "project.structure")
+    ).toBe(true);
     expect(
       payload.data.checks.some(
-        (entry) => entry.category === "schema" && entry.path === "syncore/schema.ts" && !entry.ok
+        (entry) =>
+          entry.category === "schema" &&
+          entry.path === "syncore/schema.ts" &&
+          !entry.ok
       )
     ).toBe(true);
   });
@@ -315,7 +385,9 @@ describe("syncore CLI", () => {
     expect(payload.data.status).toBe("schema-drift");
     expect(payload.data.primaryIssue.code).toBe("schema-drift");
     expect(payload.data.drift.state).not.toBe("clean");
-    expect(payload.data.drift.currentSchemaHash).not.toBe(payload.data.drift.storedSchemaHash);
+    expect(payload.data.drift.currentSchemaHash).not.toBe(
+      payload.data.drift.storedSchemaHash
+    );
   });
 
   test("doctor --fix regenerates generated files without touching the database", async () => {
@@ -337,9 +409,9 @@ describe("syncore CLI", () => {
       data: { appliedFixes?: string[]; autoFixesAvailable: boolean };
     };
     expect(payload.summary).toContain("Applied");
-    expect(payload.data.appliedFixes?.some((entry) => entry.includes("Regenerated"))).toBe(
-      true
-    );
+    expect(
+      payload.data.appliedFixes?.some((entry) => entry.includes("Regenerated"))
+    ).toBe(true);
   });
 
   test("dev --once fails non-interactively when the project is missing", async () => {
@@ -356,16 +428,12 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
 
-    const result = await runCli(
-      cwd,
-      ["dev", "--once", "--template", "node"],
-      {
-        stdin: "y\n",
-        env: {
-          SYNCORE_FORCE_INTERACTIVE: "1"
-        }
+    const result = await runCli(cwd, ["dev", "--once", "--template", "node"], {
+      stdin: "y\n",
+      env: {
+        SYNCORE_FORCE_INTERACTIVE: "1"
       }
-    );
+    });
 
     expect(result.exitCode).toBe(0);
     expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(true);
@@ -384,7 +452,9 @@ describe("syncore CLI", () => {
       "electron",
       "--typecheck",
       "try"
-    ]);
+    ], {
+      env: createIsolatedDevtoolsEnv()
+    });
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("projectTarget: client-managed");
@@ -396,19 +466,17 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
 
-    const result = await runCli(
-      cwd,
-      ["dev", "--once", "--template", "node"],
-      {
-        stdin: "y\n",
-        env: {
-          SYNCORE_FORCE_INTERACTIVE: "1"
-        }
+    const result = await runCli(cwd, ["dev", "--once", "--template", "node"], {
+      stdin: "y\n",
+      env: {
+        SYNCORE_FORCE_INTERACTIVE: "1"
       }
-    );
+    });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("[info] Starting Syncore local dev session...");
+    expect(result.stdout).toContain(
+      "[info] Starting Syncore local dev session..."
+    );
     expect(result.stdout).not.toContain("[syncore] [info]");
     expect(result.stderr).not.toContain("[syncore] [error]");
   }, 20_000);
@@ -522,7 +590,12 @@ describe("syncore CLI", () => {
     await writeWorkspaceTsconfig(cwd);
     await runCli(cwd, ["init", "--template", "node", "--yes"]);
 
-    const generateResult = await runCli(cwd, ["migrate", "generate", "initial", "--json"]);
+    const generateResult = await runCli(cwd, [
+      "migrate",
+      "generate",
+      "initial",
+      "--json"
+    ]);
     expect(generateResult.exitCode).toBe(0);
     const generatePayload = JSON.parse(generateResult.stdout) as {
       command: string;
@@ -591,7 +664,9 @@ describe("syncore CLI", () => {
       "json"
     ]);
     expect(queryResult.exitCode).toBe(0);
-    const queriedTasks = JSON.parse(queryResult.stdout) as Array<{ text: string }>;
+    const queriedTasks = JSON.parse(queryResult.stdout) as Array<{
+      text: string;
+    }>;
     expect(queriedTasks.map((task) => task.text)).toContain("Ship Syncore");
 
     const dataResult = await runCli(sourceCwd, [
@@ -641,9 +716,11 @@ describe("syncore CLI", () => {
     ]);
     expect(importResult.exitCode).toBe(0);
 
-    const database = new DatabaseSync(path.join(targetCwd, ".syncore", "syncore.db"));
+    const database = new DatabaseSync(
+      path.join(targetCwd, ".syncore", "syncore.db")
+    );
     const importedTask = database
-      .prepare('SELECT json_extract(_json, \'$.text\') AS text FROM "tasks"')
+      .prepare("SELECT json_extract(_json, '$.text') AS text FROM \"tasks\"")
       .get() as { text: string };
     database.close();
     expect(importedTask.text).toBe("Ship Syncore");
@@ -692,7 +769,9 @@ describe("syncore CLI", () => {
       error: { category: string; message: string };
     };
     expect(payload.error.category).toBe("target");
-    expect(payload.error.message).toContain("does not accept --runtime for the project target");
+    expect(payload.error.message).toContain(
+      "does not accept --runtime for the project target"
+    );
   });
 
   test("resolveClientRuntime lists available runtimes for invalid runtime ids", () => {
@@ -723,7 +802,13 @@ describe("syncore CLI", () => {
       platform: "browser-worker",
       connectedSessions: 2,
       online: true,
-      capabilities: ["run", "readData", "writeData", "exportData", "streamLogs"],
+      capabilities: [
+        "run",
+        "readData",
+        "writeData",
+        "exportData",
+        "streamLogs"
+      ],
       sessionLabels: ["tab-a", "tab-b"]
     };
 
@@ -824,7 +909,9 @@ describe("syncore CLI", () => {
     };
     expect(payload.command).toBe("targets");
     expect(payload.data.some((entry) => entry.id === "project")).toBe(true);
-    expect(payload.data.find((entry) => entry.id === "project")?.capabilities).toContain("run");
+    expect(
+      payload.data.find((entry) => entry.id === "project")?.capabilities
+    ).toContain("run");
   });
 
   test("targets default output includes client runtime rows", () => {
@@ -859,7 +946,13 @@ describe("syncore CLI", () => {
           platform: "browser-worker",
           connectedSessions: 2,
           online: true,
-          capabilities: ["run", "readData", "writeData", "exportData", "streamLogs"],
+          capabilities: [
+            "run",
+            "readData",
+            "writeData",
+            "exportData",
+            "streamLogs"
+          ],
           origin: "http://localhost:3000",
           storageProtocol: "opfs",
           sessionLabels: ["tab-a", "tab-b"]
@@ -925,7 +1018,9 @@ describe("syncore CLI", () => {
       };
     };
     expect(payload.error.category).toBe("target");
-    expect(payload.error.details?.expected).toBe("project or a 5-digit target id");
+    expect(payload.error.details?.expected).toBe(
+      "project or a 5-digit target id"
+    );
   });
 
   test("public client target ids are stable 5-digit codes", () => {
@@ -1015,6 +1110,17 @@ function createCliProcessEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     ...process.env,
     TSX_TSCONFIG_PATH: tsxTsconfigPath,
     ...extra
+  };
+}
+
+let isolatedDevtoolsPort = 46_100;
+
+function createIsolatedDevtoolsEnv(): NodeJS.ProcessEnv {
+  const devtoolsPort = isolatedDevtoolsPort;
+  isolatedDevtoolsPort += 2;
+  return {
+    SYNCORE_DASHBOARD_PORT: String(devtoolsPort + 1),
+    SYNCORE_DEVTOOLS_PORT: String(devtoolsPort)
   };
 }
 

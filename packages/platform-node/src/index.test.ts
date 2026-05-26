@@ -17,7 +17,8 @@ import {
 import {
   bindElectronWindowToSyncoreRuntime,
   createManagedNodeSyncoreClient,
-  createNodeSyncoreRuntime
+  createNodeSyncoreRuntime,
+  NodeFileStorageAdapter
 } from "./index.js";
 
 describe("Node Syncore runtime", () => {
@@ -29,6 +30,18 @@ describe("Node Syncore runtime", () => {
 
   afterEach(async () => {
     // Temporary directories are left to the OS cleanup to keep the test simple.
+  });
+
+  it("rejects storage ids that escape the storage directory", async () => {
+    const adapter = new NodeFileStorageAdapter(path.join(rootDir, "storage"));
+
+    await expect(
+      adapter.delete(path.join("..", "outside.txt"))
+    ).rejects.toThrow("Invalid storage id");
+    await expect(adapter.read("..")).rejects.toThrow("Invalid storage id");
+    await expect(
+      adapter.get(path.resolve(rootDir, "outside.txt"))
+    ).rejects.toThrow("Invalid storage id");
   });
 
   it("runs mutations and reactive queries", async () => {
@@ -213,7 +226,8 @@ describe("Node Syncore runtime", () => {
       read: false,
       write: false,
       live: false,
-      reason: "SQL Console is provided by the Project Target for this data source."
+      reason:
+        "SQL Console is provided by the Project Target for this data source."
     });
     connectedSocket?.send(
       JSON.stringify({
@@ -309,7 +323,6 @@ describe("Node Syncore runtime", () => {
     await binding.dispose();
   });
 
-
   it("ignores messages from other renderers when using ipcMain", async () => {
     const schema = defineSchema({
       tasks: defineTable({
@@ -404,4 +417,3 @@ describe("Node Syncore runtime", () => {
     await managed.dispose();
   });
 });
-
