@@ -51,6 +51,6 @@ Startup should stay compact and phase-based:
 
 ## Docs Expectations
 
-- Node and Electron docs should explain `projectTarget`
-- web, Next, and Expo docs should explain connected `client:<id>` targets
+- Node docs should explain `projectTarget`
+- Electron, web, Next, and Expo docs should explain connected `client:<id>` targets
 - docs should never imply that browser or device-backed templates operate on a project-local database

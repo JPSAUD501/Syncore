@@ -30,7 +30,7 @@ export function buildTargetCommandNextSteps(targetId?: string): string[] {
     return [`Use \`npx syncorejs run --target ${targetId} <function>\` to operate on a specific target.`];
   }
   return [
-    "Run `npx syncorejs dev` and connect an app runtime, or define a projectTarget for Node/Electron projects."
+    "Run `npx syncorejs dev` and connect an app runtime, or define a projectTarget for Node projects."
   ];
 }
 

@@ -129,6 +129,18 @@ describe("syncore CLI", () => {
     expect(configSource.trim()).toBe("export default {};");
   });
 
+  test("electron init does not scaffold a projectTarget", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+
+    const result = await runCli(cwd, ["init", "--template", "electron", "--yes"]);
+    expect(result.exitCode).toBe(0);
+
+    const configSource = await readFile(path.join(cwd, "syncore.config.ts"), "utf8");
+    expect(configSource).not.toContain("projectTarget");
+    expect(configSource.trim()).toBe("export default {};");
+  });
+
   test("svelte init scaffolds worker and provider component", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
@@ -358,6 +370,26 @@ describe("syncore CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(await exists(path.join(cwd, "syncore.config.ts"))).toBe(true);
     expect(await exists(path.join(cwd, ".syncore", "syncore.db"))).toBe(true);
+  }, 20_000);
+
+  test("dev --once allows electron projects without a project target", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "electron", "--yes"]);
+
+    const result = await runCli(cwd, [
+      "dev",
+      "--once",
+      "--template",
+      "electron",
+      "--typecheck",
+      "try"
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("projectTarget: client-managed");
+    expect(result.stdout).toContain("targets: waiting for client");
+    expect(await exists(path.join(cwd, ".syncore", "syncore.db"))).toBe(false);
   }, 20_000);
 
   test("dev --once human output does not repeat the syncore label", async () => {

@@ -33,7 +33,9 @@ below if `init` already generated them.
 npx syncorejs dev
 ```
 
-Project-local operational commands typically target `project`.
+The Electron runtime is the data source. `syncorejs dev` starts the hub and
+waits for the main process to connect; it should not create a separate
+project-local database for Electron apps.
 
 ## 5. Start the runtime in the main process
 

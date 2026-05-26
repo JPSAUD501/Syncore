@@ -406,6 +406,7 @@ export function devtoolsScopesForEvent(
     case "mutation.committed":
       return new Set([
         "runtime.summary",
+        "schema.tables",
         ...event.changedTables.map((table: string) => `table:${table}` as const)
       ]);
     case "scheduler.tick":

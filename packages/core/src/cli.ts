@@ -112,6 +112,7 @@ export function templateUsesConnectedClients(
   return (
     template === "react-web" ||
     template === "svelte" ||
+    template === "electron" ||
     template === "expo" ||
     template === "next"
   );
@@ -948,7 +949,7 @@ void createBrowserWorkerRuntime({
 }
 
 function renderSyncoreConfigTemplate(template: SyncoreTemplateName): string {
-  if (template === "node" || template === "electron") {
+  if (template === "node") {
     return `export default {
   projectTarget: {
     databasePath: ".syncore/syncore.db",

@@ -1042,6 +1042,9 @@ describe("SyncoreRuntime schema + scheduler", () => {
     expect(devtoolsInvalidationScopes).toContainEqual(
       expect.arrayContaining(["runtime.activeQueries"])
     );
+    expect(devtoolsInvalidationScopes).toContainEqual(
+      expect.arrayContaining(["schema.tables", "table:tasks"])
+    );
     unsubscribeDevtoolsInvalidations();
     await runtime.stop();
   });
@@ -1104,6 +1107,17 @@ describe("SyncoreRuntime schema + scheduler", () => {
     });
     const taskUpdates: Array<{ rows: Record<string, unknown>[] }> = [];
     const noteUpdates: Array<{ rows: Record<string, unknown>[] }> = [];
+    const schemaUpdates: Array<{ documentCounts: Record<string, number> }> = [];
+
+    await host.subscribe("schema-sub", { kind: "schema.tables" }, (payload) => {
+      if (payload.kind === "schema.tables.result") {
+        schemaUpdates.push({
+          documentCounts: Object.fromEntries(
+            payload.tables.map((table) => [table.name, table.documentCount])
+          )
+        });
+      }
+    });
 
     await host.subscribe(
       "tasks-sub",
@@ -1149,6 +1163,14 @@ describe("SyncoreRuntime schema + scheduler", () => {
     );
     expect(taskUpdates.at(-1)?.rows).toHaveLength(1);
     expect(noteUpdates.at(-1)?.rows ?? []).toHaveLength(0);
+    await waitFor(
+      () => schemaUpdates.at(-1)?.documentCounts.tasks === 1,
+      "schema tables subscription should refresh document counts"
+    );
+    expect(schemaUpdates.at(-1)?.documentCounts).toMatchObject({
+      tasks: 1,
+      notes: 0
+    });
 
     await runtime
       .createClient()
@@ -1166,6 +1188,14 @@ describe("SyncoreRuntime schema + scheduler", () => {
     );
     expect(taskUpdates.at(-1)?.rows).toHaveLength(1);
     expect(noteUpdates.at(-1)?.rows).toHaveLength(1);
+    await waitFor(
+      () => schemaUpdates.at(-1)?.documentCounts.notes === 1,
+      "schema tables subscription should refresh counts for later table changes"
+    );
+    expect(schemaUpdates.at(-1)?.documentCounts).toMatchObject({
+      tasks: 1,
+      notes: 1
+    });
 
     const exportResult = await handler({ kind: "data.export" });
     expect(exportResult.kind).toBe("data.export.result");
