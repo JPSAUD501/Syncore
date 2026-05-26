@@ -230,7 +230,7 @@ export class ReactivityEngine {
       await this.publishExternalChange({
         scope: "storage",
         reason: change.reason,
-        changedScopes: [`storage:${change.storageId}`],
+        changedScopes: ["storage.objects", `storage:${change.storageId}`],
         storageIds: [change.storageId]
       });
     }
@@ -367,6 +367,7 @@ function resolveChangedScopes(
     scopes.add(`table:${tableName}`);
   }
   for (const storageId of event.storageIds ?? []) {
+    scopes.add("storage.objects");
     scopes.add(`storage:${storageId}`);
   }
 

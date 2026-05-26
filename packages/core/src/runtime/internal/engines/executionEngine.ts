@@ -1268,10 +1268,14 @@ function collectChangedScopes(
     reason: "storage-put" | "storage-delete";
   }>
 ): Set<ImpactScope> {
-  return new Set<ImpactScope>([
-    ...[...changedTables].map((tableName) => `table:${tableName}` as ImpactScope),
-    ...storageChanges.map(
-      (change) => `storage:${change.storageId}` as ImpactScope
-    )
-  ]);
+  const scopes = new Set<ImpactScope>(
+    [...changedTables].map((tableName) => `table:${tableName}` as ImpactScope)
+  );
+  if (storageChanges.length > 0) {
+    scopes.add("storage.objects");
+  }
+  for (const change of storageChanges) {
+    scopes.add(`storage:${change.storageId}` as ImpactScope);
+  }
+  return scopes;
 }

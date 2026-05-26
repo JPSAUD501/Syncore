@@ -748,15 +748,65 @@ describe("SyncoreRuntime schema + scheduler", () => {
         expect.objectContaining({
           scope: "storage",
           reason: "storage-put",
-          storageIds: [fileId]
+          storageIds: [fileId],
+          changedScopes: ["storage.objects", `storage:${fileId}`]
         }),
         expect.objectContaining({
           scope: "storage",
           reason: "storage-delete",
-          storageIds: [fileId]
+          storageIds: [fileId],
+          changedScopes: ["storage.objects", `storage:${fileId}`]
         })
       ])
     );
+  });
+
+  it("invalidates storage object lists after receiving an external storage change", async () => {
+    const databasePath = path.join(rootDirectory, "external-storage.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const signal = new TestExternalChangeSignal();
+    const schema = defineSchema({
+      files: defineTable({
+        title: s.string()
+      })
+    });
+
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions: {},
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath),
+      externalChangeSignal: signal
+    });
+
+    await runtime.start();
+    const devtoolsInvalidationScopes: string[][] = [];
+    const unsubscribeDevtoolsInvalidations = runtime
+      .getAdmin()
+      .subscribeToDevtoolsInvalidations((scopes) => {
+        devtoolsInvalidationScopes.push([...scopes]);
+      });
+
+    signal.publish({
+      sourceId: "external-runtime",
+      scope: "storage",
+      reason: "storage-put",
+      storageIds: ["file-1"],
+      timestamp: Date.now()
+    });
+
+    await waitFor(
+      () =>
+        devtoolsInvalidationScopes.some(
+          (scopes) =>
+            scopes.includes("storage.objects") &&
+            scopes.includes("storage:file-1")
+        ),
+      "external storage change should invalidate storage object list"
+    );
+
+    unsubscribeDevtoolsInvalidations();
+    await runtime.stop();
   });
 
   it("reruns watched queries after receiving an external change event", async () => {
@@ -1167,6 +1217,18 @@ describe("SyncoreRuntime schema + scheduler", () => {
           });
           return storageId;
         }
+      }),
+      "files/remove": mutation({
+        args: {
+          id: s.string()
+        },
+        returns: s.null(),
+        handler: async (ctx, args) => {
+          await (ctx as MutationCtx).storage.delete(
+            (args as { id: string }).id
+          );
+          return null;
+        }
       })
     };
 
@@ -1223,30 +1285,61 @@ describe("SyncoreRuntime schema + scheduler", () => {
       "storage subscription should refresh"
     );
 
+    await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<"mutation", { id: string }, null>(
+          "mutation",
+          "files/remove"
+        ),
+        { id: storageId }
+      );
+
+    await waitFor(
+      () => (storageUpdates.at(-1)?.totalCount ?? 1) === 0,
+      "storage subscription should refresh after app delete"
+    );
+
+    const storageIdAfterDelete = await runtime
+      .createClient()
+      .mutation(
+        createFunctionReference<
+          "mutation",
+          { title: string; body: string },
+          string
+        >("mutation", "files/write"),
+        { title: "note-2", body: "hello again" }
+      );
+
+    await waitFor(
+      () => (storageUpdates.at(-1)?.totalCount ?? 0) === 1,
+      "storage subscription should refresh after second write"
+    );
+
     const listResult = await handler({ kind: "storage.list", limit: 100 });
     expect(listResult.kind).toBe("storage.list.result");
     if (listResult.kind === "storage.list.result") {
       expect(listResult.totalCount).toBe(1);
       expect(listResult.entries[0]).toMatchObject({
-        id: storageId,
-        fileName: "note.txt",
+        id: storageIdAfterDelete,
+        fileName: "note-2.txt",
         contentType: "text/plain"
       });
     }
 
     const readResult = await handler({
       kind: "storage.readRange",
-      id: storageId,
+      id: storageIdAfterDelete,
       offset: 0,
       length: 64
     });
     expect(readResult.kind).toBe("storage.readRange.result");
     if (readResult.kind === "storage.readRange.result") {
-      expect(readResult.entry).toMatchObject({ id: storageId });
+      expect(readResult.entry).toMatchObject({ id: storageIdAfterDelete });
       expect(Buffer.from(readResult.base64 ?? "", "base64").toString()).toBe(
-        "hello storage"
+        "hello again"
       );
-      expect(readResult.bytesRead).toBe(13);
+      expect(readResult.bytesRead).toBe(11);
     }
 
     const missingRead = await handler({
@@ -1262,7 +1355,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
     const deleteResult = await handler({
       kind: "storage.delete",
-      id: storageId
+      id: storageIdAfterDelete
     });
     expect(deleteResult).toEqual({
       kind: "storage.delete.result",
@@ -1277,7 +1370,7 @@ describe("SyncoreRuntime schema + scheduler", () => {
 
     const secondDelete = await handler({
       kind: "storage.delete",
-      id: storageId
+      id: storageIdAfterDelete
     });
     expect(secondDelete).toEqual({
       kind: "storage.delete.result",
