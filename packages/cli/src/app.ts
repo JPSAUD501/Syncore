@@ -134,7 +134,6 @@ interface LogsCommandOptions {
 }
 
 interface TargetsCommandOptions {
-  onlineOnly?: boolean;
   capability?: TargetCapability;
 }
 
@@ -362,7 +361,6 @@ function addTargetsCommand(program: Command): void {
     .command("targets")
     .summary("List available Syncore targets")
     .description("Inspect project and connected client targets for run, data, import, export, and logs.")
-    .option("--online-only", "Only show online targets")
     .option(
       "--capability <capability>",
       "Filter targets by capability: run, readData, writeData, exportData, streamLogs"
@@ -387,9 +385,6 @@ function addTargetsCommand(program: Command): void {
         }
         const targets = await listAvailableTargets(ctx.cwd);
         const filtered = targets.filter((target) => {
-          if (options.onlineOnly && !target.online) {
-            return false;
-          }
           if (options.capability && !targetSupportsCapability(target, options.capability)) {
             return false;
           }
@@ -541,7 +536,9 @@ async function maybeOpenDashboard(
     (await resolveActiveDashboardUrl(context.cwd));
   const ready = await waitForDashboardReady(targetUrl);
   if (!ready) {
-    context.warn("Dashboard did not become ready in time, so it was not opened.");
+    context.warn(
+      `Dashboard did not become ready in time, so it was not opened. Open manually: ${targetUrl}`
+    );
     return;
   }
   const opened = await openTarget(targetUrl);
@@ -1320,7 +1317,24 @@ async function startManagedDevHub(
         context.info(message.replaceAll("127.0.0.1", "localhost"));
         return;
       }
-      if (/Dashboard shell:/i.test(message) || /devtools hub:/i.test(message)) {
+      if (/Dashboard shell:/i.test(message)) {
+        context.info(message);
+        return;
+      }
+      if (
+        /Dashboard (?:source|static shell) not started automatically:/i.test(
+          message
+        ) ||
+        /Dashboard shell not available/i.test(message)
+      ) {
+        context.warn(message);
+        return;
+      }
+      if (/Devtools dashboard token:/i.test(message)) {
+        context.info(message);
+        return;
+      }
+      if (/devtools hub:/i.test(message)) {
         return;
       }
       if (/Watching syncore\//i.test(message)) {
@@ -1351,7 +1365,7 @@ async function waitForDashboardReady(
   url: string,
   options: { timeoutMs?: number; intervalMs?: number } = {}
 ): Promise<boolean> {
-  const timeoutMs = options.timeoutMs ?? 15_000;
+  const timeoutMs = options.timeoutMs ?? 45_000;
   const intervalMs = options.intervalMs ?? 250;
   const deadline = Date.now() + timeoutMs;
 

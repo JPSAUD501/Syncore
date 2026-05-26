@@ -2680,10 +2680,14 @@ export async function startDevHub(options: {
   await setupDevProjectWatch(options.cwd, options.template);
 
   if (await isLocalPortInUse(devtoolsPort)) {
+    const activeSessionState =
+      (await readDevtoolsSessionState(options.cwd)) ?? sessionState;
     console.log(
       `Syncore devtools hub already running at ws://localhost:${devtoolsPort}. Reusing existing hub/dashboard.`
     );
-    return (await readDevtoolsSessionState(options.cwd)) ?? sessionState;
+    console.log(`Devtools dashboard token: ${activeSessionState.token}`);
+    console.log(`Dashboard shell: ${activeSessionState.authenticatedDashboardUrl}`);
+    return activeSessionState;
   }
   await writeDevtoolsSessionState(options.cwd, sessionState);
 
@@ -3418,34 +3422,28 @@ export async function startDevHub(options: {
   console.log(
     "Expo apps: use the same hub URL through LAN or adb reverse while developing."
   );
-  const dashboardRoot = path.resolve(
-    CORE_PACKAGE_ROOT,
-    "..",
-    "..",
-    "apps",
-    "dashboard"
-  );
-  if (await fileExists(path.join(dashboardRoot, "vite.config.ts"))) {
-    try {
-      const viteModule = await import("vite");
-      const server = await viteModule.createServer({
-        configFile: path.join(dashboardRoot, "vite.config.ts"),
-        root: dashboardRoot,
-        server: {
-          port: dashboardPort
-        }
-      });
-      await server.listen();
-      console.log(`Dashboard shell: ${sessionState.authenticatedDashboardUrl}`);
-    } catch (error) {
-      console.log(
-        `Dashboard source not started automatically: ${formatError(error)}`
-      );
-    }
+  let dashboardStaticServer: ReturnType<typeof createServer> | undefined;
+  const dashboardStaticRoot = await resolvePackagedDashboardRoot();
+  if (!dashboardStaticRoot) {
+    throw new Error(
+      "Syncore Dashboard build is missing. Expected the packaged dashboard at syncorejs/dist/_dashboard/index.html. Rebuild syncorejs before running `syncorejs dev`."
+    );
+  }
+  try {
+    dashboardStaticServer = await startPackagedDashboardServer(
+      dashboardStaticRoot,
+      dashboardPort
+    );
+    console.log(`Dashboard shell: ${sessionState.authenticatedDashboardUrl}`);
+  } catch (error) {
+    throw new Error(
+      `Syncore Dashboard shell could not start: ${formatError(error)}`, { cause: error }
+    );
   }
 
   const close = () => {
     void projectTargetBackend?.dispose();
+    dashboardStaticServer?.close();
     websocketServer.close();
     httpServer.close();
     process.exit(0);
@@ -3454,6 +3452,116 @@ export async function startDevHub(options: {
   process.on("SIGINT", close);
   process.on("SIGTERM", close);
   return sessionState;
+}
+
+async function resolvePackagedDashboardRoot(): Promise<string | null> {
+  const candidates = [
+    path.resolve(CORE_PACKAGE_ROOT, "..", "_dashboard"),
+    path.resolve(CORE_PACKAGE_ROOT, "_dashboard"),
+    path.resolve(CORE_PACKAGE_ROOT, "..", "syncore", "dist", "_dashboard")
+  ];
+  for (const candidate of candidates) {
+    if (await fileExists(path.join(candidate, "index.html"))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+async function startPackagedDashboardServer(
+  root: string,
+  port: number
+): Promise<ReturnType<typeof createServer>> {
+  const server = createServer((request, response) => {
+    void serveDashboardAsset(root, request, response).catch((error) => {
+      if (!response.headersSent) {
+        writeTextResponse(response, 500, formatError(error));
+      } else {
+        response.destroy(error instanceof Error ? error : undefined);
+      }
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  return server;
+}
+
+async function serveDashboardAsset(
+  root: string,
+  request: IncomingMessage,
+  response: ServerResponse
+): Promise<void> {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    writeTextResponse(response, 405, "Method not allowed.");
+    return;
+  }
+  const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+  const requestedPath = decodeURIComponent(requestUrl.pathname);
+  const relativePath =
+    requestedPath === "/" ? "index.html" : requestedPath.slice(1);
+  let assetPath = path.resolve(root, relativePath);
+  if (!isPathInside(root, assetPath)) {
+    writeTextResponse(response, 403, "Forbidden.");
+    return;
+  }
+  try {
+    const info = await stat(assetPath);
+    if (info.isDirectory()) {
+      assetPath = path.join(assetPath, "index.html");
+    }
+  } catch {
+    assetPath = path.join(root, "index.html");
+  }
+  if (!isPathInside(root, assetPath)) {
+    writeTextResponse(response, 403, "Forbidden.");
+    return;
+  }
+  const body = await readFile(assetPath);
+  response.writeHead(200, {
+    "Content-Type": getDashboardAssetContentType(assetPath),
+    "Content-Length": body.byteLength
+  });
+  if (request.method === "HEAD") {
+    response.end();
+    return;
+  }
+  response.end(body);
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
+}
+
+function getDashboardAssetContentType(filePath: string): string {
+  switch (path.extname(filePath)) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".ico":
+      return "image/x-icon";
+    case ".woff2":
+      return "font/woff2";
+    default:
+      return "application/octet-stream";
+  }
 }
 
 function setStorageCorsHeaders(response: ServerResponse): void {

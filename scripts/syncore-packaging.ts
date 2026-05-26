@@ -102,6 +102,12 @@ export async function vendorSyncoreInternals(): Promise<void> {
       );
     }
 
+    await cp(
+      path.join(workspaceRoot, "apps", "dashboard", "dist"),
+      path.join(syncoreDistDir, "_dashboard"),
+      { recursive: true, force: true }
+    );
+
     await rewriteTree(syncoreDistDir, (content, filePath) =>
       rewritePublicEntry(content, filePath)
     );
@@ -345,11 +351,39 @@ export async function assertVendoredArtifactsExist(): Promise<void> {
     path.join(syncoreVendorDir, "schema", "index.js"),
     path.join(syncoreVendorDir, "react", "index.js"),
     path.join(syncoreVendorDir, "platform-web", "index.js"),
-    path.join(syncoreVendorDir, "platform-node", "index.mjs")
+    path.join(syncoreVendorDir, "platform-node", "index.mjs"),
+    path.join(syncoreDistDir, "_dashboard", "index.html")
   ];
   for (const filePath of requiredFiles) {
     await stat(filePath);
   }
+  await assertDashboardAssetsExist();
+}
+
+async function assertDashboardAssetsExist(): Promise<void> {
+  const assetsDir = path.join(syncoreDistDir, "_dashboard", "assets");
+  const assetFiles = await listFilesRecursive(assetsDir);
+  const hasJavaScript = assetFiles.some((filePath) => filePath.endsWith(".js"));
+  const hasCss = assetFiles.some((filePath) => filePath.endsWith(".css"));
+  if (!hasJavaScript || !hasCss) {
+    throw new Error(
+      "Syncore Dashboard build is incomplete. Expected at least one JavaScript asset and one CSS asset in dist/_dashboard/assets."
+    );
+  }
+}
+
+async function listFilesRecursive(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listFilesRecursive(entryPath)));
+    } else if (entry.isFile()) {
+      files.push(entryPath);
+    }
+  }
+  return files;
 }
 
 function createInternalPackage(

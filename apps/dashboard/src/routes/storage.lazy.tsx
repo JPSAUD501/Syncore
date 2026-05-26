@@ -34,16 +34,6 @@ type StorageListResult = Extract<
 >;
 
 const PAGE_SIZE = 100;
-const TEXT_PREVIEW_LIMIT = 80_000;
-
-type PreviewState = {
-  entry: StorageEntry;
-  url: string;
-  supportsRange: boolean;
-  maxPreviewBytes: number;
-  text?: string;
-  truncated?: boolean;
-};
 
 export function StoragePage() {
   const { pushToast } = useToast();
@@ -52,9 +42,6 @@ export function StoragePage() {
   const storageAvailable = storageCapability?.browse !== false;
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [previewState, setPreviewState] = useState<PreviewState | null>(null);
-  const [readError, setReadError] = useState<string | null>(null);
-  const [loadingRead, setLoadingRead] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<StorageEntry | null>(null);
 
   const listPayload = useMemo(
@@ -75,51 +62,8 @@ export function StoragePage() {
   const selectedEntry =
     entries.find((entry) => entry.id === selectedId) ?? entries[0] ?? null;
 
-  const loadEntry = useCallback(async (entry: StorageEntry) => {
+  const selectEntry = useCallback((entry: StorageEntry) => {
     setSelectedId(entry.id);
-    setLoadingRead(true);
-    setReadError(null);
-    setPreviewState(null);
-    try {
-      const result = await createStorageAccess(entry, "preview");
-      const maxPreviewBytes = result.maxPreviewBytes ?? TEXT_PREVIEW_LIMIT;
-      let text: string | undefined;
-      let truncated = false;
-      if (isTextPreview(result.entry)) {
-        if (!result.supportsRange && result.entry.size > maxPreviewBytes) {
-          throw new Error(
-            "Preview is unavailable because this storage backend cannot stream large files."
-          );
-        }
-        const response = await fetch(result.url, {
-          headers: result.supportsRange
-            ? { Range: `bytes=0-${maxPreviewBytes - 1}` }
-            : {}
-        });
-        if (!response.ok && response.status !== 206) {
-          throw new Error(await response.text());
-        }
-        text = new TextDecoder().decode(
-          new Uint8Array(await response.arrayBuffer())
-        );
-        truncated =
-          result.entry.size > maxPreviewBytes ||
-          response.status === 206 ||
-          Boolean(response.headers.get("content-range"));
-      }
-      setPreviewState({
-        entry: result.entry,
-        url: result.url,
-        supportsRange: result.supportsRange,
-        maxPreviewBytes,
-        ...(text !== undefined ? { text } : {}),
-        ...(truncated ? { truncated } : {})
-      });
-    } catch (error) {
-      setReadError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoadingRead(false);
-    }
   }, []);
 
   const handleDownload = useCallback(
@@ -157,8 +101,6 @@ export function StoragePage() {
         }
         if (selectedId === entry.id) {
           setSelectedId(null);
-          setPreviewState(null);
-          setReadError(null);
         }
         pushToast({
           tone: "success",
@@ -272,7 +214,7 @@ export function StoragePage() {
                           "cursor-pointer border-b border-border/60 text-[12px] hover:bg-bg-elevated/60",
                           active && "bg-bg-elevated"
                         )}
-                        onClick={() => void loadEntry(entry)}
+                        onClick={() => selectEntry(entry)}
                       >
                         <td className="border-b border-border/60 px-3 py-2">
                           <div className="flex min-w-0 items-center gap-2">
@@ -338,10 +280,6 @@ export function StoragePage() {
 
         <StorageDetailPanel
           entry={selectedEntry}
-          previewState={previewState}
-          readError={readError}
-          loadingRead={loadingRead}
-          onRead={loadEntry}
           onDownload={handleDownload}
           onDelete={(entry) => setDeleteTarget(entry)}
         />
@@ -371,18 +309,10 @@ export function StoragePage() {
 
 function StorageDetailPanel({
   entry,
-  previewState,
-  readError,
-  loadingRead,
-  onRead,
   onDownload,
   onDelete
 }: {
   entry: StorageEntry | null;
-  previewState: PreviewState | null;
-  readError: string | null;
-  loadingRead: boolean;
-  onRead: (entry: StorageEntry) => Promise<void>;
   onDownload: (entry: StorageEntry) => Promise<void>;
   onDelete: (entry: StorageEntry) => void;
 }) {
@@ -392,13 +322,11 @@ function StorageDetailPanel({
         <EmptyState
           icon={FileArchive}
           title="Select a storage object"
-          description="Choose an object to preview metadata and bytes."
+          description="Choose an object to inspect metadata and manage it."
         />
       </aside>
     );
   }
-
-  const canPreview = previewState?.entry.id === entry.id;
 
   return (
     <aside className="flex min-h-0 flex-col rounded-lg border border-border bg-bg-surface">
@@ -424,12 +352,7 @@ function StorageDetailPanel({
           <Meta label="Path" value={entry.path} mono />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void onRead(entry)}>
-            <FileText size={13} />
-            Preview
-          </Button>
           <Button
-            variant="secondary"
             size="sm"
             onClick={() => void onDownload(entry)}
           >
@@ -448,72 +371,14 @@ function StorageDetailPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
-        {loadingRead ? (
-          <EmptyState
-            icon={RefreshCw}
-            title="Loading preview"
-            description="Reading bytes from the selected runtime."
-            className="py-10"
-          />
-        ) : readError ? (
-          <EmptyState
-            icon={FileArchive}
-            title="Preview unavailable"
-            description={readError}
-            className="py-10"
-          />
-        ) : canPreview ? (
-          <StoragePreview preview={previewState} />
-        ) : (
-          <EmptyState
-            icon={FileArchive}
-            title="Preview not loaded"
-            description="Open a preview to inspect text, JSON or image files."
-            className="py-10"
-          />
-        )}
+        <EmptyState
+          icon={FileArchive}
+          title="Preview temporarily disabled"
+          description="Use Download to inspect this storage object outside the dashboard."
+          className="py-10"
+        />
       </div>
     </aside>
-  );
-}
-
-function StoragePreview({ preview }: { preview: PreviewState }) {
-  const { entry } = preview;
-  const contentType = entry.contentType ?? "";
-  if (contentType.startsWith("image/")) {
-    return (
-      <img
-        src={preview.url}
-        alt={entry.fileName ?? entry.id}
-        className="max-h-[520px] max-w-full rounded-md border border-border object-contain"
-      />
-    );
-  }
-
-  if (isTextPreview(entry) && preview.text !== undefined) {
-    return (
-      <div className="space-y-2">
-        {preview.truncated ? (
-          <Badge variant="secondary">
-            Preview truncated to {formatBytes(preview.maxPreviewBytes)}
-          </Badge>
-        ) : null}
-        <pre className="max-h-130 overflow-auto rounded-md border border-border bg-bg-base p-3 text-[12px] leading-relaxed text-text-secondary">
-          {contentType === "application/json"
-            ? prettyJson(preview.text)
-            : preview.text}
-        </pre>
-      </div>
-    );
-  }
-
-  return (
-    <EmptyState
-      icon={FileArchive}
-      title="Binary object"
-      description={`${formatBytes(entry.size)} cannot be previewed safely. Download the object to inspect it.`}
-      className="py-10"
-    />
   );
 }
 
@@ -568,14 +433,6 @@ function isTextPreview(entry: StorageEntry): boolean {
   );
 }
 
-function prettyJson(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
-}
-
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   const units = ["KB", "MB", "GB", "TB"];
@@ -591,7 +448,7 @@ function formatBytes(value: number): string {
 
 async function createStorageAccess(
   entry: StorageEntry,
-  purpose: "preview" | "download"
+  purpose: "download"
 ): Promise<{
   entry: StorageEntry;
   url: string;

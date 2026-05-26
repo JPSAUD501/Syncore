@@ -106,21 +106,34 @@ describe("StoragePage", () => {
     expect(screen.getAllByText("12 B").length).toBeGreaterThan(0);
   });
 
-  it("previews text storage bytes", async () => {
+  it("selects a storage object without requesting preview access", () => {
+    renderStoragePage();
+    fireEvent.click(screen.getAllByText("note.txt")[0]!);
+
+    expect(
+      screen.getAllByText("Preview temporarily disabled").length
+    ).toBeGreaterThan(0);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("creates temporary access URLs for downloads", async () => {
     requestMock.mockResolvedValue({
       kind: "storage.access.create.result",
       entry: subscriptionState.data.entries[0],
       url: "http://127.0.0.1:4311/storage/access/ticket",
       expiresAt: Date.now() + 60_000,
-      supportsRange: true,
-      maxPreviewBytes: 80_000
+      supportsRange: true
     });
 
     renderStoragePage();
-    fireEvent.click(screen.getAllByText("note.txt")[0]!);
+    fireEvent.click(screen.getAllByLabelText("Download storage object")[0]!);
 
     await waitFor(() => {
-      expect(screen.getByText("hello storage")).toBeTruthy();
+      expect(requestMock).toHaveBeenCalledWith({
+        kind: "storage.access.create",
+        id: "file-1",
+        purpose: "download"
+      });
     });
   });
 

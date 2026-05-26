@@ -100,7 +100,7 @@
     }
   },
   "scripts": {
-    "build": "npm run build:deps && tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
+    "build": "npm run build:deps && npm run build --workspace @syncore/dashboard && tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
     "build:deps": "npm run build --workspace @syncore/core && npm run build --workspace @syncore/schema && npm run build --workspace @syncore/devtools-protocol && npm run build --workspace @syncore/cli && npm run build --workspace @syncore/react && npm run build --workspace @syncore/platform-web && npm run build --workspace @syncore/platform-node && npm run build --workspace @syncore/platform-expo && npm run build --workspace @syncore/next && npm run build --workspace @syncore/svelte",
     "build:standalone": "npm run build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",

@@ -84,6 +84,9 @@ when present, then generates:
 Syncore project, keep generated files fresh, check schema drift, apply local
 migrations, and run the local dev workflow when supported by the app setup.
 
+The Dashboard shell served by `syncorejs dev` is the packaged static artifact
+from `syncorejs/dist/_dashboard`.
+
 Startup should stay compact and phase-based:
 
 - `Project`

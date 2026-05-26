@@ -132,7 +132,134 @@
           ]
         }
       ]
+    },
+    {
+      "name": "entryAttachments",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "entryId": {
+            "validator": {
+              "kind": "id",
+              "tableName": "entries"
+            },
+            "optional": false
+          },
+          "fileName": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "contentType": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "size": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "storageId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "createdAt": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "entryId",
+        "fileName",
+        "contentType",
+        "size",
+        "storageId",
+        "createdAt"
+      ],
+      "fields": [
+        {
+          "name": "contentType",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "entryId",
+          "validator": {
+            "kind": "id",
+            "tableName": "entries"
+          },
+          "storage": {
+            "kind": "id",
+            "tableName": "entries"
+          },
+          "optional": false
+        },
+        {
+          "name": "fileName",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "size",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "storageId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_entry",
+          "fields": [
+            "entryId",
+            "createdAt"
+          ]
+        }
+      ],
+      "searchIndexes": []
     }
   ],
-  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"date\",\"body\",\"mood\",\"wordCount\",\"createdAt\",\"updatedAt\"],\"fields\":[{\"name\":\"body\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"date\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"mood\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"updatedAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"wordCount\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}}],\"indexes\":[{\"fields\":[\"date\"],\"name\":\"by_date\"}],\"name\":\"entries\",\"searchIndexes\":[{\"filterFields\":[\"mood\"],\"name\":\"search_body\",\"searchField\":\"body\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"body\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"date\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"mood\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"updatedAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"wordCount\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}}}}}]}"
+  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"date\",\"body\",\"mood\",\"wordCount\",\"createdAt\",\"updatedAt\"],\"fields\":[{\"name\":\"body\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"date\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"mood\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"updatedAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"wordCount\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}}],\"indexes\":[{\"fields\":[\"date\"],\"name\":\"by_date\"}],\"name\":\"entries\",\"searchIndexes\":[{\"filterFields\":[\"mood\"],\"name\":\"search_body\",\"searchField\":\"body\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"body\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"date\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"mood\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"updatedAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"wordCount\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}}}}},{\"fieldPaths\":[\"entryId\",\"fileName\",\"contentType\",\"size\",\"storageId\",\"createdAt\"],\"fields\":[{\"name\":\"contentType\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"entryId\",\"optional\":false,\"storage\":{\"kind\":\"id\",\"tableName\":\"entries\"},\"validator\":{\"kind\":\"id\",\"tableName\":\"entries\"}},{\"name\":\"fileName\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"size\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"storageId\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"entryId\",\"createdAt\"],\"name\":\"by_entry\"}],\"name\":\"entryAttachments\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"contentType\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"entryId\":{\"optional\":false,\"validator\":{\"kind\":\"id\",\"tableName\":\"entries\"}},\"fileName\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"size\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"storageId\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}}]}"
 }
