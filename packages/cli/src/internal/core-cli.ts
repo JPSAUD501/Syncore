@@ -20,7 +20,6 @@ import { connect as connectToNet } from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { Command } from "commander";
 import { tsImport } from "tsx/esm/api";
 import WebSocket, { WebSocketServer } from "ws";
 import type {
@@ -42,12 +41,17 @@ import {
   createPublicRuntimeId,
   createPublicTargetId
 } from "@syncore/devtools-protocol";
+import { quoteIdentifier, stableStringify } from "@syncore/internal";
 import {
   generateDevtoolsToken,
   isAllowedDashboardOrigin,
   isAuthorizedDashboardRequest,
   sanitizeDevtoolsToken
 } from "./devtools-auth.js";
+import {
+  scanSyncoreFunctionExports,
+  type ScannedFunctionEntry
+} from "./codegen-scanner.js";
 import {
   createDevtoolsCommandHandler,
   createDevtoolsSubscriptionHost,
@@ -77,7 +81,7 @@ import {
   type SyncoreStorageAdapter,
   type TableDefinition,
   type Validator
-} from "./index.js";
+} from "@syncore/core";
 
 export interface SyncoreProjectTargetConfig {
   databasePath: string;
@@ -123,12 +127,6 @@ interface SyncoreTemplateFile {
   content: string;
 }
 
-interface ScannedFunctionEntry {
-  pathParts: string[];
-  exportName: string;
-  kind: "query" | "mutation" | "action";
-}
-
 const loadedTypeScriptModules = new Map<
   string,
   { mtimeMs: number; loaded: Promise<Record<string, unknown>> }
@@ -157,7 +155,6 @@ interface PackageJsonShape {
 const COMBINED_DEV_COMMAND =
   'concurrently --kill-others-on-fail --names syncore,app --prefix-colors yellow,cyan "npm run syncorejs:dev" "npm run dev:app"';
 
-const program = new Command();
 const CORE_PACKAGE_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
@@ -180,200 +177,6 @@ const STORAGE_ACCESS_TICKET_TTL_MS = 5 * 60 * 1000;
 const STORAGE_ACCESS_CHUNK_BYTES = 1024 * 1024;
 const STORAGE_ACCESS_MAX_PREVIEW_BYTES = 80_000;
 
-program
-  .name("syncorejs")
-  .description("Syncore local-first toolkit CLI")
-  .version("0.1.0");
-
-program
-  .command("init")
-  .description("Scaffold Syncore in the current directory")
-  .option(
-    "--template <template>",
-    `Template to scaffold (${VALID_SYNCORE_TEMPLATES.join(", ")}, or auto)`,
-    "auto"
-  )
-  .option("--force", "Overwrite Syncore-managed files when they already exist")
-  .action(async (options: { template: string; force?: boolean }) => {
-    const cwd = process.cwd();
-    const template = await resolveRequestedTemplate(cwd, options.template);
-    const result = await scaffoldProject(cwd, {
-      template,
-      ...(options.force ? { force: true } : {})
-    });
-    await runCodegen(cwd);
-    logScaffoldResult(result, "Syncore project scaffolded.");
-    console.log(
-      "Next: run `npx syncorejs dev` to keep codegen and local migrations in sync."
-    );
-  });
-
-program
-  .command("codegen")
-  .description("Generate typed Syncore references from syncore/functions")
-  .action(async () => {
-    await runCodegen(process.cwd());
-    console.log("Generated syncore/_generated files.");
-  });
-
-program
-  .command("doctor")
-  .description("Check Syncore project structure and inferred template")
-  .action(async () => {
-    const cwd = process.cwd();
-    const checks = [
-      "syncore.config.ts",
-      path.join("syncore", "schema.ts"),
-      path.join("syncore", "functions"),
-      path.join("syncore", "migrations")
-    ];
-    console.log(`Detected template: ${await detectProjectTemplate(cwd)}`);
-    for (const check of checks) {
-      const exists = await fileExists(path.join(cwd, check));
-      console.log(`${exists ? "OK" : "MISSING"} ${check}`);
-    }
-  });
-
-program
-  .command("import")
-  .description("Import JSONL sample data into a local Syncore table")
-  .requiredOption("--table <table>", "Table name to import into")
-  .argument("<file>", "Path to a JSONL file")
-  .action(async (filePath: string, options: { table: string }) => {
-    const importedCount = await importJsonlIntoProject(
-      process.cwd(),
-      options.table,
-      filePath
-    );
-    console.log(
-      `Imported ${importedCount} row(s) into ${JSON.stringify(options.table)}.`
-    );
-  });
-
-program
-  .command("seed")
-  .description(
-    "Import seed data from syncore/seed.jsonl or syncore/seed/<table>.jsonl"
-  )
-  .requiredOption("--table <table>", "Table name to seed")
-  .option("--file <file>", "Explicit JSONL file path")
-  .action(async (options: { table: string; file?: string }) => {
-    const cwd = process.cwd();
-    const seedFile =
-      options.file ??
-      (await resolveDefaultSeedFile(cwd, options.table)) ??
-      path.join("syncore", "seed", `${options.table}.jsonl`);
-    const importedCount = await importJsonlIntoProject(
-      cwd,
-      options.table,
-      seedFile
-    );
-    console.log(
-      `Seeded ${importedCount} row(s) into ${JSON.stringify(options.table)} from ${seedFile}.`
-    );
-  });
-
-program
-  .command("migrate:status")
-  .description(
-    "Compare the current schema against the last saved migration snapshot"
-  )
-  .action(async () => {
-    const cwd = process.cwd();
-    const schema = await loadProjectSchema(cwd);
-    const currentSnapshot = createSchemaSnapshot(schema);
-    const storedSnapshot = await readStoredSnapshot(cwd);
-    const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
-
-    console.log(`Current schema hash: ${currentSnapshot.hash}`);
-    console.log(`Stored snapshot: ${storedSnapshot?.hash ?? "none"}`);
-    console.log(`Statements to generate: ${plan.statements.length}`);
-    console.log(`Warnings: ${plan.warnings.length}`);
-    console.log(`Destructive changes: ${plan.destructiveChanges.length}`);
-
-    for (const warning of plan.warnings) {
-      console.log(`WARN ${warning}`);
-    }
-    for (const destructiveChange of plan.destructiveChanges) {
-      console.log(`BLOCK ${destructiveChange}`);
-    }
-  });
-
-program
-  .command("migrate:generate")
-  .argument("[name]", "Optional migration name", "auto")
-  .description("Generate a SQL migration file from the current schema diff")
-  .action(async (name: string) => {
-    const cwd = process.cwd();
-    const schema = await loadProjectSchema(cwd);
-    const currentSnapshot = createSchemaSnapshot(schema);
-    const storedSnapshot = await readStoredSnapshot(cwd);
-    const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
-
-    if (plan.destructiveChanges.length > 0) {
-      console.error("Destructive schema changes require a manual migration:");
-      for (const destructiveChange of plan.destructiveChanges) {
-        console.error(`- ${destructiveChange}`);
-      }
-      process.exitCode = 1;
-      return;
-    }
-
-    if (plan.statements.length === 0 && plan.warnings.length === 0) {
-      console.log("No schema changes detected.");
-      return;
-    }
-
-    const migrationsDirectory = path.join(cwd, "syncore", "migrations");
-    await mkdir(migrationsDirectory, { recursive: true });
-    const migrationNumber = await getNextMigrationNumber(migrationsDirectory);
-    const slug = slugify(name);
-    const migrationFileName = `${String(migrationNumber).padStart(4, "0")}_${slug}.sql`;
-    const migrationSql = renderMigrationSql(plan, {
-      title: `Syncore migration ${migrationFileName}`
-    });
-    await writeFile(
-      path.join(migrationsDirectory, migrationFileName),
-      migrationSql
-    );
-    await writeStoredSnapshot(cwd, currentSnapshot);
-    console.log(
-      `Generated ${path.join("syncore", "migrations", migrationFileName)}`
-    );
-  });
-
-program
-  .command("migrate:apply")
-  .description(
-    "Apply SQL migrations from syncore/migrations to the configured database"
-  )
-  .action(async () => {
-    const appliedCount = await applyProjectMigrations(process.cwd());
-    console.log(`Applied ${appliedCount} migration(s).`);
-  });
-
-program
-  .command("dev")
-  .description("Start the Syncore dev loop and devtools hub")
-  .option(
-    "--template <template>",
-    `Template to scaffold when Syncore is missing (${VALID_SYNCORE_TEMPLATES.join(", ")}, or auto)`,
-    "auto"
-  )
-  .action(async (options: { template: string }) => {
-    const cwd = process.cwd();
-    const template = await resolveRequestedTemplate(cwd, options.template);
-    await startDevHub({ cwd, template });
-  });
-
-export async function runSyncoreCli(argv = process.argv): Promise<void> {
-  await program.parseAsync(argv);
-}
-
-if (isCliEntryPoint()) {
-  await runSyncoreCli();
-}
-
 export async function runCodegen(cwd: string): Promise<void> {
   const functionsDir = path.join(cwd, "syncore", "functions");
   const generatedDir = path.join(cwd, "syncore", "_generated");
@@ -394,14 +197,7 @@ export async function runCodegen(cwd: string): Promise<void> {
       .replaceAll("\\", "/")
       .replace(/\.tsx?$/, "");
     const pathParts = relative.split("/");
-    const regex = /export const (\w+)\s*=\s*(query|mutation|action)\(/g;
-    for (const match of content.matchAll(regex)) {
-      functionEntries.push({
-        pathParts,
-        exportName: match[1]!,
-        kind: match[2] as "query" | "mutation" | "action"
-      });
-    }
+    functionEntries.push(...scanSyncoreFunctionExports(content, pathParts, file));
   }
 
   const apiSource = [
@@ -3568,10 +3364,17 @@ export async function startDevHub(options: {
 }
 
 async function resolvePackagedDashboardRoot(): Promise<string | null> {
+  const workspaceRoots = await resolveWorkspaceRoots([
+    CORE_PACKAGE_ROOT,
+    process.cwd()
+  ]);
   const candidates = [
     path.resolve(CORE_PACKAGE_ROOT, "..", "_dashboard"),
     path.resolve(CORE_PACKAGE_ROOT, "_dashboard"),
-    path.resolve(CORE_PACKAGE_ROOT, "..", "syncore", "dist", "_dashboard")
+    path.resolve(CORE_PACKAGE_ROOT, "..", "syncore", "dist", "_dashboard"),
+    ...workspaceRoots.map((root) =>
+      path.join(root, "packages", "syncore", "dist", "_dashboard")
+    )
   ];
   for (const candidate of candidates) {
     if (await fileExists(path.join(candidate, "index.html"))) {
@@ -3579,6 +3382,41 @@ async function resolvePackagedDashboardRoot(): Promise<string | null> {
     }
   }
   return null;
+}
+
+async function resolveWorkspaceRoots(starts: string[]): Promise<string[]> {
+  const roots = new Set<string>();
+  for (const start of starts) {
+    const root = await findWorkspaceRoot(start);
+    if (root) {
+      roots.add(root);
+    }
+  }
+  return [...roots];
+}
+
+async function findWorkspaceRoot(start: string): Promise<string | null> {
+  let directory = path.resolve(start);
+  for (;;) {
+    const packageJsonPath = path.join(directory, "package.json");
+    if (await fileExists(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(
+          await readFile(packageJsonPath, "utf8")
+        ) as { workspaces?: unknown };
+        if (Array.isArray(packageJson.workspaces)) {
+          return directory;
+        }
+      } catch {
+        // Keep walking; malformed package.json files are not workspace roots.
+      }
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      return null;
+    }
+    directory = parent;
+  }
 }
 
 async function startPackagedDashboardServer(
@@ -4058,38 +3896,6 @@ export function resolvePortFromEnv(
   }
 
   return parsed;
-}
-
-function isCliEntryPoint(): boolean {
-  const entryPath = process.argv[1];
-  if (!entryPath) {
-    return false;
-  }
-  return (
-    path.resolve(entryPath) === path.resolve(fileURLToPath(import.meta.url))
-  );
-}
-
-function stableStringify(value: unknown): string {
-  return JSON.stringify(sortValue(value));
-}
-
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortValue);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, nested]) => [key, sortValue(nested)])
-    );
-  }
-  return value;
-}
-
-function quoteIdentifier(identifier: string): string {
-  return `"${identifier.replaceAll('"', '""')}"`;
 }
 
 function toSearchValue(value: unknown): string {

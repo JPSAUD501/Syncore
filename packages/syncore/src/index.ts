@@ -38,6 +38,7 @@ export {
   type SchedulerApi,
   type SchedulerOptions,
   type SearchIndexBuilder,
+  type SearchIndexFilterField,
   type SearchQuery,
   type StorageObject,
   type StorageWriteInput,

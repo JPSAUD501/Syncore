@@ -15,11 +15,6 @@
       "types": "./dist/transport.d.mts",
       "import": "./dist/transport.mjs",
       "default": "./dist/transport.mjs"
-    },
-    "./cli": {
-      "types": "./dist/cli.d.mts",
-      "import": "./dist/cli.mjs",
-      "default": "./dist/cli.mjs"
     }
   },
   "scripts": {
@@ -31,11 +26,11 @@
   },
   "dependencies": {
     "@syncore/devtools-protocol": "^0.1.0",
+    "@syncore/internal": "^0.1.0",
     "@syncore/schema": "^0.1.0",
-    "commander": "^14.0.3",
-    "date-fns-tz": "^3.2.0",
-    "node-sql-parser": "^5.4.0",
-    "tsx": "^4.22.3",
-    "ws": "^8.21.0"
+    "date-fns-tz": "^3.2.0"
+  },
+  "devDependencies": {
+    "node-sql-parser": "^5.4.0"
   }
 }

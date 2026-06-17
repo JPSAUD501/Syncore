@@ -49,7 +49,7 @@ export type GenericTableSearchIndexes = Record<
   string,
   {
     searchField: string;
-    filterFields: string;
+    filterFields: readonly string[];
   }
 >;
 
@@ -66,7 +66,11 @@ export type GenericTableSearchIndexes = Record<
  * produced by `defineTable` and consumed internally by `defineSchema`.
  */
 export class TableDefinition<
-  TValidator extends Validator<Record<string, unknown>, Record<string, unknown>, string>,
+  TValidator extends Validator<
+    Record<string, unknown>,
+    Record<string, unknown>,
+    string
+  >,
   TIndexes = Record<never, never>,
   TSearchIndexes = Record<never, never>
 > {
@@ -96,7 +100,7 @@ export class TableDefinition<
    *
    * **Rules**
    * - An index must cover at least one field.
-   * - Field names must be top-level paths that exist in the table validator.
+   * - Field names must be field paths that exist in the table validator.
    * - Index names must be unique within the table.
    * - Index definitions are immutable after creation — changing the fields of
    *   an existing index requires a manual migration.
@@ -116,7 +120,9 @@ export class TableDefinition<
     fields: [TFirstField, ...TRestFields]
   ): TableDefinition<
     TValidator,
-    Expand<TIndexes & Record<TIndexName, readonly [TFirstField, ...TRestFields]>>,
+    Expand<
+      TIndexes & Record<TIndexName, readonly [TFirstField, ...TRestFields]>
+    >,
     TSearchIndexes
   > {
     this.indexes.push({
@@ -125,7 +131,9 @@ export class TableDefinition<
     });
     return this as unknown as TableDefinition<
       TValidator,
-      Expand<TIndexes & Record<TIndexName, readonly [TFirstField, ...TRestFields]>>,
+      Expand<
+        TIndexes & Record<TIndexName, readonly [TFirstField, ...TRestFields]>
+      >,
       TSearchIndexes
     >;
   }
@@ -177,7 +185,7 @@ export class TableDefinition<
           TIndexName,
           {
             searchField: TSearchField;
-            filterFields: TFilterField;
+            filterFields: readonly TFilterField[];
           }
         >
     >
@@ -196,7 +204,7 @@ export class TableDefinition<
             TIndexName,
             {
               searchField: TSearchField;
-              filterFields: TFilterField;
+              filterFields: readonly TFilterField[];
             }
           >
       >
@@ -239,29 +247,28 @@ export type InferTableInput<TTable extends AnyTableDefinition> = Infer<
   TTable["validator"]
 >;
 
-export type TableFieldPaths<TTable> = TTable extends TableDefinition<
-  infer TValidator,
-  unknown,
-  unknown
->
-  ? FieldPaths<TValidator>
-  : never;
+export type TableFieldPaths<TTable> =
+  TTable extends TableDefinition<infer TValidator, unknown, unknown>
+    ? FieldPaths<TValidator>
+    : never;
 
-export type TableIndexes<TTable> = TTable extends TableDefinition<
-  Validator<Record<string, unknown>, Record<string, unknown>, string>,
-  infer TIndexes,
-  unknown
->
-  ? TIndexes
-  : never;
+export type TableIndexes<TTable> =
+  TTable extends TableDefinition<
+    Validator<Record<string, unknown>, Record<string, unknown>, string>,
+    infer TIndexes,
+    unknown
+  >
+    ? TIndexes
+    : never;
 
-export type TableSearchIndexes<TTable> = TTable extends TableDefinition<
-  Validator<Record<string, unknown>, Record<string, unknown>, string>,
-  unknown,
-  infer TSearchIndexes
->
-  ? TSearchIndexes
-  : never;
+export type TableSearchIndexes<TTable> =
+  TTable extends TableDefinition<
+    Validator<Record<string, unknown>, Record<string, unknown>, string>,
+    unknown,
+    infer TSearchIndexes
+  >
+    ? TSearchIndexes
+    : never;
 
 export type TableIndexNames<TTable> = Extract<
   keyof TableIndexes<TTable>,
@@ -318,7 +325,11 @@ export function defineTable<const TShape extends ObjectValidatorShape>(
   validator: TShape
 ): TableDefinition<ObjectValidator<TShape>>;
 export function defineTable<
-  TValidator extends Validator<Record<string, unknown>, Record<string, unknown>, string>
+  TValidator extends Validator<
+    Record<string, unknown>,
+    Record<string, unknown>,
+    string
+  >
 >(validator: TValidator): TableDefinition<TValidator>;
 export function defineTable<const TShape extends ObjectValidatorShape>(
   validator:
@@ -327,10 +338,11 @@ export function defineTable<const TShape extends ObjectValidatorShape>(
 ): TableDefinition<
   Validator<Record<string, unknown>, Record<string, unknown>, string>
 > {
-  const normalized: Validator<Record<string, unknown>, Record<string, unknown>, string> =
-    isValidatorLike(validator)
-    ? validator
-    : ensureObjectValidator(validator);
+  const normalized: Validator<
+    Record<string, unknown>,
+    Record<string, unknown>,
+    string
+  > = isValidatorLike(validator) ? validator : ensureObjectValidator(validator);
   return new TableDefinition(normalized);
 }
 
@@ -403,7 +415,15 @@ export function defineSchema<const TTables extends SyncoreSchemaDefinition>(
 }
 
 function isValidatorLike(
-  value: Validator<Record<string, unknown>, Record<string, unknown>, string> | ObjectValidatorShape
-): value is Validator<Record<string, unknown>, Record<string, unknown>, string> {
-  return typeof (value as Validator<unknown, unknown, string>).parse === "function";
+  value:
+    | Validator<Record<string, unknown>, Record<string, unknown>, string>
+    | ObjectValidatorShape
+): value is Validator<
+  Record<string, unknown>,
+  Record<string, unknown>,
+  string
+> {
+  return (
+    typeof (value as Validator<unknown, unknown, string>).parse === "function"
+  );
 }

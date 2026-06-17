@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
 import { usePreferredTarget } from "@/hooks";
 import { useDevtoolsMultiRuntimeSubscription } from "@/hooks/useReactiveData";
+import { stableStringify } from "@/lib/stable";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type {
   SyncoreActiveQueryInfo,
@@ -38,10 +39,11 @@ function ActiveQueriesPage() {
     supportsOffline,
     selectedTarget,
     runtimeFilter
-  } =
-    usePreferredTarget();
+  } = usePreferredTarget();
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(initialQueryId ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialQueryId ?? null
+  );
 
   const runtimeIds = useMemo(() => {
     if (!selectedTarget) {
@@ -55,7 +57,10 @@ function ActiveQueriesPage() {
     return targetRuntimeId ? [targetRuntimeId] : [];
   }, [runtimeFilter, selectedTarget, targetRuntimeId]);
   const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
-    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+    Extract<
+      SyncoreDevtoolsSubscriptionResultPayload,
+      { kind: "runtime.activeQueries.result" }
+    >
   >(
     runtimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
     runtimeIds,
@@ -75,7 +80,9 @@ function ActiveQueriesPage() {
 
   const filteredQueries = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const sorted = [...queries].sort((left, right) => right.lastRunAt - left.lastRunAt);
+    const sorted = [...queries].sort(
+      (left, right) => right.lastRunAt - left.lastRunAt
+    );
     if (!needle) {
       return sorted;
     }
@@ -83,7 +90,7 @@ function ActiveQueriesPage() {
       [
         query.functionName,
         query.id,
-        JSON.stringify(query.args ?? {}),
+        stableStringify(query.args ?? {}),
         ...query.dependencyKeys
       ]
         .join(" ")
@@ -93,12 +100,18 @@ function ActiveQueriesPage() {
   }, [queries, search]);
 
   const selectedQuery =
-    filteredQueries.find((query) => getQuerySelectionId(query) === selectedId || query.id === selectedId) ??
+    filteredQueries.find(
+      (query) =>
+        getQuerySelectionId(query) === selectedId || query.id === selectedId
+    ) ??
     filteredQueries[0] ??
     null;
 
-  const functionCount = new Set(queries.map((query) => query.functionName)).size;
-  const dependencyCount = new Set(queries.flatMap((query) => query.dependencyKeys)).size;
+  const functionCount = new Set(queries.map((query) => query.functionName))
+    .size;
+  const dependencyCount = new Set(
+    queries.flatMap((query) => query.dependencyKeys)
+  ).size;
   const totalConsumers = queries.reduce(
     (sum, query) => sum + (query.consumers ?? 1),
     0
@@ -176,7 +189,8 @@ function ActiveQueriesPage() {
                   query={query}
                   selected={
                     selectedQuery
-                      ? getQuerySelectionId(selectedQuery) === getQuerySelectionId(query)
+                      ? getQuerySelectionId(selectedQuery) ===
+                        getQuerySelectionId(query)
                       : false
                   }
                   onSelect={() => setSelectedId(getQuerySelectionId(query))}
@@ -239,13 +253,20 @@ function ActiveQueriesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <DetailField label="Last Run">
                   {selectedQuery.lastRunAt > 0 ? (
-                    <TimestampCell timestamp={selectedQuery.lastRunAt} format="both" />
+                    <TimestampCell
+                      timestamp={selectedQuery.lastRunAt}
+                      format="both"
+                    />
                   ) : (
-                    <span className="text-[12px] text-text-tertiary">pending</span>
+                    <span className="text-[12px] text-text-tertiary">
+                      pending
+                    </span>
                   )}
                 </DetailField>
                 <DetailField label="Owner">
-                  <Badge variant="secondary">{selectedQuery.owner ?? "root"}</Badge>
+                  <Badge variant="secondary">
+                    {selectedQuery.owner ?? "root"}
+                  </Badge>
                 </DetailField>
               </div>
               {selectedQuery.componentPath && (
@@ -256,7 +277,11 @@ function ActiveQueriesPage() {
                 </DetailField>
               )}
               <DetailField label="Arguments">
-                <JsonViewer data={selectedQuery.args ?? {}} defaultExpanded maxDepth={4} />
+                <JsonViewer
+                  data={selectedQuery.args ?? {}}
+                  defaultExpanded
+                  maxDepth={4}
+                />
               </DetailField>
               <DetailField label="Dependencies">
                 <div className="flex flex-wrap gap-1">
@@ -266,7 +291,11 @@ function ActiveQueriesPage() {
                     </span>
                   ) : (
                     selectedQuery.dependencyKeys.map((dependency) => (
-                      <Badge key={dependency} variant="outline" className="font-mono text-[10px]">
+                      <Badge
+                        key={dependency}
+                        variant="outline"
+                        className="font-mono text-[10px]"
+                      >
                         {dependency}
                       </Badge>
                     ))
@@ -274,8 +303,8 @@ function ActiveQueriesPage() {
                 </div>
               </DetailField>
               <div className="rounded-md border border-border bg-bg-base px-3 py-2 text-[11px] text-text-tertiary">
-                {dependencyCount} unique dependencies are currently watched across all
-                active queries.
+                {dependencyCount} unique dependencies are currently watched
+                across all active queries.
               </div>
             </div>
           </ScrollArea>

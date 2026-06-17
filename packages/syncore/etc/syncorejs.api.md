@@ -263,7 +263,7 @@ export type GenericTableIndexes = Record<string, readonly string[]>;
 // @public (undocumented)
 export type GenericTableSearchIndexes = Record<string, {
     searchField: string;
-    filterFields: string;
+    filterFields: readonly string[];
 }>;
 
 // @public (undocumented)
@@ -582,8 +582,6 @@ export interface RegisteredSyncoreFunction {
     __syncoreComponent?: SyncoreComponentFunctionMetadata;
     // (undocumented)
     argsValidator: Validator<unknown, unknown, string>;
-    // Warning: (ae-incompatible-release-tags) The symbol "handler" is marked as @public, but its signature references "RegisteredSyncoreHandler" which is marked as @internal
-    //
     // (undocumented)
     handler: RegisteredSyncoreHandler;
     // (undocumented)
@@ -592,9 +590,7 @@ export interface RegisteredSyncoreFunction {
     returnsValidator?: Validator<unknown, unknown, string>;
 }
 
-// Warning: (ae-internal-missing-underscore) The name "RegisteredSyncoreHandler" should be prefixed with an underscore because the declaration is marked as @internal
-//
-// @internal
+// @public
 export type RegisteredSyncoreHandler = {
     bivarianceHack(ctx: unknown, args: unknown): unknown;
 }["bivarianceHack"];
@@ -723,13 +719,13 @@ export interface SchemaSnapshot {
 }
 
 // @public (undocumented)
-export interface SearchIndexBuilder<TSearchField extends string = string, TFilterField extends string = string> {
+export interface SearchIndexBuilder<TSearchField extends string = string, TFilterFields extends string | readonly string[] = string> {
     // (undocumented)
     build(): SearchQuery;
     // (undocumented)
-    eq(field: TFilterField, value: unknown): SearchIndexBuilder<TSearchField, TFilterField>;
+    eq(field: SearchIndexFilterField<TFilterFields>, value: unknown): SearchIndexBuilder<TSearchField, TFilterFields>;
     // (undocumented)
-    search(field: TSearchField, value: string): SearchIndexBuilder<TSearchField, TFilterField>;
+    search(field: TSearchField, value: string): SearchIndexBuilder<TSearchField, TFilterFields>;
 }
 
 // @public (undocumented)
@@ -743,6 +739,9 @@ export interface SearchIndexDefinition {
 }
 
 // @public (undocumented)
+export type SearchIndexFilterField<TFilterFields extends string | readonly string[]> = TFilterFields extends readonly (infer TField)[] ? Extract<TField, string> : Extract<TFilterFields, string>;
+
+// @public (undocumented)
 export function searchIndexTableName(tableName: string, indexName: string): string;
 
 // @public
@@ -754,6 +753,9 @@ export type SearchQuery = {
 
 // @public (undocumented)
 export function serializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: TValue, path?: string): TStorage;
+
+// @public
+export function stableStringify(value: unknown): string;
 
 // @public
 export interface StorageObject {
@@ -1060,7 +1062,7 @@ export class TableDefinition<TValidator extends Validator<Record<string, unknown
         filterFields?: TFilterField[];
     }): TableDefinition<TValidator, TIndexes, Expand<TSearchIndexes & Record<TIndexName, {
         searchField: TSearchField;
-        filterFields: TFilterField;
+        filterFields: readonly TFilterField[];
     }>>>;
     // (undocumented)
     readonly searchIndexes: SearchIndexDefinition[];

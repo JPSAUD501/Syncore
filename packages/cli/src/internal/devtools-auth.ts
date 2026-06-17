@@ -1,8 +1,11 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 
-const TOKEN_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const TOKEN_ALPHABET =
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-export function sanitizeDevtoolsToken(value: string | undefined): string | null {
+export function sanitizeDevtoolsToken(
+  value: string | undefined
+): string | null {
   if (!value) {
     return null;
   }
@@ -27,7 +30,9 @@ export function generateDevtoolsToken(length = 20): string {
   return token;
 }
 
-export function readDevtoolsTokenFromUrl(requestUrl: string | undefined): string | null {
+export function readDevtoolsTokenFromUrl(
+  requestUrl: string | undefined
+): string | null {
   if (!requestUrl) {
     return null;
   }
@@ -54,7 +59,11 @@ export function isAllowedDashboardOrigin(
     const expectedPort = String(dashboardPort);
     const originPort =
       origin.port ||
-      (origin.protocol === "https:" ? "443" : origin.protocol === "http:" ? "80" : "");
+      (origin.protocol === "https:"
+        ? "443"
+        : origin.protocol === "http:"
+          ? "80"
+          : "");
     return originPort === expectedPort;
   } catch {
     return false;

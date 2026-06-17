@@ -13,6 +13,7 @@ const syncorePackageJsonPath = path.join(
 const expectedPublicSubpaths = [
   ".",
   "./cli",
+  "./components",
   "./browser",
   "./browser/react",
   "./react",
@@ -47,9 +48,9 @@ describe("syncorejs public surface", () => {
     ) as { exports?: Record<string, unknown> };
 
     expect(packageJson.exports).toBeDefined();
-    expect(Object.keys(packageJson.exports ?? {})).toEqual(
-      expect.arrayContaining([...expectedPublicSubpaths])
-    );
+    expect(Object.keys(packageJson.exports ?? {})).toEqual([
+      ...expectedPublicSubpaths
+    ]);
   });
 
   it(

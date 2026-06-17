@@ -169,8 +169,8 @@ class RuntimeIndexRangeBuilder<
 
 class RuntimeSearchIndexBuilder<
   TSearchField extends string = string,
-  TFilterField extends string = string
-> implements SearchIndexBuilder<TSearchField, TFilterField> {
+  TFilterFields extends string | readonly string[] = string
+> implements SearchIndexBuilder<TSearchField, TFilterFields> {
   private searchField: string | undefined;
   private searchText: string | undefined;
   private readonly filters: Array<{
@@ -182,16 +182,18 @@ class RuntimeSearchIndexBuilder<
   search(
     field: TSearchField,
     value: string
-  ): SearchIndexBuilder<TSearchField, TFilterField> {
+  ): SearchIndexBuilder<TSearchField, TFilterFields> {
     this.searchField = field;
     this.searchText = value;
     return this;
   }
 
   eq(
-    field: TFilterField,
+    field: TFilterFields extends readonly (infer TField)[]
+      ? Extract<TField, string>
+      : Extract<TFilterFields, string>,
     value: unknown
-  ): SearchIndexBuilder<TSearchField, TFilterField> {
+  ): SearchIndexBuilder<TSearchField, TFilterFields> {
     this.filters.push({ field, operator: "=", value });
     return this;
   }
@@ -324,9 +326,7 @@ class RuntimeQueryBuilder<
   }
 }
 
-export class ExecutionEngine<
-  TSchema extends SyncoreDataModel
-> {
+export class ExecutionEngine<TSchema extends SyncoreDataModel> {
   constructor(private readonly deps: ExecutionEngineDeps<TSchema>) {}
 
   createClient(): SyncoreClient {
@@ -526,7 +526,7 @@ export class ExecutionEngine<
               componentPath: definition.__syncoreComponent.componentPath,
               componentName: definition.__syncoreComponent.componentName
             }
-        : {}),
+          : {}),
         argsPreview: createDevtoolsPreview(args),
         durationMs: completedAt - startedAt,
         timestamp: completedAt,
@@ -692,7 +692,12 @@ export class ExecutionEngine<
           `Search index "${searchIndex.name}" expects field "${searchIndex.searchField}".`
         );
       }
-      if (this.deps.schema.isSearchIndexDisabled(options.tableName, searchIndex.name)) {
+      if (
+        this.deps.schema.isSearchIndexDisabled(
+          options.tableName,
+          searchIndex.name
+        )
+      ) {
         whereClauses.push(
           `${fieldExpression("t", searchIndex.searchField)} LIKE ?`
         );
@@ -818,7 +823,9 @@ export class ExecutionEngine<
                 ),
                 normalizedArgs as JsonObject,
                 {
-                  ...(state.executionId ? { executionId: state.executionId } : {}),
+                  ...(state.executionId
+                    ? { executionId: state.executionId }
+                    : {}),
                   mutationDepth: state.mutationDepth + 1,
                   changedTables: state.changedTables,
                   documentChanges: state.documentChanges,
@@ -876,15 +883,13 @@ export class ExecutionEngine<
           DocumentForTable<TSchema, TTableName>
         >(
           (options) =>
-            this.executeQueryBuilder<DocumentForTable<TSchema, TTableName>>(
-              {
-                ...options,
-                tableName: this.resolveTableName(
-                  tableName,
-                  state.componentMetadata
-                )
-              }
-            ),
+            this.executeQueryBuilder<DocumentForTable<TSchema, TTableName>>({
+              ...options,
+              tableName: this.resolveTableName(
+                tableName,
+                state.componentMetadata
+              )
+            }),
           this.resolveTableName(tableName, state.componentMetadata),
           state.dependencyCollector
         ),
@@ -949,7 +954,9 @@ export class ExecutionEngine<
         );
         const current = await reader.get(tableName, id);
         if (!current) {
-          throw new Error(`Document "${id}" does not exist in "${scopedTableName}".`);
+          throw new Error(
+            `Document "${id}" does not exist in "${scopedTableName}".`
+          );
         }
         const merged: JsonObject = { ...omitSystemFields(current), ...value };
         for (const key of Object.keys(merged)) {
@@ -1009,7 +1016,9 @@ export class ExecutionEngine<
           [id]
         );
         if (!row) {
-          throw new Error(`Document "${id}" does not exist in "${scopedTableName}".`);
+          throw new Error(
+            `Document "${id}" does not exist in "${scopedTableName}".`
+          );
         }
         await this.deps.schema.syncSearchIndexes(scopedTableName, row);
         state.changedTables.add(scopedTableName);

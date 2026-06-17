@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   cp,
   mkdir,
@@ -14,6 +15,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
+const syncorePackagingLockOwnerEnv = "SYNCORE_PACKAGING_LOCK_OWNER";
 
 export const workspaceRoot = path.resolve(scriptsDir, "..");
 export const syncorePackageRoot = path.join(
@@ -25,6 +27,8 @@ export const syncorePublishedPackageName = "syncorejs";
 export const syncoreDistDir = path.join(syncorePackageRoot, "dist");
 export const syncoreVendorDir = path.join(syncoreDistDir, "_vendor");
 export const syncoreVendorLockDir = path.join(syncoreDistDir, ".vendor-lock");
+const syncoreVendorLockOwnerFile = path.join(syncoreVendorLockDir, "owner.txt");
+let syncorePackagingLockDepth = 0;
 
 export interface InternalPackageConfig {
   name: string;
@@ -37,6 +41,7 @@ export interface ExecOptions {
 }
 
 export const syncoreInternalPackages: InternalPackageConfig[] = [
+  createInternalPackage("@syncore/internal", "internal"),
   createInternalPackage("@syncore/schema", "schema"),
   createInternalPackage("@syncore/devtools-protocol", "devtools-protocol"),
   createInternalPackage("@syncore/core", "core"),
@@ -50,10 +55,10 @@ export const syncoreInternalPackages: InternalPackageConfig[] = [
 ];
 
 export const runtimeReplacements = new Map<string, string>([
+  ["@syncore/internal", "./_vendor/internal/index.js"],
   ["@syncore/schema", "./_vendor/schema/index.js"],
   ["@syncore/devtools-protocol", "./_vendor/devtools-protocol/index.js"],
   ["@syncore/core", "./_vendor/core/index.mjs"],
-  ["@syncore/core/cli", "./_vendor/core/cli.mjs"],
   ["@syncore/cli", "./_vendor/cli/index.mjs"],
   ["@syncore/react", "./_vendor/react/index.js"],
   ["@syncore/platform-web", "./_vendor/platform-web/index.js"],
@@ -69,10 +74,10 @@ export const runtimeReplacements = new Map<string, string>([
 ]);
 
 export const typeReplacements = new Map<string, string>([
+  ["@syncore/internal", "./_vendor/internal/index.d.ts"],
   ["@syncore/schema", "./_vendor/schema/index.d.ts"],
   ["@syncore/devtools-protocol", "./_vendor/devtools-protocol/index.d.ts"],
   ["@syncore/core", "./_vendor/core/index.d.mts"],
-  ["@syncore/core/cli", "./_vendor/core/cli.d.mts"],
   ["@syncore/cli", "./_vendor/cli/index.d.mts"],
   ["@syncore/react", "./_vendor/react/index.d.ts"],
   ["@syncore/platform-web", "./_vendor/platform-web/index.d.ts"],
@@ -91,7 +96,7 @@ export const typeReplacements = new Map<string, string>([
 ]);
 
 export async function vendorSyncoreInternals(): Promise<void> {
-  await withVendorLock(async () => {
+  await withSyncorePackagingLock(async () => {
     await rm(syncoreVendorDir, { recursive: true, force: true });
     await mkdir(syncoreVendorDir, { recursive: true });
 
@@ -116,17 +121,46 @@ export async function vendorSyncoreInternals(): Promise<void> {
   });
 }
 
-async function withVendorLock<T>(callback: () => Promise<T>): Promise<T> {
+export async function withSyncorePackagingLock<T>(
+  callback: () => Promise<T>
+): Promise<T> {
+  if (syncorePackagingLockDepth > 0) {
+    syncorePackagingLockDepth += 1;
+    try {
+      return await callback();
+    } finally {
+      syncorePackagingLockDepth -= 1;
+    }
+  }
+
   await mkdir(syncoreDistDir, { recursive: true });
 
   const deadline = Date.now() + 120_000;
+  const inheritedOwner = process.env[syncorePackagingLockOwnerEnv];
+  const owner = inheritedOwner ?? randomUUID();
+  let acquired = false;
+
   while (true) {
     try {
       await mkdir(syncoreVendorLockDir);
+      await writeFile(syncoreVendorLockOwnerFile, `${owner}\n`);
+      acquired = true;
       break;
     } catch (error) {
       if (!isAlreadyExistsError(error)) {
         throw error;
+      }
+      if (inheritedOwner) {
+        try {
+          const activeOwner = (
+            await readFile(syncoreVendorLockOwnerFile, "utf8")
+          ).trim();
+          if (activeOwner === inheritedOwner) {
+            break;
+          }
+        } catch {
+          // Lock directory exists but owner metadata is not readable yet.
+        }
       }
       if (Date.now() > deadline) {
         throw new Error("Timed out waiting for the Syncore packaging lock.");
@@ -136,9 +170,23 @@ async function withVendorLock<T>(callback: () => Promise<T>): Promise<T> {
   }
 
   try {
-    return await callback();
+    syncorePackagingLockDepth += 1;
+    const previousOwner = process.env[syncorePackagingLockOwnerEnv];
+    process.env[syncorePackagingLockOwnerEnv] = owner;
+    try {
+      return await callback();
+    } finally {
+      if (previousOwner === undefined) {
+        delete process.env[syncorePackagingLockOwnerEnv];
+      } else {
+        process.env[syncorePackagingLockOwnerEnv] = previousOwner;
+      }
+      syncorePackagingLockDepth -= 1;
+    }
   } finally {
-    await rm(syncoreVendorLockDir, { recursive: true, force: true });
+    if (acquired) {
+      await rm(syncoreVendorLockDir, { recursive: true, force: true });
+    }
   }
 }
 
@@ -333,9 +381,7 @@ export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function isAlreadyExistsError(
-  error: unknown
-): error is NodeJS.ErrnoException {
+function isAlreadyExistsError(error: unknown): error is NodeJS.ErrnoException {
   return (
     typeof error === "object" &&
     error !== null &&
@@ -346,6 +392,7 @@ function isAlreadyExistsError(
 
 export async function assertVendoredArtifactsExist(): Promise<void> {
   const requiredFiles = [
+    path.join(syncoreVendorDir, "internal", "index.js"),
     path.join(syncoreVendorDir, "core", "index.mjs"),
     path.join(syncoreVendorDir, "cli", "index.mjs"),
     path.join(syncoreVendorDir, "schema", "index.js"),

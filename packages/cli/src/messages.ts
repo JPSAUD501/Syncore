@@ -1,7 +1,7 @@
 import {
   type SyncoreTemplateName,
   templateUsesConnectedClients as coreTemplateUsesConnectedClients
-} from "@syncore/core/cli";
+} from "./internal/core-cli.js";
 
 export function buildInitNextSteps(template: SyncoreTemplateName): string[] {
   if (templateUsesConnectedClients(template)) {
@@ -27,7 +27,9 @@ export function buildDevBootstrapNextSteps(): string[] {
 
 export function buildTargetCommandNextSteps(targetId?: string): string[] {
   if (targetId) {
-    return [`Use \`npx syncorejs run --target ${targetId} <function>\` to operate on a specific target.`];
+    return [
+      `Use \`npx syncorejs run --target ${targetId} <function>\` to operate on a specific target.`
+    ];
   }
   return [
     "Run `npx syncorejs dev` and connect an app runtime, or define a projectTarget for Node projects."

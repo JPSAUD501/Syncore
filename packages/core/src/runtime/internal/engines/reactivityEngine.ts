@@ -14,11 +14,11 @@ import type {
 } from "../../runtime.js";
 import { DevtoolsEngine } from "./devtoolsEngine.js";
 import { generateId } from "../../id.js";
-import type {
-  ActiveQueryRecord,
-  DependencyKey
+import type { ActiveQueryRecord, DependencyKey } from "./shared.js";
+import {
+  parseCanonicalComponentFunctionName,
+  stableStringify
 } from "./shared.js";
-import { parseCanonicalComponentFunctionName } from "./shared.js";
 
 type ReactivityEngineDeps = {
   runtimeId: string;
@@ -177,12 +177,15 @@ export class ReactivityEngine {
         queryId: query.id,
         ...(parseCanonicalComponentFunctionName(query.functionName)
           ? {
-              componentPath: parseCanonicalComponentFunctionName(query.functionName)!
-                .componentPath
+              componentPath: parseCanonicalComponentFunctionName(
+                query.functionName
+              )!.componentPath
             }
           : {}),
         reason,
-        ...(cause?.executionId ? { causedByExecutionId: cause.executionId } : {}),
+        ...(cause?.executionId
+          ? { causedByExecutionId: cause.executionId }
+          : {}),
         changedScopes: [...scopeSet],
         matchedScopes,
         rerunExecutionId,
@@ -271,7 +274,10 @@ export class ReactivityEngine {
   }
 
   private notifyActiveQueriesChanged(): void {
-    this.deps.devtools.notifyScopes(["runtime.summary", "runtime.activeQueries"]);
+    this.deps.devtools.notifyScopes([
+      "runtime.summary",
+      "runtime.activeQueries"
+    ]);
   }
 
   private getInvalidatedQueriesForScopes(scopeSet: Set<ImpactScope>): Array<{
@@ -405,22 +411,4 @@ function toDevtoolsScopes(
     }
   }
   return resolved.size > 0 ? [...resolved] : ["all"];
-}
-
-function stableStringify(value: unknown): string {
-  return JSON.stringify(sortValue(value));
-}
-
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortValue);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, nested]) => [key, sortValue(nested)])
-    );
-  }
-  return value;
 }

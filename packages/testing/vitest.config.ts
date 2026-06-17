@@ -43,16 +43,6 @@ export default defineConfig({
         )
       },
       {
-        find: "@syncore/core/cli",
-        replacement: path.resolve(
-          import.meta.dirname,
-          "..",
-          "core",
-          "src",
-          "cli.ts"
-        )
-      },
-      {
         find: "@syncore/core/transport",
         replacement: path.resolve(
           import.meta.dirname,
@@ -233,11 +223,11 @@ export default defineConfig({
         )
       },
       {
-        find: "syncore",
+        find: "@syncore/internal",
         replacement: path.resolve(
           import.meta.dirname,
           "..",
-          "syncore",
+          "internal",
           "src",
           "index.ts"
         )

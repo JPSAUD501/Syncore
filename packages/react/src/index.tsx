@@ -19,6 +19,7 @@ import type {
   SyncoreWatch,
   UsePaginatedQueryResult
 } from "@syncore/core";
+import { stableStringify } from "@syncore/internal";
 
 type ManagedSyncoreWatch<TResult> = SyncoreWatch<TResult> & {
   dispose?: () => void;
@@ -29,23 +30,23 @@ type OptionalArgsTuple<TArgs> =
 
 type QueryRequestInput<
   TReference extends FunctionReference<"query"> = FunctionReference<"query">
-> = Record<never, never> extends FunctionArgs<TReference>
-  ? {
-      query: TReference;
-      args?: FunctionArgs<TReference> | Skip;
-    }
-  : {
-      query: TReference;
-      args: FunctionArgs<TReference> | Skip;
-    };
+> =
+  Record<never, never> extends FunctionArgs<TReference>
+    ? {
+        query: TReference;
+        args?: FunctionArgs<TReference> | Skip;
+      }
+    : {
+        query: TReference;
+        args: FunctionArgs<TReference> | Skip;
+      };
 
 type QueriesRequestInput = Record<string, QueryRequestInput>;
 
-type QueryStateForEntry<TEntry> = TEntry extends QueryRequestInput<
-  infer TReference
->
-  ? SyncoreQueryState<FunctionResult<TReference>>
-  : never;
+type QueryStateForEntry<TEntry> =
+  TEntry extends QueryRequestInput<infer TReference>
+    ? SyncoreQueryState<FunctionResult<TReference>>
+    : never;
 
 export type UseQueriesResult<TEntries extends QueriesRequestInput> = {
   [TKey in keyof TEntries]: QueryStateForEntry<TEntries[TKey]>;
@@ -201,7 +202,8 @@ export function useSyncore(): SyncoreClient {
 export function useSyncoreStatus(): SyncoreRuntimeStatus {
   const client = useSyncore();
   const watch = useMemo(
-    () => client.watchRuntimeStatus() as ManagedSyncoreWatch<SyncoreRuntimeStatus>,
+    () =>
+      client.watchRuntimeStatus() as ManagedSyncoreWatch<SyncoreRuntimeStatus>,
     [client]
   );
   const [status, setStatus] = useState<SyncoreRuntimeStatus>(() =>
@@ -253,7 +255,10 @@ export function useQuery<TArgs, TResult>(
   reference: FunctionReference<"query", TArgs, TResult>,
   ...args: OptionalArgsTuple<TArgs> | [Skip]
 ): TResult | undefined {
-  const state = useQueryState(reference, ...(args as OptionalArgsTuple<TArgs> | [Skip]));
+  const state = useQueryState(
+    reference,
+    ...(args as OptionalArgsTuple<TArgs> | [Skip])
+  );
   if (state.error) {
     throw state.error;
   }
@@ -528,9 +533,8 @@ export function usePaginatedQuery<TReference extends PaginatedQueryReference>(
       }) satisfies PaginatedQueryInternalState,
     [isSkipped, options.initialNumItems, requestKey]
   );
-  const [state, setState] = useState<PaginatedQueryInternalState>(
-    createInitialState
-  );
+  const [state, setState] =
+    useState<PaginatedQueryInternalState>(createInitialState);
 
   let currentState = state;
   if (currentState.requestKey !== requestKey) {
@@ -561,10 +565,9 @@ export function usePaginatedQuery<TReference extends PaginatedQueryReference>(
     let error: Error | undefined;
 
     for (const page of currentState.pages) {
-      const pageState =
-        pageStates[page.key as keyof typeof pageStates] as
-          | SyncoreQueryState<PaginationResult<PaginatedQueryItem<TReference>>>
-          | undefined;
+      const pageState = pageStates[page.key as keyof typeof pageStates] as
+        | SyncoreQueryState<PaginationResult<PaginatedQueryItem<TReference>>>
+        | undefined;
       if (!pageState || pageState.status === "loading") {
         break;
       }
@@ -588,7 +591,9 @@ export function usePaginatedQuery<TReference extends PaginatedQueryReference>(
     const isLoading = !isSkipped && pages.length === 0 && !error;
     const isLoadingMore =
       currentState.pages.length > pages.length ||
-      (!!lastRequestedState && lastRequestedState.status === "loading" && pages.length > 0);
+      (!!lastRequestedState &&
+        lastRequestedState.status === "loading" &&
+        pages.length > 0);
     const hasMore = !!lastLoadedPage && !lastLoadedPage.isDone;
     const status: SyncorePaginatedQueryStatus = error
       ? "error"
@@ -753,24 +758,6 @@ function toQueryState<TResult>(
   };
 }
 
-function stableStringify(value: unknown): string {
-  return JSON.stringify(sortValue(value));
-}
-
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortValue);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, nested]) => [key, sortValue(nested)])
-    );
-  }
-  return value;
-}
-
 class ReactQueriesObserver {
   readonly client: SyncoreClient;
   private readonly listeners = new Set<() => void>();
@@ -836,7 +823,9 @@ class ReactQueriesObserver {
     }
   }
 
-  getSnapshot(entries: NormalizedQueryEntry[]): Record<string, QuerySnapshot<unknown>> {
+  getSnapshot(
+    entries: NormalizedQueryEntry[]
+  ): Record<string, QuerySnapshot<unknown>> {
     return readQueriesSnapshot(
       entries.map((entry) => ({
         key: entry.key,

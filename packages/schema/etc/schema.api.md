@@ -109,7 +109,7 @@ export type GenericTableIndexes = Record<string, readonly string[]>;
 // @public (undocumented)
 export type GenericTableSearchIndexes = Record<string, {
     searchField: string;
-    filterFields: string;
+    filterFields: readonly string[];
 }>;
 
 // @public (undocumented)
@@ -307,6 +307,9 @@ export function searchIndexTableName(tableName: string, indexName: string): stri
 // @public (undocumented)
 export function serializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: TValue, path?: string): TStorage;
 
+// @public
+export function stableStringify(value: unknown): string;
+
 // @public (undocumented)
 export class StringValidator extends BaseValidator<string> {
     constructor();
@@ -361,7 +364,7 @@ export class TableDefinition<TValidator extends Validator<Record<string, unknown
         filterFields?: TFilterField[];
     }): TableDefinition<TValidator, TIndexes, Expand<TSearchIndexes & Record<TIndexName, {
         searchField: TSearchField;
-        filterFields: TFilterField;
+        filterFields: readonly TFilterField[];
     }>>>;
     // (undocumented)
     readonly searchIndexes: SearchIndexDefinition[];

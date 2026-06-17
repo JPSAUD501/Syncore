@@ -5,6 +5,7 @@ import {
   execCommand,
   syncorePublishedPackageName,
   syncorePackageRoot,
+  withSyncorePackagingLock,
   walkFiles,
   workspaceRoot
 } from "./syncore-packaging";
@@ -16,6 +17,7 @@ async function main(): Promise<void> {
   let tarballPath: string | undefined;
 
   try {
+    await withSyncorePackagingLock(async () => {
     await execCommand(
       "npm",
       ["run", "build:standalone", "--workspace", syncorePublishedPackageName],
@@ -24,7 +26,7 @@ async function main(): Promise<void> {
 
     const { stdout } = await execCommand(
       "npm",
-      ["pack", "--json"],
+      ["pack", "--json", "--pack-destination", tempRoot],
       syncorePackageRoot
     );
     const packInfo = JSON.parse(stdout.trim()) as Array<{ filename?: string }>;
@@ -33,7 +35,7 @@ async function main(): Promise<void> {
       throw new Error("Failed to determine syncore tarball name.");
     }
 
-    tarballPath = path.join(syncorePackageRoot, tarballName);
+    tarballPath = path.join(tempRoot, tarballName);
     const fixtureDir = path.join(tempRoot, "fixture");
 
     await execCommand("npm", ["init", "-y"], fixtureDir, { createCwd: true });
@@ -133,6 +135,7 @@ async function main(): Promise<void> {
     }
 
     console.log(`Validated ${tarballName}`);
+    });
   } finally {
     if (tarballPath) {
       await rm(tarballPath, { force: true }).catch(() => undefined);

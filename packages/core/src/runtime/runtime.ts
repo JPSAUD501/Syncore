@@ -62,7 +62,12 @@ export interface SyncoreFunctionRegistry {
   readonly [name: string]: RegisteredSyncoreFunction | undefined;
 }
 
-/** @internal Bivariant function handler type used to avoid TypeScript strictness issues with contravariant function parameters. */
+/**
+ * Function handler stored in a registered Syncore function.
+ *
+ * This type is intentionally bivariant so generated registries can preserve
+ * precise handler types while still satisfying the runtime registry shape.
+ */
 export type RegisteredSyncoreHandler = {
   bivarianceHack(ctx: unknown, args: unknown): unknown;
 }["bivarianceHack"];
@@ -974,18 +979,24 @@ export interface IndexRangeBuilder<TFieldName extends string = string> {
 
 export interface SearchIndexBuilder<
   TSearchField extends string = string,
-  TFilterField extends string = string
+  TFilterFields extends string | readonly string[] = string
 > {
   search(
     field: TSearchField,
     value: string
-  ): SearchIndexBuilder<TSearchField, TFilterField>;
+  ): SearchIndexBuilder<TSearchField, TFilterFields>;
   eq(
-    field: TFilterField,
+    field: SearchIndexFilterField<TFilterFields>,
     value: unknown
-  ): SearchIndexBuilder<TSearchField, TFilterField>;
+  ): SearchIndexBuilder<TSearchField, TFilterFields>;
   build(): SearchQuery;
 }
+
+export type SearchIndexFilterField<
+  TFilterFields extends string | readonly string[]
+> = TFilterFields extends readonly (infer TField)[]
+  ? Extract<TField, string>
+  : Extract<TFilterFields, string>;
 
 export type TableNames<TSchema extends SyncoreDataModel> = Extract<
   keyof TSchema["tables"],

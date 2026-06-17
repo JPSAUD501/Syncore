@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "svelte": "^5.55.9",
-    "syncorejs": "^0.2.2"
+    "syncorejs": "^0.2.6"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

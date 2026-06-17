@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { isPlainObject, stripSystemFields } from "@/lib/documents";
+import { stableStringify } from "@/lib/stable";
 
 interface DocumentEditorDialogProps {
   open: boolean;
@@ -78,7 +80,7 @@ export function DocumentEditorDialog({
 
   const isDirty = useMemo(() => {
     if (!parsedState.value) return false;
-    return JSON.stringify(parsedState.value) !== JSON.stringify(initialValue);
+    return stableStringify(parsedState.value) !== stableStringify(initialValue);
   }, [initialValue, parsedState.value]);
 
   const diff = useMemo(() => {
@@ -192,17 +194,6 @@ export function DocumentEditorDialog({
   );
 }
 
-function stripSystemFields(document: Record<string, unknown>) {
-  const next = { ...document };
-  delete next._id;
-  delete next._creationTime;
-  return next;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function summarizeDiff(
   previous: Record<string, unknown>,
   next: Record<string, unknown>
@@ -226,7 +217,7 @@ function summarizeDiff(
       continue;
     }
 
-    if (JSON.stringify(previous[key]) !== JSON.stringify(next[key])) {
+    if (stableStringify(previous[key]) !== stableStringify(next[key])) {
       changed += 1;
     }
   }

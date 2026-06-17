@@ -29,6 +29,13 @@ import { useConnection } from "@/hooks";
 import { usePreferredTarget } from "@/hooks/usePreferredTarget";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
+import { stableStringify } from "@/lib/stable";
+import {
+  readJsonPreference,
+  safeRemoveLocalStorage,
+  SQL_HISTORY_STORAGE_KEY,
+  writeJsonPreference
+} from "@/lib/storage";
 import { cn, formatDuration } from "@/lib/utils";
 import type { TableSchema } from "@syncore/devtools-protocol";
 
@@ -62,31 +69,30 @@ interface HistoryEntry {
 
 type SqlMode = "read" | "write" | "live";
 
-const STORAGE_KEY = "syncore-sql-history";
-
-const PRAGMA_SHORTCUTS: Array<{ label: string; query: string; mode: SqlMode }> = [
-  {
-    label: "Table List",
-    query: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;",
-    mode: "read"
-  },
-  {
-    label: "Schema Info",
-    query: "SELECT sql FROM sqlite_master WHERE type='table';",
-    mode: "read"
-  },
-  {
-    label: "Index List",
-    query: "SELECT name, tbl_name FROM sqlite_master WHERE type='index';",
-    mode: "read"
-  },
-  { label: "Page Count", query: "PRAGMA page_count;", mode: "read" },
-  { label: "Page Size", query: "PRAGMA page_size;", mode: "read" },
-  { label: "Journal Mode", query: "PRAGMA journal_mode;", mode: "read" },
-  { label: "WAL Status", query: "PRAGMA wal_checkpoint;", mode: "read" },
-  { label: "Foreign Keys", query: "PRAGMA foreign_keys;", mode: "read" },
-  { label: "Integrity Check", query: "PRAGMA integrity_check;", mode: "read" }
-];
+const PRAGMA_SHORTCUTS: Array<{ label: string; query: string; mode: SqlMode }> =
+  [
+    {
+      label: "Table List",
+      query: "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;",
+      mode: "read"
+    },
+    {
+      label: "Schema Info",
+      query: "SELECT sql FROM sqlite_master WHERE type='table';",
+      mode: "read"
+    },
+    {
+      label: "Index List",
+      query: "SELECT name, tbl_name FROM sqlite_master WHERE type='index';",
+      mode: "read"
+    },
+    { label: "Page Count", query: "PRAGMA page_count;", mode: "read" },
+    { label: "Page Size", query: "PRAGMA page_size;", mode: "read" },
+    { label: "Journal Mode", query: "PRAGMA journal_mode;", mode: "read" },
+    { label: "WAL Status", query: "PRAGMA wal_checkpoint;", mode: "read" },
+    { label: "Foreign Keys", query: "PRAGMA foreign_keys;", mode: "read" },
+    { label: "Integrity Check", query: "PRAGMA integrity_check;", mode: "read" }
+  ];
 
 function getModeUnavailableReason(mode: SqlMode, fallback: string): string {
   if (mode === "live") {
@@ -193,13 +199,8 @@ function SqlPage() {
   const [loading, setLoading] = useState(false);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const parsed = stored ? (JSON.parse(stored) as unknown) : [];
-      return Array.isArray(parsed) ? (parsed as HistoryEntry[]) : [];
-    } catch {
-      return [];
-    }
+    const parsed = readJsonPreference<unknown>(SQL_HISTORY_STORAGE_KEY, []);
+    return Array.isArray(parsed) ? (parsed as HistoryEntry[]) : [];
   });
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const sqlCapabilities = activeRuntime?.capabilities?.sql;
@@ -239,11 +240,7 @@ function SqlPage() {
   /* ---------------------------------------------------------------- */
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 50)));
-    } catch {
-      /* ignore quota errors */
-    }
+    writeJsonPreference(SQL_HISTORY_STORAGE_KEY, history.slice(0, 50));
   }, [history]);
 
   const liveStartedAtRef = useRef<number | null>(null);
@@ -254,10 +251,7 @@ function SqlPage() {
       : null,
     {
       enabled:
-        isReady &&
-        canLiveSql &&
-        mode === "live" &&
-        query.trim().length > 0,
+        isReady && canLiveSql && mode === "live" && query.trim().length > 0,
       targetRuntimeId
     }
   );
@@ -323,10 +317,13 @@ function SqlPage() {
       const startTime = performance.now();
 
       try {
-        const res = await sendRequest({
-          kind: executionMode === "write" ? "sql.write" : "sql.read",
-          query: queryText
-        }, { targetRuntimeId });
+        const res = await sendRequest(
+          {
+            kind: executionMode === "write" ? "sql.write" : "sql.read",
+            query: queryText
+          },
+          { targetRuntimeId }
+        );
         const durationMs = performance.now() - startTime;
 
         if (res.kind === "sql.read.result") {
@@ -462,7 +459,7 @@ function SqlPage() {
 
   const clearHistory = useCallback(() => {
     setHistory([]);
-    localStorage.removeItem(STORAGE_KEY);
+    safeRemoveLocalStorage(SQL_HISTORY_STORAGE_KEY);
   }, []);
 
   /* ---------------------------------------------------------------- */
@@ -784,12 +781,16 @@ function SqlPage() {
       <Dialog open={mobileHistoryOpen} onOpenChange={setMobileHistoryOpen}>
         <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-sm">
           <DialogHeader className="border-b border-border px-4 py-3">
-            <DialogTitle className="text-[14px]">Quick Actions & History</DialogTitle>
+            <DialogTitle className="text-[14px]">
+              Quick Actions & History
+            </DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[70vh]">
             <div className="p-3">
               {/* Quick actions */}
-              <p className="mb-2 text-[11px] font-semibold text-text-primary">Quick Actions</p>
+              <p className="mb-2 text-[11px] font-semibold text-text-primary">
+                Quick Actions
+              </p>
               <div className="mb-4 space-y-0.5">
                 {PRAGMA_SHORTCUTS.map((shortcut) => (
                   <button
@@ -814,9 +815,13 @@ function SqlPage() {
                 ))}
               </div>
               {/* History */}
-              <p className="mb-2 text-[11px] font-semibold text-text-primary">History</p>
+              <p className="mb-2 text-[11px] font-semibold text-text-primary">
+                History
+              </p>
               {history.length === 0 ? (
-                <p className="py-4 text-center text-[11px] text-text-tertiary">No query history</p>
+                <p className="py-4 text-center text-[11px] text-text-tertiary">
+                  No query history
+                </p>
               ) : (
                 <div className="space-y-0.5">
                   {history.map((entry, i) => (
@@ -831,9 +836,15 @@ function SqlPage() {
                     >
                       <div className="flex items-center gap-1.5 mb-0.5">
                         {entry.error ? (
-                          <AlertCircle size={9} className="text-error shrink-0" />
+                          <AlertCircle
+                            size={9}
+                            className="text-error shrink-0"
+                          />
                         ) : (
-                          <Terminal size={9} className="text-text-tertiary shrink-0" />
+                          <Terminal
+                            size={9}
+                            className="text-text-tertiary shrink-0"
+                          />
                         )}
                         <span className="text-[10px] text-text-tertiary">
                           {new Date(entry.timestamp).toLocaleTimeString()}
@@ -988,7 +999,7 @@ function ResultsTable({ result }: { result: QueryResult }) {
       } else {
         for (let cellIdx = 0; cellIdx < row.length; cellIdx++) {
           if (
-            JSON.stringify(row[cellIdx]) !== JSON.stringify(prevRow[cellIdx])
+            stableStringify(row[cellIdx]) !== stableStringify(prevRow[cellIdx])
           ) {
             const key = `${rowIdx}:${cellIdx}`;
             const next = (pulseVersions.get(key) ?? 0) + 1;

@@ -36,8 +36,8 @@ export default defineConfig({
     neverBundle: [
       "@syncore/cli",
       "@syncore/core",
-      "@syncore/core/cli",
       "@syncore/devtools-protocol",
+      "@syncore/internal",
       "@syncore/next",
       "@syncore/next/config",
       "@syncore/platform-expo",
@@ -65,6 +65,7 @@ export default defineConfig({
       "react/jsx-runtime",
       "tsx",
       "tsx/esm/api",
+      "typescript",
       "vite",
       "ws"
     ]

@@ -9,6 +9,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { parseDocumentImportText } from "@/lib/documents";
 
 interface ImportDocumentsDialogProps {
   open: boolean;
@@ -42,7 +43,7 @@ export function ImportDocumentsDialog({
 
     let documents: Record<string, unknown>[];
     try {
-      documents = parseImportText(text);
+      documents = parseDocumentImportText(text);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid import payload.");
       return;
@@ -114,55 +115,4 @@ export function ImportDocumentsDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function parseImportText(text: string): Record<string, unknown>[] {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    throw new Error("Paste at least one document to import.");
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.map(assertDocument).map(stripSystemFields);
-    }
-    return [stripSystemFields(assertDocument(parsed))];
-  } catch {
-    const lines = trimmed
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    if (lines.length === 0) {
-      throw new Error("Paste at least one document to import.");
-    }
-
-    return lines.map((line, index) => {
-      try {
-        return stripSystemFields(assertDocument(JSON.parse(line) as unknown));
-      } catch (err) {
-        throw new Error(
-          err instanceof Error
-            ? `Line ${index + 1}: ${err.message}`
-            : `Line ${index + 1}: Invalid JSON`,
-          { cause: err }
-        );
-      }
-    });
-  }
-}
-
-function assertDocument(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Each imported item must be a JSON object.");
-  }
-  return value as Record<string, unknown>;
-}
-
-function stripSystemFields(document: Record<string, unknown>) {
-  const next = { ...document };
-  delete next._id;
-  delete next._creationTime;
-  return next;
 }

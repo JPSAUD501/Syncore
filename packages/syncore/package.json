@@ -101,7 +101,7 @@
   },
   "scripts": {
     "build": "npm run build:deps && npm run build --workspace @syncore/dashboard && tsdown --config tsdown.config.ts && tsx ../../scripts/vendor-syncore-internals.ts",
-    "build:deps": "npm run build --workspace @syncore/core && npm run build --workspace @syncore/schema && npm run build --workspace @syncore/devtools-protocol && npm run build --workspace @syncore/cli && npm run build --workspace @syncore/react && npm run build --workspace @syncore/platform-web && npm run build --workspace @syncore/platform-node && npm run build --workspace @syncore/platform-expo && npm run build --workspace @syncore/next && npm run build --workspace @syncore/svelte",
+    "build:deps": "npm run build --workspace @syncore/internal && npm run build --workspace @syncore/devtools-protocol && npm run build --workspace @syncore/schema && npm run build --workspace @syncore/core && npm run build --workspace @syncore/platform-node && npm run build --workspace @syncore/platform-web && npm run build --workspace @syncore/platform-expo && npm run build --workspace @syncore/react && npm run build --workspace @syncore/next && npm run build --workspace @syncore/svelte && npm run build --workspace @syncore/cli",
     "build:standalone": "npm run build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint src --ext .ts,.tsx",
@@ -115,6 +115,7 @@
     "node-sql-parser": "^5.4.0",
     "sql.js": "^1.14.1",
     "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
     "ws": "^8.21.0"
   },
   "peerDependencies": {
@@ -149,6 +150,7 @@
     "@syncore/cli": "^0.1.0",
     "@syncore/core": "^0.1.0",
     "@syncore/devtools-protocol": "^0.1.0",
+    "@syncore/internal": "^0.1.0",
     "@syncore/next": "^0.1.0",
     "@syncore/platform-expo": "^0.1.0",
     "@syncore/platform-node": "^0.1.0",

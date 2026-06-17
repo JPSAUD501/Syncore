@@ -112,6 +112,9 @@ export interface FunctionDefinition {
     visibility?: "public" | "internal";
 }
 
+// @public
+export function generateUniqueSessionName(): string;
+
 // @public (undocumented)
 export interface InvalidationCause {
     // (undocumented)

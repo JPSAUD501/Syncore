@@ -2,9 +2,18 @@ import { useMemo, useState } from "react";
 import { Popover } from "radix-ui";
 import { PanelRightOpen } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getReferenceDisplay, type ReferenceFieldOptions } from "@/lib/dataReferences";
+import {
+  getReferenceDisplay,
+  type ReferenceFieldOptions
+} from "@/lib/dataReferences";
 import { useTrackChanges } from "@/hooks";
-import { formatCellPreview, isDateLikeField, isColorLikeField, formatReadableDate } from "@/lib/dataValue";
+import {
+  formatCellPreview,
+  isDateLikeField,
+  isColorLikeField,
+  formatReadableDate
+} from "@/lib/dataValue";
+import { stableStringify } from "@/lib/stable";
 import { cn } from "@/lib/utils";
 import { CellEditor } from "./CellEditor";
 
@@ -49,7 +58,7 @@ export function DataTable({
   const { isChanged, isNew, getChangePulse, getNewPulse } = useTrackChanges(
     rows,
     (_row, index) => rowIds[index] ?? `row-${index}`,
-    (row) => JSON.stringify(row)
+    (row) => stableStringify(row)
   );
 
   const visibleRowIds = useMemo(() => rowIds, [rowIds]);
@@ -150,11 +159,16 @@ export function DataTable({
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             if (!onCellEdit) return;
-                            setEditingCell({ rowId, field: col, value: row[col] });
+                            setEditingCell({
+                              rowId,
+                              field: col,
+                              value: row[col]
+                            });
                           }}
                           className={cn(
                             "flex min-h-11 shrink-0 cursor-default items-center border-r border-border px-3 py-2 font-mono text-[12px] text-text-secondary last:border-r-0 select-none",
-                            isEditingThisCell && "bg-bg-surface ring-1 ring-inset ring-accent/40",
+                            isEditingThisCell &&
+                              "bg-bg-surface ring-1 ring-inset ring-accent/40",
                             getColumnWidthClass(col)
                           )}
                         >
@@ -254,7 +268,9 @@ function CellValue({
     return (
       <span
         className="block truncate tabular-nums text-[11px] text-amber-100"
-        title={preview.title ? `${preview.text}\n${preview.title}` : preview.text}
+        title={
+          preview.title ? `${preview.text}\n${preview.title}` : preview.text
+        }
       >
         {readable}
       </span>

@@ -4,6 +4,7 @@ import path from "node:path";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "..");
 const publicPackageFilters = [
+  "@syncore/internal",
   "syncorejs",
   "@syncore/core",
   "@syncore/schema",

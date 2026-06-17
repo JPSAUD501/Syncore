@@ -1,10 +1,10 @@
 import initSqlJs from "sql.js";
 import type { RunResult, SyncoreSqlDriver } from "@syncore/core";
+import { normalizeSqliteParams } from "@syncore/internal";
 import { SyncoreIndexedDbPersistence } from "./indexeddb.js";
 import type { SyncoreWebPersistence } from "./persistence.js";
 
 type SqlJsDatabase = initSqlJs.Database;
-type SqlJsValue = initSqlJs.SqlValue;
 
 export interface CreateSqlJsDriverOptions {
   databaseName: string;
@@ -64,7 +64,7 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     this.ensureOpen();
     const statement = this.database.prepare(sql);
     try {
-      statement.run(normalizeParams(params));
+      statement.run(normalizeSqliteParams(params));
       const lastInsertRowid = readScalarNumber(
         this.database,
         "SELECT last_insert_rowid()"
@@ -84,7 +84,7 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     this.ensureOpen();
     const statement = this.database.prepare(sql);
     try {
-      statement.bind(normalizeParams(params));
+      statement.bind(normalizeSqliteParams(params));
       if (!statement.step()) {
         return undefined;
       }
@@ -98,7 +98,7 @@ export class SqlJsDriver implements SyncoreSqlDriver {
     this.ensureOpen();
     const statement = this.database.prepare(sql);
     try {
-      statement.bind(normalizeParams(params));
+      statement.bind(normalizeSqliteParams(params));
       const rows: T[] = [];
       while (statement.step()) {
         rows.push(statement.getAsObject() as T);
@@ -207,26 +207,6 @@ function isBrowserLikeRuntime(): boolean {
     WorkerGlobalScope?: unknown;
   };
   return typeof window !== "undefined" || scope.WorkerGlobalScope !== undefined;
-}
-
-function normalizeParams(values: unknown[]): SqlJsValue[] {
-  return values.map((value) => {
-    if (typeof value === "boolean") {
-      return value ? 1 : 0;
-    }
-    if (
-      value === null ||
-      typeof value === "number" ||
-      typeof value === "string" ||
-      value instanceof Uint8Array
-    ) {
-      return value;
-    }
-    if (value instanceof ArrayBuffer) {
-      return new Uint8Array(value);
-    }
-    return JSON.stringify(value);
-  });
 }
 
 function readScalarNumber(database: SqlJsDatabase, sql: string): number | null {

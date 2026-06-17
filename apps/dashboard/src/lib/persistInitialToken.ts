@@ -1,19 +1,9 @@
-const DASHBOARD_TOKEN_STORAGE_KEY = "syncore-dashboard-hub-token";
-
-export {};
+import { sanitizeHubToken, writeStoredDashboardToken } from "./storage";
 
 declare global {
   interface Window {
     __syncoreDashboardInitialToken?: string;
   }
-}
-
-function sanitizeHubToken(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  const sanitized = value.replace(/[^A-Za-z0-9]/g, "");
-  return sanitized.length > 0 ? sanitized : null;
 }
 
 function readTokenFromUrl(url: string): string | null {
@@ -36,7 +26,10 @@ function readInitialNavigationToken(): string | null {
   }
 }
 
-if (typeof window !== "undefined") {
+export function persistInitialDashboardToken(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
   const searchParams = new URLSearchParams(window.location.search);
   const token = sanitizeHubToken(
     searchParams.get("token") ?? searchParams.get("hubToken")
@@ -45,10 +38,6 @@ if (typeof window !== "undefined") {
     (
       window as typeof window & { __syncoreDashboardInitialToken?: string }
     ).__syncoreDashboardInitialToken = token;
-    try {
-      window.localStorage.setItem(DASHBOARD_TOKEN_STORAGE_KEY, token);
-    } catch {
-      /* ignore storage failures */
-    }
+    writeStoredDashboardToken(token);
   }
 }

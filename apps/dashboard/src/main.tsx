@@ -1,12 +1,15 @@
-import "./lib/persistInitialToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { ToastProvider } from "@/components/ui/toast";
+import { persistInitialDashboardToken } from "@/lib/persistInitialToken";
+import { bootstrapDevtoolsStore } from "@/lib/store";
 import "./app.css";
 
 const router = createRouter({ routeTree });
+persistInitialDashboardToken();
+bootstrapDevtoolsStore();
 
 declare module "@tanstack/react-router" {
   interface Register {

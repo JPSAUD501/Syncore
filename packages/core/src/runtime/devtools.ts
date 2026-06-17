@@ -8,6 +8,7 @@ import type {
   SyncoreDevtoolsSubscriptionResultPayload,
   TableSchema
 } from "@syncore/devtools-protocol";
+import { quoteIdentifier } from "@syncore/internal";
 import { describeValidator } from "@syncore/schema";
 import type { TableDefinition, Validator } from "@syncore/schema";
 import type {
@@ -22,7 +23,6 @@ import { createFunctionReference } from "./runtime.js";
 import {
   parseCanonicalComponentFunctionName,
   parseComponentScopedIdentifier,
-  quoteIdentifier,
   safeReadRecurringSchedule
 } from "./internal/engines/shared.js";
 

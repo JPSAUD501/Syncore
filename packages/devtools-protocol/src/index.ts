@@ -266,6 +266,125 @@ export function createPublicTargetId(
   return createPublicId(targetKey, targetKeys);
 }
 
+/**
+ * Generates a short human-readable label for devtools sessions and data
+ * sources.
+ *
+ * @returns A display label such as "Crystal Blaze".
+ */
+export function generateUniqueSessionName(): string {
+  const adjective =
+    SESSION_ADJECTIVES[Math.floor(Math.random() * SESSION_ADJECTIVES.length)]!;
+  const noun = SESSION_NOUNS[Math.floor(Math.random() * SESSION_NOUNS.length)]!;
+  return `${adjective} ${noun}`;
+}
+
+const SESSION_ADJECTIVES = [
+  "Acrobatic",
+  "Bold",
+  "Cosmic",
+  "Daring",
+  "Electric",
+  "Fierce",
+  "Golden",
+  "Hidden",
+  "Iron",
+  "Jade",
+  "Keen",
+  "Lunar",
+  "Mystic",
+  "Noble",
+  "Orbital",
+  "Primal",
+  "Quick",
+  "Radiant",
+  "Shadow",
+  "Turbo",
+  "Ultra",
+  "Vivid",
+  "Wicked",
+  "Xenon",
+  "Zen",
+  "Arctic",
+  "Binary",
+  "Cyber",
+  "Digital",
+  "Ember",
+  "Frozen",
+  "Galactic",
+  "Hyper",
+  "Infra",
+  "Jumbo",
+  "Kinetic",
+  "Liquid",
+  "Magnetic",
+  "Neon",
+  "Onyx",
+  "Phantom",
+  "Quantum",
+  "Rapid",
+  "Sonic",
+  "Titan",
+  "Velvet",
+  "Wild",
+  "Blazing",
+  "Crystal",
+  "Dynamic"
+] as const;
+
+const SESSION_NOUNS = [
+  "Monkey",
+  "Phoenix",
+  "Tiger",
+  "Dragon",
+  "Falcon",
+  "Panther",
+  "Wolf",
+  "Eagle",
+  "Cobra",
+  "Shark",
+  "Raven",
+  "Fox",
+  "Lynx",
+  "Hawk",
+  "Bear",
+  "Jaguar",
+  "Viper",
+  "Owl",
+  "Stallion",
+  "Dolphin",
+  "Developer",
+  "Hacker",
+  "Wizard",
+  "Ninja",
+  "Pilot",
+  "Pioneer",
+  "Voyager",
+  "Explorer",
+  "Runner",
+  "Ranger",
+  "Maverick",
+  "Spartan",
+  "Viking",
+  "Sentinel",
+  "Guardian",
+  "Nomad",
+  "Cipher",
+  "Vector",
+  "Matrix",
+  "Prism",
+  "Nebula",
+  "Comet",
+  "Pulse",
+  "Vertex",
+  "Flux",
+  "Storm",
+  "Blaze",
+  "Frost",
+  "Thunder",
+  "Drift"
+] as const;
+
 function createPublicIdWithFormatter(
   key: string,
   keys: Iterable<string>,

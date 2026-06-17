@@ -1,12 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import {
-  Database,
-  Search,
-  Table2,
-  Layers,
-  Key,
-  Loader2
-} from "lucide-react";
+import { Database, Search, Table2, Layers, Key, Loader2 } from "lucide-react";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -42,6 +35,12 @@ import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { getPublicRuntimeId, useActiveRuntime } from "@/lib/store";
 import { sendRequest } from "@/lib/store";
 import { parseEditableCellValue, toEditableCellText } from "@/lib/dataValue";
+import {
+  assertDocument,
+  downloadJson,
+  stripSystemFields
+} from "@/lib/documents";
+import { stableStringify } from "@/lib/stable";
 import { cn } from "@/lib/utils";
 import type { DataFilter } from "@syncore/devtools-protocol";
 import {
@@ -70,12 +69,16 @@ function DataPage() {
 
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
-  const [activePanelTab, setActivePanelTab] = useState<"data" | "schema" | "indexes">("data");
+  const [activePanelTab, setActivePanelTab] = useState<
+    "data" | "schema" | "indexes"
+  >("data");
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [filters, setFilters] = useState<DataFilter[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
-  const [pendingSelectedRowId, setPendingSelectedRowId] = useState<string | null>(null);
+  const [pendingSelectedRowId, setPendingSelectedRowId] = useState<
+    string | null
+  >(null);
   const [panelDocId, setPanelDocId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<
@@ -96,7 +99,8 @@ function DataPage() {
   const [mobileTablesOpen, setMobileTablesOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
-  const [showMissingReferencesOnly, setShowMissingReferencesOnly] = useState(false);
+  const [showMissingReferencesOnly, setShowMissingReferencesOnly] =
+    useState(false);
   const [referenceRowsByTable, setReferenceRowsByTable] = useState<
     Record<string, Record<string, unknown>[]>
   >({});
@@ -136,7 +140,9 @@ function DataPage() {
         )
         .filter((entry): entry is ReferenceFieldOptions => Boolean(entry)) ??
       [];
-    return Object.fromEntries(entries.map((entry) => [entry.field.name, entry]));
+    return Object.fromEntries(
+      entries.map((entry) => [entry.field.name, entry])
+    );
   }, [currentSchema, referenceRowsByTable]);
 
   // Auto-select first table
@@ -259,11 +265,14 @@ function DataPage() {
     async (id: string) => {
       if (!targetRuntimeId || !selectedTable) return;
       try {
-        await sendRequest({
-          kind: "data.delete",
-          table: selectedTable,
-          id
-        }, { targetRuntimeId });
+        await sendRequest(
+          {
+            kind: "data.delete",
+            table: selectedTable,
+            id
+          },
+          { targetRuntimeId }
+        );
         setSelectedRowIds((current) => current.filter((rowId) => rowId !== id));
         pushToast({
           tone: "success",
@@ -286,11 +295,14 @@ function DataPage() {
       if (!targetRuntimeId || !selectedTable || ids.length === 0) return;
       await Promise.all(
         ids.map((id) =>
-          sendRequest({
-            kind: "data.delete",
-            table: selectedTable,
-            id
-          }, { targetRuntimeId })
+          sendRequest(
+            {
+              kind: "data.delete",
+              table: selectedTable,
+              id
+            },
+            { targetRuntimeId }
+          )
         )
       );
       setSelectedRowIds([]);
@@ -310,11 +322,14 @@ function DataPage() {
     ) => {
       if (!targetRuntimeId || !selectedTable) return;
       validateDocumentReferences(referenceFields, document);
-      const res = await sendRequest({
-        kind: "data.insert",
-        table: selectedTable,
-        document
-      }, { targetRuntimeId });
+      const res = await sendRequest(
+        {
+          kind: "data.insert",
+          table: selectedTable,
+          document
+        },
+        { targetRuntimeId }
+      );
       if (res.kind === "data.mutate.result" && !res.success) {
         throw new Error(res.error ?? "Failed to insert document.");
       }
@@ -333,12 +348,15 @@ function DataPage() {
     async (id: string, fields: Record<string, unknown>) => {
       if (!targetRuntimeId || !selectedTable) return;
       validateDocumentReferences(referenceFields, fields);
-      const res = await sendRequest({
-        kind: "data.patch",
-        table: selectedTable,
-        id,
-        fields
-      }, { targetRuntimeId });
+      const res = await sendRequest(
+        {
+          kind: "data.patch",
+          table: selectedTable,
+          id,
+          fields
+        },
+        { targetRuntimeId }
+      );
       if (res.kind === "data.mutate.result" && !res.success) {
         throw new Error(res.error ?? "Failed to update document.");
       }
@@ -442,7 +460,9 @@ function DataPage() {
   }, [pushToast, tableList, targetRuntimeId]);
 
   const handleImportDatabase = useCallback(
-    async (tables: Array<{ name: string; rows: Record<string, unknown>[] }>) => {
+    async (
+      tables: Array<{ name: string; rows: Record<string, unknown>[] }>
+    ) => {
       if (!targetRuntimeId) return;
       let importedRows = 0;
       for (const table of tables) {
@@ -524,7 +544,9 @@ function DataPage() {
   // When a pending reference-navigation row appears, open it in the panel
   useEffect(() => {
     if (!pendingSelectedRowId) return;
-    const found = rows.some((row) => getDocumentId(row) === pendingSelectedRowId);
+    const found = rows.some(
+      (row) => getDocumentId(row) === pendingSelectedRowId
+    );
     if (!found) return;
     setPanelDocId(pendingSelectedRowId);
     setPendingSelectedRowId(null);
@@ -629,8 +651,7 @@ function DataPage() {
   }, [currentSchema, rows]);
 
   const rowsWithMissingReferences = useMemo(
-    () =>
-      rows.filter((row) => hasMissingReference(row, referenceFields)),
+    () => rows.filter((row) => hasMissingReference(row, referenceFields)),
     [referenceFields, rows]
   );
   const visibleRows = showMissingReferencesOnly
@@ -934,7 +955,10 @@ function DataPage() {
                   >
                     Missing refs
                     {rowsWithMissingReferences.length > 0 && (
-                      <Badge variant="destructive" className="ml-1 px-1 py-0 text-[9px]">
+                      <Badge
+                        variant="destructive"
+                        className="ml-1 px-1 py-0 text-[9px]"
+                      >
                         {rowsWithMissingReferences.length}
                       </Badge>
                     )}
@@ -953,18 +977,18 @@ function DataPage() {
               >
                 <div className="border-b border-border bg-bg-surface px-3">
                   <TabsList variant="line" className="h-9">
-                  <TabsTrigger value="data" className="gap-1">
-                    <Table2 size={12} />
-                    Data
-                  </TabsTrigger>
-                  <TabsTrigger value="schema" className="gap-1">
-                    <Layers size={12} />
-                    Schema
-                  </TabsTrigger>
-                  <TabsTrigger value="indexes" className="gap-1">
-                    <Key size={12} />
-                    Indexes
-                  </TabsTrigger>
+                    <TabsTrigger value="data" className="gap-1">
+                      <Table2 size={12} />
+                      Data
+                    </TabsTrigger>
+                    <TabsTrigger value="schema" className="gap-1">
+                      <Layers size={12} />
+                      Schema
+                    </TabsTrigger>
+                    <TabsTrigger value="indexes" className="gap-1">
+                      <Key size={12} />
+                      Indexes
+                    </TabsTrigger>
                   </TabsList>
                 </div>
 
@@ -986,8 +1010,8 @@ function DataPage() {
                             showMissingReferencesOnly
                               ? "No rows have missing references."
                               : filters.length > 0
-                              ? "No rows match the current filters."
-                              : "This table is empty."
+                                ? "No rows match the current filters."
+                                : "This table is empty."
                           }
                           className="h-full rounded-md border border-border bg-bg-base"
                         />
@@ -1021,7 +1045,9 @@ function DataPage() {
                           }}
                           onOpenReference={(tableName, id) => {
                             setSelectedTable(tableName);
-                            setFilters([{ field: "_id", operator: "eq", value: id }]);
+                            setFilters([
+                              { field: "_id", operator: "eq", value: id }
+                            ]);
                             setSelectedRowIds([]);
                             setPanelDocId(null);
                             setPendingSelectedRowId(id);
@@ -1078,7 +1104,10 @@ function DataPage() {
                     activePanelTab !== "indexes" && "hidden"
                   )}
                 >
-                  <IndexesViewer indexes={currentSchema?.indexes ?? []} className="p-2" />
+                  <IndexesViewer
+                    indexes={currentSchema?.indexes ?? []}
+                    className="p-2"
+                  />
                 </TabsContent>
               </Tabs>
             </div>
@@ -1324,7 +1353,11 @@ function TableDirectory({
             {schemaLoading && (
               <Loader2 size={12} className="animate-spin text-text-tertiary" />
             )}
-            {hasSchemaData && <span className="text-[11px] text-text-tertiary">{tableCount}</span>}
+            {hasSchemaData && (
+              <span className="text-[11px] text-text-tertiary">
+                {tableCount}
+              </span>
+            )}
           </div>
         </div>
         <div className="relative">
@@ -1407,7 +1440,9 @@ function ImportDatabaseDialog({
 
   useEffect(() => {
     if (open) {
-      setText('{\n  "format": "syncore.devtools.export.v1",\n  "tables": []\n}');
+      setText(
+        '{\n  "format": "syncore.devtools.export.v1",\n  "tables": []\n}'
+      );
       setError(null);
       setSubmitting(false);
     }
@@ -1440,8 +1475,8 @@ function ImportDatabaseDialog({
         <DialogHeader>
           <DialogTitle>Import Database</DialogTitle>
           <DialogDescription>
-            Paste a Syncore database export or a JSON object whose keys are table
-            names and values are document arrays.
+            Paste a Syncore database export or a JSON object whose keys are
+            table names and values are document arrays.
           </DialogDescription>
         </DialogHeader>
 
@@ -1523,7 +1558,10 @@ function parseDatabaseImportText(
       return {
         name: table.name,
         rows: table.rows.map((row, rowIndex) =>
-          assertImportDocument(row, `${table.name}[${rowIndex}]`)
+          assertDocument(
+            row,
+            `${table.name}[${rowIndex}] must be a JSON object.`
+          )
         )
       };
     });
@@ -1536,39 +1574,10 @@ function parseDatabaseImportText(
     return {
       name,
       rows: value.map((row, rowIndex) =>
-        assertImportDocument(row, `${name}[${rowIndex}]`)
+        assertDocument(row, `${name}[${rowIndex}] must be a JSON object.`)
       )
     };
   });
-}
-
-function assertImportDocument(
-  value: unknown,
-  label: string
-): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`${label} must be a JSON object.`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function stripSystemFields(document: Record<string, unknown>) {
-  const next = { ...document };
-  delete next._id;
-  delete next._creationTime;
-  return next;
-}
-
-function downloadJson(value: unknown, filename: string): void {
-  const blob = new Blob([JSON.stringify(value, null, 2)], {
-    type: "application/json"
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function shallowEqualRows(
@@ -1582,7 +1591,7 @@ function shallowEqualRows(
     return false;
   }
   for (let index = 0; index < left.length; index += 1) {
-    if (JSON.stringify(left[index]) !== JSON.stringify(right[index])) {
+    if (stableStringify(left[index]) !== stableStringify(right[index])) {
       return false;
     }
   }
@@ -1605,7 +1614,7 @@ function stringifyEditableValue(value: unknown): string {
   if (value === undefined) {
     return "";
   }
-  return JSON.stringify(value);
+  return stableStringify(value);
 }
 
 function validateReferenceValue(

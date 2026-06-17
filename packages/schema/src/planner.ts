@@ -3,10 +3,8 @@ import {
   type SyncoreSchemaDefinition,
   type SyncoreSchema
 } from "./definition.js";
-import {
-  describeValidator,
-  type ValidatorDescription
-} from "./validators.js";
+import { describeValidator, type ValidatorDescription } from "./validators.js";
+import { quoteIdentifier, stableStringify } from "@syncore/internal";
 
 export interface TableFieldSnapshot {
   name: string;
@@ -65,7 +63,9 @@ export function createSchemaSnapshot<TTables extends SyncoreSchemaDefinition>(
       const validator = describeValidator(table.validator);
       return {
         name: tableName,
-        ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
+        ...(table.options.tableName
+          ? { displayName: table.options.tableName }
+          : {}),
         ...(table.options.componentPath
           ? { componentPath: table.options.componentPath }
           : {}),
@@ -114,22 +114,31 @@ export function diffSchemaSnapshots(
   const previousTables = new Map(
     (previousSnapshot?.tables ?? []).map((table) => [table.name, table])
   );
-  const nextTables = new Map(nextSnapshot.tables.map((table) => [table.name, table]));
+  const nextTables = new Map(
+    nextSnapshot.tables.map((table) => [table.name, table])
+  );
 
   for (const table of nextSnapshot.tables) {
     const previousTable = previousTables.get(table.name);
     if (!previousTable) {
       statements.push(renderCreateTableStatement(table.name));
       for (const index of table.indexes) {
-        statements.push(renderCreateIndexStatement(table.name, index.name, index.fields));
+        statements.push(
+          renderCreateIndexStatement(table.name, index.name, index.fields)
+        );
       }
       for (const searchIndex of table.searchIndexes) {
-        statements.push(renderCreateSearchIndexStatement(table.name, searchIndex));
+        statements.push(
+          renderCreateSearchIndexStatement(table.name, searchIndex)
+        );
       }
       continue;
     }
 
-    if (stableStringify(previousTable.validator) !== stableStringify(table.validator)) {
+    if (
+      stableStringify(previousTable.validator) !==
+      stableStringify(table.validator)
+    ) {
       warnings.push(
         `Validator changed for table "${table.name}". Existing rows are not rewritten automatically.`
       );
@@ -138,15 +147,21 @@ export function diffSchemaSnapshots(
     const previousIndexes = new Map(
       previousTable.indexes.map((index) => [index.name, index])
     );
-    const nextIndexes = new Map(table.indexes.map((index) => [index.name, index]));
+    const nextIndexes = new Map(
+      table.indexes.map((index) => [index.name, index])
+    );
 
     for (const index of table.indexes) {
       const previousIndex = previousIndexes.get(index.name);
       if (!previousIndex) {
-        statements.push(renderCreateIndexStatement(table.name, index.name, index.fields));
+        statements.push(
+          renderCreateIndexStatement(table.name, index.name, index.fields)
+        );
         continue;
       }
-      if (stableStringify(previousIndex.fields) !== stableStringify(index.fields)) {
+      if (
+        stableStringify(previousIndex.fields) !== stableStringify(index.fields)
+      ) {
         destructiveChanges.push(
           `Index "${table.name}.${index.name}" changed fields and requires a manual migration.`
         );
@@ -171,10 +186,14 @@ export function diffSchemaSnapshots(
     for (const searchIndex of table.searchIndexes) {
       const previousSearchIndex = previousSearchIndexes.get(searchIndex.name);
       if (!previousSearchIndex) {
-        statements.push(renderCreateSearchIndexStatement(table.name, searchIndex));
+        statements.push(
+          renderCreateSearchIndexStatement(table.name, searchIndex)
+        );
         continue;
       }
-      if (stableStringify(previousSearchIndex) !== stableStringify(searchIndex)) {
+      if (
+        stableStringify(previousSearchIndex) !== stableStringify(searchIndex)
+      ) {
         destructiveChanges.push(
           `Search index "${table.name}.${searchIndex.name}" changed and requires a manual migration.`
         );
@@ -289,7 +308,9 @@ export function parseSchemaSnapshot(source: string): SchemaSnapshot {
     return {
       formatVersion: 3,
       plannerVersion: 2,
-      ...(parsed.runtimeVersion ? { runtimeVersion: parsed.runtimeVersion } : {}),
+      ...(parsed.runtimeVersion
+        ? { runtimeVersion: parsed.runtimeVersion }
+        : {}),
       tables: parsed.tables.map((table) => ({
         ...table,
         fieldPaths: extractFieldPaths(table.validator),
@@ -349,7 +370,10 @@ export function renderCreateSearchIndexStatement(
   )} USING fts5(_id UNINDEXED, search_value);`;
 }
 
-export function searchIndexTableName(tableName: string, indexName: string): string {
+export function searchIndexTableName(
+  tableName: string,
+  indexName: string
+): string {
   return `fts_${tableName}_${indexName}`;
 }
 
@@ -359,28 +383,6 @@ function createSchemaHash(
   }
 ): string {
   return stableStringify(value);
-}
-
-function quoteIdentifier(identifier: string): string {
-  return `"${identifier.replaceAll('"', '""')}"`;
-}
-
-function stableStringify(value: unknown): string {
-  return JSON.stringify(sortValue(value));
-}
-
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortValue);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, nested]) => [key, sortValue(nested)])
-    );
-  }
-  return value;
 }
 
 function extractFieldPaths(
@@ -400,7 +402,13 @@ function extractFieldPaths(
     case "codec":
       return extractFieldPaths(description.value, prefix);
     case "union":
-      return [...new Set(description.members.flatMap((member) => extractFieldPaths(member, prefix)))];
+      return [
+        ...new Set(
+          description.members.flatMap((member) =>
+            extractFieldPaths(member, prefix)
+          )
+        )
+      ];
     default:
       return [];
   }

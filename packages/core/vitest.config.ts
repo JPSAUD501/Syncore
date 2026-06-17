@@ -4,6 +4,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@syncore/internal": path.resolve(
+        import.meta.dirname,
+        "../internal/src/index.ts"
+      ),
       "@syncore/schema": path.resolve(
         import.meta.dirname,
         "../schema/src/index.ts"

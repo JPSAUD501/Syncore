@@ -27,6 +27,7 @@ import {
   createDefaultSyncChannelName,
   createWebSyncoreRuntime
 } from "@syncore/platform-web";
+import { normalizeSqliteParams } from "@syncore/internal";
 
 export type ExpoSyncoreSchema<
   TSchema extends SyncoreDataModel = SyncoreDataModel
@@ -390,7 +391,10 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
     params: unknown[] = []
   ): Promise<{ changes: number; lastInsertRowid?: number | string }> {
     this.ensureOpen();
-    const result = await this.database.runAsync(sql, normalizeParams(params));
+    const result = await this.database.runAsync(
+      sql,
+      normalizeSqliteParams(params)
+    );
     return {
       changes: result.changes,
       lastInsertRowid: result.lastInsertRowId
@@ -401,14 +405,14 @@ export class ExpoSqliteDriver implements SyncoreSqlDriver {
     this.ensureOpen();
     const row = await this.database.getFirstAsync<T>(
       sql,
-      normalizeParams(params)
+      normalizeSqliteParams(params)
     );
     return row ?? undefined;
   }
 
   async all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     this.ensureOpen();
-    return this.database.getAllAsync<T>(sql, normalizeParams(params));
+    return this.database.getAllAsync<T>(sql, normalizeSqliteParams(params));
   }
 
   async withTransaction<T>(callback: () => Promise<T>): Promise<T> {
@@ -556,28 +560,6 @@ export class ExpoFileStorageAdapter implements SyncoreStorageAdapter {
       file.delete();
     }
   }
-}
-
-function normalizeParams(
-  values: unknown[]
-): Array<string | number | Uint8Array | null> {
-  return values.map((value) => {
-    if (typeof value === "boolean") {
-      return value ? 1 : 0;
-    }
-    if (
-      value === null ||
-      typeof value === "string" ||
-      typeof value === "number" ||
-      value instanceof Uint8Array
-    ) {
-      return value;
-    }
-    if (value instanceof ArrayBuffer) {
-      return new Uint8Array(value);
-    }
-    return JSON.stringify(value);
-  });
 }
 
 function normalizeBinary(data: StorageWriteInput["data"]): Uint8Array {

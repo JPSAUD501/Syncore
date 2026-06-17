@@ -27,7 +27,7 @@
     "next": "16.3.0-canary.27",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "syncorejs": "^0.2.2"
+    "syncorejs": "^0.2.6"
   },
   "devDependencies": {
     "vitest": "^4.1.7"

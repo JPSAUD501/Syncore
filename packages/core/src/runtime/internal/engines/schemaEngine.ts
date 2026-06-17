@@ -20,13 +20,12 @@ import type {
 } from "../../runtime.js";
 import {
   getTableDefinition,
-  quoteIdentifier,
   resolveSearchIndexTableName,
   searchIndexKey,
-  stableStringify,
   toSearchValue,
   type DatabaseRow
 } from "./shared.js";
+import { quoteIdentifier, stableStringify } from "@syncore/internal";
 import { type DevtoolsEngine } from "./devtoolsEngine.js";
 
 type RecordDocument = Record<string, unknown>;

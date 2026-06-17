@@ -1,5 +1,6 @@
 import { cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { withSyncorePackagingLock } from "../../../scripts/syncore-packaging";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "..", "..", "..");
 const snapshotRoot = path.resolve(import.meta.dirname, "..", ".declaration-artifacts");
@@ -22,12 +23,14 @@ const declarationArtifacts = [
   "packages/next/dist/config.d.ts"
 ] as const;
 
-await rm(snapshotRoot, { recursive: true, force: true });
+await withSyncorePackagingLock(async () => {
+  await rm(snapshotRoot, { recursive: true, force: true });
 
-for (const relativePath of declarationArtifacts) {
-  const sourcePath = path.resolve(workspaceRoot, relativePath);
-  const targetPath = path.resolve(snapshotRoot, relativePath);
+  for (const relativePath of declarationArtifacts) {
+    const sourcePath = path.resolve(workspaceRoot, relativePath);
+    const targetPath = path.resolve(snapshotRoot, relativePath);
 
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  await cp(sourcePath, targetPath);
-}
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await cp(sourcePath, targetPath);
+  }
+});

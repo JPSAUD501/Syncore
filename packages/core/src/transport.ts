@@ -5,6 +5,7 @@ import {
   type SyncoreRuntimeStatus,
   type SyncoreWatch
 } from "./runtime/runtime.js";
+import { stableStringify } from "@syncore/internal";
 import type { SyncoreSchema } from "@syncore/schema";
 import { generateId } from "./runtime/id.js";
 import type { FunctionReference } from "./runtime/functions.js";
@@ -209,7 +210,11 @@ export class SyncoreBridgeClient implements SyncoreClient {
     reference: FunctionReference<"query", TArgs, TResult>,
     ...args: OptionalArgsTuple<TArgs>
   ): Promise<TResult> {
-    return this.invoke("query", reference, normalizeOptionalArgs(args) as JsonObject);
+    return this.invoke(
+      "query",
+      reference,
+      normalizeOptionalArgs(args) as JsonObject
+    );
   }
 
   mutation<TArgs, TResult>(
@@ -511,9 +516,7 @@ export interface AttachedRuntimeBridge {
   dispose(): Promise<void>;
 }
 
-export function attachRuntimeBridge<
-  TSchema extends SyncoreSchema<any>
->(
+export function attachRuntimeBridge<TSchema extends SyncoreSchema<any>>(
   options: AttachRuntimeBridgeOptions<TSchema>
 ): AttachedRuntimeBridge {
   const subscriptions = new Map<
@@ -752,22 +755,4 @@ export function normalizeOptionalArgs<TArgs>(
   args: [] | [TArgs] | readonly unknown[]
 ): TArgs {
   return (args[0] ?? {}) as TArgs;
-}
-
-export function stableStringify(value: unknown): string {
-  return JSON.stringify(sortValue(value));
-}
-
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortValue);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, nested]) => [key, sortValue(nested)])
-    );
-  }
-  return value;
 }

@@ -28,10 +28,24 @@ import {
   slugify,
   startDevHub,
   writeStoredSnapshot
-} from "@syncore/core/cli";
-import { CliContext, type CliChoice, type GlobalCliOptions, openTarget } from "./context.js";
-import { runShellCommand, printCompactDevPhase, printDevSessionIntro, withConsoleCapture } from "./dev-session.js";
-import { applyDoctorFixes, buildDoctorReport, type DoctorReport } from "./doctor.js";
+} from "./internal/core-cli.js";
+import {
+  CliContext,
+  type CliChoice,
+  type GlobalCliOptions,
+  openTarget
+} from "./context.js";
+import {
+  runShellCommand,
+  printCompactDevPhase,
+  printDevSessionIntro,
+  withConsoleCapture
+} from "./dev-session.js";
+import {
+  applyDoctorFixes,
+  buildDoctorReport,
+  type DoctorReport
+} from "./doctor.js";
 import { applyRootHelp } from "./help.js";
 import {
   buildDevBootstrapNextSteps,
@@ -161,7 +175,10 @@ export function buildProgram(): Command {
   program
     .name("syncorejs")
     .usage("<command> [options]")
-    .option("--cwd <path>", "Run the command as if started from the given directory")
+    .option(
+      "--cwd <path>",
+      "Run the command as if started from the given directory"
+    )
     .option("--json", "Emit machine-readable JSON output")
     .option("--verbose", "Print additional diagnostics")
     .option("--no-interactive", "Disable prompts and terminal UX")
@@ -192,7 +209,9 @@ function addInitCommand(program: Command): void {
   program
     .command("init")
     .summary("Scaffold Syncore into the current project")
-    .description("Scaffold Syncore files, scripts, and generated types into the selected directory.")
+    .description(
+      "Scaffold Syncore files, scripts, and generated types into the selected directory."
+    )
     .option(
       "--template <template>",
       `Template to scaffold (${VALID_SYNCORE_TEMPLATES.join(", ")}, or auto)`,
@@ -267,12 +286,17 @@ function addCodegenCommand(program: Command): void {
   program
     .command("codegen")
     .summary("Generate typed Syncore references")
-    .description("Regenerate syncore/_generated from the current syncore/functions tree.")
+    .description(
+      "Regenerate syncore/_generated from the current syncore/functions tree."
+    )
     .addHelpText(
       "after",
-      ["", "Examples:", "  npx syncorejs codegen", "  npx syncorejs codegen --cwd ./apps/web"].join(
-        "\n"
-      )
+      [
+        "",
+        "Examples:",
+        "  npx syncorejs codegen",
+        "  npx syncorejs codegen --cwd ./apps/web"
+      ].join("\n")
     )
     .action(async (_options: Record<string, never>, command: Command) => {
       const ctx = createContext(command);
@@ -292,8 +316,13 @@ function addDoctorCommand(program: Command): void {
   program
     .command("doctor")
     .summary("Inspect the current Syncore project state")
-    .description("Check project structure, template capabilities, hub state, and available targets.")
-    .option("--fix", "Apply safe low-risk fixes like codegen and snapshot refresh")
+    .description(
+      "Check project structure, template capabilities, hub state, and available targets."
+    )
+    .option(
+      "--fix",
+      "Apply safe low-risk fixes like codegen and snapshot refresh"
+    )
     .addHelpText(
       "after",
       [
@@ -342,7 +371,9 @@ function addDoctorCommand(program: Command): void {
           verbose: ctx.verbose
         });
         if (report.workspaceMatches.length > 0) {
-          ctx.warn("You appear to be at a workspace root instead of inside an app package.");
+          ctx.warn(
+            "You appear to be at a workspace root instead of inside an app package."
+          );
           for (const match of report.workspaceMatches) {
             process.stdout.write(
               `  - ${match.relativePath} (${match.template}) -> use --cwd ${match.relativePath}\n`
@@ -360,7 +391,9 @@ function addTargetsCommand(program: Command): void {
   program
     .command("targets")
     .summary("List available Syncore targets")
-    .description("Inspect project and connected client targets for run, data, import, export, and logs.")
+    .description(
+      "Inspect project and connected client targets for run, data, import, export, and logs."
+    )
     .option(
       "--capability <capability>",
       "Filter targets by capability: run, readData, writeData, exportData, streamLogs"
@@ -385,7 +418,10 @@ function addTargetsCommand(program: Command): void {
         }
         const targets = await listAvailableTargets(ctx.cwd);
         const filtered = targets.filter((target) => {
-          if (options.capability && !targetSupportsCapability(target, options.capability)) {
+          if (
+            options.capability &&
+            !targetSupportsCapability(target, options.capability)
+          ) {
             return false;
           }
           return true;
@@ -421,8 +457,14 @@ function addDevCommand(program: Command): void {
     )
     .option("--once", "Run bootstrap once and exit")
     .option("--until-success", "Retry bootstrap until it succeeds")
-    .option("--run <function>", "Run a Syncore function after bootstrap succeeds")
-    .option("--run-sh <command>", "Run a shell command after bootstrap succeeds")
+    .option(
+      "--run <function>",
+      "Run a Syncore function after bootstrap succeeds"
+    )
+    .option(
+      "--run-sh <command>",
+      "Run a shell command after bootstrap succeeds"
+    )
     .option(
       "--typecheck <mode>",
       "Run TypeScript typecheck before entering the local dev loop: enable, try, or disable",
@@ -447,7 +489,7 @@ function addDevCommand(program: Command): void {
         "  npx syncorejs dev --until-success",
         "  npx syncorejs dev --run tasks/list",
         "  npx syncorejs dev --no-open-dashboard",
-        "  npx syncorejs dev --run-sh \"npm run dev\"",
+        '  npx syncorejs dev --run-sh "npm run dev"',
         "  npx syncorejs dev --typecheck enable",
         "  npx syncorejs dev --tail-logs always"
       ].join("\n")
@@ -456,12 +498,17 @@ function addDevCommand(program: Command): void {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
         if (options.run && options.runSh) {
-          ctx.fail("`syncorejs dev` accepts either --run or --run-sh, not both.");
+          ctx.fail(
+            "`syncorejs dev` accepts either --run or --run-sh, not both."
+          );
         }
         const shouldOpenDashboard = options.openDashboard ?? true;
         await ensureLocalPortConfiguration(ctx);
 
-        const template = await resolveRequestedTemplate(ctx.cwd, options.template);
+        const template = await resolveRequestedTemplate(
+          ctx.cwd,
+          options.template
+        );
         validateDevModes(ctx, options);
         printDevSessionIntro(ctx);
         await ensureDevProjectExists(ctx, template);
@@ -486,7 +533,9 @@ function addDevCommand(program: Command): void {
           if (!ctx.json) {
             printDevReadySummary(ctx, {
               template,
-              projectTargetConfigured: targets.some((target) => target.kind === "project"),
+              projectTargetConfigured: targets.some(
+                (target) => target.kind === "project"
+              ),
               dashboardUrl: resolveDashboardUrl(),
               devtoolsUrl: resolveDevtoolsUrl(),
               targets,
@@ -507,7 +556,9 @@ function addDevCommand(program: Command): void {
         const targets = await listAvailableTargets(ctx.cwd);
         printDevReadySummary(ctx, {
           template,
-          projectTargetConfigured: targets.some((target) => target.kind === "project"),
+          projectTargetConfigured: targets.some(
+            (target) => target.kind === "project"
+          ),
           dashboardUrl: resolveDashboardUrl(),
           devtoolsUrl: resolveDevtoolsUrl(),
           targets,
@@ -553,7 +604,9 @@ function addMigrateCommand(program: Command): void {
   const migrate = program
     .command("migrate")
     .summary("Generate and apply local SQL migrations")
-    .description("Work with schema diffs, migration SQL, and the local Syncore database.");
+    .description(
+      "Work with schema diffs, migration SQL, and the local Syncore database."
+    );
 
   migrate
     .command("status")
@@ -579,11 +632,19 @@ function addMigrateCommand(program: Command): void {
         });
 
         if (!ctx.json) {
-          process.stdout.write(`Current schema hash: ${currentSnapshot.hash}\n`);
-          process.stdout.write(`Stored snapshot: ${storedSnapshot?.hash ?? "none"}\n`);
-          process.stdout.write(`Statements to generate: ${plan.statements.length}\n`);
+          process.stdout.write(
+            `Current schema hash: ${currentSnapshot.hash}\n`
+          );
+          process.stdout.write(
+            `Stored snapshot: ${storedSnapshot?.hash ?? "none"}\n`
+          );
+          process.stdout.write(
+            `Statements to generate: ${plan.statements.length}\n`
+          );
           process.stdout.write(`Warnings: ${plan.warnings.length}\n`);
-          process.stdout.write(`Destructive changes: ${plan.destructiveChanges.length}\n`);
+          process.stdout.write(
+            `Destructive changes: ${plan.destructiveChanges.length}\n`
+          );
           for (const warning of plan.warnings) {
             ctx.warn(warning);
           }
@@ -599,48 +660,62 @@ function addMigrateCommand(program: Command): void {
     .argument("[name]", "Optional migration name", "auto")
     .summary("Generate a SQL migration from the current schema diff")
     .action(
-      async (name: string, _options: Record<string, never>, command: Command) => {
-      const ctx = createContext(command);
-      await executeCommand(ctx, async () => {
-        const schema = await loadProjectSchema(ctx.cwd);
-        const currentSnapshot = createSchemaSnapshot(schema);
-        const storedSnapshot = await readStoredSnapshot(ctx.cwd);
-        const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
+      async (
+        name: string,
+        _options: Record<string, never>,
+        command: Command
+      ) => {
+        const ctx = createContext(command);
+        await executeCommand(ctx, async () => {
+          const schema = await loadProjectSchema(ctx.cwd);
+          const currentSnapshot = createSchemaSnapshot(schema);
+          const storedSnapshot = await readStoredSnapshot(ctx.cwd);
+          const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
 
-        if (plan.destructiveChanges.length > 0) {
-          ctx.fail(
-            `Destructive schema changes require a manual migration: ${plan.destructiveChanges.join("; ")}`
+          if (plan.destructiveChanges.length > 0) {
+            ctx.fail(
+              `Destructive schema changes require a manual migration: ${plan.destructiveChanges.join("; ")}`
+            );
+          }
+          if (plan.statements.length === 0 && plan.warnings.length === 0) {
+            ctx.printResult({
+              summary: "No schema changes detected."
+            });
+            return;
+          }
+
+          const migrationsDirectory = path.join(
+            ctx.cwd,
+            "syncore",
+            "migrations"
           );
-        }
-        if (plan.statements.length === 0 && plan.warnings.length === 0) {
-          ctx.printResult({
-            summary: "No schema changes detected."
+          await mkdir(migrationsDirectory, { recursive: true });
+          const migrationNumber =
+            await getNextMigrationNumber(migrationsDirectory);
+          const slug = slugify(name);
+          const fileName = `${String(migrationNumber).padStart(4, "0")}_${slug}.sql`;
+          const migrationSql = renderMigrationSql(plan, {
+            title: `Syncore migration ${fileName}`
           });
-          return;
-        }
+          await writeFile(
+            path.join(migrationsDirectory, fileName),
+            migrationSql
+          );
+          await writeStoredSnapshot(ctx.cwd, currentSnapshot);
 
-        const migrationsDirectory = path.join(ctx.cwd, "syncore", "migrations");
-        await mkdir(migrationsDirectory, { recursive: true });
-        const migrationNumber = await getNextMigrationNumber(migrationsDirectory);
-        const slug = slugify(name);
-        const fileName = `${String(migrationNumber).padStart(4, "0")}_${slug}.sql`;
-        const migrationSql = renderMigrationSql(plan, {
-          title: `Syncore migration ${fileName}`
+          ctx.printResult({
+            summary: `Generated syncore/migrations/${fileName}.`,
+            command: "migrate generate",
+            data: {
+              path: path.join("syncore", "migrations", fileName),
+              statements: plan.statements,
+              warnings: plan.warnings
+            },
+            nextSteps: [
+              "Run `npx syncorejs migrate apply` to apply pending migrations."
+            ]
+          });
         });
-        await writeFile(path.join(migrationsDirectory, fileName), migrationSql);
-        await writeStoredSnapshot(ctx.cwd, currentSnapshot);
-
-        ctx.printResult({
-          summary: `Generated syncore/migrations/${fileName}.`,
-          command: "migrate generate",
-          data: {
-            path: path.join("syncore", "migrations", fileName),
-            statements: plan.statements,
-            warnings: plan.warnings
-          },
-          nextSteps: ["Run `npx syncorejs migrate apply` to apply pending migrations."]
-        });
-      });
       }
     );
 
@@ -650,8 +725,9 @@ function addMigrateCommand(program: Command): void {
     .action(async (_options: Record<string, never>, command: Command) => {
       const ctx = createContext(command);
       await executeCommand(ctx, async () => {
-        const appliedCount = await ctx.withSpinner("Applying migrations", async () =>
-          applyProjectMigrations(ctx.cwd)
+        const appliedCount = await ctx.withSpinner(
+          "Applying migrations",
+          async () => applyProjectMigrations(ctx.cwd)
         );
         ctx.printResult({
           summary: `Applied ${appliedCount} migration(s).`,
@@ -665,12 +741,23 @@ function addRunCommand(program: Command): void {
   program
     .command("run")
     .summary("Run a local Syncore function")
-    .description("Execute a query, mutation, or action against the local runtime.")
-    .argument("<functionName>", "Function name like tasks/list or api.tasks.list")
+    .description(
+      "Execute a query, mutation, or action against the local runtime."
+    )
+    .argument(
+      "<functionName>",
+      "Function name like tasks/list or api.tasks.list"
+    )
     .argument("[args]", "JSON object of arguments", "{}")
     .option("--watch", "Watch a query for local changes")
-    .option("--target <target>", "Target id: project or a 5-digit client target id")
-    .option("--runtime <runtime>", "Runtime id inside the selected client target")
+    .option(
+      "--target <target>",
+      "Target id: project or a 5-digit client target id"
+    )
+    .option(
+      "--runtime <runtime>",
+      "Runtime id inside the selected client target"
+    )
     .option(
       "--format <format>",
       "Output format: pretty, json, or jsonl",
@@ -682,7 +769,7 @@ function addRunCommand(program: Command): void {
         "",
         "Examples:",
         "  npx syncorejs run tasks/list",
-        "  npx syncorejs run api.tasks.create '{\"text\":\"Ship Syncore\"}' --target project",
+        '  npx syncorejs run api.tasks.create \'{"text":"Ship Syncore"}\' --target project',
         "  npx syncorejs run tasks/list --watch --target 10427 --runtime 20318 --format json"
       ].join("\n")
     )
@@ -693,133 +780,145 @@ function addRunCommand(program: Command): void {
         options: RunCommandOptions,
         command: Command
       ) => {
-      const ctx = createContext(command);
-      await executeCommand(ctx, async () => {
-        if (options.runtime && !options.target) {
-          ctx.fail("`syncorejs run --runtime` requires --target.");
-        }
-        const args = parseJsonObject(argsText, "Function arguments");
+        const ctx = createContext(command);
+        await executeCommand(ctx, async () => {
+          if (options.runtime && !options.target) {
+            ctx.fail("`syncorejs run --runtime` requires --target.");
+          }
+          const args = parseJsonObject(argsText, "Function arguments");
 
-        const target = await resolveOperationalTarget(ctx, options.target, {
-          command: "run",
-          capability: "run"
-        });
-        const runtime = resolveClientRuntime(target, options.runtime, {
-          command: "run"
-        });
-        if (target.kind === "project") {
-          const managed = await createManagedProjectClient(ctx.cwd);
-          try {
-            const resolved = await resolveProjectFunction(
-              ctx.cwd,
-              functionName,
-              managed.functions
-            );
-            if (options.watch && resolved.definition.kind !== "query") {
-              ctx.fail("`syncorejs run --watch` only supports query functions.");
-            }
-            ctx.info(
-              options.watch
-                ? `Watching ${resolved.name} on ${target.id}.`
-                : `Running ${resolved.name} on ${target.id}.`
-            );
-            if (options.watch) {
-              const watch = managed.client.watchQuery(
-                resolved.reference as never,
-                args
+          const target = await resolveOperationalTarget(ctx, options.target, {
+            command: "run",
+            capability: "run"
+          });
+          const runtime = resolveClientRuntime(target, options.runtime, {
+            command: "run"
+          });
+          if (target.kind === "project") {
+            const managed = await createManagedProjectClient(ctx.cwd);
+            try {
+              const resolved = await resolveProjectFunction(
+                ctx.cwd,
+                functionName,
+                managed.functions
               );
-              const render = () => {
-                const error = watch.localQueryError();
-                if (error) {
-                  ctx.handleError(error);
-                  return;
-                }
-                renderOutput(ctx, watch.localQueryResult(), options.format);
-              };
-              const unsubscribe = watch.onUpdate(render);
-              ctx.info("Watching query. Press Ctrl+C to stop.");
-              await waitForSignal();
-              unsubscribe();
-              watch.dispose?.();
-              return;
-            }
+              if (options.watch && resolved.definition.kind !== "query") {
+                ctx.fail(
+                  "`syncorejs run --watch` only supports query functions."
+                );
+              }
+              ctx.info(
+                options.watch
+                  ? `Watching ${resolved.name} on ${target.id}.`
+                  : `Running ${resolved.name} on ${target.id}.`
+              );
+              if (options.watch) {
+                const watch = managed.client.watchQuery(
+                  resolved.reference as never,
+                  args
+                );
+                const render = () => {
+                  const error = watch.localQueryError();
+                  if (error) {
+                    ctx.handleError(error);
+                    return;
+                  }
+                  renderOutput(ctx, watch.localQueryResult(), options.format);
+                };
+                const unsubscribe = watch.onUpdate(render);
+                ctx.info("Watching query. Press Ctrl+C to stop.");
+                await waitForSignal();
+                unsubscribe();
+                watch.dispose?.();
+                return;
+              }
 
-            const result =
-              resolved.definition.kind === "query"
-                ? await managed.client.query(resolved.reference as never, args)
-                : resolved.definition.kind === "mutation"
-                  ? await managed.client.mutation(
+              const result =
+                resolved.definition.kind === "query"
+                  ? await managed.client.query(
                       resolved.reference as never,
                       args
                     )
-                  : await managed.client.action(resolved.reference as never, args);
+                  : resolved.definition.kind === "mutation"
+                    ? await managed.client.mutation(
+                        resolved.reference as never,
+                        args
+                      )
+                    : await managed.client.action(
+                        resolved.reference as never,
+                        args
+                      );
 
-            renderOutput(ctx, result, options.format);
-            return;
-          } finally {
-            await managed.dispose();
-          }
-        }
-
-        const resolved = await resolveProjectFunction(ctx.cwd, functionName);
-        if (options.watch && resolved.definition.kind !== "query") {
-          ctx.fail("`syncorejs run --watch` only supports query functions.");
-        }
-        ctx.info(
-          options.watch
-            ? `Watching ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
-            : `Running ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
-        );
-        const hub = await requireHubConnection(ctx);
-        try {
-          if (options.watch) {
-            const unsubscribe = hub.subscribe(runtime!.runtimeId, {
-              kind: "fn.watch",
-              functionName: resolved.name,
-              functionType: "query",
-              args
-            }, {
-              onData(payload) {
-                if (payload.kind !== "fn.watch.result") {
-                  return;
-                }
-                if (payload.error) {
-                  ctx.handleError(new Error(payload.error));
-                  return;
-                }
-                renderOutput(ctx, payload.result, options.format);
-              },
-              onError(error) {
-                ctx.handleError(new Error(error));
-              }
-            });
-            ctx.info(`Watching query on ${target.id}. Press Ctrl+C to stop.`);
-            await waitForSignal();
-            unsubscribe();
-            return;
-          }
-
-          const result = await hub.sendCommand(runtime!.runtimeId, {
-            kind: "fn.run",
-            functionName: resolved.name,
-            functionType: resolved.definition.kind,
-            args
-          });
-          if (result.kind === "fn.run.result") {
-            if (result.error) {
-              ctx.fail(result.error);
+              renderOutput(ctx, result, options.format);
+              return;
+            } finally {
+              await managed.dispose();
             }
-            renderOutput(ctx, result.result, options.format);
-            return;
           }
-          if (result.kind === "error") {
-            ctx.fail(result.message, 1, result);
+
+          const resolved = await resolveProjectFunction(ctx.cwd, functionName);
+          if (options.watch && resolved.definition.kind !== "query") {
+            ctx.fail("`syncorejs run --watch` only supports query functions.");
           }
-          ctx.fail(`Unexpected response from ${target.id}.`, 1, result);
-        } finally {
-          await hub.dispose();
-        }
-      });
+          ctx.info(
+            options.watch
+              ? `Watching ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
+              : `Running ${resolved.name} on ${target.id}${runtime ? ` (${runtime.id} ${runtime.label})` : ""}.`
+          );
+          const hub = await requireHubConnection(ctx);
+          try {
+            if (options.watch) {
+              const unsubscribe = hub.subscribe(
+                runtime!.runtimeId,
+                {
+                  kind: "fn.watch",
+                  functionName: resolved.name,
+                  functionType: "query",
+                  args
+                },
+                {
+                  onData(payload) {
+                    if (payload.kind !== "fn.watch.result") {
+                      return;
+                    }
+                    if (payload.error) {
+                      ctx.handleError(new Error(payload.error));
+                      return;
+                    }
+                    renderOutput(ctx, payload.result, options.format);
+                  },
+                  onError(error) {
+                    ctx.handleError(new Error(error));
+                  }
+                }
+              );
+              ctx.info(`Watching query on ${target.id}. Press Ctrl+C to stop.`);
+              await waitForSignal();
+              unsubscribe();
+              return;
+            }
+
+            const result = await hub.sendCommand(runtime!.runtimeId, {
+              kind: "fn.run",
+              functionName: resolved.name,
+              functionType: resolved.definition.kind,
+              args
+            });
+            if (result.kind === "fn.run.result") {
+              if (result.error) {
+                ctx.fail(result.error);
+              }
+              renderOutput(ctx, result.result, options.format);
+              return;
+            }
+            if (result.kind === "error") {
+              ctx.fail(result.message, 1, result);
+            }
+            ctx.fail(`Unexpected response from ${target.id}.`, 1, result);
+          } finally {
+            await hub.dispose();
+          }
+        });
       }
     );
 }
@@ -830,8 +929,14 @@ function addDataCommand(program: Command): void {
     .summary("Inspect local Syncore data")
     .description("List tables or print local rows from a specific table.")
     .argument("[table]", "Optional table to inspect")
-    .option("--target <target>", "Target id: project or a 5-digit client target id")
-    .option("--runtime <runtime>", "Runtime id inside the selected client target")
+    .option(
+      "--target <target>",
+      "Target id: project or a 5-digit client target id"
+    )
+    .option(
+      "--runtime <runtime>",
+      "Runtime id inside the selected client target"
+    )
     .option("--limit <n>", "Maximum rows to print", "100")
     .option("--order <choice>", "Order by _creationTime", "desc")
     .option("--watch", "Watch a table for changes on the selected target")
@@ -856,100 +961,109 @@ function addDataCommand(program: Command): void {
         options: DataCommandOptions,
         command: Command
       ) => {
-      const ctx = createContext(command);
-      await executeCommand(ctx, async () => {
-        if (options.runtime && !options.target) {
-          ctx.fail("`syncorejs data --runtime` requires --target.");
-        }
-        const target = await resolveOperationalTarget(ctx, options.target, {
-          command: "data",
-          capability: "readData"
-        });
-        const runtime = resolveClientRuntime(target, options.runtime, {
-          command: "data"
-        });
-        if (!table) {
-          const tables =
-            target.kind === "project"
-              ? await listProjectTables(ctx.cwd)
-              : await listRemoteTables(runtime!.runtimeId, ctx);
-          ctx.printResult({
-            summary: `Found ${tables.length} table(s) on ${target.id}.`,
-            command: "data",
-            data: tables,
-            target: target.id
-          });
-          if (!ctx.json) {
-            for (const entry of tables) {
-              const tableEntry = entry as {
-                name: string;
-                documentCount: number;
-                displayName?: string;
-                owner?: "root" | "component";
-                componentPath?: string;
-              };
-              const label =
-                typeof tableEntry.displayName === "string" &&
-                tableEntry.displayName.length > 0 &&
-                tableEntry.displayName !== tableEntry.name
-                  ? `${tableEntry.displayName} -> ${tableEntry.name}`
-                  : tableEntry.name;
-              const owner =
-                tableEntry.owner === "component"
-                  ? `  component:${String(tableEntry.componentPath ?? "unknown")}`
-                  : "";
-              process.stdout.write(
-                `  ${label} (${tableEntry.documentCount} document(s))${owner}\n`
-              );
-            }
+        const ctx = createContext(command);
+        await executeCommand(ctx, async () => {
+          if (options.runtime && !options.target) {
+            ctx.fail("`syncorejs data --runtime` requires --target.");
           }
-          return;
-        }
-
-        if (target.kind === "project") {
-          const payload = await readProjectTable(ctx.cwd, table, {
-            limit: Number.parseInt(options.limit, 10),
-            order: options.order === "asc" ? "asc" : "desc"
+          const target = await resolveOperationalTarget(ctx, options.target, {
+            command: "data",
+            capability: "readData"
           });
-          renderOutput(ctx, payload.rows, options.format);
-          return;
-        }
-
-        const hub = await requireHubConnection(ctx);
-        try {
-          const payload = await readRemoteTable(hub, runtime!.runtimeId, table, {
-            limit: Number.parseInt(options.limit, 10)
+          const runtime = resolveClientRuntime(target, options.runtime, {
+            command: "data"
           });
-          renderOutput(ctx, payload.rows, options.format);
-
-          if (!options.watch) {
+          if (!table) {
+            const tables =
+              target.kind === "project"
+                ? await listProjectTables(ctx.cwd)
+                : await listRemoteTables(runtime!.runtimeId, ctx);
+            ctx.printResult({
+              summary: `Found ${tables.length} table(s) on ${target.id}.`,
+              command: "data",
+              data: tables,
+              target: target.id
+            });
+            if (!ctx.json) {
+              for (const entry of tables) {
+                const tableEntry = entry as {
+                  name: string;
+                  documentCount: number;
+                  displayName?: string;
+                  owner?: "root" | "component";
+                  componentPath?: string;
+                };
+                const label =
+                  typeof tableEntry.displayName === "string" &&
+                  tableEntry.displayName.length > 0 &&
+                  tableEntry.displayName !== tableEntry.name
+                    ? `${tableEntry.displayName} -> ${tableEntry.name}`
+                    : tableEntry.name;
+                const owner =
+                  tableEntry.owner === "component"
+                    ? `  component:${String(tableEntry.componentPath ?? "unknown")}`
+                    : "";
+                process.stdout.write(
+                  `  ${label} (${tableEntry.documentCount} document(s))${owner}\n`
+                );
+              }
+            }
             return;
           }
 
-          const unsubscribe = hub.subscribe(runtime!.runtimeId, {
-            kind: "data.table",
-            table,
-            limit: Number.parseInt(options.limit, 10)
-          }, {
-            onData(result) {
-              if (result.kind !== "data.table.result") {
-                return;
+          if (target.kind === "project") {
+            const payload = await readProjectTable(ctx.cwd, table, {
+              limit: Number.parseInt(options.limit, 10),
+              order: options.order === "asc" ? "asc" : "desc"
+            });
+            renderOutput(ctx, payload.rows, options.format);
+            return;
+          }
+
+          const hub = await requireHubConnection(ctx);
+          try {
+            const payload = await readRemoteTable(
+              hub,
+              runtime!.runtimeId,
+              table,
+              {
+                limit: Number.parseInt(options.limit, 10)
               }
-              renderOutput(ctx, result.rows, options.format);
-            },
-            onError(error) {
-              ctx.handleError(new Error(error));
+            );
+            renderOutput(ctx, payload.rows, options.format);
+
+            if (!options.watch) {
+              return;
             }
-          });
-          ctx.info(
-            `Watching table ${table} on ${target.id} (${runtime!.id} ${runtime!.label}). Press Ctrl+C to stop.`
-          );
-          await waitForSignal();
-          unsubscribe();
-        } finally {
-          await hub.dispose();
-        }
-      });
+
+            const unsubscribe = hub.subscribe(
+              runtime!.runtimeId,
+              {
+                kind: "data.table",
+                table,
+                limit: Number.parseInt(options.limit, 10)
+              },
+              {
+                onData(result) {
+                  if (result.kind !== "data.table.result") {
+                    return;
+                  }
+                  renderOutput(ctx, result.rows, options.format);
+                },
+                onError(error) {
+                  ctx.handleError(new Error(error));
+                }
+              }
+            );
+            ctx.info(
+              `Watching table ${table} on ${target.id} (${runtime!.id} ${runtime!.label}). Press Ctrl+C to stop.`
+            );
+            await waitForSignal();
+            unsubscribe();
+          } finally {
+            await hub.dispose();
+          }
+        });
       }
     );
 }
@@ -958,11 +1072,19 @@ function addImportCommand(program: Command): void {
   program
     .command("import")
     .summary("Import local data into Syncore")
-    .description("Import JSON, JSONL, directory, or ZIP data into the local Syncore database.")
+    .description(
+      "Import JSON, JSONL, directory, or ZIP data into the local Syncore database."
+    )
     .argument("<path>", "Path to a .json, .jsonl, directory, or .zip input")
     .option("--table <table>", "Destination table for single-file imports")
-    .option("--target <target>", "Target id: project or a 5-digit client target id")
-    .option("--runtime <runtime>", "Runtime id inside the selected client target")
+    .option(
+      "--target <target>",
+      "Target id: project or a 5-digit client target id"
+    )
+    .option(
+      "--runtime <runtime>",
+      "Runtime id inside the selected client target"
+    )
     .addHelpText(
       "after",
       [
@@ -979,52 +1101,65 @@ function addImportCommand(program: Command): void {
         options: ImportCommandOptions,
         command: Command
       ) => {
-      const ctx = createContext(command);
-      await executeCommand(ctx, async () => {
-        if (options.runtime && !options.target) {
-          ctx.fail("`syncorejs import --runtime` requires --target.");
-        }
-        const target = await resolveOperationalTarget(ctx, options.target, {
-          command: "import",
-          capability: "writeData"
-        });
-        const runtime = resolveClientRuntime(target, options.runtime, {
-          command: "import"
-        });
-        const preview = await previewImportPlan(ctx, sourcePath, options, target.id);
-        if (
-          ctx.interactive &&
-          !(await ctx.confirm(
-            `Import ${preview.totalRows} row(s) into ${target.id}?`,
-            true
-          ))
-        ) {
-          ctx.fail("Import cancelled by user.");
-        }
-        const imported =
-          target.kind === "project"
-            ? await ctx.withSpinner("Importing local data", async () =>
-                importProjectData(ctx.cwd, sourcePath, {
-                  ...(options.table ? { table: options.table } : {})
-                })
-              )
-            : await ctx.withSpinner(`Importing data into ${target.id}`, async () =>
-                importIntoClientTarget(ctx, target, runtime!, sourcePath, options)
-              );
-        ctx.printResult({
-          summary: `Imported ${imported.reduce((sum, entry) => sum + entry.importedCount, 0)} row(s).`,
-          command: "import",
-          data: imported,
-          target: target.id
-        });
-        if (!ctx.json) {
-          for (const entry of imported) {
-            process.stdout.write(
-              `  ${entry.table}: ${entry.importedCount} row(s)\n`
-            );
+        const ctx = createContext(command);
+        await executeCommand(ctx, async () => {
+          if (options.runtime && !options.target) {
+            ctx.fail("`syncorejs import --runtime` requires --target.");
           }
-        }
-      });
+          const target = await resolveOperationalTarget(ctx, options.target, {
+            command: "import",
+            capability: "writeData"
+          });
+          const runtime = resolveClientRuntime(target, options.runtime, {
+            command: "import"
+          });
+          const preview = await previewImportPlan(
+            ctx,
+            sourcePath,
+            options,
+            target.id
+          );
+          if (
+            ctx.interactive &&
+            !(await ctx.confirm(
+              `Import ${preview.totalRows} row(s) into ${target.id}?`,
+              true
+            ))
+          ) {
+            ctx.fail("Import cancelled by user.");
+          }
+          const imported =
+            target.kind === "project"
+              ? await ctx.withSpinner("Importing local data", async () =>
+                  importProjectData(ctx.cwd, sourcePath, {
+                    ...(options.table ? { table: options.table } : {})
+                  })
+                )
+              : await ctx.withSpinner(
+                  `Importing data into ${target.id}`,
+                  async () =>
+                    importIntoClientTarget(
+                      ctx,
+                      target,
+                      runtime!,
+                      sourcePath,
+                      options
+                    )
+                );
+          ctx.printResult({
+            summary: `Imported ${imported.reduce((sum, entry) => sum + entry.importedCount, 0)} row(s).`,
+            command: "import",
+            data: imported,
+            target: target.id
+          });
+          if (!ctx.json) {
+            for (const entry of imported) {
+              process.stdout.write(
+                `  ${entry.table}: ${entry.importedCount} row(s)\n`
+              );
+            }
+          }
+        });
       }
     );
 }
@@ -1033,11 +1168,22 @@ function addExportCommand(program: Command): void {
   program
     .command("export")
     .summary("Export local Syncore data")
-    .description("Export one or more local tables to JSON, JSONL, a directory, or a ZIP file.")
-    .requiredOption("--path <path>", "Output path (.json, .jsonl, directory, or .zip)")
+    .description(
+      "Export one or more local tables to JSON, JSONL, a directory, or a ZIP file."
+    )
+    .requiredOption(
+      "--path <path>",
+      "Output path (.json, .jsonl, directory, or .zip)"
+    )
     .option("--table <table>", "Export a single table")
-    .option("--target <target>", "Target id: project or a 5-digit client target id")
-    .option("--runtime <runtime>", "Runtime id inside the selected client target")
+    .option(
+      "--target <target>",
+      "Target id: project or a 5-digit client target id"
+    )
+    .option(
+      "--runtime <runtime>",
+      "Runtime id inside the selected client target"
+    )
     .addHelpText(
       "after",
       [
@@ -1068,8 +1214,10 @@ function addExportCommand(program: Command): void {
                   ...(options.table ? { table: options.table } : {})
                 })
               )
-            : await ctx.withSpinner(`Exporting data from ${target.id}`, async () =>
-                exportClientTargetData(ctx, target, runtime!, options)
+            : await ctx.withSpinner(
+                `Exporting data from ${target.id}`,
+                async () =>
+                  exportClientTargetData(ctx, target, runtime!, options)
               );
         ctx.printResult({
           summary: `Exported ${result.tables.length} table(s) to ${result.path}.`,
@@ -1085,13 +1233,25 @@ function addLogsCommand(program: Command): void {
   program
     .command("logs")
     .summary("Inspect Syncore runtime logs")
-    .description("Read persisted hub logs and optionally watch live runtime events.")
+    .description(
+      "Read persisted hub logs and optionally watch live runtime events."
+    )
     .option("--target <target>", "Target id, or all", "all")
-    .option("--runtime <runtime>", "Runtime id inside the selected client target")
+    .option(
+      "--runtime <runtime>",
+      "Runtime id inside the selected client target"
+    )
     .option("--limit <n>", "Maximum log lines to print", "100")
     .option("--watch", "Stream new logs from the local devtools hub")
-    .option("--kind <kind>", "Filter by event kind: query, mutation, action, system")
-    .option("--format <format>", "Output format: pretty, json, or jsonl", "pretty")
+    .option(
+      "--kind <kind>",
+      "Filter by event kind: query, mutation, action, system"
+    )
+    .option(
+      "--format <format>",
+      "Output format: pretty, json, or jsonl",
+      "pretty"
+    )
     .addHelpText(
       "after",
       [
@@ -1117,7 +1277,9 @@ function addDashboardCommand(program: Command): void {
   program
     .command("dashboard")
     .summary("Print or open the local dashboard URL")
-    .description("Show the local Syncore dashboard URL, optionally opening it in the browser.")
+    .description(
+      "Show the local Syncore dashboard URL, optionally opening it in the browser."
+    )
     .option("--open", "Open the dashboard URL")
     .action(async (options: OpenCommandOptions, command: Command) => {
       const ctx = createContext(command);
@@ -1145,7 +1307,9 @@ function addDocsCommand(program: Command): void {
   program
     .command("docs")
     .summary("Print or open the most relevant Syncore docs")
-    .description("Resolve the best local docs target for the detected template and optionally open it.")
+    .description(
+      "Resolve the best local docs target for the detected template and optionally open it."
+    )
     .option("--open", "Open the docs target")
     .action(async (options: OpenCommandOptions, command: Command) => {
       const ctx = createContext(command);
@@ -1214,9 +1378,13 @@ async function ensureDevProjectExists(
   }
 }
 
-type ConnectedHub = NonNullable<Awaited<ReturnType<typeof connectToProjectHub>>>;
+type ConnectedHub = NonNullable<
+  Awaited<ReturnType<typeof connectToProjectHub>>
+>;
 
-async function ensureLocalPortConfiguration(context: CliContext): Promise<void> {
+async function ensureLocalPortConfiguration(
+  context: CliContext
+): Promise<void> {
   const dashboardUrl = resolveDashboardUrl();
   const devtoolsUrl = resolveDevtoolsUrl();
   const dashboardPort = Number.parseInt(new URL(dashboardUrl).port, 10);
@@ -1284,22 +1452,19 @@ async function runDevBootstrapLoop(
         if (tailLogs === "errors") {
           await printRecentRuntimeSignals(context, context.cwd);
         }
-        context.fail(
-          report.primaryIssue.summary,
-          1,
-          report,
-          {
-            category: "runtime",
-            nextSteps: report.suggestions
-          }
-        );
+        context.fail(report.primaryIssue.summary, 1, report, {
+          category: "runtime",
+          nextSteps: report.suggestions
+        });
       }
       return report;
     } catch (error) {
       if (!untilSuccess) {
         throw error;
       }
-      context.warn(`Syncore dev bootstrap failed, retrying: ${formatError(error)}`);
+      context.warn(
+        `Syncore dev bootstrap failed, retrying: ${formatError(error)}`
+      );
       await new Promise((resolve) => setTimeout(resolve, 1200));
     }
   }
@@ -1419,13 +1584,12 @@ async function runDevFollowup(
     } else {
       const hub = await requireHubConnection(context);
       try {
-        const result =
-          await hub.sendCommand(target.runtimeId, {
-            kind: "fn.run",
-            functionName: resolved.name,
-            functionType: resolved.definition.kind,
-            args: {}
-          });
+        const result = await hub.sendCommand(target.runtimeId, {
+          kind: "fn.run",
+          functionName: resolved.name,
+          functionType: resolved.definition.kind,
+          args: {}
+        });
         if (result.kind !== "fn.run.result") {
           context.fail(`Unexpected response from ${target.id}.`, 1, result);
         }
@@ -1450,7 +1614,9 @@ async function monitorLiveDevSession(
   tailLogs: DevCommandOptions["tailLogs"]
 ): Promise<void> {
   const stopTailing =
-    tailLogs === "always" ? startRuntimeLogTail(context, context.cwd) : undefined;
+    tailLogs === "always"
+      ? startRuntimeLogTail(context, context.cwd)
+      : undefined;
   if (!templateUsesConnectedClients(template)) {
     try {
       await waitForSignal();
@@ -1503,7 +1669,10 @@ async function monitorLiveDevSession(
   }
 }
 
-function validateDevModes(context: CliContext, options: DevCommandOptions): void {
+function validateDevModes(
+  context: CliContext,
+  options: DevCommandOptions
+): void {
   if (!["enable", "try", "disable"].includes(options.typecheck)) {
     context.fail(
       `Unknown typecheck mode ${JSON.stringify(options.typecheck)}. Expected enable, try, or disable.`
@@ -1526,18 +1695,26 @@ interface DevTypecheckResult {
 
 function printDevPreflight(context: CliContext, report: DoctorReport): void {
   if (report.status === "missing-generated") {
-    context.info("Preflight: generated Syncore files are missing; dev will refresh them.");
+    context.info(
+      "Preflight: generated Syncore files are missing; dev will refresh them."
+    );
     return;
   }
   if (report.status === "schema-drift") {
-    context.info("Preflight: schema drift detected; dev will refresh local Syncore state where safe.");
+    context.info(
+      "Preflight: schema drift detected; dev will refresh local Syncore state where safe."
+    );
     return;
   }
   if (report.status === "waiting-for-client") {
-    context.info("Preflight: this template uses client-managed runtimes; connect the app to unlock live targets.");
+    context.info(
+      "Preflight: this template uses client-managed runtimes; connect the app to unlock live targets."
+    );
     return;
   }
-  context.info("Preflight: Syncore project structure and local runtime prerequisites were inspected.");
+  context.info(
+    "Preflight: Syncore project structure and local runtime prerequisites were inspected."
+  );
 }
 
 async function runDevTypecheck(
@@ -1556,7 +1733,9 @@ async function runDevTypecheck(
   const tsconfigPath = await findTypecheckConfig(context.cwd);
   if (!tsconfigPath) {
     if (mode === "enable") {
-      context.fail("Typecheck was enabled but no tsconfig.json was found in this project.");
+      context.fail(
+        "Typecheck was enabled but no tsconfig.json was found in this project."
+      );
     }
     context.warn("Typecheck skipped because no tsconfig.json was found.");
     return {
@@ -1570,9 +1749,13 @@ async function runDevTypecheck(
   const tscPath = await findTypeScriptCompiler(context.cwd);
   if (!tscPath) {
     if (mode === "enable") {
-      context.fail("Typecheck was enabled but no local TypeScript compiler was found.");
+      context.fail(
+        "Typecheck was enabled but no local TypeScript compiler was found."
+      );
     }
-    context.warn("Typecheck skipped because TypeScript is not available in this workspace.");
+    context.warn(
+      "Typecheck skipped because TypeScript is not available in this workspace."
+    );
     return {
       mode,
       attempted: false,
@@ -1581,8 +1764,14 @@ async function runDevTypecheck(
     };
   }
 
-  context.info(`Typecheck: running tsc --noEmit -p ${path.basename(tsconfigPath)}.`);
-  const result = await runTypeScriptCompiler(context.cwd, tscPath, tsconfigPath);
+  context.info(
+    `Typecheck: running tsc --noEmit -p ${path.basename(tsconfigPath)}.`
+  );
+  const result = await runTypeScriptCompiler(
+    context.cwd,
+    tscPath,
+    tsconfigPath
+  );
   if (result.ok) {
     context.success("Typecheck passed.");
     return {
@@ -1604,7 +1793,9 @@ async function runDevTypecheck(
       }
     );
   }
-  context.warn(`Typecheck reported issues but dev will continue.${detail ? ` ${detail}` : ""}`);
+  context.warn(
+    `Typecheck reported issues but dev will continue.${detail ? ` ${detail}` : ""}`
+  );
   return {
     mode,
     attempted: true,
@@ -1633,7 +1824,12 @@ async function findTypeScriptCompiler(cwd: string): Promise<string | null> {
   const executableName = process.platform === "win32" ? "tsc.cmd" : "tsc";
   let current = cwd;
   while (true) {
-    const candidate = path.join(current, "node_modules", ".bin", executableName);
+    const candidate = path.join(
+      current,
+      "node_modules",
+      ".bin",
+      executableName
+    );
     if (await fileExists(candidate)) {
       return candidate;
     }
@@ -1685,7 +1881,9 @@ function summarizeCompilerOutput(output: string): string | undefined {
 }
 
 function describeTypecheckStatus(result: DevTypecheckResult): string {
-  return result.details ? `${result.summary} (${result.details})` : result.summary;
+  return result.details
+    ? `${result.summary} (${result.details})`
+    : result.summary;
 }
 
 function describeDevDriftStatus(report: DoctorReport): string {
@@ -1705,18 +1903,15 @@ function describeDevDriftStatus(report: DoctorReport): string {
   }
 }
 
-async function requireHubConnection(context: CliContext): Promise<ConnectedHub> {
+async function requireHubConnection(
+  context: CliContext
+): Promise<ConnectedHub> {
   const hub = await connectToProjectHub();
   if (!hub) {
-    context.fail(
-      "The local devtools hub is not running.",
-      1,
-      undefined,
-      {
-        category: "hub",
-        nextSteps: buildHubUnavailableNextSteps()
-      }
-    );
+    context.fail("The local devtools hub is not running.", 1, undefined, {
+      category: "hub",
+      nextSteps: buildHubUnavailableNextSteps()
+    });
   }
   return hub;
 }
@@ -1731,7 +1926,11 @@ async function listRemoteTables(
       kind: "schema.tables"
     });
     if (result.kind !== "schema.tables.result") {
-      context.fail("Unexpected response while listing remote tables.", 1, result);
+      context.fail(
+        "Unexpected response while listing remote tables.",
+        1,
+        result
+      );
     }
     return result.tables.map((table) => ({
       name: table.name,
@@ -1749,10 +1948,12 @@ async function readRemoteTable(
   options: {
     limit: number;
   }
-): Promise<Extract<
-  Awaited<ReturnType<typeof subscribeOnce>>,
-  { kind: "data.table.result" }
->> {
+): Promise<
+  Extract<
+    Awaited<ReturnType<typeof subscribeOnce>>,
+    { kind: "data.table.result" }
+  >
+> {
   const result = await subscribeOnce(hub, runtimeId, {
     kind: "data.table",
     table,
@@ -1791,7 +1992,7 @@ async function importIntoClientTarget(
         if (result.kind !== "data.mutate.result" || !result.success) {
           const message =
             result.kind === "data.mutate.result"
-              ? result.error ?? `Failed to import into ${batch.table}.`
+              ? (result.error ?? `Failed to import into ${batch.table}.`)
               : `Unexpected response while importing into ${batch.table}.`;
           context.fail(message, 1, result);
         }
@@ -1828,12 +2029,17 @@ async function exportClientTargetData(
     const payloads = await Promise.all(
       tables.map(async (table) => ({
         table,
-        rows: (await readRemoteTable(hub, runtime.runtimeId, table, {
-          limit: Number.MAX_SAFE_INTEGER
-        })).rows
+        rows: (
+          await readRemoteTable(hub, runtime.runtimeId, table, {
+            limit: Number.MAX_SAFE_INTEGER
+          })
+        ).rows
       }))
     );
-    return await writeExportData(path.resolve(context.cwd, options.path), payloads);
+    return await writeExportData(
+      path.resolve(context.cwd, options.path),
+      payloads
+    );
   } finally {
     await hub.dispose();
   }
@@ -1860,7 +2066,9 @@ async function runLogsCommand(
       })
     : null;
   const allowedRuntimeIds =
-    selectedTarget?.kind === "client" ? new Set(selectedTarget.runtimeIds) : undefined;
+    selectedTarget?.kind === "client"
+      ? new Set(selectedTarget.runtimeIds)
+      : undefined;
   const entries = await readPersistedLogs(context.cwd);
   const filtered = entries
     .map((entry) => decoratePersistedLogEntry(entry, runtimeLookup))
@@ -1947,10 +2155,7 @@ async function printRecentRuntimeSignals(
   }
 }
 
-function startRuntimeLogTail(
-  context: CliContext,
-  cwd: string
-): () => void {
+function startRuntimeLogTail(context: CliContext, cwd: string): () => void {
   let seenCount = 0;
   let disposed = false;
   const poll = async () => {
@@ -1975,7 +2180,11 @@ function startRuntimeLogTail(
 }
 
 function normalizeRuntimeEvent(
-  event: Record<string, unknown> & { type: string; runtimeId: string; timestamp: number },
+  event: Record<string, unknown> & {
+    type: string;
+    runtimeId: string;
+    timestamp: number;
+  },
   runtimeEntry?: ClientRuntimeLookupEntry
 ): PersistedLogEntry | null {
   const functionName =
@@ -1983,7 +2192,9 @@ function normalizeRuntimeEvent(
   const functionComponent = resolveComponentInfoFromFunctionName(functionName);
   const queryComponent =
     typeof event.queryId === "string"
-      ? resolveComponentInfoFromFunctionName(formatInvalidatedQueryId(event.queryId))
+      ? resolveComponentInfoFromFunctionName(
+          formatInvalidatedQueryId(event.queryId)
+        )
       : undefined;
   const storageComponent =
     typeof event.storageId === "string"
@@ -1998,7 +2209,7 @@ function normalizeRuntimeEvent(
             ? { componentName: event.componentName }
             : {})
         }
-      : functionComponent ?? queryComponent ?? storageComponent;
+      : (functionComponent ?? queryComponent ?? storageComponent);
   const logMessage =
     typeof event.message === "string" ? event.message : "Syncore log";
   const resolvedTargetId =
@@ -2125,7 +2336,8 @@ function normalizeRuntimeEvent(
         eventType: event.type,
         category: "system",
         ...(componentInfo ?? {}),
-        message: event.type === "log" ? logMessage : humanizeRuntimeEvent(event),
+        message:
+          event.type === "log" ? logMessage : humanizeRuntimeEvent(event),
         event
       };
   }
@@ -2141,11 +2353,16 @@ function decoratePersistedLogEntry(
     targetId:
       entry.targetId === "all"
         ? "all"
-        : runtime?.targetId ?? entry.targetId ?? entry.runtimeId,
+        : (runtime?.targetId ?? entry.targetId ?? entry.runtimeId),
     ...(runtime?.targetLabel ? { targetLabel: runtime.targetLabel } : {}),
     ...(runtime?.id ? { publicRuntimeId: runtime.id } : {}),
     ...(runtime?.label ? { runtimeLabel: runtime.label } : {}),
-    ...(entry.origin ? {} : { origin: entry.runtimeId === "syncore-dev-hub" ? "dashboard" : "runtime" })
+    ...(entry.origin
+      ? {}
+      : {
+          origin:
+            entry.runtimeId === "syncore-dev-hub" ? "dashboard" : "runtime"
+        })
   };
 }
 
@@ -2173,7 +2390,9 @@ function resolveComponentInfoFromFunctionName(functionName: string):
       componentPath: string;
     }
   | undefined {
-  const match = /^components\/(.+)\/(public|internal)\/(.+)$/.exec(functionName);
+  const match = /^components\/(.+)\/(public|internal)\/(.+)$/.exec(
+    functionName
+  );
   if (!match) {
     return undefined;
   }
@@ -2233,21 +2452,23 @@ async function promptForTemplate(
 ): Promise<SyncoreTemplateName> {
   const choices: CliChoice<SyncoreTemplateName>[] = VALID_SYNCORE_TEMPLATES.map(
     (template) =>
-    template === detectedTemplate
-      ? {
-          label: template,
-          value: template,
-          description: "Detected from the current project"
-        }
-      : {
-          label: template,
-          value: template
-        }
+      template === detectedTemplate
+        ? {
+            label: template,
+            value: template,
+            description: "Detected from the current project"
+          }
+        : {
+            label: template,
+            value: template
+          }
   );
   return await context.select(
     "Choose a Syncore template for this directory.",
     choices,
-    isKnownTemplate(detectedTemplate) ? detectedTemplate : VALID_SYNCORE_TEMPLATES[0]
+    isKnownTemplate(detectedTemplate)
+      ? detectedTemplate
+      : VALID_SYNCORE_TEMPLATES[0]
   );
 }
 
@@ -2322,7 +2543,10 @@ async function previewImportPlan(
   return preview;
 }
 
-function parseJsonObject(input: string, label: string): Record<string, unknown> {
+function parseJsonObject(
+  input: string,
+  label: string
+): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(input);

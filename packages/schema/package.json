@@ -18,5 +18,8 @@
     "lint": "eslint src --ext .ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@syncore/internal": "^0.1.0"
   }
 }

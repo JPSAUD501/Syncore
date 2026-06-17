@@ -15,7 +15,8 @@ import WebSocket from "ws";
 import {
   SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
   SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
-  SYNCORE_DEVTOOLS_PROTOCOL_VERSION
+  SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+  generateUniqueSessionName
 } from "@syncore/devtools-protocol";
 import type {
   SyncoreDevtoolsClientMessage,
@@ -293,96 +294,6 @@ function resolveStorageFilePath(directory: string, id: string): string {
     throw new Error(`Invalid storage id ${JSON.stringify(id)}.`);
   }
   return filePath;
-}
-
-const SESSION_ADJECTIVES = [
-  "Acrobatic",
-  "Bold",
-  "Cosmic",
-  "Daring",
-  "Electric",
-  "Fierce",
-  "Golden",
-  "Hidden",
-  "Iron",
-  "Jade",
-  "Keen",
-  "Lunar",
-  "Mystic",
-  "Noble",
-  "Orbital",
-  "Primal",
-  "Quick",
-  "Radiant",
-  "Shadow",
-  "Turbo",
-  "Ultra",
-  "Vivid",
-  "Wicked",
-  "Xenon",
-  "Zen",
-  "Arctic",
-  "Binary",
-  "Cyber",
-  "Digital",
-  "Ember",
-  "Frozen",
-  "Galactic",
-  "Hyper",
-  "Infra",
-  "Jumbo",
-  "Kinetic",
-  "Liquid",
-  "Magnetic",
-  "Neon",
-  "Onyx",
-  "Phantom",
-  "Quantum",
-  "Rapid",
-  "Sonic",
-  "Titan",
-  "Velvet",
-  "Wild",
-  "Blazing",
-  "Crystal",
-  "Dynamic"
-] as const;
-
-const SESSION_NOUNS = [
-  "Phoenix",
-  "Dragon",
-  "Developer",
-  "Hacker",
-  "Wizard",
-  "Runner",
-  "Ranger",
-  "Maverick",
-  "Spartan",
-  "Viking",
-  "Sentinel",
-  "Guardian",
-  "Nomad",
-  "Cipher",
-  "Vector",
-  "Matrix",
-  "Prism",
-  "Nebula",
-  "Comet",
-  "Pulse",
-  "Vertex",
-  "Flux",
-  "Storm",
-  "Blaze",
-  "Frost",
-  "Thunder",
-  "Drift"
-] as const;
-
-function generateUniqueSessionName(): string {
-  const adj =
-    SESSION_ADJECTIVES[Math.floor(Math.random() * SESSION_ADJECTIVES.length)]!;
-  const noun = SESSION_NOUNS[Math.floor(Math.random() * SESSION_NOUNS.length)]!;
-  return `${adj} ${noun}`;
 }
 
 function resolvePersistedDataSourceAlias(

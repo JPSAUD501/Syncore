@@ -1,4 +1,11 @@
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -21,6 +28,7 @@ import {
   createPublicRuntimeId as createSharedPublicRuntimeId,
   createPublicTargetId as createSharedPublicTargetId
 } from "@syncore/devtools-protocol";
+import { quoteIdentifier } from "@syncore/internal";
 import {
   type DevHubSessionState,
   VALID_SYNCORE_TEMPLATES,
@@ -35,7 +43,7 @@ import {
   resolveProjectTargetConfig,
   runCodegen,
   resolvePortFromEnv
-} from "@syncore/core/cli";
+} from "./internal/core-cli.js";
 import {
   createManagedNodeSyncoreClient,
   NodeSqliteDriver
@@ -252,7 +260,9 @@ export async function listProjectFunctions(
 ): Promise<Array<{ name: string; kind: RegisteredSyncoreFunction["kind"] }>> {
   const functions = await loadRuntimeProjectFunctions(cwd);
   return Object.entries(functions)
-    .filter((entry): entry is [string, RegisteredSyncoreFunction] => Boolean(entry[1]))
+    .filter((entry): entry is [string, RegisteredSyncoreFunction] =>
+      Boolean(entry[1])
+    )
     .map(([name, definition]) => ({
       name,
       kind: definition.kind
@@ -269,7 +279,8 @@ export async function resolveProjectFunction(
   definition: RegisteredSyncoreFunction;
   reference: FunctionReference;
 }> {
-  const functions = preloadedFunctions ?? (await loadRuntimeProjectFunctions(cwd));
+  const functions =
+    preloadedFunctions ?? (await loadRuntimeProjectFunctions(cwd));
   const normalizedName = normalizeFunctionName(requestedName, functions);
   const definition = functions[normalizedName];
   if (!definition) {
@@ -312,7 +323,10 @@ function suggestFunctionNames(
         sharedSegmentsScore(normalized, name.toLowerCase())
     }))
     .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name))
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.name.localeCompare(right.name)
+    )
     .slice(0, 5)
     .map((entry) => entry.name);
 }
@@ -337,7 +351,10 @@ export function normalizeFunctionName(
   const candidates = [
     trimmed,
     trimmed.replace(/^api\./, "").replaceAll(".", "/"),
-    trimmed.replace(/^api\./, "").replaceAll(".", "/").replaceAll(":", "/"),
+    trimmed
+      .replace(/^api\./, "")
+      .replaceAll(".", "/")
+      .replaceAll(":", "/"),
     trimmed.replaceAll(":", "/"),
     trimmed.replaceAll(".", "/")
   ];
@@ -379,7 +396,9 @@ export async function listProjectTables(cwd: string): Promise<TableSummary[]> {
       );
       results.push({
         name: tableName,
-        ...(table.options.tableName ? { displayName: table.options.tableName } : {}),
+        ...(table.options.tableName
+          ? { displayName: table.options.tableName }
+          : {}),
         owner: table.options.componentPath ? "component" : "root",
         ...(table.options.componentPath
           ? { componentPath: table.options.componentPath }
@@ -774,10 +793,7 @@ export async function listAvailableTargets(
     listConnectedClientTargets()
   ]);
 
-  return [
-    ...(projectTarget ? [projectTarget] : []),
-    ...clientTargets
-  ];
+  return [...(projectTarget ? [projectTarget] : []), ...clientTargets];
 }
 
 export async function connectToProjectHub(
@@ -794,7 +810,9 @@ export async function connectToProjectHub(
   }
 }
 
-export function isKnownTemplate(value: string): value is (typeof VALID_SYNCORE_TEMPLATES)[number] {
+export function isKnownTemplate(
+  value: string
+): value is (typeof VALID_SYNCORE_TEMPLATES)[number] {
   return VALID_SYNCORE_TEMPLATES.includes(
     value as (typeof VALID_SYNCORE_TEMPLATES)[number]
   );
@@ -831,10 +849,6 @@ function isComponentPublicFunctionMatch(
   );
 }
 
-function quoteIdentifier(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
-}
-
 async function resolveImportSources(
   sourcePath: string,
   explicitTable: string | undefined,
@@ -843,14 +857,18 @@ async function resolveImportSources(
   const extension = path.extname(sourcePath).toLowerCase();
   if (extension === ".jsonl") {
     if (!explicitTable) {
-      throw new Error("`syncorejs import` requires --table when importing a .jsonl file.");
+      throw new Error(
+        "`syncorejs import` requires --table when importing a .jsonl file."
+      );
     }
     return [{ table: explicitTable, filePath: sourcePath }];
   }
 
   if (extension === ".json") {
     if (!explicitTable) {
-      throw new Error("`syncorejs import` requires --table when importing a .json file.");
+      throw new Error(
+        "`syncorejs import` requires --table when importing a .json file."
+      );
     }
     const rows = JSON.parse(await readFile(sourcePath, "utf8")) as unknown;
     if (!Array.isArray(rows)) {
@@ -902,7 +920,11 @@ async function extractImportSourcesFromZip(
   const zip = new AdmZip(sourcePath);
   await assertSafeZipExtractionPaths(sourcePath, zip, tempDirectory);
   zip.extractAllTo(tempDirectory, true);
-  return await resolveImportSources(tempDirectory, undefined, cleanupDirectories);
+  return await resolveImportSources(
+    tempDirectory,
+    undefined,
+    cleanupDirectories
+  );
 }
 
 async function assertSafeZipExtractionPaths(
@@ -1072,7 +1094,9 @@ async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
   });
   const hellos = new Map<string, RuntimeHello>();
   const events: RuntimeEventMessage["event"][] = [];
-  const eventListeners = new Set<(event: RuntimeEventMessage["event"]) => void>();
+  const eventListeners = new Set<
+    (event: RuntimeEventMessage["event"]) => void
+  >();
   let lastSnapshotMessageAt = 0;
   const commandResolvers = new Map<
     string,
@@ -1139,7 +1163,9 @@ async function connectToDevtoolsHub(url: string): Promise<HubConnection> {
       return;
     }
     if (message.type === "subscription.error") {
-      subscriptionHandlers.get(message.subscriptionId)?.onError?.(message.error);
+      subscriptionHandlers
+        .get(message.subscriptionId)
+        ?.onError?.(message.error);
     }
   });
 
@@ -1314,7 +1340,9 @@ function buildClientTargets(hellos: RuntimeHello[]): ClientTargetDescriptor[] {
         ...(primary.storageProtocol
           ? { storageProtocol: primary.storageProtocol }
           : {}),
-        ...(primary.databaseLabel ? { databaseLabel: primary.databaseLabel } : {}),
+        ...(primary.databaseLabel
+          ? { databaseLabel: primary.databaseLabel }
+          : {}),
         ...(primary.storageIdentity
           ? { storageIdentity: primary.storageIdentity }
           : {}),
@@ -1328,7 +1356,9 @@ function buildClientTargets(hellos: RuntimeHello[]): ClientTargetDescriptor[] {
 
 export function createPublicClientTargetId(
   key: string,
-  groupsOrKeys: Map<string, { key: string; runtimes: RuntimeHello[] }> | Iterable<string>
+  groupsOrKeys:
+    | Map<string, { key: string; runtimes: RuntimeHello[] }>
+    | Iterable<string>
 ): string {
   const keys =
     groupsOrKeys instanceof Map ? [...groupsOrKeys.keys()] : [...groupsOrKeys];
@@ -1351,7 +1381,9 @@ function renderClientTargetLabel(
     hello.databaseLabel ??
     hello.origin ??
     `${hello.platform} client`;
-  return connectedSessions > 1 ? `${base} (${connectedSessions} sessions)` : base;
+  return connectedSessions > 1
+    ? `${base} (${connectedSessions} sessions)`
+    : base;
 }
 
 export function createBasePublicClientTargetId(input: string): string {

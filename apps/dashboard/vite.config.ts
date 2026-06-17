@@ -17,6 +17,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      "@syncore/internal": path.resolve(
+        import.meta.dirname,
+        "../../packages/internal/src/index.ts"
+      ),
       "@": path.resolve(import.meta.dirname, "./src")
     }
   },

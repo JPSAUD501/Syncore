@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { subscribe, useActiveRuntime, useDevtoolsStore } from "@/lib/store";
+import { stableStringify } from "@/lib/stable";
 import type {
   SyncoreDevtoolsSubscriptionPayload,
   SyncoreDevtoolsSubscriptionResultPayload
@@ -28,7 +29,7 @@ export function useTrackChanges<T>(
 
     for (const [index, item] of items.entries()) {
       const key = keyFn(item, index);
-      const hash = hashFn ? hashFn(item) : JSON.stringify(item);
+      const hash = hashFn ? hashFn(item) : stableStringify(item);
       nextHashes.set(key, hash);
       if (!previousHashes.has(key)) {
         const nextPulse = (newPulseVersions.get(key) ?? 0) + 1;
@@ -75,8 +76,8 @@ export function useDidJustChange(
   const latestPulseRef = useRef(0);
 
   useEffect(() => {
-    const serialized = JSON.stringify(value);
-    const resetKey = JSON.stringify(options?.resetKey ?? null);
+    const serialized = stableStringify(value);
+    const resetKey = stableStringify(options?.resetKey ?? null);
     if (previousResetKeyRef.current !== resetKey) {
       previousResetKeyRef.current = resetKey;
       previousValueRef.current = serialized;
@@ -117,7 +118,7 @@ export function useDevtoolsSubscription<
     (state) => options?.targetRuntimeId ?? state.selectedRuntimeId
   );
   const payloadRef = useRef<SyncoreDevtoolsSubscriptionPayload | null>(payload);
-  const payloadKey = JSON.stringify(payload);
+  const payloadKey = stableStringify(payload);
   payloadRef.current = payload;
   const [data, setData] = useState<TResult | null>(null);
   const [loading, setLoading] = useState(Boolean(payload) && enabled);
@@ -171,10 +172,12 @@ export function useDevtoolsMultiRuntimeSubscription<
 ) {
   const enabled = options?.enabled ?? true;
   const payloadRef = useRef<SyncoreDevtoolsSubscriptionPayload | null>(payload);
-  const payloadKey = JSON.stringify(payload);
-  const runtimeIdsKey = JSON.stringify(runtimeIds);
+  const payloadKey = stableStringify(payload);
+  const runtimeIdsKey = stableStringify(runtimeIds);
   payloadRef.current = payload;
-  const [dataByRuntime, setDataByRuntime] = useState<Record<string, TResult>>({});
+  const [dataByRuntime, setDataByRuntime] = useState<Record<string, TResult>>(
+    {}
+  );
   const [loading, setLoading] = useState(Boolean(payload) && enabled);
   const [error, setError] = useState<string | null>(null);
 

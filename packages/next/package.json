@@ -27,14 +27,14 @@
   "dependencies": {
     "@syncore/core": "^0.1.0",
     "@syncore/platform-web": "^0.1.0",
-    "@syncore/react": "^0.1.0",
-    "react": "^18.3.0 || ^19.0.0"
+    "@syncore/react": "^0.1.0"
   },
   "peerDependencies": {
     "next": "^15.0.0 || ^16.0.0",
     "react": "^18.3.0 || ^19.0.0"
   },
   "devDependencies": {
-    "next": "16.3.0-canary.27"
+    "next": "16.3.0-canary.27",
+    "react": "19.2.3"
   }
 }

@@ -448,7 +448,7 @@ export type GenericTableIndexes = Record<string, readonly string[]>;
 // @public (undocumented)
 export type GenericTableSearchIndexes = Record<string, {
     searchField: string;
-    filterFields: string;
+    filterFields: readonly string[];
 }>;
 
 // @public (undocumented)
@@ -467,11 +467,6 @@ export type ImpactScope = "runtime.summary" | "runtime.activeQueries" | "schema.
 
 // @public
 export type ImpactSet = ReadonlySet<ImpactScope>;
-
-// @public (undocumented)
-export namespace index_d_exports {
-    export { ActionCtx, AnySyncoreFunctionDefinition, AttachRuntimeBridgeOptions, AttachedRuntimeBridge, BridgeQueryWatch, CapabilityDescriptor, ComparisonOperator, ComponentPath, CronJobs, DevtoolsCommandHandler, DevtoolsCommandHandlerDeps, DevtoolsLiveQueryScope, DevtoolsLiveQuerySnapshot, DevtoolsSink, DevtoolsSqlAnalysis, DevtoolsSqlMode, DevtoolsSqlReadResult, DevtoolsSqlSupport, DevtoolsSubscriptionHost, DevtoolsSubscriptionListener, DocumentForTable, EmptyArgs, ExecutionResult, FilterBuilder, FunctionArgs, FunctionArgsFromDefinition, FunctionConfig, FunctionKindFromDefinition, FunctionReference, FunctionReferenceFor, FunctionReferencesForTree, FunctionResult, FunctionResultFromDefinition, ImpactScope, ImpactSet, IndexRangeBuilder, InferArgs, InsertValueForTable, InstalledComponentApi, InstalledComponentsApi, JsonObject, MisfirePolicy, MutationCtx, PaginationOptions, PaginationResult, PatchValueForTable, QueryBuilder, QueryCondition, QueryCtx, QueryExpression, RecurringDailySchedule, RecurringIntervalSchedule, RecurringJobDefinition, RecurringSchedule, RecurringWeeklySchedule, RegisteredSyncoreFunction, RegisteredSyncoreHandler, ResolvedSyncoreComponent, RunResult, SchedulerApi, SchedulerOptions, SearchIndexBuilder, SearchQuery, StorageObject, StorageWriteInput, SyncoreActiveQueryInfo, SyncoreBridgeClient, SyncoreBridgeMessageEndpoint, SyncoreBridgeRequest, SyncoreBridgeResponse, SyncoreCapabilities, SyncoreClient, SyncoreComponent, SyncoreComponentFunctionMetadata, SyncoreComponentHookContext, SyncoreComponentInstall, SyncoreComponentsManifest, SyncoreCoreCapability, SyncoreDataModel, SyncoreDatabaseReader, SyncoreDatabaseWriter, SyncoreDevtoolsEvent, SyncoreExternalChangeApplier, SyncoreExternalChangeEvent, SyncoreExternalChangeReason, SyncoreExternalChangeScope, SyncoreExternalChangeSignal, SyncoreFunctionDefinition, SyncoreFunctionKind, SyncoreFunctionRegistry, SyncoreFunctionTree, SyncoreHostServiceName, SyncorePaginatedQueryStatus, SyncoreQueriesRequest, SyncoreQueryRequest, SyncoreQueryState, SyncoreQueryStatus, SyncoreRequestedCapability, SyncoreResolvedComponents, SyncoreRuntime, SyncoreRuntimeAdmin, SyncoreRuntimeCapabilities, SyncoreRuntimeOptions, SyncoreRuntimeStatus, SyncoreRuntimeStatusKind, SyncoreRuntimeStatusReason, SyncoreRuntimeStorageCapability, SyncoreRuntimeSummary, SyncoreSqlDriver, SyncoreStorageAdapter, SyncoreStorageApi, SyncoreWatch, TableNames, UpdateScheduledJobOptions, UsePaginatedQueryResult, action, attachRuntimeBridge, composeProjectFunctionRegistry, composeProjectSchema, createBindingFunctionReference, createComponentPhysicalTableName, createDeferredSyncoreClient, createDevtoolsCommandHandler, createDevtoolsSubscriptionHost, createFunctionReference, createFunctionReferenceFor, createInstalledComponentsApi, createInvokeRequest, createUnavailableSyncoreClient, createWatchKey, cronJobs, defineComponent, defineComponents, generateId, installComponent, mutation, normalizeOptionalArgs, query, resolveComponentsManifest, stableStringify, toCanonicalComponentFunctionName };
-}
 
 // @public (undocumented)
 export interface IndexDefinition {
@@ -785,8 +780,6 @@ export interface RegisteredSyncoreFunction {
     __syncoreComponent?: SyncoreComponentFunctionMetadata;
     // (undocumented)
     argsValidator: Validator<unknown, unknown, string>;
-    // Warning: (ae-incompatible-release-tags) The symbol "handler" is marked as @public, but its signature references "RegisteredSyncoreHandler" which is marked as @internal
-    //
     // (undocumented)
     handler: RegisteredSyncoreHandler;
     // (undocumented)
@@ -795,9 +788,7 @@ export interface RegisteredSyncoreFunction {
     returnsValidator?: Validator<unknown, unknown, string>;
 }
 
-// Warning: (ae-internal-missing-underscore) The name "RegisteredSyncoreHandler" should be prefixed with an underscore because the declaration is marked as @internal
-//
-// @internal
+// @public
 export type RegisteredSyncoreHandler = {
     bivarianceHack(ctx: unknown, args: unknown): unknown;
 }["bivarianceHack"];
@@ -926,13 +917,13 @@ export interface SchemaSnapshot {
 }
 
 // @public (undocumented)
-export interface SearchIndexBuilder<TSearchField extends string = string, TFilterField extends string = string> {
+export interface SearchIndexBuilder<TSearchField extends string = string, TFilterFields extends string | readonly string[] = string> {
     // (undocumented)
     build(): SearchQuery;
     // (undocumented)
-    eq(field: TFilterField, value: unknown): SearchIndexBuilder<TSearchField, TFilterField>;
+    eq(field: SearchIndexFilterField<TFilterFields>, value: unknown): SearchIndexBuilder<TSearchField, TFilterFields>;
     // (undocumented)
-    search(field: TSearchField, value: string): SearchIndexBuilder<TSearchField, TFilterField>;
+    search(field: TSearchField, value: string): SearchIndexBuilder<TSearchField, TFilterFields>;
 }
 
 // @public (undocumented)
@@ -944,6 +935,9 @@ export interface SearchIndexDefinition {
     // (undocumented)
     searchField: string;
 }
+
+// @public (undocumented)
+export type SearchIndexFilterField<TFilterFields extends string | readonly string[]> = TFilterFields extends readonly (infer TField)[] ? Extract<TField, string> : Extract<TFilterFields, string>;
 
 // @public (undocumented)
 export function searchIndexTableName(tableName: string, indexName: string): string;
@@ -958,7 +952,7 @@ export type SearchQuery = {
 // @public (undocumented)
 export function serializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: TValue, path?: string): TStorage;
 
-// @public (undocumented)
+// @public
 export function stableStringify(value: unknown): string;
 
 // @public
@@ -1664,7 +1658,7 @@ export class TableDefinition<TValidator extends Validator<Record<string, unknown
         filterFields?: TFilterField[];
     }): TableDefinition<TValidator, TIndexes, Expand<TSearchIndexes & Record<TIndexName, {
         searchField: TSearchField;
-        filterFields: TFilterField;
+        filterFields: readonly TFilterField[];
     }>>>;
     // (undocumented)
     readonly searchIndexes: SearchIndexDefinition[];
@@ -1907,8 +1901,8 @@ export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
 
 // Warnings were encountered during analysis:
 //
-// src/runtime/runtime.ts:1541:17 - (ae-forgotten-export) The symbol "StorageEntry" needs to be exported by the entry point index.d.mts
-// C:/Users/joao.cardoso/GitHub/Syncore/packages/devtools-protocol/src/index.ts:102:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
+// src/runtime/runtime.ts:1552:17 - (ae-forgotten-export) The symbol "StorageEntry" needs to be exported by the entry point index.d.mts
+// D:/GitHub/Syncore/packages/devtools-protocol/src/index.ts:102:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
 
 // (No @packageDocumentation comment for this package)
 

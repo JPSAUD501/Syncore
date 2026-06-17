@@ -2,7 +2,8 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   defineTable,
   type InferTableInput,
-  type TableFieldPaths
+  type TableFieldPaths,
+  type TableSearchIndexConfig
 } from "./definition.js";
 import { type FieldPaths, s } from "./validators.js";
 
@@ -119,6 +120,9 @@ describe("schema validators", () => {
     expectTypeOf<TableInput["payload"]["kind"]>().toEqualTypeOf<
       "note" | "checklist"
     >();
+    expectTypeOf<
+      TableSearchIndexConfig<typeof table, "search_title">["filterFields"]
+    >().toEqualTypeOf<readonly ("status" | "projectId")[]>();
   });
 });
 

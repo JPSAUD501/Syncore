@@ -15,7 +15,7 @@ import {
   readStoredSnapshot,
   runCodegen,
   writeStoredSnapshot
-} from "@syncore/core/cli";
+} from "./internal/core-cli.js";
 import type {
   ClientTargetDescriptor,
   SyncoreTargetDescriptor,
@@ -202,7 +202,9 @@ export async function buildDoctorReport(cwd: string): Promise<DoctorReport> {
   );
   const hasProject = await hasSyncoreProject(cwd);
 
-  let projectTarget: Awaited<ReturnType<typeof resolveProjectTargetDescriptor>> = null;
+  let projectTarget: Awaited<
+    ReturnType<typeof resolveProjectTargetDescriptor>
+  > = null;
   let persistenceDetails: string | undefined;
   try {
     projectTarget = await resolveProjectTargetDescriptor(cwd);
@@ -243,7 +245,9 @@ export async function buildDoctorReport(cwd: string): Promise<DoctorReport> {
     }
   };
 
-  const workspaceMatches = hasProject ? [] : await findWorkspaceSyncoreProjects(cwd);
+  const workspaceMatches = hasProject
+    ? []
+    : await findWorkspaceSyncoreProjects(cwd);
   const runtimeSignals = await inspectRuntimeSignals(cwd);
   const loadedDrift = await loadSchemaDrift(cwd, checks);
   const drift = loadedDrift?.drift ?? {
@@ -280,7 +284,11 @@ export async function buildDoctorReport(cwd: string): Promise<DoctorReport> {
     workspaceMatches
   });
 
-  const suggestions = collectSuggestions(primaryIssue, diagnostics, workspaceMatches);
+  const suggestions = collectSuggestions(
+    primaryIssue,
+    diagnostics,
+    workspaceMatches
+  );
 
   return {
     cwd,
@@ -324,7 +332,12 @@ export async function applyDoctorFixes(
     refreshedReport.drift.state === "snapshot-outdated" ||
     refreshedReport.drift.state === "migration-pending"
   ) {
-    const generatedSchemaPath = path.join(cwd, "syncore", "_generated", "schema.ts");
+    const generatedSchemaPath = path.join(
+      cwd,
+      "syncore",
+      "_generated",
+      "schema.ts"
+    );
     if (await fileExists(generatedSchemaPath)) {
       const schema = await loadProjectSchema(cwd);
       const snapshot = createSchemaSnapshot(schema);
@@ -441,7 +454,8 @@ async function loadSchemaDrift(
         ? "destructive"
         : !storedSnapshot
           ? "missing-snapshot"
-          : storedSnapshot.hash !== currentSnapshot.hash && plan.statements.length > 0
+          : storedSnapshot.hash !== currentSnapshot.hash &&
+              plan.statements.length > 0
             ? "migration-pending"
             : storedSnapshot.hash !== currentSnapshot.hash
               ? "snapshot-outdated"
@@ -459,7 +473,11 @@ async function loadSchemaDrift(
         details:
           state === "clean"
             ? "Local schema snapshot matches the generated Syncore schema."
-            : describeDriftState(state, plan.statements.length, plan.warnings.length)
+            : describeDriftState(
+                state,
+                plan.statements.length,
+                plan.warnings.length
+              )
       }
     };
   } catch (error) {
@@ -513,7 +531,8 @@ function buildDiagnostics(input: {
 }): JourneyDiagnostic[] {
   const diagnostics: JourneyDiagnostic[] = [];
   const missingProjectPaths = input.checks.filter(
-    (check) => (check.category === "project" || check.category === "schema") && !check.ok
+    (check) =>
+      (check.category === "project" || check.category === "schema") && !check.ok
   );
   diagnostics.push(
     missingProjectPaths.length === 0 && input.hasProject
@@ -536,7 +555,8 @@ function buildDiagnostics(input: {
             missingProjectPaths.length > 0
               ? `Missing: ${missingProjectPaths.map((check) => check.path).join(", ")}.`
               : "This directory does not contain a full Syncore project yet.",
-          suggestedAction: "Run `npx syncorejs init` or restore the missing project files.",
+          suggestedAction:
+            "Run `npx syncorejs init` or restore the missing project files.",
           canAutoFix: false
         }
   );
@@ -552,7 +572,8 @@ function buildDiagnostics(input: {
           severity: "info",
           status: "pass",
           summary: "Generated Syncore files are present.",
-          details: "syncore/_generated looks available for runtime and type-driven tooling.",
+          details:
+            "syncore/_generated looks available for runtime and type-driven tooling.",
           canAutoFix: false
         }
       : {
@@ -562,7 +583,8 @@ function buildDiagnostics(input: {
           status: "fail",
           summary: "Generated Syncore files are missing.",
           details: `Missing: ${missingGenerated.map((check) => check.path).join(", ")}.`,
-          suggestedAction: "Run `npx syncorejs codegen` or `npx syncorejs doctor --fix`.",
+          suggestedAction:
+            "Run `npx syncorejs codegen` or `npx syncorejs doctor --fix`.",
           canAutoFix: true,
           fixCommand: "npx syncorejs doctor --fix"
         }
@@ -578,7 +600,9 @@ function buildDiagnostics(input: {
           severity: "info",
           status: "pass",
           summary: "Project target persistence is configured.",
-          ...(input.persistenceDetails ? { details: input.persistenceDetails } : {}),
+          ...(input.persistenceDetails
+            ? { details: input.persistenceDetails }
+            : {}),
           canAutoFix: false
         }
       : input.usesConnectedClients
@@ -625,7 +649,8 @@ function buildDiagnostics(input: {
           status: "warn",
           summary: "Local devtools hub is not running.",
           details: `Expected devtools endpoint: ${input.hub.url}.`,
-          suggestedAction: "Run `npx syncorejs dev` to start the local hub and dashboard.",
+          suggestedAction:
+            "Run `npx syncorejs dev` to start the local hub and dashboard.",
           canAutoFix: false
         }
   );
@@ -648,7 +673,8 @@ function buildDiagnostics(input: {
           status: "warn",
           summary: "Dashboard shell is not responding yet.",
           details: `Expected dashboard URL: ${input.hub.dashboardUrl}.`,
-          suggestedAction: "Run `npx syncorejs dev` or inspect whether the dashboard port is already taken.",
+          suggestedAction:
+            "Run `npx syncorejs dev` or inspect whether the dashboard port is already taken.",
           canAutoFix: false
         }
   );
@@ -731,7 +757,10 @@ function buildSchemaDiagnostic(drift: DriftState): JourneyDiagnostic {
       fixCommand: "npx syncorejs doctor --fix"
     };
   }
-  if (drift.state === "snapshot-outdated" || drift.state === "migration-pending") {
+  if (
+    drift.state === "snapshot-outdated" ||
+    drift.state === "migration-pending"
+  ) {
     return {
       id: "schema.drift",
       category: "schema",
@@ -763,7 +792,9 @@ function buildSchemaDiagnostic(drift: DriftState): JourneyDiagnostic {
   };
 }
 
-function buildRuntimeDiagnostic(runtimeSignals: RuntimeSignals): JourneyDiagnostic {
+function buildRuntimeDiagnostic(
+  runtimeSignals: RuntimeSignals
+): JourneyDiagnostic {
   if (runtimeSignals.sessionState === "invalid") {
     return {
       id: "runtime.session",
@@ -821,13 +852,15 @@ function resolvePrimaryIssue(input: {
       code: "workspace-root",
       summary: "You are at a workspace root, not inside a Syncore app package.",
       details: `Found ${input.workspaceMatches.length} Syncore package(s) under this workspace.`,
-      impact: "Project-specific diagnostics and runtime operations are ambiguous from the workspace root.",
+      impact:
+        "Project-specific diagnostics and runtime operations are ambiguous from the workspace root.",
       suggestedAction: `Run the command with --cwd ${input.workspaceMatches[0]!.relativePath} or change into that package directory.`
     };
   }
 
   const missingProjectPaths = input.checks.filter(
-    (check) => (check.category === "project" || check.category === "schema") && !check.ok
+    (check) =>
+      (check.category === "project" || check.category === "schema") && !check.ok
   );
   if (!input.hasProject || missingProjectPaths.length > 0) {
     return {
@@ -837,8 +870,10 @@ function resolvePrimaryIssue(input: {
         missingProjectPaths.length > 0
           ? `Missing: ${missingProjectPaths.map((check) => check.path).join(", ")}.`
           : "This directory does not contain a complete Syncore project yet.",
-      impact: "The CLI cannot bootstrap the local runtime or inspect schema and persistence reliably.",
-      suggestedAction: "Run `npx syncorejs init` or restore the missing project files."
+      impact:
+        "The CLI cannot bootstrap the local runtime or inspect schema and persistence reliably.",
+      suggestedAction:
+        "Run `npx syncorejs init` or restore the missing project files."
     };
   }
 
@@ -850,8 +885,10 @@ function resolvePrimaryIssue(input: {
       code: "missing-generated",
       summary: "Generated Syncore files are missing.",
       details: `Missing: ${missingGenerated.map((check) => check.path).join(", ")}.`,
-      impact: "Type-driven runtime loading and schema inspection may be stale or unavailable.",
-      suggestedAction: "Run `npx syncorejs doctor --fix` or `npx syncorejs codegen`."
+      impact:
+        "Type-driven runtime loading and schema inspection may be stale or unavailable.",
+      suggestedAction:
+        "Run `npx syncorejs doctor --fix` or `npx syncorejs codegen`."
     };
   }
 
@@ -861,7 +898,8 @@ function resolvePrimaryIssue(input: {
       summary: "Schema drift is blocked by destructive changes.",
       details: input.drift.destructiveChanges.join("; "),
       impact: "Syncore cannot safely advance the local schema automatically.",
-      suggestedAction: "Review the schema change manually and generate a migration before continuing."
+      suggestedAction:
+        "Review the schema change manually and generate a migration before continuing."
     };
   }
 
@@ -869,15 +907,14 @@ function resolvePrimaryIssue(input: {
     return {
       code: "waiting-for-client",
       summary: "This app is waiting for a connected local runtime.",
-      details:
-        input.hubRunning
-          ? "Client-managed templates only become fully operational after the app host connects to the local Syncore hub."
-          : "This template depends on a client-managed runtime, and no app runtime is connected yet.",
-      impact: "Worker, bridge IPC, storage, and client-side data inspection stay unavailable until a runtime connects.",
-      suggestedAction:
-        input.hubRunning
-          ? "Start your app host, then run `npx syncorejs targets` to inspect connected runtimes."
-          : "Run `npx syncorejs dev`, start your app host, then run `npx syncorejs targets` to inspect connected runtimes."
+      details: input.hubRunning
+        ? "Client-managed templates only become fully operational after the app host connects to the local Syncore hub."
+        : "This template depends on a client-managed runtime, and no app runtime is connected yet.",
+      impact:
+        "Worker, bridge IPC, storage, and client-side data inspection stay unavailable until a runtime connects.",
+      suggestedAction: input.hubRunning
+        ? "Start your app host, then run `npx syncorejs targets` to inspect connected runtimes."
+        : "Run `npx syncorejs dev`, start your app host, then run `npx syncorejs targets` to inspect connected runtimes."
     };
   }
 
@@ -890,7 +927,8 @@ function resolvePrimaryIssue(input: {
       code: "schema-drift",
       summary: "The local schema snapshot is out of sync.",
       details: input.drift.details ?? "Schema drift was detected.",
-      impact: "The local dev loop can become confusing because the stored snapshot no longer matches the generated schema.",
+      impact:
+        "The local dev loop can become confusing because the stored snapshot no longer matches the generated schema.",
       suggestedAction:
         input.drift.state === "migration-pending"
           ? "Run `npx syncorejs migrate status` to inspect the diff, then use `npx syncorejs doctor --fix` if you only need to refresh the stored snapshot."
@@ -902,8 +940,10 @@ function resolvePrimaryIssue(input: {
     return {
       code: "hub-down",
       summary: "The local devtools hub is not running.",
-      details: "Syncore can inspect project state, but runtime and client diagnostics are limited until the hub starts.",
-      impact: "Commands that depend on live targets, logs, or IPC visibility will have reduced signal.",
+      details:
+        "Syncore can inspect project state, but runtime and client diagnostics are limited until the hub starts.",
+      impact:
+        "Commands that depend on live targets, logs, or IPC visibility will have reduced signal.",
       suggestedAction: "Run `npx syncorejs dev` to start the local hub."
     };
   }
@@ -911,9 +951,12 @@ function resolvePrimaryIssue(input: {
   return {
     code: "ready",
     summary: "Syncore is ready for the local development loop.",
-    details: "Project structure, generated files, schema state, and runtime prerequisites look healthy.",
-    impact: "You can use `syncorejs dev`, inspect targets, and operate on the local runtime.",
-    suggestedAction: "Run `npx syncorejs dev` to keep codegen, schema, and the local hub in sync."
+    details:
+      "Project structure, generated files, schema state, and runtime prerequisites look healthy.",
+    impact:
+      "You can use `syncorejs dev`, inspect targets, and operate on the local runtime.",
+    suggestedAction:
+      "Run `npx syncorejs dev` to keep codegen, schema, and the local hub in sync."
   };
 }
 

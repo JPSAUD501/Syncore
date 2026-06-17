@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      "@syncore/internal": path.resolve(
+        __dirname,
+        "../../packages/internal/src/index.ts"
+      ),
       "@": path.resolve(__dirname, "./src")
     }
   },

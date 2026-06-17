@@ -10,6 +10,7 @@ import {
   type TableDefinition,
   type Validator
 } from "@syncore/schema";
+import { quoteIdentifier, sortValue, stableStringify } from "@syncore/internal";
 import type {
   MisfirePolicy,
   RecurringSchedule,
@@ -232,27 +233,8 @@ export function fieldExpression(tableAlias: string, field: string): string {
   return `json_extract(${prefix}_json, '$.${field}')`;
 }
 
-export function quoteIdentifier(identifier: string): string {
-  return `"${identifier.replaceAll('"', '""')}"`;
-}
-
-export function stableStringify(value: unknown): string {
-  return JSON.stringify(sortValue(value));
-}
-
-export function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortValue);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, nested]) => [key, sortValue(nested)])
-    );
-  }
-  return value;
-}
+export { stableStringify, sortValue } from "@syncore/internal";
+export { quoteIdentifier } from "@syncore/internal";
 
 export function omitSystemFields<TDocument extends object>(
   document: TDocument

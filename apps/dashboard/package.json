@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@syncore/devtools-protocol": "^0.1.0",
+    "@syncore/internal": "^0.1.0",
     "@tanstack/react-router": "^1.170.7",
     "@tanstack/react-virtual": "^3.13.25",
     "class-variance-authority": "^0.7.1",

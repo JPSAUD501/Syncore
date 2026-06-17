@@ -19,6 +19,7 @@ import {
   SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
   SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
   SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+  generateUniqueSessionName,
   type SyncoreDevtoolsClientMessage,
   type SyncoreDevtoolsCapabilities,
   type SyncoreDevtoolsMessage,
@@ -1377,125 +1378,8 @@ function getAnnouncedBrowserSessions(): Set<string> {
   return scope[key];
 }
 
-/* ------------------------------------------------------------------ */
-/*  Unique session name generator                                      */
-/* ------------------------------------------------------------------ */
-
-const SESSION_ADJECTIVES = [
-  "Acrobatic",
-  "Bold",
-  "Cosmic",
-  "Daring",
-  "Electric",
-  "Fierce",
-  "Golden",
-  "Hidden",
-  "Iron",
-  "Jade",
-  "Keen",
-  "Lunar",
-  "Mystic",
-  "Noble",
-  "Orbital",
-  "Primal",
-  "Quick",
-  "Radiant",
-  "Shadow",
-  "Turbo",
-  "Ultra",
-  "Vivid",
-  "Wicked",
-  "Xenon",
-  "Zen",
-  "Arctic",
-  "Binary",
-  "Cyber",
-  "Digital",
-  "Ember",
-  "Frozen",
-  "Galactic",
-  "Hyper",
-  "Infra",
-  "Jumbo",
-  "Kinetic",
-  "Liquid",
-  "Magnetic",
-  "Neon",
-  "Onyx",
-  "Phantom",
-  "Quantum",
-  "Rapid",
-  "Sonic",
-  "Titan",
-  "Velvet",
-  "Wild",
-  "Blazing",
-  "Crystal",
-  "Dynamic"
-] as const;
-
-const SESSION_NOUNS = [
-  "Monkey",
-  "Phoenix",
-  "Tiger",
-  "Dragon",
-  "Falcon",
-  "Panther",
-  "Wolf",
-  "Eagle",
-  "Cobra",
-  "Shark",
-  "Raven",
-  "Fox",
-  "Lynx",
-  "Hawk",
-  "Bear",
-  "Jaguar",
-  "Viper",
-  "Owl",
-  "Stallion",
-  "Dolphin",
-  "Developer",
-  "Hacker",
-  "Wizard",
-  "Ninja",
-  "Pilot",
-  "Pioneer",
-  "Voyager",
-  "Explorer",
-  "Runner",
-  "Ranger",
-  "Maverick",
-  "Spartan",
-  "Viking",
-  "Sentinel",
-  "Guardian",
-  "Nomad",
-  "Cipher",
-  "Vector",
-  "Matrix",
-  "Prism",
-  "Nebula",
-  "Comet",
-  "Pulse",
-  "Vertex",
-  "Flux",
-  "Storm",
-  "Blaze",
-  "Frost",
-  "Thunder",
-  "Drift"
-] as const;
-
 const BROWSER_STORAGE_UNAVAILABLE_REASON =
   "Browser file storage requires OPFS. IndexedDB is used for data only.";
-
-function generateUniqueSessionName(): string {
-  const adj =
-    SESSION_ADJECTIVES[Math.floor(Math.random() * SESSION_ADJECTIVES.length)]!;
-  const noun = SESSION_NOUNS[Math.floor(Math.random() * SESSION_NOUNS.length)]!;
-  return `${adj} ${noun}`;
-}
 
 /**
  * Browser file/blob storage adapter backed by `SyncoreWebPersistence`.

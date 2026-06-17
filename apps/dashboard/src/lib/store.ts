@@ -22,26 +22,25 @@ import {
   readDashboardActivityPreference,
   writeDashboardActivityPreference
 } from "./activity";
+import {
+  clearStoredDashboardToken,
+  EXECUTOR_RUNTIME_STORAGE_KEY,
+  readStoredDashboardToken,
+  readStringPreference,
+  RUNTIME_FILTER_STORAGE_KEY,
+  sanitizeHubToken,
+  writeStoredDashboardToken,
+  writeStringPreference
+} from "./storage";
 
 const MAX_EVENTS = 500;
 const HUB_RUNTIME_ID = "syncore-dev-hub";
-const DASHBOARD_TOKEN_STORAGE_KEY = "syncore-dashboard-hub-token";
-const RUNTIME_FILTER_STORAGE_KEY = "syncore-dashboard-runtime-filter";
-const EXECUTOR_RUNTIME_STORAGE_KEY = "syncore-dashboard-executor-runtime";
 const RECONNECT_DELAY = 2000;
 const REQUEST_TIMEOUT = 10_000;
 const DEBUG_DEVTOOLS = false;
 const debugCounters = new Map<string, number>();
 let syncingDashboardTokenUrl = false;
 let dashboardTokenUrlSyncInstalled = false;
-
-function sanitizeHubToken(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  const sanitized = value.replace(/[^A-Za-z0-9]/g, "");
-  return sanitized.length > 0 ? sanitized : null;
-}
 
 function readDashboardTokenFromUrl(): string | null {
   if (typeof window === "undefined") {
@@ -76,41 +75,6 @@ function readDashboardTokenFromUrl(): string | null {
   return null;
 }
 
-function readStoredDashboardToken(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    return sanitizeHubToken(
-      window.localStorage.getItem(DASHBOARD_TOKEN_STORAGE_KEY)
-    );
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredDashboardToken(token: string): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(DASHBOARD_TOKEN_STORAGE_KEY, token);
-  } catch {
-    /* ignore storage failures */
-  }
-}
-
-function clearStoredDashboardToken(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.removeItem(DASHBOARD_TOKEN_STORAGE_KEY);
-  } catch {
-    /* ignore storage failures */
-  }
-}
-
 export function syncDashboardTokenInUrl(token: string | null): void {
   if (typeof window === "undefined") {
     return;
@@ -136,57 +100,20 @@ export function syncDashboardTokenInUrl(token: string | null): void {
 }
 
 function readRuntimeFilterPreference(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const value = window.localStorage.getItem(RUNTIME_FILTER_STORAGE_KEY);
-    return value === "all" || (value && value.length > 0) ? value : null;
-  } catch {
-    return null;
-  }
+  const value = readStringPreference(RUNTIME_FILTER_STORAGE_KEY);
+  return value === "all" || value ? value : null;
 }
 
 function writeRuntimeFilterPreference(value: string | null): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    if (value) {
-      window.localStorage.setItem(RUNTIME_FILTER_STORAGE_KEY, value);
-    } else {
-      window.localStorage.removeItem(RUNTIME_FILTER_STORAGE_KEY);
-    }
-  } catch {
-    /* ignore storage failures */
-  }
+  writeStringPreference(RUNTIME_FILTER_STORAGE_KEY, value);
 }
 
 function readExecutorRuntimePreference(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const value = window.localStorage.getItem(EXECUTOR_RUNTIME_STORAGE_KEY);
-    return value && value.length > 0 ? value : null;
-  } catch {
-    return null;
-  }
+  return readStringPreference(EXECUTOR_RUNTIME_STORAGE_KEY);
 }
 
 function writeExecutorRuntimePreference(value: string | null): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    if (value) {
-      window.localStorage.setItem(EXECUTOR_RUNTIME_STORAGE_KEY, value);
-    } else {
-      window.localStorage.removeItem(EXECUTOR_RUNTIME_STORAGE_KEY);
-    }
-  } catch {
-    /* ignore storage failures */
-  }
+  writeStringPreference(EXECUTOR_RUNTIME_STORAGE_KEY, value);
 }
 
 function installDashboardTokenUrlSync(): void {
@@ -237,11 +164,6 @@ function resolveInitialHubToken(): string | null {
 function buildDevtoolsWebSocketUrl(token: string): string {
   return `ws://localhost:4311/?token=${encodeURIComponent(token)}`;
 }
-
-const INITIAL_HUB_TOKEN = resolveInitialHubToken();
-const INITIAL_RUNTIME_FILTER = readRuntimeFilterPreference();
-const INITIAL_EXECUTOR_RUNTIME = readExecutorRuntimePreference();
-installDashboardTokenUrlSync();
 
 function debugLog(key: string, ...args: unknown[]) {
   if (!DEBUG_DEVTOOLS) {
@@ -1029,21 +951,13 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
   runtimes: {},
   selectedTargetId: null,
   selectedRuntimeId: null,
-  selectedRuntimeFilter: INITIAL_RUNTIME_FILTER,
-  preferredExecutorRuntimeId: INITIAL_EXECUTOR_RUNTIME,
-  selectedRuntimeSelectionMode:
-    INITIAL_RUNTIME_FILTER === "all"
-      ? "all"
-      : INITIAL_RUNTIME_FILTER
-        ? "runtime"
-        : null,
+  selectedRuntimeFilter: null,
+  preferredExecutorRuntimeId: null,
+  selectedRuntimeSelectionMode: null,
   includeDashboardActivity: readDashboardActivityPreference(),
-  hubToken: INITIAL_HUB_TOKEN,
-  authRequired: INITIAL_HUB_TOKEN === null,
-  authError:
-    INITIAL_HUB_TOKEN === null
-      ? "Paste the devtools token printed by `syncorejs dev`."
-      : null,
+  hubToken: null,
+  authRequired: true,
+  authError: "Paste the devtools token printed by `syncorejs dev`.",
 
   _setConnected: (v) =>
     set((state) => (state.connected === v ? state : { connected: v })),
@@ -1556,6 +1470,29 @@ export const useDevtoolsStore = create<DevtoolsState>((set) => ({
       };
     })
 }));
+
+export function bootstrapDevtoolsStore(): void {
+  installDashboardTokenUrlSync();
+  const initialRuntimeFilter = readRuntimeFilterPreference();
+  const initialExecutorRuntime = readExecutorRuntimePreference();
+  const initialHubToken = resolveInitialHubToken();
+  useDevtoolsStore.setState({
+    selectedRuntimeFilter: initialRuntimeFilter,
+    preferredExecutorRuntimeId: initialExecutorRuntime,
+    selectedRuntimeSelectionMode:
+      initialRuntimeFilter === "all"
+        ? "all"
+        : initialRuntimeFilter
+          ? "runtime"
+          : null,
+    hubToken: initialHubToken,
+    authRequired: initialHubToken === null,
+    authError:
+      initialHubToken === null
+        ? "Paste the devtools token printed by `syncorejs dev`."
+        : null
+  });
+}
 
 export function useActiveRuntime() {
   return useDevtoolsStore((state) => getActiveRuntime(state));

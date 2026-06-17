@@ -46,6 +46,7 @@ import {
   useDevtoolsSubscription
 } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
+import { stableStringify } from "@/lib/stable";
 import { cn, formatDuration } from "@/lib/utils";
 import type {
   ExecutionTrace,
@@ -90,7 +91,8 @@ type FunctionListEntry = {
 
 function FunctionsPage() {
   const { functionMetrics, functionEvents, traceIndex } = useDevtools();
-  const { targetRuntimeId, usingProjectTarget, selectedTarget, runtimeFilter } = usePreferredTarget();
+  const { targetRuntimeId, usingProjectTarget, selectedTarget, runtimeFilter } =
+    usePreferredTarget();
   const functionSearch = useSearch({ from: "/functions" });
   const navigate = useNavigate();
   const appliedSearchRef = useRef<string | null>(null);
@@ -119,7 +121,10 @@ function FunctionsPage() {
     return targetRuntimeId ? [targetRuntimeId] : [];
   }, [runtimeFilter, selectedTarget, targetRuntimeId]);
   const activeQueriesSubscription = useDevtoolsMultiRuntimeSubscription<
-    Extract<SyncoreDevtoolsSubscriptionResultPayload, { kind: "runtime.activeQueries.result" }>
+    Extract<
+      SyncoreDevtoolsSubscriptionResultPayload,
+      { kind: "runtime.activeQueries.result" }
+    >
   >(
     activeQueryRuntimeIds.length > 0 ? { kind: "runtime.activeQueries" } : null,
     activeQueryRuntimeIds,
@@ -133,10 +138,11 @@ function FunctionsPage() {
   const loadingFunctions = functionsSubscription.loading;
   const activeQueries = useMemo(
     () =>
-      Object.values(activeQueriesSubscription.dataByRuntime).flatMap((payload) =>
-        payload.kind === "runtime.activeQueries.result"
-          ? payload.activeQueries
-          : []
+      Object.values(activeQueriesSubscription.dataByRuntime).flatMap(
+        (payload) =>
+          payload.kind === "runtime.activeQueries.result"
+            ? payload.activeQueries
+            : []
       ),
     [activeQueriesSubscription.dataByRuntime]
   );
@@ -167,7 +173,9 @@ function FunctionsPage() {
         errorRate: 0,
         lastInvoked: 0,
         registered: true,
-        activeCount: activeQueries.filter((query) => query.functionName === fn.name).length
+        activeCount: activeQueries.filter(
+          (query) => query.functionName === fn.name
+        ).length
       };
       if (fn.args) entry.args = fn.args;
       map.set(fn.name, entry);
@@ -184,7 +192,8 @@ function FunctionsPage() {
         type: fnType,
         ...(existing?.file ? { file: existing.file } : {}),
         ...(existing?.modulePath ? { modulePath: existing.modulePath } : {}),
-        namespace: existing?.namespace ?? inferFunctionNamespace(metric.functionName),
+        namespace:
+          existing?.namespace ?? inferFunctionNamespace(metric.functionName),
         metadataAvailable: existing?.metadataAvailable ?? false,
         invocations: metric.invocations,
         avgDuration: metric.avgDuration,
@@ -210,8 +219,8 @@ function FunctionsPage() {
     const normalizedSearch = search.trim().toLowerCase();
     const tracesByFunction = traceIndex.byFunctionName;
     const filtered = normalizedSearch
-      ? allFunctions.filter(
-          (fn) => getFunctionSearchText(fn, tracesByFunction).includes(normalizedSearch)
+      ? allFunctions.filter((fn) =>
+          getFunctionSearchText(fn, tracesByFunction).includes(normalizedSearch)
         )
       : allFunctions;
 
@@ -224,10 +233,10 @@ function FunctionsPage() {
     }
 
     return Array.from(groups.entries())
-      .map(([group, functions]) => [
-        group,
-        [...functions].sort(compareFunctionEntries)
-      ] as const)
+      .map(
+        ([group, functions]) =>
+          [group, [...functions].sort(compareFunctionEntries)] as const
+      )
       .sort(([a], [b]) => a.localeCompare(b));
   }, [allFunctions, search, traceIndex.byFunctionName]);
 
@@ -317,63 +326,71 @@ function FunctionsPage() {
   /*  Run function                                                     */
   /* ---------------------------------------------------------------- */
 
-  const handleRun = useCallback(async (overrideArgs?: Record<string, unknown>) => {
-    if (!selectedFunction || !targetRuntimeId) return;
+  const handleRun = useCallback(
+    async (overrideArgs?: Record<string, unknown>) => {
+      if (!selectedFunction || !targetRuntimeId) return;
 
-    let args: Record<string, unknown>;
-    if (overrideArgs) {
-      args = overrideArgs;
-    } else {
-      try {
-        const parsed = JSON.parse(argsText) as unknown;
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      let args: Record<string, unknown>;
+      if (overrideArgs) {
+        args = overrideArgs;
+      } else {
+        try {
+          const parsed = JSON.parse(argsText) as unknown;
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            setRunResult({
+              status: "error",
+              error: "Arguments must be a JSON object"
+            });
+            return;
+          }
+          args = parsed as Record<string, unknown>;
+        } catch {
           setRunResult({
             status: "error",
-            error: "Arguments must be a JSON object"
+            error: "Invalid JSON in arguments"
           });
           return;
         }
-        args = parsed as Record<string, unknown>;
-      } catch {
+      }
+
+      setRunResult({ status: "running" });
+      try {
+        const res = await sendRequest(
+          {
+            kind: "fn.run",
+            functionName: selectedFunction.name,
+            functionType:
+              selectedFunction.type === "cron"
+                ? "action"
+                : selectedFunction.type,
+            args
+          },
+          { targetRuntimeId }
+        );
+        if (res.kind === "fn.run.result") {
+          if (res.error) {
+            setRunResult({
+              status: "error",
+              error: res.error,
+              durationMs: res.durationMs
+            });
+          } else {
+            setRunResult({
+              status: "success",
+              result: res.result,
+              durationMs: res.durationMs
+            });
+          }
+        }
+      } catch (err) {
         setRunResult({
           status: "error",
-          error: "Invalid JSON in arguments"
+          error: err instanceof Error ? err.message : "Unknown error"
         });
-        return;
       }
-    }
-
-    setRunResult({ status: "running" });
-    try {
-      const res = await sendRequest({
-        kind: "fn.run",
-        functionName: selectedFunction.name,
-        functionType:
-          selectedFunction.type === "cron" ? "action" : selectedFunction.type,
-        args
-      }, { targetRuntimeId });
-      if (res.kind === "fn.run.result") {
-        if (res.error) {
-          setRunResult({
-            status: "error",
-            error: res.error,
-            durationMs: res.durationMs
-          });
-        } else {
-          setRunResult({
-            status: "success",
-            result: res.result,
-            durationMs: res.durationMs
-          });
-        }
-      }
-    } catch (err) {
-      setRunResult({
-        status: "error",
-        error: err instanceof Error ? err.message : "Unknown error"
-      });
-    }
-  }, [selectedFunction, targetRuntimeId, argsText]);
+    },
+    [selectedFunction, targetRuntimeId, argsText]
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
@@ -384,76 +401,82 @@ function FunctionsPage() {
       {/* ---- Left sidebar: file tree ---- */}
       <div className="hidden min-h-0 w-72 shrink-0 md:flex">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-bg-surface">
-        <div className="border-b border-border p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-[13px] font-bold text-text-primary flex-1">
-              Functions
-            </h2>
-            {usingProjectTarget && (
-              <Badge variant="outline" className="text-[9px]">
-                Project Target
-              </Badge>
-            )}
-            {loadingFunctions && (
-              <Loader2 size={12} className="animate-spin text-text-tertiary" />
-            )}
-          </div>
-          <div className="relative">
-            <Search
-              size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
-            />
-            <Input
-              placeholder="Search functions..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 border-border bg-bg-base pl-8 text-[12px]"
-            />
-          </div>
-        </div>
-
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {fileTree.length === 0 ? (
-              <div className="py-8 text-center">
-                <Code2 size={20} className="mx-auto mb-2 text-text-tertiary" />
-                <p className="text-[11px] text-text-tertiary">
-                  {targetRuntimeId
-                    ? "No functions available for this target"
-                    : "Connect a runtime"}
-                </p>
-              </div>
-            ) : (
-              fileTree.map(([group, fns]) => (
-                <FileGroup
-                  key={group}
-                  group={group}
-                  functions={fns}
-                  selectedFn={selectedFn}
-                  onSelect={(name) =>
-                    selectFunction(name, { clearRouteSearch: true })
-                  }
+          <div className="border-b border-border p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-[13px] font-bold text-text-primary flex-1">
+                Functions
+              </h2>
+              {usingProjectTarget && (
+                <Badge variant="outline" className="text-[9px]">
+                  Project Target
+                </Badge>
+              )}
+              {loadingFunctions && (
+                <Loader2
+                  size={12}
+                  className="animate-spin text-text-tertiary"
                 />
-              ))
-            )}
+              )}
+            </div>
+            <div className="relative">
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+              />
+              <Input
+                placeholder="Search functions..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 border-border bg-bg-base pl-8 text-[12px]"
+              />
+            </div>
           </div>
-        </ScrollArea>
 
-        {/* Summary counts */}
-        <div className="border-t border-border p-3">
-          <div className="flex gap-3 text-[11px] text-text-tertiary">
-            <span>
-              {allFunctions.filter((f) => f.type === "query").length} queries
-            </span>
-            <span>
-              {allFunctions.filter((f) => f.type === "mutation").length}{" "}
-              mutations
-            </span>
-            <span>
-              {allFunctions.filter((f) => f.type === "action").length} actions
-            </span>
+          <ScrollArea className="flex-1">
+            <div className="p-2">
+              {fileTree.length === 0 ? (
+                <div className="py-8 text-center">
+                  <Code2
+                    size={20}
+                    className="mx-auto mb-2 text-text-tertiary"
+                  />
+                  <p className="text-[11px] text-text-tertiary">
+                    {targetRuntimeId
+                      ? "No functions available for this target"
+                      : "Connect a runtime"}
+                  </p>
+                </div>
+              ) : (
+                fileTree.map(([group, fns]) => (
+                  <FileGroup
+                    key={group}
+                    group={group}
+                    functions={fns}
+                    selectedFn={selectedFn}
+                    onSelect={(name) =>
+                      selectFunction(name, { clearRouteSearch: true })
+                    }
+                  />
+                ))
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Summary counts */}
+          <div className="border-t border-border p-3">
+            <div className="flex gap-3 text-[11px] text-text-tertiary">
+              <span>
+                {allFunctions.filter((f) => f.type === "query").length} queries
+              </span>
+              <span>
+                {allFunctions.filter((f) => f.type === "mutation").length}{" "}
+                mutations
+              </span>
+              <span>
+                {allFunctions.filter((f) => f.type === "action").length} actions
+              </span>
+            </div>
           </div>
-        </div>
         </div>
       </div>
 
@@ -471,7 +494,10 @@ function FunctionsPage() {
             Functions
           </Button>
           {selectedFunction && (
-            <Badge variant="secondary" className="max-w-[60vw] truncate font-mono">
+            <Badge
+              variant="secondary"
+              className="max-w-[60vw] truncate font-mono"
+            >
               <span className="truncate">{selectedFunction.name}</span>
             </Badge>
           )}
@@ -502,13 +528,15 @@ function FunctionsPage() {
                   <Code2 size={11} />
                   {selectedFunction.namespace}
                 </span>
-                <Badge variant={selectedFunction.registered ? "secondary" : "outline"}>
+                <Badge
+                  variant={
+                    selectedFunction.registered ? "secondary" : "outline"
+                  }
+                >
                   {selectedFunction.registered ? "registered" : "observed only"}
                 </Badge>
                 {!selectedFunction.metadataAvailable && (
-                  <Badge variant="outline">
-                    file metadata unavailable
-                  </Badge>
+                  <Badge variant="outline">file metadata unavailable</Badge>
                 )}
                 <span className="flex items-center gap-1">
                   <Activity size={11} />
@@ -582,7 +610,9 @@ function FunctionsPage() {
                 <FunctionLogs
                   events={selectedFnEvents}
                   traces={selectedFnTraces}
-                  onUseArgs={(args) => setArgsText(JSON.stringify(args, null, 2))}
+                  onUseArgs={(args) =>
+                    setArgsText(JSON.stringify(args, null, 2))
+                  }
                   onOpenExecution={(executionId) =>
                     void navigate({
                       to: "/logs",
@@ -641,7 +671,10 @@ function FunctionsPage() {
               <div className="p-2">
                 {fileTree.length === 0 ? (
                   <div className="py-8 text-center">
-                    <Code2 size={20} className="mx-auto mb-2 text-text-tertiary" />
+                    <Code2
+                      size={20}
+                      className="mx-auto mb-2 text-text-tertiary"
+                    />
                     <p className="text-[11px] text-text-tertiary">
                       {targetRuntimeId
                         ? "No functions available"
@@ -918,108 +951,116 @@ function FunctionLogs({
   return (
     <ScrollArea className="h-full">
       <div className="p-4 space-y-1">
-        {traces.length > 0 ? traces.map((trace, i) => {
-          const event = events[i];
-          const eventType =
-            trace.kind === "query"
-              ? "query.executed"
-              : trace.kind === "mutation" || trace.kind === "dashboard"
-                ? "mutation.committed"
-                : "action.completed";
-          const fnType = inferFunctionType(eventType);
-          const args =
-            trace.argsPreview?.kind === "value" &&
-            trace.argsPreview.value &&
-            typeof trace.argsPreview.value === "object" &&
-            !Array.isArray(trace.argsPreview.value)
-              ? (trace.argsPreview.value as Record<string, unknown>)
-              : null;
-          return (
-            <div
-              key={`${trace.executionId}-${i}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onOpenExecution(trace.executionId)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpenExecution(trace.executionId);
-                }
-              }}
-              title="Open execution in Logs"
-              className="group flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors animate-fade-in hover:bg-bg-surface/50 focus:outline-none focus:ring-2 focus:ring-accent/30"
-            >
-              {fnType && (
-                <FunctionBadge
-                  type={fnType}
-                  showIcon={false}
-                  className="text-[8px] px-1 py-0 w-14 justify-center"
-                />
-              )}
-              <TimestampCell timestamp={event?.timestamp ?? Date.now()} format="time" />
-              {event && "durationMs" in event && event.durationMs !== undefined && (
-                <span className="text-[11px] text-text-tertiary font-mono">
-                  {formatDuration(event.durationMs)}
-                </span>
-              )}
-              {((event && "error" in event && event.error) || trace?.error) && (
-                <Badge variant="destructive" className="text-[9px]">
-                  Error
-                </Badge>
-              )}
-              <span className="ml-auto text-[10px] text-text-tertiary font-mono truncate max-w-48">
-                {trace.executionId}
-              </span>
-              <ExternalLink
-                size={12}
-                className="shrink-0 text-text-tertiary opacity-60 transition-colors group-hover:text-accent group-hover:opacity-100"
-              />
-              {args && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  title="Use args"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onUseArgs(args);
+        {traces.length > 0
+          ? traces.map((trace, i) => {
+              const event = events[i];
+              const eventType =
+                trace.kind === "query"
+                  ? "query.executed"
+                  : trace.kind === "mutation" || trace.kind === "dashboard"
+                    ? "mutation.committed"
+                    : "action.completed";
+              const fnType = inferFunctionType(eventType);
+              const args =
+                trace.argsPreview?.kind === "value" &&
+                trace.argsPreview.value &&
+                typeof trace.argsPreview.value === "object" &&
+                !Array.isArray(trace.argsPreview.value)
+                  ? (trace.argsPreview.value as Record<string, unknown>)
+                  : null;
+              return (
+                <div
+                  key={`${trace.executionId}-${i}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpenExecution(trace.executionId)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpenExecution(trace.executionId);
+                    }
                   }}
+                  title="Open execution in Logs"
+                  className="group flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors animate-fade-in hover:bg-bg-surface/50 focus:outline-none focus:ring-2 focus:ring-accent/30"
                 >
-                  <Copy size={12} />
-                </Button>
-              )}
-            </div>
-          );
-        }) : events.map((event, i) => {
-          const fnType = inferFunctionType(event.type);
-          return (
-            <div
-              key={`${event.timestamp}-${i}`}
-              className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-bg-surface/50 transition-colors animate-fade-in"
-            >
-              {fnType && (
-                <FunctionBadge
-                  type={fnType}
-                  showIcon={false}
-                  className="text-[8px] px-1 py-0 w-14 justify-center"
-                />
-              )}
-              <TimestampCell timestamp={event.timestamp} format="time" />
-              {event.durationMs !== undefined && (
-                <span className="text-[11px] text-text-tertiary font-mono">
-                  {formatDuration(event.durationMs)}
-                </span>
-              )}
-              {event.error && (
-                <Badge variant="destructive" className="text-[9px]">
-                  Error
-                </Badge>
-              )}
-              <span className="ml-auto text-[10px] text-text-tertiary font-mono truncate max-w-48">
-                {event.type}
-              </span>
-            </div>
-          );
-        })}
+                  {fnType && (
+                    <FunctionBadge
+                      type={fnType}
+                      showIcon={false}
+                      className="text-[8px] px-1 py-0 w-14 justify-center"
+                    />
+                  )}
+                  <TimestampCell
+                    timestamp={event?.timestamp ?? Date.now()}
+                    format="time"
+                  />
+                  {event &&
+                    "durationMs" in event &&
+                    event.durationMs !== undefined && (
+                      <span className="text-[11px] text-text-tertiary font-mono">
+                        {formatDuration(event.durationMs)}
+                      </span>
+                    )}
+                  {((event && "error" in event && event.error) ||
+                    trace?.error) && (
+                    <Badge variant="destructive" className="text-[9px]">
+                      Error
+                    </Badge>
+                  )}
+                  <span className="ml-auto text-[10px] text-text-tertiary font-mono truncate max-w-48">
+                    {trace.executionId}
+                  </span>
+                  <ExternalLink
+                    size={12}
+                    className="shrink-0 text-text-tertiary opacity-60 transition-colors group-hover:text-accent group-hover:opacity-100"
+                  />
+                  {args && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      title="Use args"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onUseArgs(args);
+                      }}
+                    >
+                      <Copy size={12} />
+                    </Button>
+                  )}
+                </div>
+              );
+            })
+          : events.map((event, i) => {
+              const fnType = inferFunctionType(event.type);
+              return (
+                <div
+                  key={`${event.timestamp}-${i}`}
+                  className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-bg-surface/50 transition-colors animate-fade-in"
+                >
+                  {fnType && (
+                    <FunctionBadge
+                      type={fnType}
+                      showIcon={false}
+                      className="text-[8px] px-1 py-0 w-14 justify-center"
+                    />
+                  )}
+                  <TimestampCell timestamp={event.timestamp} format="time" />
+                  {event.durationMs !== undefined && (
+                    <span className="text-[11px] text-text-tertiary font-mono">
+                      {formatDuration(event.durationMs)}
+                    </span>
+                  )}
+                  {event.error && (
+                    <Badge variant="destructive" className="text-[9px]">
+                      Error
+                    </Badge>
+                  )}
+                  <span className="ml-auto text-[10px] text-text-tertiary font-mono truncate max-w-48">
+                    {event.type}
+                  </span>
+                </div>
+              );
+            })}
       </div>
     </ScrollArea>
   );
@@ -1052,13 +1093,21 @@ function FunctionActiveQueries({
       <div className="space-y-3 p-4">
         <div className="flex items-center justify-between rounded-md border border-border bg-bg-base px-3 py-2">
           <div className="text-[12px] text-text-secondary">
-            {queries.length} active subscription{queries.length === 1 ? "" : "s"} ·{" "}
-            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0)} consumer
-            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0) === 1
+            {queries.length} active subscription
+            {queries.length === 1 ? "" : "s"} ·{" "}
+            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0)}{" "}
+            consumer
+            {queries.reduce((sum, query) => sum + (query.consumers ?? 1), 0) ===
+            1
               ? ""
               : "s"}
           </div>
-          <Button variant="outline" size="xs" className="gap-1.5" onClick={onOpenQueries}>
+          <Button
+            variant="outline"
+            size="xs"
+            className="gap-1.5"
+            onClick={onOpenQueries}
+          >
             <Radio size={11} />
             Open Queries
           </Button>
@@ -1247,7 +1296,10 @@ function getFunctionGroupLabel(fn: FunctionListEntry): string {
   return "Root functions";
 }
 
-function compareFunctionEntries(left: FunctionListEntry, right: FunctionListEntry) {
+function compareFunctionEntries(
+  left: FunctionListEntry,
+  right: FunctionListEntry
+) {
   if (left.activeCount !== right.activeCount) {
     return right.activeCount - left.activeCount;
   }
@@ -1272,7 +1324,7 @@ function getFunctionSearchText(
     fn.modulePath ?? "",
     fn.namespace,
     fn.registered ? "registered" : "observed only",
-    JSON.stringify(fn.args ?? {}),
+    stableStringify(fn.args ?? {}),
     traces
       .slice(0, 5)
       .map((trace) =>

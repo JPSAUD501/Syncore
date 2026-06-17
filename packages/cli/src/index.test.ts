@@ -282,6 +282,67 @@ describe("syncore CLI", () => {
     expect(generatedServer).toContain("../schema.js");
   });
 
+  test("codegen scans function exports with TypeScript AST", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    await writeFile(
+      path.join(cwd, "syncore", "functions", "advanced.ts"),
+      [
+        `import { action, mutation, query } from "../_generated/server";`,
+        ``,
+        `// export const commented = query({ handler: () => null });`,
+        `const source = "export const stringMatch = mutation({ handler: () => null })";`,
+        `const localOnly = query({ handler: () => null });`,
+        `export const typed: unknown = query({ handler: () => null });`,
+        `export const satisfied = query({ handler: () => null }) satisfies unknown;`,
+        `export const multiline = mutation({`,
+        `  handler: () => null`,
+        `});`,
+        `export const parenthesized = (action({ handler: () => null }));`,
+        `const named = query({ handler: () => null });`,
+        `export const ignored = source.query({ handler: () => null });`,
+        `export { named };`,
+        `export { localOnly as aliased };`,
+        `void localOnly;`,
+        `void typed;`,
+        `void satisfied;`,
+        `void multiline;`,
+        `void parenthesized;`,
+        `void named;`,
+        `void ignored;`
+      ].join("\n") + "\n"
+    );
+
+    const result = await runCli(cwd, ["codegen"]);
+    expect(result.exitCode).toBe(0);
+
+    const generatedApi = await readFile(
+      path.join(cwd, "syncore", "_generated", "api.ts"),
+      "utf8"
+    );
+    const generatedFunctions = await readFile(
+      path.join(cwd, "syncore", "_generated", "functions.ts"),
+      "utf8"
+    );
+
+    expect(generatedApi).toContain("typed: createFunctionReferenceFor");
+    expect(generatedApi).toContain("satisfied: createFunctionReferenceFor");
+    expect(generatedApi).toContain("multiline: createFunctionReferenceFor");
+    expect(generatedApi).toContain("parenthesized: createFunctionReferenceFor");
+    expect(generatedApi).toContain("named: createFunctionReferenceFor");
+    expect(generatedApi).not.toContain("commented");
+    expect(generatedApi).not.toContain("stringMatch");
+    expect(generatedApi).not.toContain("localOnly");
+    expect(generatedApi).not.toContain("aliased");
+    expect(generatedApi).not.toContain("ignored");
+    expect(generatedFunctions).toContain('"advanced/typed"');
+    expect(generatedFunctions).toContain('"advanced/satisfied"');
+    expect(generatedFunctions).toContain('"advanced/multiline"');
+    expect(generatedFunctions).toContain('"advanced/parenthesized"');
+    expect(generatedFunctions).toContain('"advanced/named"');
+  });
+
   test("doctor reports workspace-root context in the monorepo root", async () => {
     const result = await runCli(workspaceRoot, ["doctor", "--json"]);
 

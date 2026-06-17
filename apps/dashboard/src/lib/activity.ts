@@ -1,7 +1,9 @@
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
-
-export const DASHBOARD_ACTIVITY_STORAGE_KEY =
-  "syncore-dashboard-include-dashboard-activity";
+import {
+  DASHBOARD_ACTIVITY_STORAGE_KEY,
+  readBooleanPreference,
+  writeBooleanPreference
+} from "./storage";
 
 export type ActivityOrigin = "app" | "dashboard";
 
@@ -60,26 +62,9 @@ export function summarizeActivityEvents(events: SyncoreDevtoolsEvent[]) {
 }
 
 export function readDashboardActivityPreference() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  try {
-    return window.localStorage.getItem(DASHBOARD_ACTIVITY_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return readBooleanPreference(DASHBOARD_ACTIVITY_STORAGE_KEY);
 }
 
 export function writeDashboardActivityPreference(value: boolean) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(
-      DASHBOARD_ACTIVITY_STORAGE_KEY,
-      value ? "1" : "0"
-    );
-  } catch {
-    /* ignore storage failures */
-  }
+  writeBooleanPreference(DASHBOARD_ACTIVITY_STORAGE_KEY, value);
 }

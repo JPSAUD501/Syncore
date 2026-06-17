@@ -20,13 +20,13 @@ const localSchema = defineSchema({
 describe("runtime query builder types", () => {
   it("preserves indexed field names and document shape", () => {
     expectTypeOf(localSchema.tables.tasks).toEqualTypeOf<typeof tasksTable>();
-    expectTypeOf<typeof tasksTable["indexesByName"]>().toEqualTypeOf<{
+    expectTypeOf<(typeof tasksTable)["indexesByName"]>().toEqualTypeOf<{
       by_status: readonly ["status"];
     }>();
-    expectTypeOf<typeof tasksTable["searchIndexesByName"]>().toEqualTypeOf<{
+    expectTypeOf<(typeof tasksTable)["searchIndexesByName"]>().toEqualTypeOf<{
       search_title: {
         searchField: "title";
-        filterFields: "status" | "projectId";
+        filterFields: readonly ("status" | "projectId")[];
       };
     }>();
     type TaskRow = Awaited<ReturnType<typeof collectTasksByStatus>>[number];
@@ -44,15 +44,21 @@ function collectTasksByStatus(ctx: QueryCtx<typeof localSchema>) {
     .collect();
 }
 
-function assertRuntimeQueryBuilderTypeErrors(ctx: QueryCtx<typeof localSchema>) {
+function assertRuntimeQueryBuilderTypeErrors(
+  ctx: QueryCtx<typeof localSchema>
+) {
   // @ts-expect-error unknown index name
   ctx.db.query("tasks").withIndex("by_missing");
-  // @ts-expect-error field not included in the index
-  ctx.db.query("tasks").withIndex("by_status", (range) => range.eq("title", "syncore"));
-  // @ts-expect-error unknown search index name
-  ctx.db.query("tasks").withSearchIndex("search_missing", (search) =>
-    search.search("title", "syncore")
-  );
+  ctx.db
+    .query("tasks")
+    // @ts-expect-error field not included in the index
+    .withIndex("by_status", (range) => range.eq("title", "syncore"));
+  ctx.db
+    .query("tasks")
+    // @ts-expect-error unknown search index name
+    .withSearchIndex("search_missing", (search) =>
+      search.search("title", "syncore")
+    );
   ctx.db.query("tasks").withSearchIndex("search_title", (search) =>
     // @ts-expect-error wrong search field
     search.search("status", "todo")
@@ -61,6 +67,11 @@ function assertRuntimeQueryBuilderTypeErrors(ctx: QueryCtx<typeof localSchema>) 
     // @ts-expect-error title is not a filter field on this search index
     search.search("title", "syncore").eq("title", "syncore")
   );
+  ctx.db
+    .query("tasks")
+    .withSearchIndex("search_title", (search) =>
+      search.search("title", "syncore").eq("projectId", "project")
+    );
 }
 
 void localSchema;

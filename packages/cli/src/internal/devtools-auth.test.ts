@@ -41,7 +41,9 @@ describe("isAllowedDashboardOrigin", () => {
   });
 
   it("rejects non-loopback origins or the wrong port", () => {
-    expect(isAllowedDashboardOrigin("http://192.168.0.10:4310", 4310)).toBe(false);
+    expect(isAllowedDashboardOrigin("http://192.168.0.10:4310", 4310)).toBe(
+      false
+    );
     expect(isAllowedDashboardOrigin("http://localhost:9999", 4310)).toBe(false);
   });
 });
@@ -94,8 +96,6 @@ describe("isAuthorizedDashboardRequest", () => {
   });
 
   it("does not classify non-dashboard browser origins as dashboard auth requests", () => {
-    expect(
-      isAllowedDashboardOrigin("http://localhost:3000", 4310)
-    ).toBe(false);
+    expect(isAllowedDashboardOrigin("http://localhost:3000", 4310)).toBe(false);
   });
 });
