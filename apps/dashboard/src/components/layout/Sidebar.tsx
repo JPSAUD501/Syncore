@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { motion } from "motion/react";
 import {
   Activity,
   Database,
@@ -46,15 +47,15 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
 
   return (
     <aside className="flex h-screen w-[240px] shrink-0 flex-col border-r border-border bg-bg-base">
-      <div className="flex items-center gap-3 border-b border-border px-4 py-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg-surface font-semibold text-text-primary">
+      <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-bold text-bg-base">
           S
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold text-text-primary">
+          <div className="truncate text-[13px] font-semibold leading-tight text-text-primary">
             Syncore
           </div>
-          <div className="truncate text-[12px] text-text-tertiary">
+          <div className="truncate text-[11px] leading-tight text-text-tertiary">
             Dev Dashboard
           </div>
         </div>
@@ -89,15 +90,26 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
               to={item.to}
               onClick={onNavClick}
               className={cn(
-                "flex items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors duration-150",
-                "hover:bg-bg-surface hover:text-text-primary",
+                "relative flex items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+                "hover:text-text-primary",
                 isActive
                   ? "border-border-hover bg-bg-surface text-text-primary"
-                  : "border-transparent text-text-secondary"
+                  : "border-transparent text-text-secondary hover:bg-bg-surface/60"
               )}
             >
-              <item.icon size={15} strokeWidth={1.8} />
-              {item.label}
+              {isActive && (
+                <motion.span
+                  layoutId="sidebar-active-indicator"
+                  className="pointer-events-none absolute inset-0 rounded-md border border-border-hover bg-bg-surface"
+                  transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
+                />
+              )}
+              <item.icon
+                size={15}
+                strokeWidth={1.8}
+                className="relative z-10"
+              />
+              <span className="relative z-10">{item.label}</span>
             </Link>
           );
         })}
@@ -105,12 +117,22 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
 
       {/* Status bar */}
       <div className="space-y-2 border-t border-border px-4 py-3">
-        <div className="text-[11px] text-text-tertiary">
-          {connected
-            ? connectedRuntimeCount > 0
-              ? `${connectedRuntimeCount} runtime(s) connected`
-              : "Hub connected"
-            : "Disconnected"}
+        <div className="flex items-center gap-2 text-[11px] text-text-tertiary">
+          <span
+            className={cn(
+              "inline-block size-1.5 rounded-full",
+              connected
+                ? "bg-success animate-live-dot"
+                : "bg-text-tertiary"
+            )}
+          />
+          <span>
+            {connected
+              ? connectedRuntimeCount > 0
+                ? `${connectedRuntimeCount} runtime(s) connected`
+                : "Hub connected"
+              : "Disconnected"}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <Badge variant="secondary" className="text-[10px] py-0">

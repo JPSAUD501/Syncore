@@ -29,11 +29,12 @@ import {
   useDevtoolsSubscription,
   useDevtoolsMultiRuntimeSubscription,
   useDidJustChange,
+  useTrackChanges,
   useRefreshTimer,
   useConnection,
   useDevtools
 } from "@/hooks";
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo } from "react";
 import {
   EVENT_BADGE_VARIANTS,
   EVENT_COLORS,
@@ -43,6 +44,7 @@ import {
   getEventRuntimeTag,
   getEventSummary
 } from "@/lib/eventPresentation";
+import { getEventDedupKey } from "@/lib/store";
 import type {
   SyncoreDevtoolsEvent,
   SyncoreDevtoolsSubscriptionResultPayload
@@ -83,7 +85,7 @@ function StatCard({
   return (
     <div
       className={cn(
-        "group flex min-h-28 flex-col gap-1.5 rounded-md border border-border bg-bg-surface p-4 transition-colors hover:border-border-hover",
+        "group flex min-h-28 flex-col gap-1.5 rounded-md border border-border bg-bg-surface p-4 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)] hover:border-border-hover",
         didChange &&
           (pulse % 2 === 0 ? "animate-highlight-a" : "animate-highlight-b")
       )}
@@ -94,7 +96,7 @@ function StatCard({
         </span>
         <div
           className={cn(
-            "rounded-md border border-border bg-bg-base p-1.5 transition-colors group-hover:border-border-hover",
+            "rounded-md border border-border bg-bg-base p-1.5 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)] group-hover:border-border-hover",
             color
           )}
         >
@@ -302,31 +304,15 @@ export function OverviewPage() {
     [events]
   );
 
-  // Only animate events that arrive after the first batch for a runtime.
-  const previousRuntimeIdRef = useRef<string | null>(runtimeId);
-  const previousEventCountRef = useRef(visibleEvents.length);
-  const hasHydratedInitialEventsRef = useRef(visibleEvents.length > 0);
-  let newEventCount = 0;
-  if (previousRuntimeIdRef.current !== runtimeId) {
-    previousRuntimeIdRef.current = runtimeId;
-    previousEventCountRef.current = visibleEvents.length;
-    hasHydratedInitialEventsRef.current = visibleEvents.length > 0;
-  } else if (!hasHydratedInitialEventsRef.current) {
-    if (visibleEvents.length > 0) {
-      hasHydratedInitialEventsRef.current = true;
-    }
-    previousEventCountRef.current = visibleEvents.length;
-  } else if (visibleEvents.length > previousEventCountRef.current) {
-    newEventCount = visibleEvents.length - previousEventCountRef.current;
-  }
-
-  useEffect(() => {
-    if (previousRuntimeIdRef.current !== runtimeId) {
-      previousRuntimeIdRef.current = runtimeId;
-      hasHydratedInitialEventsRef.current = visibleEvents.length > 0;
-    }
-    previousEventCountRef.current = visibleEvents.length;
-  }, [visibleEvents.length, runtimeId]);
+  // Track newly-arrived events by stable dedup key. useTrackChanges auto-
+  // clears the "new" flag after 1200ms, so we don't need manual counters.
+  // It also keys off a stable id, so prepended new events get animated
+  // without re-mounting existing rows (which would cause visual glitches).
+  const trackedEvents = visibleEvents.slice(0, 50);
+  const { isNew } = useTrackChanges(
+    trackedEvents,
+    (event) => getEventDedupKey(event)
+  );
 
   return (
     <div className="space-y-4">
@@ -438,11 +424,12 @@ export function OverviewPage() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {visibleEvents.slice(0, 50).map((event, i) => {
+                {trackedEvents.map((event, i) => {
                   const config = getEventConfig(event.type);
                   const summary = getEventSummary(event);
                   const duration = getEventDuration(event);
-                  const isNew = i < newEventCount;
+                  const eventKey = getEventDedupKey(event);
+                  const isNewEntry = isNew(eventKey);
                   const executionId = getExecutionIdForEvent(event);
                   const invalidations =
                     event.type === "query.executed"
@@ -451,7 +438,7 @@ export function OverviewPage() {
                   const Component = executionId ? "button" : "div";
                   return (
                     <Component
-                      key={`${event.type}-${event.timestamp}-${i}`}
+                      key={eventKey}
                       type={executionId ? "button" : undefined}
                       onClick={
                         executionId
@@ -463,9 +450,9 @@ export function OverviewPage() {
                           : undefined
                       }
                       className={cn(
-                        "flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-bg-elevated/50 transition-colors",
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-bg-elevated/50 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
                         executionId && "cursor-pointer",
-                        isNew && "animate-fade-in-fast"
+                        isNewEntry && "animate-fade-in-fast"
                       )}
                     >
                       <config.icon size={13} className={config.color} />

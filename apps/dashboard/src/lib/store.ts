@@ -680,7 +680,7 @@ function countRuntimeEvents(events: SyncoreDevtoolsEvent[]) {
   };
 }
 
-function getEventDedupKey(event: SyncoreDevtoolsEvent): string {
+export function getEventDedupKey(event: SyncoreDevtoolsEvent): string {
   switch (event.type) {
     case "mutation.committed":
       return `${event.type}:${event.runtimeId}:${event.executionId ?? event.mutationId}`;

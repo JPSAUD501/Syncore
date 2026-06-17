@@ -1,4 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "motion/react";
 import { Database, Search, Table2, Layers, Key, Loader2 } from "lucide-react";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getDocumentId } from "@/lib/dataValue";
 import {
@@ -1002,7 +1004,9 @@ function DataPage() {
                 >
                   <div className="flex h-full">
                     <div className="min-w-0 flex-1 p-2">
-                      {visibleRows.length === 0 ? (
+                      {loading && visibleRows.length === 0 ? (
+                        <DataTableSkeleton columnCount={Math.min(columns.length, 6)} />
+                      ) : visibleRows.length === 0 ? (
                         <EmptyState
                           icon={Database}
                           title="No data"
@@ -1060,28 +1064,44 @@ function DataPage() {
                       )}
                     </div>
 
-                    {liveSelectedDoc && (
-                      <div className="fixed inset-0 z-50 overflow-y-auto md:contents">
-                        <DocumentPanel
-                          document={liveSelectedDoc}
-                          onClose={() => setPanelDocId(null)}
-                          onEditField={(id, field, value) =>
-                            setFieldEditState({ id, field, value })
-                          }
-                          onEditDocument={() => {
-                            setEditorMode("patch");
-                            setEditorOpen(true);
+                    <AnimatePresence>
+                      {liveSelectedDoc && (
+                        <motion.div
+                          key="document-panel"
+                          initial={{ opacity: 0, x: 16 }}
+                          animate={{
+                            opacity: 1,
+                            x: 0,
+                            transition: { duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }
                           }}
-                          onDuplicate={() => {
-                            setEditorMode("duplicate");
-                            setEditorOpen(true);
+                          exit={{
+                            opacity: 0,
+                            x: 16,
+                            transition: { duration: 0.16, ease: [0.22, 0.61, 0.36, 1] }
                           }}
-                          onDelete={(id) => setConfirmDeleteId(id)}
-                          referenceFields={referenceFields}
-                          className="w-full border-l-0 md:w-96 md:border-l"
-                        />
-                      </div>
-                    )}
+                          className="fixed inset-0 z-50 md:static md:z-auto md:shrink-0 md:self-stretch"
+                        >
+                          <DocumentPanel
+                            document={liveSelectedDoc}
+                            onClose={() => setPanelDocId(null)}
+                            onEditField={(id, field, value) =>
+                              setFieldEditState({ id, field, value })
+                            }
+                            onEditDocument={() => {
+                              setEditorMode("patch");
+                              setEditorOpen(true);
+                            }}
+                            onDuplicate={() => {
+                              setEditorMode("duplicate");
+                              setEditorOpen(true);
+                            }}
+                            onDelete={(id) => setConfirmDeleteId(id)}
+                            referenceFields={referenceFields}
+                            className="w-full h-full border-l-0 md:w-96 md:border-l"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </TabsContent>
 
@@ -1670,4 +1690,38 @@ function hasMissingReference(
       !reference.options.some((option) => option.id === value)
     );
   });
+}
+
+/** Loading placeholder for the data table — distinct from the empty state. */
+function DataTableSkeleton({ columnCount = 5 }: { columnCount?: number }) {
+  return (
+    <div className="h-full overflow-hidden rounded-md border border-border bg-bg-base">
+      <div className="flex h-9 border-b border-border bg-bg-surface">
+        <div className="w-16 shrink-0 border-r border-border" />
+        {Array.from({ length: columnCount }).map((_, i) => (
+          <div
+            key={i}
+            className="h-9 flex-1 border-r border-border px-3 py-2 last:border-r-0"
+          >
+            <Skeleton className="h-3 w-20" />
+          </div>
+        ))}
+      </div>
+      {Array.from({ length: 10 }).map((_, row) => (
+        <div key={row} className="flex border-b border-border/60">
+          <div className="flex w-16 shrink-0 items-center justify-center border-r border-border px-2">
+            <Skeleton className="size-3.5 rounded-sm" />
+          </div>
+          {Array.from({ length: columnCount }).map((_, col) => (
+            <div
+              key={col}
+              className="flex min-h-11 flex-1 items-center border-r border-border px-3 py-2 last:border-r-0"
+            >
+              <Skeleton className="h-3.5 w-full max-w-[12rem]" />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }

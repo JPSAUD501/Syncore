@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-router";
 import {
   getRuntimeLabel,
+  getEventDedupKey,
   useRuntimeList,
   useDevtoolsStore
 } from "@/lib/store";
@@ -30,7 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   filterActivityEvents
 } from "@/lib/activity";
-import { useDevtools } from "@/hooks";
+import { useDevtools, useTrackChanges } from "@/hooks";
 import {
   EVENT_BADGE_VARIANTS,
   EVENT_COLORS,
@@ -109,7 +110,7 @@ function LogEntry({
         "hover:bg-bg-elevated/50",
         isSelected && "bg-bg-elevated border-l-2 border-l-accent",
         errored && "bg-error/3",
-        isNew && "animate-fade-in"
+        isNew && "animate-fade-in-fast"
       )}
     >
       <Icon size={12} className={cn(color, "shrink-0")} />
@@ -198,10 +199,6 @@ export function LogsPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const [pausedEvents, setPausedEvents] = useState<SyncoreDevtoolsEvent[]>([]);
 
-  // Track known count for fade-in animations on new entries
-  const prevCountRef = useRef(0);
-  const knownCount = prevCountRef.current;
-
   // When paused, buffer events
   const displayEvents = paused ? pausedEvents : filteredActivityEvents;
   const visibleDisplayEvents = useMemo(
@@ -216,9 +213,6 @@ export function LogsPage() {
   useEffect(() => {
     if (!paused) {
       setPausedEvents(filteredActivityEvents);
-      prevCountRef.current = filteredActivityEvents.filter(
-        isVisibleActivityEvent
-      ).length;
     }
   }, [paused, filteredActivityEvents]);
 
@@ -247,6 +241,14 @@ export function LogsPage() {
 
     return result;
   }, [visibleDisplayEvents, activeFilters, searchText]);
+
+  // Track newly-arrived events by stable dedup key. useTrackChanges auto-
+  // clears the "new" flag after 1200ms. The stable key means prepended
+  // new events are animated without re-mounting existing rows.
+  const { isNew } = useTrackChanges(
+    filteredEvents,
+    (event: SyncoreDevtoolsEvent) => getEventDedupKey(event)
+  );
 
   const toggleFilter = useCallback((type: EventType) => {
     setActiveFilters((prev) => {
@@ -473,10 +475,10 @@ export function LogsPage() {
                 );
                 return (
                   <LogEntry
-                    key={`${event.type}-${event.timestamp}-${i}`}
+                    key={getEventDedupKey(event)}
                     event={event}
                     isSelected={selectedIndex === i}
-                    isNew={i >= knownCount}
+                    isNew={isNew(getEventDedupKey(event))}
                     runtimeMap={runtimeMap}
                     causalBadges={causalBadges}
                     onClick={() =>

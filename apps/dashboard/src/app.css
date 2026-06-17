@@ -6,6 +6,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap");
 
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* ================================================================== */
 /*  Substrate Design System — Custom Theme                             */
@@ -73,6 +74,87 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 10px;
+
+  /* --- Motion vocabulary (shared with lib/motion.ts) ---
+     Keep these in sync with the TS easings so CSS + Framer Motion
+     transitions feel identical. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
+
+  /* --- Shadows --- */
+  --shadow-glow-accent: 0 0 0 1px oklch(0.72 0.12 70 / 0.18),
+    0 0 18px -4px oklch(0.72 0.12 70 / 0.28);
+  /* Soft elevation shadow — adaptive per theme via the overrides below. */
+  --shadow-soft: 0 4px 16px -4px rgba(0, 0, 0, 0.45),
+    0 2px 6px -2px rgba(0, 0, 0, 0.35);
+
+  /* --- tw-animate-css tuning --- */
+  --tw-duration-fast: var(--duration-fast);
+  --tw-duration-normal: var(--duration-base);
+  --tw-duration-slow: var(--duration-slow);
+  --tw-ease-out: var(--ease-out-expo);
+}
+
+/* ================================================================== */
+/*  Light theme — applied via the `.light` class on <html>.            */
+/*  Dark is the unstyled default. Keeps the gold accent. The class is  */
+/*  toggled by lib/theme.ts (and a pre-paint script in index.html).    */
+/* ================================================================== */
+
+html.light {
+  --color-bg-deep: #f4f1ea;
+  --color-bg-base: #faf7f1;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #f0ece2;
+  --color-bg-overlay: #e7e1d4;
+
+  --color-accent: #9c6b16;
+  --color-accent-muted: #7e5510;
+  --color-accent-subtle: oklch(0.55 0.1 70 / 0.1);
+
+  --color-text-primary: #28241e;
+  --color-text-secondary: #5f5950;
+  --color-text-tertiary: #80796d;
+  --color-text-code: #6b5219;
+
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-error: #c0322b;
+  --color-info: #1d63d3;
+
+  --color-fn-query: #15803d;
+  --color-fn-mutation: #1d63d3;
+  --color-fn-action: #6d28d9;
+  --color-fn-cron: #b45309;
+
+  --color-border: oklch(0.35 0.03 70 / 0.16);
+  --color-border-hover: oklch(0.35 0.03 70 / 0.28);
+  --color-border-active: oklch(0.55 0.08 70 / 0.45);
+
+  --color-background: #f4f1ea;
+  --color-foreground: #28241e;
+  --color-card: #faf7f1;
+  --color-card-foreground: #28241e;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #28241e;
+  --color-primary: #9c6b16;
+  --color-primary-foreground: #faf7f1;
+  --color-secondary: #f0ece2;
+  --color-secondary-foreground: #28241e;
+  --color-muted: #f0ece2;
+  --color-muted-foreground: #5f5950;
+  --color-destructive: #c0322b;
+  --color-input: oklch(0.35 0.03 70 / 0.2);
+  --color-ring: #9c6b16;
+
+  --shadow-glow-accent: 0 0 0 1px oklch(0.55 0.1 70 / 0.22),
+    0 0 16px -6px oklch(0.55 0.1 70 / 0.32);
+  --shadow-soft: 0 6px 20px -6px rgba(80, 65, 35, 0.16),
+    0 2px 6px -2px rgba(80, 65, 35, 0.1);
 }
 
 /* ================================================================== */
@@ -113,6 +195,10 @@ body::before {
   background-size: 256px 256px;
 }
 
+html.light body::before {
+  opacity: 0.012;
+}
+
 /* ================================================================== */
 /*  Scrollbar styling                                                  */
 /* ================================================================== */
@@ -129,10 +215,18 @@ body::before {
 ::-webkit-scrollbar-thumb {
   background: oklch(0.72 0.12 70 / 0.15);
   border-radius: 3px;
+  transition: background var(--duration-base) var(--ease-out-soft);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: oklch(0.72 0.12 70 / 0.25);
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: oklch(0.35 0.03 70 / 0.2);
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.35 0.03 70 / 0.34);
 }
 
 /* ================================================================== */
@@ -141,6 +235,11 @@ body::before {
 
 ::selection {
   background: oklch(0.72 0.12 70 / 0.25);
+  color: var(--color-text-primary);
+}
+
+html.light ::selection {
+  background: oklch(0.55 0.1 70 / 0.3);
   color: var(--color-text-primary);
 }
 
@@ -191,30 +290,6 @@ button {
   }
 }
 
-@keyframes highlightBorderA {
-  0% {
-    border-color: var(--color-border);
-  }
-  15% {
-    border-color: var(--color-accent);
-  }
-  100% {
-    border-color: var(--color-border);
-  }
-}
-
-@keyframes highlightBorderB {
-  0% {
-    border-color: var(--color-border);
-  }
-  15% {
-    border-color: var(--color-accent);
-  }
-  100% {
-    border-color: var(--color-border);
-  }
-}
-
 @keyframes fadeInA {
   0% {
     opacity: 0;
@@ -246,20 +321,31 @@ button {
   }
 }
 
-@keyframes pulseGlow {
+@keyframes liveDot {
   0%,
   100% {
-    box-shadow: 0 0 0 0 oklch(0.72 0.12 70 / 0);
+    opacity: 1;
+    box-shadow: 0 0 0 0 oklch(0.72 0.12 70 / 0.4);
   }
   50% {
-    box-shadow: 0 0 8px 2px oklch(0.72 0.12 70 / 0.15);
+    opacity: 0.55;
+    box-shadow: 0 0 0 4px oklch(0.72 0.12 70 / 0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
   }
 }
 
 .animate-highlight-a,
 .animate-highlight-b {
   animation-duration: 1.2s;
-  animation-timing-function: ease-out;
+  animation-timing-function: var(--ease-out-soft);
 }
 
 .animate-highlight-a {
@@ -270,31 +356,18 @@ button {
   animation-name: highlightB;
 }
 
-.animate-highlight-border-a,
-.animate-highlight-border-b {
-  animation-duration: 1.2s;
-  animation-timing-function: ease-out;
-}
-
-.animate-highlight-border-a {
-  animation-name: highlightBorderA;
-}
-
-.animate-highlight-border-b {
-  animation-name: highlightBorderB;
-}
-
 .animate-fade-in,
 .animate-fade-in-a,
 .animate-fade-in-b {
   animation-duration: 0.3s;
-  animation-timing-function: ease-out;
+  animation-timing-function: var(--ease-out-soft);
 }
 
 .animate-fade-in-fast {
-  animation-duration: 0.1s;
-  animation-timing-function: ease-out;
+  animation-duration: 0.14s;
+  animation-timing-function: var(--ease-out-soft);
   animation-name: fadeInA;
+  animation-fill-mode: both;
 }
 
 .animate-fade-in,
@@ -307,26 +380,55 @@ button {
 }
 
 .animate-fade-in-cell {
-  animation: fadeInCell 0.4s ease-out;
+  animation: fadeInCell 0.4s var(--ease-out-soft);
 }
 
-.animate-pulse-glow {
-  animation: pulseGlow 2s ease-in-out infinite;
-}
-
-/* Live indicator dot */
-@keyframes liveDot {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-
+/* Live indicator dot — pulsing connection signal */
 .animate-live-dot {
-  animation: liveDot 1.5s ease-in-out infinite;
+  animation: liveDot 1.6s var(--ease-out-soft) infinite;
+}
+
+/* Skeleton shimmer — used by ui/Skeleton */
+.skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    oklch(0.72 0.12 70 / 0.06),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s var(--ease-out-soft) infinite;
+}
+
+/* Accent glow utility — sparingly on active/focus moments */
+.shadow-glow-accent {
+  box-shadow: var(--shadow-glow-accent);
+}
+
+/* Soft elevation utility — adaptive per theme. */
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+/* ================================================================== */
+/*  Theme toggle — circular reveal via the View Transitions API.       */
+/*  The animation itself is driven by WAAPI in lib/theme.ts            */
+/*  (animating ::view-transition-new(root)). Here we only disable the  */
+/*  default cross-fade so our circle reveal isn't double-animated.      */
+/* ================================================================== */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  z-index: 1;
+}
+
+::view-transition-old(root) {
+  z-index: 9999;
 }
 
 /* ================================================================== */
@@ -354,8 +456,8 @@ button {
   background: var(--color-bg-deep);
   border: 1px solid var(--color-border);
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color var(--duration-base) var(--ease-out-soft),
+    box-shadow var(--duration-base) var(--ease-out-soft);
 }
 
 .sql-editor-wrapper:focus-within {
@@ -371,4 +473,24 @@ button {
 
 .sql-editor-wrapper .cm-editor.cm-focused {
   outline: none !important;
+}
+
+/* ================================================================== */
+/*  Reduced motion — disable non-essential animation                   */
+/* ================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-live-dot,
+  .skeleton-shimmer {
+    animation: none !important;
+  }
 }

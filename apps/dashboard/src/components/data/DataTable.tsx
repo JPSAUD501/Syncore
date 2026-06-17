@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Popover } from "radix-ui";
 import { PanelRightOpen } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -55,7 +56,7 @@ export function DataTable({
     [rows]
   );
 
-  const { isChanged, isNew, getChangePulse, getNewPulse } = useTrackChanges(
+  const { isChanged, isNew, getChangePulse } = useTrackChanges(
     rows,
     (_row, index) => rowIds[index] ?? `row-${index}`,
     (row) => stableStringify(row)
@@ -99,13 +100,12 @@ export function DataTable({
             const rowChanged = isChanged(rowId);
             const rowNew = isNew(rowId);
             const changePulse = getChangePulse(rowId);
-            const newPulse = getNewPulse(rowId);
 
             return (
               <div
                 key={rowId}
                 className={cn(
-                  "flex border-b border-border/80 bg-bg-base transition-colors",
+                  "flex border-b border-border/80 bg-bg-base transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
                   isSelected
                     ? "bg-bg-surface shadow-[inset_2px_0_0_0_var(--color-accent)]"
                     : isChecked
@@ -115,101 +115,98 @@ export function DataTable({
                     (changePulse % 2 === 0
                       ? "animate-highlight-a"
                       : "animate-highlight-b"),
-                  rowNew &&
-                    (newPulse % 2 === 0
-                      ? "animate-fade-in-a"
-                      : "animate-fade-in-b")
+                  rowNew && "animate-fade-in"
                 )}
               >
-                <div
-                  className="flex min-h-11 w-16 shrink-0 items-center justify-center gap-1 border-r border-border px-2 py-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <RowCheckbox
-                    checked={isChecked}
-                    onChange={() => onToggleRowSelection?.(rowId)}
-                    ariaLabel={`Select row ${rowId}`}
-                  />
-                  <button
-                    type="button"
-                    className={cn(
-                      "inline-flex size-6 items-center justify-center rounded border border-transparent text-text-tertiary transition-colors hover:border-border-hover hover:bg-bg-elevated hover:text-text-primary",
-                      isSelected && "border-accent/30 bg-accent/10 text-accent"
-                    )}
-                    title="Inspect row"
-                    aria-label={`Inspect row ${rowId}`}
-                    onClick={() => onRowClick?.(rowId)}
+                  <div
+                    className="flex min-h-11 w-16 shrink-0 items-center justify-center gap-1 border-r border-border px-2 py-2"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <PanelRightOpen size={12} />
-                  </button>
-                </div>
-                {columns.map((col) => {
-                  const isEditingThisCell =
-                    editingCell?.rowId === rowId && editingCell.field === col;
-                  return (
-                    <Popover.Root
-                      key={col}
-                      open={isEditingThisCell}
-                      onOpenChange={(open) => {
-                        if (!open) setEditingCell(null);
-                      }}
+                    <RowCheckbox
+                      checked={isChecked}
+                      onChange={() => onToggleRowSelection?.(rowId)}
+                      ariaLabel={`Select row ${rowId}`}
+                    />
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex size-6 items-center justify-center rounded border border-transparent text-text-tertiary transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)] hover:border-border-hover hover:bg-bg-elevated hover:text-text-primary",
+                        isSelected && "border-accent/30 bg-accent/10 text-accent"
+                      )}
+                      title="Inspect row"
+                      aria-label={`Inspect row ${rowId}`}
+                      onClick={() => onRowClick?.(rowId)}
                     >
-                      <Popover.Anchor asChild>
-                        <div
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            if (!onCellEdit) return;
-                            setEditingCell({
-                              rowId,
-                              field: col,
-                              value: row[col]
-                            });
-                          }}
-                          className={cn(
-                            "flex min-h-11 shrink-0 cursor-default items-center border-r border-border px-3 py-2 font-mono text-[12px] text-text-secondary last:border-r-0 select-none",
-                            isEditingThisCell &&
-                              "bg-bg-surface ring-1 ring-inset ring-accent/40",
-                            getColumnWidthClass(col)
-                          )}
-                        >
-                          <div className="min-w-0 w-full">
-                            <CellValue
-                              field={col}
-                              value={row[col]}
-                              reference={referenceFields?.[col]}
-                              onOpenReference={onOpenReference}
-                            />
+                      <PanelRightOpen size={12} />
+                    </button>
+                  </div>
+                  {columns.map((col) => {
+                    const isEditingThisCell =
+                      editingCell?.rowId === rowId && editingCell.field === col;
+                    return (
+                      <Popover.Root
+                        key={col}
+                        open={isEditingThisCell}
+                        onOpenChange={(open) => {
+                          if (!open) setEditingCell(null);
+                        }}
+                      >
+                        <Popover.Anchor asChild>
+                          <div
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              if (!onCellEdit) return;
+                              setEditingCell({
+                                rowId,
+                                field: col,
+                                value: row[col]
+                              });
+                            }}
+                            className={cn(
+                              "flex min-h-11 shrink-0 cursor-default items-center border-r border-border px-3 py-2 font-mono text-[12px] text-text-secondary last:border-r-0 select-none transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+                              isEditingThisCell &&
+                                "bg-bg-surface ring-1 ring-inset ring-accent/40",
+                              getColumnWidthClass(col)
+                            )}
+                          >
+                            <div className="min-w-0 w-full">
+                              <CellValue
+                                field={col}
+                                value={row[col]}
+                                reference={referenceFields?.[col]}
+                                onOpenReference={onOpenReference}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </Popover.Anchor>
-                      <Popover.Portal>
-                        <Popover.Content
-                          align="start"
-                          side="bottom"
-                          sideOffset={4}
-                          className="z-50 outline-none"
-                          onOpenAutoFocus={(e) => e.preventDefault()}
-                        >
-                          {isEditingThisCell && editingCell !== null && (
-                            <CellEditor
-                              field={col}
-                              value={editingCell.value}
-                              reference={referenceFields?.[col]}
-                              onCancel={() => setEditingCell(null)}
-                              onSave={(value) => {
-                                onCellEdit?.(rowId, col, value);
-                                setEditingCell(null);
-                              }}
-                            />
-                          )}
-                        </Popover.Content>
-                      </Popover.Portal>
-                    </Popover.Root>
-                  );
-                })}
-              </div>
-            );
-          })}
+                        </Popover.Anchor>
+                        <Popover.Portal>
+                          <Popover.Content
+                            align="start"
+                            side="bottom"
+                            sideOffset={4}
+                            className="z-50 outline-none"
+                            onOpenAutoFocus={(e) => e.preventDefault()}
+                          >
+                            {isEditingThisCell && editingCell !== null && (
+                              <CellEditor
+                                field={col}
+                                value={editingCell.value}
+                                reference={referenceFields?.[col]}
+                                onCancel={() => setEditingCell(null)}
+                                onSave={(value) => {
+                                  onCellEdit?.(rowId, col, value);
+                                  setEditingCell(null);
+                                }}
+                              />
+                            )}
+                          </Popover.Content>
+                        </Popover.Portal>
+                      </Popover.Root>
+                    );
+                  })}
+                </div>
+              );
+            })}
         </div>
       </div>
     </ScrollArea>
@@ -267,7 +264,7 @@ function CellValue({
     const readable = formatReadableDate(preview.text);
     return (
       <span
-        className="block truncate tabular-nums text-[11px] text-amber-100"
+        className="block truncate tabular-nums text-[11px] text-warning"
         title={
           preview.title ? `${preview.text}\n${preview.title}` : preview.text
         }
@@ -281,7 +278,7 @@ function CellValue({
     return (
       <span className="inline-flex items-center gap-1.5" title={preview.text}>
         <span
-          className="inline-block size-3.5 shrink-0 rounded-sm border border-white/20"
+          className="inline-block size-3.5 shrink-0 rounded-sm border border-border"
           style={{ backgroundColor: preview.colorHex }}
         />
         <span className="text-text-secondary">{preview.text}</span>
@@ -351,25 +348,35 @@ function RowCheckbox({
       <div
         aria-hidden
         className={cn(
-          "flex size-3.5 items-center justify-center rounded-sm border transition-colors",
+          "flex size-3.5 items-center justify-center rounded-sm border transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
           checked
             ? "border-accent bg-accent"
             : "border-border bg-bg-base hover:border-border-hover"
         )}
       >
-        {checked && (
-          <svg
-            viewBox="0 0 10 8"
-            className="size-2.5"
-            fill="none"
-            stroke="white"
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M1 4L3.5 6.5L9 1" />
-          </svg>
-        )}
+        <AnimatePresence>
+          {checked && (
+            <motion.svg
+              key="check"
+              viewBox="0 0 10 8"
+              className="size-2.5"
+              fill="none"
+              stroke="var(--color-primary-foreground)"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                transition: { duration: 0.15, ease: [0.34, 1.4, 0.64, 1] }
+              }}
+              exit={{ opacity: 0, scale: 0.4, transition: { duration: 0.1 } }}
+            >
+              <path d="M1 4L3.5 6.5L9 1" />
+            </motion.svg>
+          )}
+        </AnimatePresence>
       </div>
     </label>
   );

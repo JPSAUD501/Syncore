@@ -4,10 +4,12 @@ import type {
   ExecutionTrace,
   SyncoreDevtoolsEvent
 } from "@syncore/devtools-protocol";
+import { motion } from "motion/react";
 import { ExternalLink, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { fadeUp, staggerContainer } from "@/lib/motion";
 import { JsonViewer } from "./JsonViewer";
 import {
   EVENT_BADGE_VARIANTS,
@@ -457,10 +459,16 @@ function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
   // INSERT: only after
   if (after && !before) {
     return (
-      <div className="rounded border border-success/20 overflow-hidden">
+      <motion.div
+        variants={staggerContainer(0.03)}
+        initial="hidden"
+        animate="visible"
+        className="rounded border border-success/20 overflow-hidden"
+      >
         {Object.entries(after).map(([key, value]) => (
-          <div
+          <motion.div
             key={key}
+            variants={fadeUp}
             className="flex items-baseline gap-2 border-b border-success/10 bg-success/5 px-3 py-1.5 last:border-b-0"
           >
             <span className="w-32 shrink-0 truncate font-mono text-[11px] text-success/80">
@@ -469,19 +477,25 @@ function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
             <span className="min-w-0 truncate font-mono text-[11px] text-success">
               {formatPreviewValue(value)}
             </span>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     );
   }
 
   // DELETE: only before
   if (before && !after) {
     return (
-      <div className="rounded border border-error/20 overflow-hidden">
+      <motion.div
+        variants={staggerContainer(0.03)}
+        initial="hidden"
+        animate="visible"
+        className="rounded border border-error/20 overflow-hidden"
+      >
         {Object.entries(before).map(([key, value]) => (
-          <div
+          <motion.div
             key={key}
+            variants={fadeUp}
             className="flex items-baseline gap-2 border-b border-error/10 bg-error/5 px-3 py-1.5 last:border-b-0"
           >
             <span className="w-32 shrink-0 truncate font-mono text-[11px] text-error/80">
@@ -490,9 +504,9 @@ function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
             <span className="min-w-0 truncate font-mono text-[11px] text-error line-through">
               {formatPreviewValue(value)}
             </span>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     );
   }
 
@@ -533,12 +547,18 @@ function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
 
     return (
       <div className="space-y-1">
-        <div className="rounded border border-border overflow-hidden">
+        <motion.div
+          variants={staggerContainer(0.03)}
+          initial="hidden"
+          animate="visible"
+          className="rounded border border-border overflow-hidden"
+        >
           {changed.map((entry) => {
             if (entry.kind === "changed") {
               return (
-                <div
+                <motion.div
                   key={entry.key}
+                  variants={fadeUp}
                   className="flex items-baseline border-b border-warning/10 bg-warning/5 last:border-b-0"
                 >
                   <span className="w-32 shrink-0 truncate px-3 py-1.5 font-mono text-[11px] text-text-secondary">
@@ -555,13 +575,14 @@ function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
                       {formatPreviewValue(entry.after)}
                     </span>
                   </div>
-                </div>
+                </motion.div>
               );
             }
             if (entry.kind === "added") {
               return (
-                <div
+                <motion.div
                   key={entry.key}
+                  variants={fadeUp}
                   className="flex items-baseline border-b border-success/10 bg-success/5 last:border-b-0"
                 >
                   <span className="w-32 shrink-0 truncate px-3 py-1.5 font-mono text-[11px] text-success/80">
@@ -570,13 +591,14 @@ function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
                   <span className="min-w-0 truncate px-3 py-1.5 font-mono text-[11px] text-success">
                     {formatPreviewValue(entry.after)}
                   </span>
-                </div>
+                </motion.div>
               );
             }
             // removed
             return (
-              <div
+              <motion.div
                 key={entry.key}
+                variants={fadeUp}
                 className="flex items-baseline border-b border-error/10 bg-error/5 last:border-b-0"
               >
                 <span className="w-32 shrink-0 truncate px-3 py-1.5 font-mono text-[11px] text-error/80">
@@ -585,10 +607,10 @@ function DocumentChangeDiff({ change }: { change: DocumentChangePreview }) {
                 <span className="min-w-0 truncate px-3 py-1.5 font-mono text-[11px] text-error line-through">
                   {formatPreviewValue(entry.before)}
                 </span>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
         {unchangedCount > 0 && (
           <div className="px-1 text-[11px] text-text-tertiary">
             +{unchangedCount} unchanged{" "}

@@ -636,7 +636,8 @@ function SqlPage() {
               {getModeUnavailableReason("live", sqlUnavailableReason)}
             </div>
           ) : mode === "live" && liveSubscription.loading && !result ? (
-            <div className="p-4 text-[12px] text-text-tertiary">
+            <div className="flex items-center gap-2 p-4 text-[12px] text-text-tertiary">
+              <Loader2 size={13} className="animate-spin" />
               Subscribing...
             </div>
           ) : result ? (

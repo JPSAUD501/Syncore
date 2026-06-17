@@ -55,7 +55,9 @@ vi.mock("@/lib/store", () => ({
   useRuntimeList: () => storeState.runtimes,
   sendRequest: vi.fn(),
   getRuntimeLabel: (runtime: { sessionLabel?: string; appName?: string; platform: string }) =>
-    runtime.sessionLabel ?? runtime.appName ?? runtime.platform
+    runtime.sessionLabel ?? runtime.appName ?? runtime.platform,
+  getEventDedupKey: (event: { type: string; runtimeId: string; timestamp: number }) =>
+    `${event.type}:${event.runtimeId}:${event.timestamp}`
 }));
 
 vi.mock("@/hooks", () => ({
@@ -69,6 +71,12 @@ vi.mock("@/hooks", () => ({
       byDocument: new Map(),
       invalidationsByCause: new Map()
     }
+  }),
+  useTrackChanges: () => ({
+    isNew: () => false,
+    isChanged: () => false,
+    getChangePulse: () => 0,
+    getNewPulse: () => 0
   }),
   usePreferredTarget: () => ({ targetRuntimeId: "runtime-1" })
 }));

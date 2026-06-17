@@ -1,4 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "motion/react";
 import {
   getPublicRuntimeId,
   getPublicTargetDisplayId,
@@ -17,9 +18,7 @@ import {
   Check,
   ChevronDown,
   Menu,
-  Settings,
-  Wifi,
-  WifiOff
+  Settings
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +41,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -161,7 +161,25 @@ export function Header({
           </Button>
         )}
         <h1 className="truncate text-sm font-semibold text-text-primary">
-          {title}
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={title}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{
+                opacity: 1,
+                y: 0,
+                transition: { duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }
+              }}
+              exit={{
+                opacity: 0,
+                y: -4,
+                transition: { duration: 0.12, ease: [0.22, 0.61, 0.36, 1] }
+              }}
+              className="inline-block"
+            >
+              {title}
+            </motion.span>
+          </AnimatePresence>
         </h1>
       </div>
 
@@ -215,8 +233,8 @@ export function Header({
           <DialogTrigger asChild>
             <Button
               variant="outline"
-              size="icon-xs"
-              className="flex text-text-tertiary hover:text-text-primary"
+              size="icon-sm"
+              className="text-text-tertiary hover:text-text-primary"
               title="Settings"
             >
               <Settings size={14} />
@@ -256,7 +274,7 @@ export function Header({
                       !includeDashboardActivity ? "checked" : "unchecked"
                     }
                     className={cn(
-                      "pointer-events-none block size-4 rounded-full bg-white ring-0 transition-transform",
+                      "pointer-events-none block size-4 rounded-full bg-bg-deep ring-0 transition-transform",
                       !includeDashboardActivity
                         ? "translate-x-4"
                         : "translate-x-0"
@@ -268,15 +286,7 @@ export function Header({
           </DialogContent>
         </Dialog>
 
-        <Badge
-          variant={connected ? "success" : "destructive"}
-          className={cn("gap-1.5", connected && "animate-fade-in")}
-        >
-          {connected ? <Wifi size={11} /> : <WifiOff size={11} />}
-          <span className="hidden sm:inline">
-            {connected ? "Live" : "Offline"}
-          </span>
-        </Badge>
+        <ThemeToggle />
       </div>
 
       <ContextSwitcherDialog

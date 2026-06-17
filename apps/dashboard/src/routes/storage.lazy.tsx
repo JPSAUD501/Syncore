@@ -5,7 +5,6 @@ import {
   FileText,
   HardDrive,
   Image,
-  RefreshCw,
   Search,
   Trash2
 } from "lucide-react";
@@ -20,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmActionDialog } from "@/components/data/ConfirmActionDialog";
 import { EmptyState, TimestampCell } from "@/components/shared";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { request, useActiveRuntime } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -165,11 +165,7 @@ export function StoragePage() {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-bg-surface">
           {subscription.loading ? (
-            <EmptyState
-              icon={RefreshCw}
-              title="Loading storage"
-              description="Reading storage metadata from the selected runtime."
-            />
+            <StorageTableSkeleton />
           ) : subscription.error ? (
             <EmptyState
               icon={HardDrive}
@@ -471,4 +467,34 @@ async function createStorageAccess(
       ? { maxPreviewBytes: result.maxPreviewBytes }
       : {})
   };
+}
+
+/** Distinct loading state — a shimmering table skeleton instead of reusing EmptyState. */
+function StorageTableSkeleton() {
+  return (
+    <div className="h-full overflow-auto">
+      <table className="w-full min-w-[760px] border-separate border-spacing-0">
+        <thead className="sticky top-0 z-10 bg-bg-surface">
+          <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-tertiary">
+            <th className="border-b border-border px-3 py-2 font-medium">Object</th>
+            <th className="border-b border-border px-3 py-2 font-medium">Type</th>
+            <th className="border-b border-border px-3 py-2 text-right font-medium">Size</th>
+            <th className="border-b border-border px-3 py-2 font-medium">Modified</th>
+            <th className="border-b border-border px-3 py-2" />
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <tr key={i} className="border-b border-border/60">
+              <td className="px-3 py-3"><Skeleton className="h-4 w-[60%]" /></td>
+              <td className="px-3 py-3"><Skeleton className="h-4 w-16" /></td>
+              <td className="px-3 py-3"><Skeleton className="ml-auto h-4 w-12" /></td>
+              <td className="px-3 py-3"><Skeleton className="h-4 w-24" /></td>
+              <td className="px-3 py-3"><Skeleton className="h-4 w-8" /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }

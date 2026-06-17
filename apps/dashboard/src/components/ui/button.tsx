@@ -5,16 +5,18 @@ import { Slot } from "radix-ui";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-1 focus-visible:ring-offset-bg-deep disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap outline-none transition-all duration-[var(--duration-base)] ease-[var(--ease-out-soft)] focus-visible:ring-2 focus-visible:ring-accent/30 focus-visible:ring-offset-1 focus-visible:ring-offset-bg-deep disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-accent text-bg-deep hover:bg-accent/90 font-semibold",
-        destructive: "bg-error/80 text-text-primary hover:bg-error/90",
+        default:
+          "bg-accent text-bg-deep hover:bg-accent/90 font-semibold active:scale-[0.98]",
+        destructive:
+          "bg-error/80 text-text-primary hover:bg-error/90 active:scale-[0.98]",
         outline:
           "border border-border bg-transparent hover:bg-bg-surface hover:border-border-hover text-text-secondary hover:text-text-primary",
         secondary:
-          "bg-bg-surface text-text-secondary border border-border hover:bg-bg-elevated hover:text-text-primary",
+          "bg-bg-surface text-text-secondary border border-border hover:bg-bg-elevated hover:text-text-primary active:scale-[0.98]",
         ghost:
           "hover:bg-bg-surface hover:text-text-primary text-text-secondary",
         link: "text-accent underline-offset-4 hover:underline"

@@ -160,10 +160,10 @@ export function DocumentPanel({
                   </span>
                   <div className="mt-1 flex items-center gap-1.5 truncate text-[10px] text-text-secondary">
                     {colorInfo && (
-                      <span
-                        className="inline-block size-3 shrink-0 rounded-sm border border-white/20"
-                        style={{ backgroundColor: colorInfo.hex }}
-                      />
+                        <span
+                          className="inline-block size-3 shrink-0 rounded-sm border border-border"
+                          style={{ backgroundColor: colorInfo.hex }}
+                        />
                     )}
                     {reference && (
                       <Badge

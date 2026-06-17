@@ -146,7 +146,9 @@ vi.mock("@/lib/store", () => ({
     sessionLabel?: string;
     appName?: string;
     platform: string;
-  }) => runtime.sessionLabel ?? runtime.appName ?? runtime.platform
+  }) => runtime.sessionLabel ?? runtime.appName ?? runtime.platform,
+  getEventDedupKey: (event: { type: string; runtimeId: string; timestamp: number }) =>
+    `${event.type}:${event.runtimeId}:${event.timestamp}`
 }));
 
 vi.mock("@/hooks", () => ({
@@ -196,6 +198,12 @@ vi.mock("@/hooks", () => ({
     return { dataByRuntime: {}, loading: false, error: null, hasData: false };
   },
   useDidJustChange: () => ({ didChange: false, pulse: 0 }),
+  useTrackChanges: () => ({
+    isNew: () => false,
+    isChanged: () => false,
+    getChangePulse: () => 0,
+    getNewPulse: () => 0
+  }),
   useRefreshTimer: () => undefined
 }));
 

@@ -9,6 +9,22 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d4a853'/%3E%3Ctext x='16' y='22' font-size='18' font-weight='bold' text-anchor='middle' fill='%23141210'%3ES%3C/text%3E%3C/svg%3E"
     />
+    <script>
+      // Apply theme before first paint to avoid a flash. Default is dark.
+      (function () {
+        try {
+          var t = localStorage.getItem("syncore-dashboard-theme") || "dark";
+          var resolved =
+            t === "system"
+              ? window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark"
+              : t;
+          if (resolved === "light") document.documentElement.classList.add("light");
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
