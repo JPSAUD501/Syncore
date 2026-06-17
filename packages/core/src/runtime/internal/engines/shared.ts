@@ -233,8 +233,7 @@ export function fieldExpression(tableAlias: string, field: string): string {
   return `json_extract(${prefix}_json, '$.${field}')`;
 }
 
-export { stableStringify, sortValue } from "@syncore/internal";
-export { quoteIdentifier } from "@syncore/internal";
+export { quoteIdentifier, sortValue, stableStringify };
 
 export function omitSystemFields<TDocument extends object>(
   document: TDocument
