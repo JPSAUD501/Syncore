@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fadeUp, staggerContainer } from "@/lib/motion";
 import { JsonViewer } from "./JsonViewer";
+import { InfoTooltip } from "./InfoTooltip";
 import {
   EVENT_BADGE_VARIANTS,
   EVENT_LABELS,
@@ -174,7 +175,16 @@ export function TraceDetailPanel({
                   className="rounded-md border border-border bg-bg-base p-3"
                 >
                   <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px]">
-                    <Badge variant="outline">{change.operation}</Badge>
+                    <InfoTooltip
+                      termSlug={
+                        change.operation === "delete"
+                          ? "op.mut-delete"
+                          : `op.${change.operation}`
+                      }
+                      side="top"
+                    >
+                      <Badge variant="outline">{change.operation}</Badge>
+                    </InfoTooltip>
                     <button
                       type="button"
                       className="font-mono text-accent hover:underline"

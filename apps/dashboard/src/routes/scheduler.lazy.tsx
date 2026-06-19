@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
+import { EmptyState, JsonViewer, TimestampCell, InfoTooltip } from "@/components/shared";
 import { usePreferredTarget } from "@/hooks";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { sendRequest } from "@/lib/store";
@@ -430,9 +430,14 @@ function JobDetailPanel({
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <JobStatusBadge status={job.status} />
-            <Badge variant="outline" className="text-[9px]">
-              {isRecurring ? "Recurring" : "One-shot"}
-            </Badge>
+            <InfoTooltip
+              termSlug="scheduler.schedule"
+              side="bottom"
+            >
+              <Badge variant="outline" className="text-[9px]">
+                {isRecurring ? "Recurring" : "One-shot"}
+              </Badge>
+            </InfoTooltip>
             {job.recurringName && (
               <span className="truncate text-[10px] text-text-tertiary">
                 {job.recurringName}
@@ -474,7 +479,7 @@ function JobDetailPanel({
                 <TimestampCell timestamp={job.runAt} format="both" />
               </DetailField>
               {job.lastRunAt && (
-                <DetailField label="Last Run">
+                <DetailField label="Last Run" infoSlug="scheduler.last-run">
                   <TimestampCell timestamp={job.lastRunAt} format="both" />
                 </DetailField>
               )}
@@ -908,16 +913,27 @@ function NumberField({
 
 function DetailField({
   label,
-  children
+  children,
+  infoSlug
 }: {
   label: string;
   children: ReactNode;
+  /** Optional glossary term slug; when set, the label gets an info tooltip. */
+  infoSlug?: string;
 }) {
   return (
     <div>
-      <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-        {label}
-      </label>
+      {infoSlug ? (
+        <InfoTooltip termSlug={infoSlug} side="top">
+          <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
+            {label}
+          </label>
+        </InfoTooltip>
+      ) : (
+        <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
+          {label}
+        </label>
+      )}
       {children}
     </div>
   );
@@ -945,7 +961,11 @@ function JobStatusBadge({ status }: { status: SchedulerJob["status"] }) {
         : status === "cancelled"
           ? "secondary"
           : "warning";
-  return <Badge variant={variant}>{status}</Badge>;
+  return (
+    <InfoTooltip termSlug="scheduler.status" side="left">
+      <Badge variant={variant}>{status}</Badge>
+    </InfoTooltip>
+  );
 }
 
 function isRecurringJob(

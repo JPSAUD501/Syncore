@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { InfoTooltip } from "@/components/shared";
 import type { TableSchema } from "@syncore/devtools-protocol";
 import { Layers, Hash, ToggleLeft, Type, Calendar, Braces, Link2 } from "lucide-react";
 
@@ -59,13 +60,17 @@ export function SchemaViewer({ schema, className }: SchemaViewerProps) {
                 <span className="text-[12px] text-text-primary font-mono flex-1">
                   {field.name}
                 </span>
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  {field.type}
-                </Badge>
-                {field.referenceTable && (
-                  <Badge variant="secondary" className="text-[10px] font-mono">
-                    {"->"} {field.referenceTable}
+                <InfoTooltip termSlug="schema.field-kind" side="left">
+                  <Badge variant="outline" className="text-[10px] font-mono">
+                    {field.type}
                   </Badge>
+                </InfoTooltip>
+                {field.referenceTable && (
+                  <InfoTooltip termSlug="schema.reference" side="left">
+                    <Badge variant="secondary" className="text-[10px] font-mono">
+                      {"->"} {field.referenceTable}
+                    </Badge>
+                  </InfoTooltip>
                 )}
                 {field.optional && (
                   <Badge variant="secondary" className="text-[10px]">

@@ -29,7 +29,7 @@ import {
   SchemaViewer,
   IndexesViewer
 } from "@/components/data";
-import { EmptyState } from "@/components/shared";
+import { EmptyState, InfoTooltip } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { usePreferredTarget } from "@/hooks";
@@ -989,7 +989,9 @@ function DataPage() {
                     </TabsTrigger>
                     <TabsTrigger value="indexes" className="gap-1">
                       <Key size={12} />
-                      Indexes
+                      <InfoTooltip termSlug="schema.indexes" side="bottom">
+                        <span>Indexes</span>
+                      </InfoTooltip>
                     </TabsTrigger>
                   </TabsList>
                 </div>

@@ -1,8 +1,17 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Search, Database, Zap, Clock } from "lucide-react";
+import { InfoTooltip } from "@/components/shared";
 
 export type FunctionType = "query" | "mutation" | "action" | "cron";
+
+/** Maps each function type to its glossary term slug. */
+const FUNCTION_TERM_SLUG: Record<FunctionType, string> = {
+  query: "fn.query",
+  mutation: "fn.mutation",
+  action: "fn.action",
+  cron: "fn.cron"
+};
 
 const FUNCTION_CONFIG: Record<
   FunctionType,
@@ -59,18 +68,20 @@ export function FunctionBadge({
   const Icon = config.icon;
 
   return (
-    <Badge
-      className={cn(
-        config.bgClass,
-        config.colorClass,
-        config.borderClass,
-        "border text-[10px] font-semibold uppercase tracking-wide",
-        className
-      )}
-    >
-      {showIcon && <Icon size={10} />}
-      {config.label}
-    </Badge>
+    <InfoTooltip termSlug={FUNCTION_TERM_SLUG[type]} side="top">
+      <Badge
+        className={cn(
+          config.bgClass,
+          config.colorClass,
+          config.borderClass,
+          "border text-[10px] font-semibold uppercase tracking-wide",
+          className
+        )}
+      >
+        {showIcon && <Icon size={10} />}
+        {config.label}
+      </Badge>
+    </InfoTooltip>
   );
 }
 

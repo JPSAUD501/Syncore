@@ -18,7 +18,8 @@ import {
   Check,
   ChevronDown,
   Menu,
-  Settings
+  Settings,
+  BookOpen
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,8 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { InfoTooltip } from "@/components/shared";
+import { useDocsModal } from "@/lib/docsModal";
 import { cn } from "@/lib/utils";
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -286,6 +289,16 @@ export function Header({
           </DialogContent>
         </Dialog>
 
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="text-text-tertiary hover:text-text-primary"
+          title="Documentation"
+          onClick={() => useDocsModal.getState().openDocs(null)}
+        >
+          <BookOpen size={14} />
+        </Button>
+
         <ThemeToggle />
       </div>
 
@@ -399,23 +412,27 @@ function ContextSwitcherDialog({
                             </span>
                           )}
                         <span className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]">
-                          <span title={`Storage protocol: ${parts.protocol}`}>
-                            {parts.protocol}
-                          </span>
+                          <InfoTooltip termSlug="storage.protocol" side="top">
+                            <span>{parts.protocol}</span>
+                          </InfoTooltip>
                         </span>
-                        <span
-                          className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] font-mono"
-                          title="Stable public Data Source id used to distinguish similar storages."
+                        <InfoTooltip
+                          termSlug="storage.public-id"
+                          side="top"
                         >
-                          {parts.publicId}
-                        </span>
-                        {target.databaseLabel && (
-                          <span
-                            className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]"
-                            title="Logical database label announced by the runtime."
-                          >
-                            db={target.databaseLabel}
+                          <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] font-mono">
+                            {parts.publicId}
                           </span>
+                        </InfoTooltip>
+                        {target.databaseLabel && (
+                          <InfoTooltip
+                            termSlug="storage.database-label"
+                            side="top"
+                          >
+                            <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px]">
+                              db={target.databaseLabel}
+                            </span>
+                          </InfoTooltip>
                         )}
                       </div>
                       {target.metadataWarning && (
@@ -456,19 +473,20 @@ function ContextSwitcherDialog({
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="text-sm font-medium text-text-primary">
-                            All runtimes
-                          </span>
-                          <span
-                            className="rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] tabular-nums text-text-tertiary"
-                            title="Number of runtimes connected to this Data Source."
-                          >
-                            {
-                              selectedTarget.runtimes.filter(
-                                (runtime) => runtime.connected
-                              ).length
-                            } connected
-                          </span>
+                          <InfoTooltip termSlug="runtime.all-runtimes" side="right">
+                            <span className="text-sm font-medium text-text-primary">
+                              All runtimes
+                            </span>
+                          </InfoTooltip>
+                          <InfoTooltip termSlug="runtime.connection" side="right">
+                            <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1.5 py-0.5 text-[10px] tabular-nums text-text-tertiary">
+                              {
+                                selectedTarget.runtimes.filter(
+                                  (runtime) => runtime.connected
+                                ).length
+                              } connected
+                            </span>
+                          </InfoTooltip>
                         </div>
                         <div className="mt-1 text-[11px] text-text-tertiary">
                           Shows activity from every runtime. Commands run via{" "}
@@ -527,50 +545,44 @@ function ContextSwitcherDialog({
                             {label}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-text-tertiary">
-                            <span
-                              className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px] font-mono"
-                              title="Stable public runtime id."
-                            >
-                              {runtimePublicId}
-                            </span>
-                            {browser && !projectRuntime && (
-                              <span
-                                className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]"
-                                title="Browser or host runtime family."
-                              >
-                                {browser}
+                            <InfoTooltip termSlug="runtime.public-id" side="top">
+                              <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px] font-mono">
+                                {runtimePublicId}
                               </span>
+                            </InfoTooltip>
+                            {browser && !projectRuntime && (
+                              <InfoTooltip termSlug="runtime.browser" side="top">
+                                <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]">
+                                  {browser}
+                                </span>
+                              </InfoTooltip>
                             )}
                             {projectRuntime ? (
-                              <span
-                                className="rounded border border-accent/30 bg-accent/8 px-1 py-0.5 text-[10px] text-accent"
-                                title="Project Target runtime: local administrative runtime with project-level capabilities."
-                              >
-                                Project
-                              </span>
+                              <InfoTooltip termSlug="runtime.project-target" side="top">
+                                <span className="cursor-default rounded border border-accent/30 bg-accent/8 px-1 py-0.5 text-[10px] text-accent">
+                                  Project
+                                </span>
+                              </InfoTooltip>
                             ) : runtime.platform ? (
-                              <span
-                                className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]"
-                                title="Runtime platform."
-                              >
-                                {runtime.platform}
-                              </span>
+                              <InfoTooltip termSlug="runtime.platform" side="top">
+                                <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]">
+                                  {runtime.platform}
+                                </span>
+                              </InfoTooltip>
                             ) : null}
                             {runtime.capabilities?.sql?.read && (
-                              <span
-                                className="rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]"
-                                title="This runtime supports SQL Console commands."
-                              >
-                                SQL
-                              </span>
+                              <InfoTooltip termSlug="target.sql" side="top">
+                                <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]">
+                                  SQL
+                                </span>
+                              </InfoTooltip>
                             )}
                         {executor && (
-                          <span
-                                className="rounded border border-success/30 bg-success/8 px-1 py-0.5 text-[10px] text-success"
-                                title="Commands run through this runtime while All runtimes is selected."
-                              >
-                            Executor
-                          </span>
+                          <InfoTooltip termSlug="runtime.executor" side="top">
+                              <span className="cursor-default rounded border border-success/30 bg-success/8 px-1 py-0.5 text-[10px] text-success">
+                              Executor
+                              </span>
+                          </InfoTooltip>
                         )}
                       </div>
                     </div>

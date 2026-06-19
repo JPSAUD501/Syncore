@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmActionDialog } from "@/components/data/ConfirmActionDialog";
-import { EmptyState, TimestampCell } from "@/components/shared";
+import { EmptyState, TimestampCell, InfoTooltip } from "@/components/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
 import { request, useActiveRuntime } from "@/lib/store";
@@ -139,7 +139,11 @@ export function StoragePage() {
     <div className="flex h-full min-h-[620px] flex-col gap-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-[14px] font-bold text-text-primary">Storage</h2>
+          <h2 className="flex items-center gap-1.5 text-[14px] font-bold text-text-primary">
+            <InfoTooltip termSlug="storage.protocol" side="right">
+              <span>Storage</span>
+            </InfoTooltip>
+          </h2>
           <p className="mt-1 text-[12px] text-text-tertiary">
             {subscription.data
               ? `${subscription.data.totalCount} object${subscription.data.totalCount === 1 ? "" : "s"}`

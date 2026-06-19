@@ -42,7 +42,7 @@ import {
   getEventRuntimeTag,
   getEventSummary
 } from "@/lib/eventPresentation";
-import { TraceDetailPanel } from "@/components/shared";
+import { TraceDetailPanel, InfoTooltip } from "@/components/shared";
 import type { ExecutionTrace } from "@syncore/devtools-protocol";
 import type { TraceIndex } from "@/lib/traces";
 import {
@@ -114,12 +114,14 @@ function LogEntry({
       )}
     >
       <Icon size={12} className={cn(color, "shrink-0")} />
-      <Badge
-        variant={EVENT_BADGE_VARIANTS[event.type]}
-        className="w-18 justify-center text-[10px] shrink-0"
-      >
-        {EVENT_LABELS[event.type]}
-      </Badge>
+      <InfoTooltip termSlug="logs.level" side="top">
+        <Badge
+          variant={EVENT_BADGE_VARIANTS[event.type]}
+          className="w-18 justify-center text-[10px] shrink-0"
+        >
+          {EVENT_LABELS[event.type]}
+        </Badge>
+      </InfoTooltip>
       <Badge
         variant="outline"
         className="hidden w-30 justify-center text-[10px] shrink-0 xl:inline-flex"

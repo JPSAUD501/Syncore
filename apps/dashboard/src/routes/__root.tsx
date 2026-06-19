@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { DashboardTokenDialog } from "@/components/layout/DashboardTokenDialog";
 import { InactiveRuntimeNotice } from "@/components/layout/InactiveRuntimeNotice";
+import { DocsDialog } from "@/components/docs/DocsDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { initDevtoolsConnection, destroyDevtoolsConnection } from "@/lib/store";
 import { readDashboardAuthSearch } from "@/lib/routeSearch";
@@ -71,6 +72,7 @@ function RootLayout() {
         </div>
         <DashboardTokenDialog />
         <InactiveRuntimeNotice />
+        <DocsDialog />
       </div>
     </TooltipProvider>
   );

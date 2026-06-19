@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { EmptyState, JsonViewer, TimestampCell } from "@/components/shared";
+import { EmptyState, JsonViewer, TimestampCell, InfoTooltip } from "@/components/shared";
 import { usePreferredTarget } from "@/hooks";
 import { useDevtoolsMultiRuntimeSubscription } from "@/hooks/useReactiveData";
 import { stableStringify } from "@/lib/stable";
@@ -263,7 +263,14 @@ function ActiveQueriesPage() {
                     </span>
                   )}
                 </DetailField>
-                <DetailField label="Owner">
+                <DetailField
+                  label="Owner"
+                  infoSlug={
+                    (selectedQuery.owner ?? "root") === "root"
+                      ? "schema.owner-root"
+                      : "schema.owner-component"
+                  }
+                >
                   <Badge variant="secondary">
                     {selectedQuery.owner ?? "root"}
                   </Badge>
@@ -385,16 +392,27 @@ function MetricCard({
 
 function DetailField({
   label,
-  children
+  children,
+  infoSlug
 }: {
   label: string;
   children: ReactNode;
+  /** Optional glossary term slug; when set, the label gets an info tooltip. */
+  infoSlug?: string;
 }) {
   return (
     <div>
-      <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
-        {label}
-      </label>
+      {infoSlug ? (
+        <InfoTooltip termSlug={infoSlug} side="top">
+          <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
+            {label}
+          </label>
+        </InfoTooltip>
+      ) : (
+        <label className="mb-1 block text-[11px] font-medium text-text-tertiary">
+          {label}
+        </label>
+      )}
       {children}
     </div>
   );

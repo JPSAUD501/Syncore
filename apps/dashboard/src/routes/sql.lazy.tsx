@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { EmptyState } from "@/components/shared";
+import { EmptyState, InfoTooltip } from "@/components/shared";
 import { useConnection } from "@/hooks";
 import { usePreferredTarget } from "@/hooks/usePreferredTarget";
 import { useDevtoolsSubscription } from "@/hooks/useReactiveData";
@@ -1025,12 +1025,18 @@ function ResultsTable({ result }: { result: QueryResult }) {
           {result.mode === "live"
             ? "Live query active."
             : "Query executed successfully."}{" "}
-          {typeof result.rowsAffected === "number" && result.rowsAffected > 0
-            ? `${result.rowsAffected} rows affected.`
-            : ""}
+          {typeof result.rowsAffected === "number" && result.rowsAffected > 0 ? (
+            <InfoTooltip termSlug="sql.rows-affected" side="top">
+              <span>{result.rowsAffected} rows affected.</span>
+            </InfoTooltip>
+          ) : (
+            ""
+          )}
         </p>
         <p className="text-[10px] text-text-tertiary mt-1">
-          {formatDuration(result.durationMs)}
+          <InfoTooltip termSlug="sql.execution-time" side="top">
+            <span>{formatDuration(result.durationMs)}</span>
+          </InfoTooltip>
         </p>
         {result.invalidationScopes && result.invalidationScopes.length > 0 && (
           <p className="text-[10px] text-text-tertiary mt-1">

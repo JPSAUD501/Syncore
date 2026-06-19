@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { JsonViewer } from "@/components/shared";
+import { JsonViewer, InfoTooltip } from "@/components/shared";
 import { X, Copy, Check, Trash2, Edit, CopyPlus } from "lucide-react";
 import { useState, useCallback } from "react";
 import { getReferenceDisplay, type ReferenceFieldOptions } from "@/lib/dataReferences";
@@ -166,20 +166,35 @@ export function DocumentPanel({
                         />
                     )}
                     {reference && (
-                      <Badge
-                        variant={referenceDisplay?.missing ? "destructive" : "outline"}
-                        className="h-4 px-1 py-0 text-[8px]"
+                      <InfoTooltip
+                        termSlug={
+                          referenceDisplay?.missing
+                            ? "schema.reference-missing"
+                            : "schema.reference"
+                        }
+                        side="top"
                       >
-                        {referenceDisplay?.missing ? "missing" : reference.tableName}
-                      </Badge>
+                        <Badge
+                          variant={referenceDisplay?.missing ? "destructive" : "outline"}
+                          className="h-4 px-1 py-0 text-[8px]"
+                        >
+                          {referenceDisplay?.missing ? "missing" : reference.tableName}
+                        </Badge>
+                      </InfoTooltip>
                     )}
                     {displayText}
                   </div>
                 </div>
                 <div className="ml-3 flex items-center gap-2">
-                  <span className="text-[10px] text-text-tertiary">
-                    {preview.kind === "empty" ? "—" : preview.kind}
-                  </span>
+                  {preview.kind === "empty" ? (
+                    <span className="text-[10px] text-text-tertiary">—</span>
+                  ) : (
+                    <InfoTooltip termSlug="schema.field-kind" side="left">
+                      <span className="text-[10px] text-text-tertiary">
+                        {preview.kind}
+                      </span>
+                    </InfoTooltip>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon-xs"

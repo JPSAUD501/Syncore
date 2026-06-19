@@ -37,7 +37,8 @@ import {
   inferFunctionType,
   JsonViewer,
   EmptyState,
-  TimestampCell
+  TimestampCell,
+  InfoTooltip
 } from "@/components/shared";
 import type { FunctionType } from "@/components/shared/FunctionBadge";
 import { useDevtools, usePreferredTarget } from "@/hooks";
@@ -528,13 +529,22 @@ function FunctionsPage() {
                   <Code2 size={11} />
                   {selectedFunction.namespace}
                 </span>
-                <Badge
-                  variant={
-                    selectedFunction.registered ? "secondary" : "outline"
+                <InfoTooltip
+                  termSlug={
+                    selectedFunction.registered
+                      ? "fn.registered"
+                      : "fn.observed-only"
                   }
+                  side="top"
                 >
-                  {selectedFunction.registered ? "registered" : "observed only"}
-                </Badge>
+                  <Badge
+                    variant={
+                      selectedFunction.registered ? "secondary" : "outline"
+                    }
+                  >
+                    {selectedFunction.registered ? "registered" : "observed only"}
+                  </Badge>
+                </InfoTooltip>
                 {!selectedFunction.metadataAvailable && (
                   <Badge variant="outline">file metadata unavailable</Badge>
                 )}
@@ -776,9 +786,11 @@ function FileGroup({
                   </Badge>
                 )}
                 {!fn.registered && (
-                  <Badge variant="outline" className="px-1 py-0 text-[8px]">
-                    observed
-                  </Badge>
+                  <InfoTooltip termSlug="fn.observed-only" side="top">
+                    <Badge variant="outline" className="px-1 py-0 text-[8px]">
+                      observed
+                    </Badge>
+                  </InfoTooltip>
                 )}
               </span>
             </button>
@@ -1130,7 +1142,9 @@ function FunctionActiveQueries({
             <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] text-text-tertiary">
               <span>Last run</span>
               <TimestampCell timestamp={query.lastRunAt} format="relative" />
-              <span>Dependencies</span>
+              <InfoTooltip termSlug="fn.dependencies" side="right">
+                <span>Dependencies</span>
+              </InfoTooltip>
               <span className="font-mono">{query.dependencyKeys.length}</span>
             </div>
             <JsonViewer data={query.args ?? {}} maxDepth={3} />
@@ -1191,6 +1205,7 @@ function FunctionMetricsPanel({
           label="Active"
           value={fn.type === "query" ? String(activeQueries.length) : "-"}
           icon={Radio}
+          infoSlug="fn.active-queries"
         />
       </div>
 
@@ -1199,6 +1214,7 @@ function FunctionMetricsPanel({
           label="Consumers"
           value={fn.type === "query" ? String(totalConsumers) : "-"}
           icon={Radio}
+          infoSlug="fn.consumers"
         />
         <MetricCard
           label="Success"
@@ -1239,12 +1255,15 @@ function MetricCard({
   label,
   value,
   icon: Icon,
-  variant = "default"
+  variant = "default",
+  infoSlug
 }: {
   label: string;
   value: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   variant?: "default" | "error";
+  /** Optional glossary term slug; when set, the label gets an info tooltip. */
+  infoSlug?: string;
 }) {
   return (
     <div className="rounded-md border border-border bg-bg-base p-3">
@@ -1253,9 +1272,17 @@ function MetricCard({
           size={12}
           className={variant === "error" ? "text-error" : "text-text-tertiary"}
         />
-        <span className="text-[10px] font-medium text-text-tertiary">
-          {label}
-        </span>
+        {infoSlug ? (
+          <InfoTooltip termSlug={infoSlug} side="top">
+            <span className="text-[10px] font-medium text-text-tertiary">
+              {label}
+            </span>
+          </InfoTooltip>
+        ) : (
+          <span className="text-[10px] font-medium text-text-tertiary">
+            {label}
+          </span>
+        )}
       </div>
       <p
         className={cn(
