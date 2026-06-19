@@ -28,6 +28,22 @@ const RAW_DOCS = import.meta.glob("./*.md", {
   import: "default"
 }) as Record<string, string>;
 
+/**
+ * Title-case a heading: capitalize the first letter of every word, leaving
+ * already-uppercase words (acronyms like "SQL", "ID") intact. Words after "&"
+ * are also capitalized.
+ */
+function titleCase(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((word) => {
+      // Keep acronyms / all-caps tokens as-is.
+      if (word.length > 1 && word === word.toUpperCase()) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
 function extractTitle(markdown: string): { title: string; body: string } {
   const lines = markdown.replace(/^\uFEFF/, "").split(/\r?\n/);
   let title = "";
@@ -37,7 +53,7 @@ function extractTitle(markdown: string): { title: string; body: string } {
     const line = lines[i] ?? "";
     const match = line.match(/^\s*#\s+(.+?)\s*$/);
     if (match) {
-      title = (match[1] ?? "").trim();
+      title = titleCase((match[1] ?? "").trim());
       firstHeadingIndex = i;
       break;
     }

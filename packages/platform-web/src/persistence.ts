@@ -54,8 +54,8 @@ export interface StoredWebFileMetadata {
  * browser capabilities and the requested `WebPersistenceMode`.
  */
 export interface SyncoreWebPersistence {
-  /** The storage protocol used: `"opfs"` (Origin Private File System) or `"idb"` (IndexedDB). */
-  readonly storageProtocol: "idb" | "opfs";
+  /** The storage protocol used: `"opfs"` (Origin Private File System) or `"indexeddb"` (IndexedDB). */
+  readonly storageProtocol: "indexeddb" | "opfs";
   /** Load the serialized SQLite database for `key`, or `null` if none has been saved yet. */
   loadDatabase(key: string): Promise<Uint8Array | null>;
   /** Persist the serialized SQLite database bytes for `key`. */

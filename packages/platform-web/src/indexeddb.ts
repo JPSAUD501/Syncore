@@ -23,15 +23,14 @@ type StoredFileRecord = {
 /**
  * IndexedDB-backed {@link SyncoreWebPersistence} implementation.
  *
- * Stores the SQLite database blob in IndexedDB. It still satisfies the lower
- * level persistence interface for compatibility, but Syncore's default browser
- * file storage is OPFS-only and will not use IndexedDB for blobs.
+ * Stores the SQLite database blob in IndexedDB. Syncore's default browser file
+ * storage is OPFS-only and will not use IndexedDB for blobs.
  *
  * Prefer `createWebPersistence()` over constructing this directly unless
  * you need to pass a specific IndexedDB database name.
  */
 export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
-  readonly storageProtocol = "idb" as const;
+  readonly storageProtocol = "indexeddb" as const;
   private readonly databaseName: string;
 
   constructor(options?: IndexedDbPersistenceOptions) {

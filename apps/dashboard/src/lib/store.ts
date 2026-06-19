@@ -301,8 +301,6 @@ export interface TargetState {
   metadataIncomplete: boolean;
   metadataWarning?: string;
   capabilities: SyncoreDevtoolsCapabilities;
-  sqlAvailable: boolean;
-  sqlUnavailableReason?: string;
 }
 
 function createRuntimeState(meta: RuntimeMeta): RuntimeState {
@@ -418,7 +416,7 @@ function getTargetGroupKey(runtime: RuntimeState): string {
 function normalizeStorageProtocol(
   protocol: string | undefined
 ): string | undefined {
-  return protocol === "idb" ? "indexeddb" : protocol;
+  return protocol;
 }
 
 function getTargetTechnicalLabel(runtime: RuntimeState): string {
@@ -495,29 +493,7 @@ function mergeDevtoolsCapabilities(
 ): SyncoreDevtoolsCapabilities {
   const selected = runtimes.filter((runtime) => runtime.connected);
   const candidates = selected.length > 0 ? selected : runtimes;
-  const sqlRead = candidates.some(
-    (runtime) => runtime.capabilities?.sql?.read === true
-  );
-  const sqlWrite = candidates.some(
-    (runtime) => runtime.capabilities?.sql?.write === true
-  );
-  const sqlLive = candidates.some(
-    (runtime) => runtime.capabilities?.sql?.live === true
-  );
   return {
-    sql: {
-      read: sqlRead,
-      write: sqlWrite,
-      live: sqlLive,
-      ...(!sqlRead
-        ? {
-            reason:
-              candidates.find((runtime) => runtime.capabilities?.sql?.reason)
-                ?.capabilities?.sql?.reason ??
-              "SQL Console is not available for this data source."
-          }
-        : {})
-    },
     data: {
       browse: candidates.some(
         (runtime) => runtime.capabilities?.data?.browse !== false
@@ -584,7 +560,6 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
         (runtime) => runtime.connected
       ).length;
       const capabilities = mergeDevtoolsCapabilities(sorted);
-      const sqlAvailable = capabilities.sql?.read === true;
       const id = createPublicTargetId(key, keys);
       const technicalLabel = getTargetTechnicalLabel(primary);
       const metadataWarning = getTargetMetadataWarning(primary);
@@ -613,11 +588,7 @@ function buildTargets(runtimes: Record<string, RuntimeState>): TargetState[] {
         technicalLabel,
         metadataIncomplete: metadataWarning !== undefined,
         ...(metadataWarning ? { metadataWarning } : {}),
-        capabilities,
-        sqlAvailable,
-        ...(capabilities.sql?.reason
-          ? { sqlUnavailableReason: capabilities.sql.reason }
-          : {})
+        capabilities
       };
     })
     .sort((left, right) => {
@@ -1783,12 +1754,6 @@ function runtimeSupportsCommand(
   runtime: RuntimeState,
   payload: SyncoreDevtoolsCommandPayload
 ): boolean {
-  if (payload.kind.startsWith("sql.")) {
-    if (payload.kind === "sql.write") {
-      return runtime.capabilities?.sql?.write === true;
-    }
-    return runtime.capabilities?.sql?.read === true;
-  }
   if (payload.kind.startsWith("data.")) {
     if (payload.kind === "data.export") {
       return runtime.capabilities?.data?.importExport !== false;
@@ -2033,14 +1998,9 @@ export function destroyDevtoolsConnection() {
 function getHelloCompatibilityError(
   msg: Extract<SyncoreDevtoolsMessage, { type: "hello" }>
 ): string | null {
-  const protocolVersion =
-    msg.protocolVersion ?? SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION;
-  const minSupportedProtocolVersion =
-    msg.minSupportedProtocolVersion ??
-    SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION;
-  const maxSupportedProtocolVersion =
-    msg.maxSupportedProtocolVersion ??
-    SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION;
+  const protocolVersion = msg.protocolVersion;
+  const minSupportedProtocolVersion = msg.minSupportedProtocolVersion;
+  const maxSupportedProtocolVersion = msg.maxSupportedProtocolVersion;
 
   if (
     isCompatibleVersionHandshake({

@@ -76,9 +76,3 @@ mutations, etc.) still need a single runtime to run through — that's the
 - **Executor** — the runtime commands will actually run through while
   "All runtimes" is selected. The dashboard picks a sensible default (usually
   the active runtime), but you can override it with **"Use as executor"**.
-
-## SQL capability
-
-A runtime may show a **SQL** badge when it supports read SQL Console commands.
-The SQL Console route only appears in the sidebar when the selected target
-announces `sqlAvailable`.

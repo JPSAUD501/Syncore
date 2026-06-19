@@ -1042,12 +1042,6 @@ function createBrowserDevtoolsCapabilities(
   const storageCapability = runtimeCapabilities?.storage;
   const storageAvailable = storageCapability?.available !== false;
   return {
-    sql: {
-      read: false,
-      write: false,
-      live: false,
-      reason: "SQL Console is not available for browser runtimes."
-    },
     data: {
       browse: true,
       mutate: true,

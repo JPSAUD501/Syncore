@@ -162,9 +162,6 @@ export interface CreateExpoRuntimeOptions<
 export interface ExpoSyncoreBootstrap<
   TSchema extends ExpoSyncoreSchema = ExpoSyncoreSchema
 > {
-  /** @deprecated Access the runtime via `getClient()` instead. */
-  getRuntime(): never;
-
   /**
    * Start the runtime on first call, then return the same client on subsequent
    * calls. Safe to call from multiple places concurrently.
@@ -330,11 +327,6 @@ export function createExpoSyncoreBootstrap<TSchema extends ExpoSyncoreSchema>(
   };
 
   return {
-    getRuntime() {
-      throw new Error(
-        "createExpoSyncoreBootstrap().getRuntime() is not available synchronously. Use getClient() instead."
-      );
-    },
     async getClient() {
       if (!started) {
         started = ensureRuntime().then((activeRuntime) =>

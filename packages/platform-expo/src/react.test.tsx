@@ -19,9 +19,6 @@ describe("SyncoreExpoProvider", () => {
       kind: "ready"
     });
     const bootstrap = {
-      getRuntime() {
-        throw new Error("not used in test");
-      },
       getClient: () => clientPromise,
       stop: vi.fn(async () => undefined),
       reset: vi.fn(async () => undefined)

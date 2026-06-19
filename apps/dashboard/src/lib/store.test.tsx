@@ -276,15 +276,16 @@ describe("devtools store runtime selection", () => {
   });
 
   it("orders events by newest execution order even when a rerun has a causal parent", () => {
-    useDevtoolsStore.getState()._handleMessage({
-      type: "hello",
-      runtimeId: "runtime-old",
-      platform: "browser-worker",
-      targetKind: "client",
-      appName: "localhost",
-      origin: "http://localhost:3000",
-      storageIdentity: "idb://workspace"
-    });
+    useDevtoolsStore.getState()._handleMessage(
+      helloMessage({
+        runtimeId: "runtime-old",
+        platform: "browser-worker",
+        targetKind: "client",
+        appName: "localhost",
+        origin: "http://localhost:3000",
+        storageIdentity: "indexeddb://workspace"
+      })
+    );
     useDevtoolsStore.getState()._handleMessage({
       type: "event.batch",
       runtimeId: "runtime-old",
@@ -329,7 +330,7 @@ describe("devtools store runtime selection", () => {
         targetKind: "client",
         appName: "localhost",
         origin: "http://localhost:3000",
-        storageIdentity: "idb://workspace"
+        storageIdentity: "indexeddb://workspace"
       })
     );
     useDevtoolsStore.getState()._handleMessage(
@@ -339,7 +340,7 @@ describe("devtools store runtime selection", () => {
         targetKind: "client",
         appName: "localhost",
         origin: "http://localhost:3000",
-        storageIdentity: "idb://workspace"
+        storageIdentity: "indexeddb://workspace"
       })
     );
 
@@ -423,6 +424,11 @@ describe("devtools store runtime selection", () => {
   it("selects the only runtime directly when a client data source has one runtime", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-a-12345678",
       platform: "browser-worker",
       targetKind: "client",
@@ -608,15 +614,15 @@ describe("devtools store runtime selection", () => {
     );
   });
 
-  it("normalizes idb storage metadata as IndexedDB", () => {
+  it("uses indexeddb storage metadata directly", () => {
     useDevtoolsStore.getState()._handleMessage(
       helloMessage({
-        runtimeId: "runtime-idb",
+        runtimeId: "runtime-indexeddb",
         platform: "browser-worker",
         targetKind: "client",
         origin: "http://localhost:3000",
-        storageProtocol: "idb",
-        storageIdentity: "idb://workspace",
+        storageProtocol: "indexeddb",
+        storageIdentity: "indexeddb://workspace",
         databaseLabel: "syncore",
         dataSourceAlias: "Vivid Dragon"
       })
@@ -627,67 +633,6 @@ describe("devtools store runtime selection", () => {
     expect(result.current?.label).toBe("Vivid Dragon");
     expect(result.current?.storageProtocol).toBe("indexeddb");
     expect(result.current?.technicalLabel).toContain("localhost:3000");
-  });
-
-  it("derives SQL support from announced capabilities", () => {
-    useDevtoolsStore.getState()._handleMessage(
-      helloMessage({
-        runtimeId: "runtime-web",
-        platform: "browser-worker",
-        targetKind: "client",
-        origin: "http://localhost:3000",
-        storageProtocol: "opfs",
-        storageIdentity: "opfs://workspace",
-        capabilities: {
-          sql: {
-            read: false,
-            write: false,
-            live: false,
-            reason: "SQL Console is not available for browser runtimes."
-          }
-        }
-      })
-    );
-
-    const { result } = renderHook(() => ({
-      selectedTarget: useSelectedTarget(),
-      targets: useConnectedTargets()
-    }));
-    expect(result.current.selectedTarget?.sqlAvailable).toBe(false);
-    expect(result.current.selectedTarget?.sqlUnavailableReason).toBe(
-      "SQL Console is not available for browser runtimes."
-    );
-
-    useDevtoolsStore.getState()._handleMessage(
-      helloMessage({
-        runtimeId: "runtime-node",
-        platform: "browser-worker",
-        targetKind: "client",
-        databaseLabel: "app.db",
-        storageProtocol: "file",
-        storageIdentity: "file://app.db",
-        capabilities: {
-          sql: {
-            read: true,
-            write: true,
-            live: true
-          }
-        }
-      })
-    );
-    const { result: targetsAfterFileRuntime } = renderHook(() =>
-      useConnectedTargets()
-    );
-    const fileTarget = targetsAfterFileRuntime.current.find(
-      (target) => target.label === "app.db"
-    );
-    expect(fileTarget).toBeDefined();
-    useDevtoolsStore.getState().selectTarget(fileTarget?.id ?? null);
-
-    const { result: selectedFileTarget } = renderHook(() =>
-      useSelectedTarget()
-    );
-    expect(selectedFileTarget.current?.sqlAvailable).toBe(true);
   });
 
   it("marks runtimes with incompatible devtools protocol as disconnected", () => {
@@ -714,6 +659,11 @@ describe("devtools store runtime selection", () => {
   it("defaults to all sessions while keeping a deterministic executor when a second session joins the same client target", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-a-12345678",
       platform: "browser-worker",
       targetKind: "client",
@@ -724,6 +674,11 @@ describe("devtools store runtime selection", () => {
     });
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-b-87654321",
       platform: "browser-worker",
       targetKind: "client",
@@ -752,6 +707,11 @@ describe("devtools store runtime selection", () => {
   it("falls back to the only remaining session when the selected runtime disconnects", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-a-12345678",
       platform: "browser-worker",
       targetKind: "client",
@@ -762,6 +722,11 @@ describe("devtools store runtime selection", () => {
     });
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-b-87654321",
       platform: "browser-worker",
       targetKind: "client",
@@ -795,6 +760,11 @@ describe("devtools store runtime selection", () => {
   it("keeps the selected session filter when other sessions emit events", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-a-12345678",
       platform: "browser-worker",
       targetKind: "client",
@@ -805,6 +775,11 @@ describe("devtools store runtime selection", () => {
     });
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-b-87654321",
       platform: "browser-worker",
       targetKind: "client",
@@ -840,6 +815,11 @@ describe("devtools store runtime selection", () => {
   it("keeps an explicitly selected session when a third session joins the same target", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-a-12345678",
       platform: "browser-worker",
       targetKind: "client",
@@ -850,6 +830,11 @@ describe("devtools store runtime selection", () => {
     });
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-b-87654321",
       platform: "browser-worker",
       targetKind: "client",
@@ -861,6 +846,11 @@ describe("devtools store runtime selection", () => {
     useDevtoolsStore.getState().selectRuntime("runtime-b-87654321");
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-c-11223344",
       platform: "browser-worker",
       targetKind: "client",
@@ -888,6 +878,11 @@ describe("devtools store runtime selection", () => {
   it("does not expose disconnected sessions in the selected target runtime list", () => {
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-a-12345678",
       platform: "browser-worker",
       targetKind: "client",
@@ -898,6 +893,11 @@ describe("devtools store runtime selection", () => {
     });
     useDevtoolsStore.getState()._handleMessage({
       type: "hello",
+      protocolVersion: SYNCORE_DEVTOOLS_PROTOCOL_VERSION,
+      minSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MIN_SUPPORTED_PROTOCOL_VERSION,
+      maxSupportedProtocolVersion:
+        SYNCORE_DEVTOOLS_MAX_SUPPORTED_PROTOCOL_VERSION,
       runtimeId: "runtime-b-87654321",
       platform: "browser-worker",
       targetKind: "client",

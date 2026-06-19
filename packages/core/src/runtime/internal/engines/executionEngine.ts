@@ -892,9 +892,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
             }),
           this.resolveTableName(tableName, state.componentMetadata),
           state.dependencyCollector
-        ),
-      raw: <TValue>(sql: string, params?: unknown[]) =>
-        this.deps.driver.all<TValue>(sql, params)
+        )
     };
   }
 

@@ -24,7 +24,6 @@ export type GlossaryCategory =
   | "scheduler"
   | "queries"
   | "logs"
-  | "sql"
   | "traces";
 
 export interface GlossaryTerm {
@@ -62,13 +61,6 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "storage.indexeddb",
     title: "indexeddb",
     short: "IndexedDB — o armazenamento de documentos nativo do navegador.",
-    docSlug: "storage-protocols",
-    category: "storage"
-  },
-  "storage.idb": {
-    slug: "storage.idb",
-    title: "idb",
-    short: "Apelido antigo (wire) para IndexedDB, normalizado na exibição.",
     docSlug: "storage-protocols",
     category: "storage"
   },
@@ -235,14 +227,6 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
-  "target.sql": {
-    slug: "target.sql",
-    title: "SQL",
-    short: "Este runtime suporta comandos de leitura do SQL Console.",
-    docSlug: "sql-console",
-    category: "runtime"
-  },
-
   // ── Reactivity: change reasons & invalidate scope ────────────────────
   "change.commit": {
     slug: "change.commit",
@@ -560,22 +544,6 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     category: "logs"
   },
 
-  // ── SQL Console ──────────────────────────────────────────────────────
-  "sql.rows-affected": {
-    slug: "sql.rows-affected",
-    title: "Rows affected",
-    short: "Número de linhas alteradas pelo último comando executado.",
-    docSlug: "sql-console",
-    category: "sql"
-  },
-  "sql.execution-time": {
-    slug: "sql.execution-time",
-    title: "Execution time",
-    short: "Quanto tempo o comando levou para executar.",
-    docSlug: "sql-console",
-    category: "sql"
-  },
-
   // ── Traces ───────────────────────────────────────────────────────────
   "traces.span": {
     slug: "traces.span",
@@ -614,19 +582,19 @@ export const GLOSSARY_CATEGORIES: {
 }[] = [
   {
     category: "storage",
-    title: "Storage protocols",
+    title: "Storage Protocols",
     description:
       "Como o Syncore persiste dados entre runtimes de navegador, Node e Electron."
   },
   {
     category: "runtime",
-    title: "Runtime & targets",
+    title: "Runtime & Targets",
     description:
       "Plataformas, sessões, data sources e a diferença entre alvos de cliente e de projeto."
   },
   {
     category: "reactivity",
-    title: "Reactivity & invalidation",
+    title: "Reactivity & Invalidation",
     description: "Por que os caches mudam e como a invalidação é escopada."
   },
   {
@@ -637,7 +605,7 @@ export const GLOSSARY_CATEGORIES: {
   },
   {
     category: "schema",
-    title: "Schema & documents",
+    title: "Schema & Documents",
     description: "Posse, tipos de campo, referências e índices."
   },
   {
@@ -653,18 +621,13 @@ export const GLOSSARY_CATEGORIES: {
   },
   {
     category: "queries",
-    title: "Active queries",
+    title: "Active Queries",
     description: "Status, duração e métricas de resultado das queries ativas."
   },
   {
     category: "logs",
     title: "Logs",
     description: "Níveis e escopos de log."
-  },
-  {
-    category: "sql",
-    title: "SQL Console",
-    description: "Executando SQL no runtime conectado."
   },
   {
     category: "traces",

@@ -216,43 +216,11 @@ describe("Node Syncore runtime", () => {
     const hello = JSON.parse(helloPayload ?? "{}") as {
       runtimeId: string;
       dataSourceAlias?: string;
-      capabilities?: {
-        sql?: { read: boolean; write: boolean; live: boolean; reason?: string };
-      };
+      capabilities?: Record<string, unknown>;
     };
     expect(hello.dataSourceAlias).toEqual(expect.any(String));
     expect(hello.dataSourceAlias?.length).toBeGreaterThan(0);
-    expect(hello.capabilities?.sql).toMatchObject({
-      read: false,
-      write: false,
-      live: false,
-      reason:
-        "SQL Console is provided by the Project Target for this data source."
-    });
-    connectedSocket?.send(
-      JSON.stringify({
-        type: "command",
-        commandId: "sql-read-probe",
-        targetRuntimeId: hello.runtimeId,
-        payload: {
-          kind: "sql.read",
-          query: 'SELECT _id FROM "tasks"'
-        }
-      })
-    );
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const sqlResultPayload = messages.find((message) =>
-      message.includes('"commandId":"sql-read-probe"')
-    );
-    expect(sqlResultPayload).toBeDefined();
-    expect(JSON.parse(sqlResultPayload ?? "{}")).toMatchObject({
-      type: "command.result",
-      commandId: "sql-read-probe",
-      payload: {
-        kind: "sql.read.result",
-        error: "SQL Console is not available for this runtime."
-      }
-    });
+    expect(hello.capabilities).not.toHaveProperty("sql");
     const externalChangePayload = messages.find((message) =>
       message.includes('"type":"external.change"')
     );

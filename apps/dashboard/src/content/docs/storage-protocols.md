@@ -17,7 +17,6 @@ the host instead of forcing a single one.
 | --- | --- | --- | --- |
 | `opfs` | Browser (worker/main) | Origin Private File System | A file-backed database local to the browser origin. |
 | `indexeddb` | Browser (worker/main) | IndexedDB | A native browser key/value document store. |
-| `idb` | Browser | (alias) | Legacy wire alias for `indexeddb`. Normalized to `indexeddb` on display. |
 | `file` | Node / Electron | A file on disk | A server-side or desktop file-backed database. |
 
 ### `opfs` — Origin Private File System
@@ -32,9 +31,6 @@ rather than a document store.
 The browser's native indexed key/value store. Syncore models documents on top of
 it. It's widely available in workers and the main thread and is the default when
 OPFS isn't suitable.
-
-> The wire value `idb` is a legacy alias for `indexeddb`. The dashboard
-> normalizes it for display, but you may see it in raw event payloads.
 
 ### `file` — Node / Electron database
 

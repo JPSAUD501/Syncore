@@ -112,7 +112,6 @@
     "adm-zip": "^0.5.17",
     "commander": "^14.0.3",
     "date-fns-tz": "^3.2.0",
-    "node-sql-parser": "^5.4.0",
     "sql.js": "^1.14.1",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",

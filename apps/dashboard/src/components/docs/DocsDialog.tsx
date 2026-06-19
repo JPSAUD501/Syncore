@@ -10,10 +10,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Markdown } from "@/components/docs/Markdown";
 import { getDoc, listDocs } from "@/content/docs";
-import {
-  GLOSSARY_CATEGORIES,
-  termsByCategory
-} from "@/lib/glossary/terms";
+import { GLOSSARY, GLOSSARY_CATEGORIES } from "@/lib/glossary/terms";
 import { useDocsModal } from "@/lib/docsModal";
 import { cn } from "@/lib/utils";
 
@@ -87,73 +84,63 @@ export function DocsDialog() {
 
 function IndexView() {
   const openDocs = useDocsModal((s) => s.openDocs);
-  const grouped = termsByCategory();
-  const all = listDocs();
+
+  // One entry per document. Each glossary category maps to a primary doc; we
+  // build the list from the docs themselves and pair each with its category
+  // description, so there's a single, non-duplicated list with no internal
+  // term "tags".
+  const docs = listDocs();
+  const descBySlug = new Map<string, string>();
+  for (const cat of GLOSSARY_CATEGORIES) {
+    const primarySlug = findPrimaryDocSlug(cat.category);
+    if (primarySlug) descBySlug.set(primarySlug, cat.description);
+  }
 
   return (
     <div className="pb-2">
       <h1 className="mb-1 text-xl font-bold text-text-primary">Documentation</h1>
-      <p className="mb-6 text-[13px] text-text-tertiary">
-        Concepts and terms used across the Syncore Dev Dashboard.
+      <p className="mb-5 text-[13px] text-text-tertiary">
+        Conceitos e termos do Syncore Dev Dashboard.
       </p>
 
-      <div className="space-y-5">
-        {GLOSSARY_CATEGORIES.map(({ category, title, description }) => {
-          const terms = grouped[category] ?? [];
-          const primaryDocSlug = terms[0]?.docSlug;
-          const doc = primaryDocSlug ? getDoc(primaryDocSlug) : null;
-          if (!doc) return null;
+      <div className="divide-y divide-border">
+        {docs.map((d) => {
+          const description = descBySlug.get(d.slug);
           return (
-            <div key={category}>
-              <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                <h2 className="text-[14px] font-semibold text-text-primary">
-                  {title}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => openDocs(doc.slug)}
-                  className="text-[11px] font-medium text-accent transition-colors hover:text-accent-muted"
-                >
-                  Read →
-                </button>
-              </div>
-              <p className="mb-2 text-[12px] text-text-tertiary">{description}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {terms.map((term) => (
-                  <button
-                    key={term.slug}
-                    type="button"
-                    onClick={() => openDocs(term.docSlug)}
-                    className="rounded border border-border bg-bg-elevated px-2 py-0.5 text-[11px] text-text-secondary transition-colors hover:border-border-hover hover:text-text-primary"
-                  >
-                    {term.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-8 border-t border-border pt-5">
-        <h2 className="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-text-tertiary">
-          All documents
-        </h2>
-        <div className="grid gap-1.5 sm:grid-cols-2">
-          {all.map((d) => (
             <button
               key={d.slug}
               type="button"
               onClick={() => openDocs(d.slug)}
-              className="truncate rounded-md border border-border bg-bg-surface px-3 py-2 text-left text-[13px] text-text-secondary transition-colors hover:border-border-hover hover:text-text-primary"
+              className="group flex w-full items-start gap-3 px-1 py-3 text-left transition-colors hover:bg-bg-surface/60 rounded-md"
             >
-              {d.title}
+              <ChevronRight
+                size={14}
+                className="mt-0.5 shrink-0 text-text-tertiary transition-colors group-hover:text-accent"
+              />
+              <div className="min-w-0">
+                <div className="text-[14px] font-medium text-text-primary group-hover:text-accent transition-colors">
+                  {d.title}
+                </div>
+                {description && (
+                  <div className="mt-0.5 text-[12px] text-text-tertiary">
+                    {description}
+                  </div>
+                )}
+              </div>
             </button>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+/** Find the primary doc slug for a category (first term's docSlug). */
+function findPrimaryDocSlug(category: string): string | undefined {
+  for (const term of Object.values(GLOSSARY)) {
+    if (term.category === category) return term.docSlug;
+  }
+  return undefined;
 }
 
 /* ── Single document ─────────────────────────────────────────────────── */

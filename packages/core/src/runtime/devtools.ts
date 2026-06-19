@@ -13,7 +13,6 @@ import { describeValidator } from "@syncore/schema";
 import type { TableDefinition, Validator } from "@syncore/schema";
 import type {
   DevtoolsLiveQueryScope,
-  ImpactScope,
   SyncoreDataModel,
   SyncoreRuntimeAdmin,
   SyncoreRuntimeOptions,
@@ -31,32 +30,6 @@ export interface DevtoolsCommandHandlerDeps {
   schema: SyncoreDataModel;
   functions: SyncoreRuntimeOptions<SyncoreDataModel>["functions"];
   admin: SyncoreRuntimeAdmin<SyncoreDataModel>;
-  sql?: DevtoolsSqlSupport;
-}
-
-export type DevtoolsSqlMode = "read" | "write" | "ddl";
-
-export interface DevtoolsSqlAnalysis {
-  mode: DevtoolsSqlMode;
-  readTables: string[];
-  writeTables: string[];
-  schemaChanged: boolean;
-  observedScopes: DevtoolsLiveQueryScope[];
-}
-
-export interface DevtoolsSqlReadResult {
-  columns: string[];
-  rows: unknown[][];
-  observedTables: string[];
-}
-
-export interface DevtoolsSqlSupport {
-  analyzeSqlStatement(query: string): DevtoolsSqlAnalysis;
-  ensureSqlMode(
-    analysis: DevtoolsSqlAnalysis,
-    expected: DevtoolsSqlMode | "watch"
-  ): void;
-  runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult;
 }
 
 export type DevtoolsCommandHandler = (
@@ -89,7 +62,7 @@ interface SubscriptionRecord {
 export function createDevtoolsCommandHandler(
   deps: DevtoolsCommandHandlerDeps
 ): DevtoolsCommandHandler {
-  const { driver, admin, sql } = deps;
+  const { driver, admin } = deps;
 
   return async (payload): Promise<SyncoreDevtoolsCommandResultPayload> => {
     await admin.prepareForDirectAccess();
@@ -260,65 +233,6 @@ export function createDevtoolsCommandHandler(
             totalCount: 0,
             offset,
             hasMore: false,
-            error: error instanceof Error ? error.message : String(error)
-          };
-        }
-      }
-
-      case "sql.read": {
-        try {
-          const sqlSupport = requireDevtoolsSqlSupport(sql);
-          const databasePath = admin.getDriverDatabasePath();
-          if (!databasePath) {
-            throw new Error("SQL Read requires a file-backed database path.");
-          }
-          const { columns, rows } = sqlSupport.runReadonlyQuery(
-            databasePath,
-            payload.query
-          );
-          return {
-            kind: "sql.read.result",
-            columns,
-            rows
-          };
-        } catch (error) {
-          return {
-            kind: "sql.read.result",
-            columns: [],
-            rows: [],
-            error: error instanceof Error ? error.message : String(error)
-          };
-        }
-      }
-
-      case "sql.write": {
-        try {
-          const sqlSupport = requireDevtoolsSqlSupport(sql);
-          const analysis = sqlSupport.analyzeSqlStatement(payload.query);
-          if (analysis.mode === "read") {
-            throw new Error(
-              "Use SQL Read or SQL Live for read-only statements."
-            );
-          }
-          const result = await driver.run(payload.query);
-          admin.notifyDevtoolsScopes(analysis.observedScopes);
-          await admin.forceRefreshDevtools(
-            "SQL write executed from devtools dashboard.",
-            analysis.observedScopes.flatMap((scope) =>
-              scope === "all" ? [] : ([scope] as ImpactScope[])
-            ),
-            { origin: "dashboard" }
-          );
-          return {
-            kind: "sql.write.result",
-            rowsAffected: result.changes,
-            invalidationScopes: [...analysis.observedScopes]
-          };
-        } catch (error) {
-          return {
-            kind: "sql.write.result",
-            rowsAffected: 0,
-            invalidationScopes: [],
             error: error instanceof Error ? error.message : String(error)
           };
         }
@@ -505,8 +419,7 @@ export function createDevtoolsSubscriptionHost(
         driver,
         schema,
         functions,
-        admin,
-        ...(deps.sql ? { sql: deps.sql } : {})
+        admin
       })
     );
   };
@@ -580,7 +493,7 @@ export function createDevtoolsSubscriptionHost(
           unsubscribeRuntime();
           unsubscribeEvents();
         },
-        scopes: scopesForSubscription(payload, deps.sql)
+        scopes: scopesForSubscription(payload)
       });
       await emit(payload, listener);
     },
@@ -697,24 +610,10 @@ async function resolveSubscriptionPayload(
         };
       }
     }
-    case "sql.watch": {
-      const sqlSupport = requireDevtoolsSqlSupport(deps.sql);
-      const databasePath = admin.getDriverDatabasePath();
-      if (!databasePath) {
-        throw new Error("SQL Live requires a file-backed database path.");
-      }
-      const { columns, rows, observedTables } = sqlSupport.runReadonlyQuery(
-        databasePath,
-        payload.query
-      );
-      return {
-        kind: "sql.watch.result",
-        columns,
-        rows,
-        observedTables
-      };
-    }
   }
+  throw new Error(
+    `Unsupported devtools subscription: ${(payload as { kind: string }).kind}`
+  );
 }
 
 async function queryTable(
@@ -1207,8 +1106,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 function scopesForSubscription(
-  payload: SyncoreDevtoolsSubscriptionPayload,
-  sql?: DevtoolsSqlSupport
+  payload: SyncoreDevtoolsSubscriptionPayload
 ): Set<DevtoolsInvalidationScope> {
   switch (payload.kind) {
     case "runtime.summary":
@@ -1227,16 +1125,6 @@ function scopesForSubscription(
       return new Set(["all"]);
     case "storage.list":
       return new Set(["storage.objects"]);
-    case "sql.watch": {
-      try {
-        const sqlSupport = requireDevtoolsSqlSupport(sql);
-        const analysis = sqlSupport.analyzeSqlStatement(payload.query);
-        sqlSupport.ensureSqlMode(analysis, "watch");
-        return new Set<DevtoolsInvalidationScope>(analysis.observedScopes);
-      } catch {
-        return new Set<DevtoolsInvalidationScope>(["all"]);
-      }
-    }
     default:
       return new Set<DevtoolsInvalidationScope>(["all"]);
   }
@@ -1257,11 +1145,3 @@ function intersects(
   return false;
 }
 
-function requireDevtoolsSqlSupport(
-  sql?: DevtoolsSqlSupport
-): DevtoolsSqlSupport {
-  if (!sql) {
-    throw new Error("SQL Console is not available for this runtime.");
-  }
-  return sql;
-}

@@ -1055,10 +1055,6 @@ type OptionalArgsTuple<TArgs> =
  *   .order("asc")
  *   .take(20);
  *
- * // Raw SQL escape hatch (use sparingly — bypasses type safety)
- * const rows = await ctx.db.raw<{ count: number }>(
- *   "SELECT COUNT(*) AS count FROM tasks"
- * );
  * ```
  */
 export interface SyncoreDatabaseReader<
@@ -1087,13 +1083,6 @@ export interface SyncoreDatabaseReader<
     TSchema["tables"][TTableName],
     DocumentForTable<TSchema, TTableName>
   >;
-  /**
-   * Execute a raw SQL `SELECT` statement and return the results.
-   *
-   * Prefer the typed query builder whenever possible. Use `raw` as an escape
-   * hatch for complex aggregations or joins that the builder cannot express.
-   */
-  raw<TValue = unknown>(sql: string, params?: unknown[]): Promise<TValue[]>;
 }
 
 /**

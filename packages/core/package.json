@@ -29,8 +29,5 @@
     "@syncore/internal": "^0.1.0",
     "@syncore/schema": "^0.1.0",
     "date-fns-tz": "^3.2.0"
-  },
-  "devDependencies": {
-    "node-sql-parser": "^5.4.0"
   }
 }

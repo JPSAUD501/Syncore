@@ -7,7 +7,6 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
-import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
@@ -34,169 +33,8 @@ import {
 } from "./runtime.js";
 import {
   createDevtoolsCommandHandler,
-  createDevtoolsSubscriptionHost,
-  type DevtoolsSqlAnalysis,
-  type DevtoolsSqlReadResult,
-  type DevtoolsSqlSupport
+  createDevtoolsSubscriptionHost
 } from "./devtools.js";
-
-const require = createRequire(import.meta.url);
-const { Parser } = require("node-sql-parser") as {
-  Parser: new () => {
-    astify(sql: string, options?: { database?: string }): unknown;
-  };
-};
-const parser = new Parser();
-
-type SqlAst = {
-  type: string;
-  from?: Array<{ table?: string; expr?: { ast?: SqlAst } }>;
-  table?: Array<{ table?: string }> | { table?: string } | null | string;
-};
-
-const analyzeSqlStatement = (query: string): DevtoolsSqlAnalysis => {
-  const ast = parser.astify(query, { database: "sqlite" }) as SqlAst | SqlAst[];
-  if (Array.isArray(ast)) {
-    throw new Error("Only a single SQL statement is supported.");
-  }
-
-  switch (ast.type) {
-    case "select":
-      return buildReadAnalysis(ast);
-    case "update":
-    case "delete":
-    case "insert":
-    case "replace":
-      return buildWriteAnalysis(extractTables(ast.table), false);
-    case "create":
-    case "drop":
-    case "alter":
-      return buildWriteAnalysis(extractTables(ast.table), true);
-    default:
-      throw new Error(`Unsupported SQL statement type: ${String(ast.type)}`);
-  }
-};
-
-const ensureSqlMode: DevtoolsSqlSupport["ensureSqlMode"] = (
-  analysis,
-  expected
-) => {
-  if (expected === "watch") {
-    if (analysis.mode !== "read") {
-      throw new Error("Live mode supports read-only SQL only.");
-    }
-    return;
-  }
-
-  if (analysis.mode !== expected) {
-    if (expected === "read") {
-      throw new Error("Use SQL Write for mutating statements.");
-    }
-    throw new Error("Use SQL Read or SQL Live for read-only statements.");
-  }
-};
-
-const runReadonlyQuery = (
-  databasePath: string,
-  query: string
-): DevtoolsSqlReadResult => {
-  const analysis = analyzeSqlStatement(query);
-  ensureSqlMode(analysis, "read");
-
-  const database = new DatabaseSync(databasePath, { readOnly: true });
-  try {
-    const statement = database.prepare(query);
-    const rows = statement.all() as Array<Record<string, unknown>>;
-    const columnsMeta = statement.columns();
-    const columns = columnsMeta.map((column) => column.name);
-    const observedTables = Array.from(
-      new Set(
-        columnsMeta
-          .map((column) => column.table)
-          .filter((table): table is string => typeof table === "string")
-      )
-    );
-
-    return {
-      columns,
-      rows: rows.map((row) => columns.map((column) => row[column])),
-      observedTables:
-        observedTables.length > 0 ? observedTables : analysis.readTables
-    };
-  } finally {
-    database.close();
-  }
-};
-
-const nodeDevtoolsSqlSupport: DevtoolsSqlSupport = {
-  analyzeSqlStatement,
-  ensureSqlMode,
-  runReadonlyQuery
-};
-
-function buildReadAnalysis(ast: SqlAst): DevtoolsSqlAnalysis {
-  const readTables = Array.from(new Set(extractReadTables(ast)));
-  return {
-    mode: "read",
-    readTables,
-    writeTables: [],
-    schemaChanged: false,
-    observedScopes:
-      readTables.length > 0
-        ? readTables.map((table) => `table:${table}` as const)
-        : ["all"]
-  };
-}
-
-function buildWriteAnalysis(
-  tables: string[],
-  schemaChanged: boolean
-): DevtoolsSqlAnalysis {
-  const uniqueTables = Array.from(new Set(tables));
-  return {
-    mode: schemaChanged ? "ddl" : "write",
-    readTables: [],
-    writeTables: uniqueTables,
-    schemaChanged,
-    observedScopes: schemaChanged
-      ? [
-          "schema.tables",
-          ...uniqueTables.map((table) => `table:${table}` as const)
-        ]
-      : uniqueTables.length > 0
-        ? uniqueTables.map((table) => `table:${table}` as const)
-        : ["all"]
-  };
-}
-
-function extractReadTables(ast: SqlAst): string[] {
-  return (ast.from ?? [])
-    .flatMap((entry) => {
-      if (entry.table) {
-        return [entry.table];
-      }
-      if (entry.expr?.ast) {
-        return extractReadTables(entry.expr.ast);
-      }
-      return [];
-    })
-    .filter((table) => table !== "dual");
-}
-
-function extractTables(table: SqlAst["table"]): string[] {
-  if (Array.isArray(table)) {
-    return table
-      .map((entry) => entry?.table)
-      .filter((value): value is string => typeof value === "string");
-  }
-  if (table && typeof table === "object") {
-    return typeof table.table === "string" ? [table.table] : [];
-  }
-  if (typeof table === "string") {
-    return [table];
-  }
-  return [];
-}
 
 class TestSqliteDriver implements SyncoreSqlDriver {
   private readonly database: DatabaseSync;
@@ -1095,15 +933,13 @@ describe("SyncoreRuntime schema + scheduler", () => {
       driver: hostDriver,
       schema,
       functions,
-      admin: runtime.getAdmin(),
-      sql: nodeDevtoolsSqlSupport
+      admin: runtime.getAdmin()
     });
     const handler = createDevtoolsCommandHandler({
       driver: hostDriver,
       schema,
       functions,
-      admin: runtime.getAdmin(),
-      sql: nodeDevtoolsSqlSupport
+      admin: runtime.getAdmin()
     });
     const taskUpdates: Array<{ rows: Record<string, unknown>[] }> = [];
     const noteUpdates: Array<{ rows: Record<string, unknown>[] }> = [];
@@ -1137,15 +973,6 @@ describe("SyncoreRuntime schema + scheduler", () => {
         }
       }
     );
-
-    await host.subscribe(
-      "sql-watch",
-      { kind: "sql.watch", query: 'SELECT _id FROM "tasks" LIMIT 10' },
-      () => {
-        // Warm the lazy SQL module so scope analysis is available synchronously.
-      }
-    );
-    host.unsubscribe("sql-watch");
 
     await runtime
       .createClient()
@@ -1521,15 +1348,13 @@ describe("SyncoreRuntime schema + scheduler", () => {
       driver: hostDriver,
       schema,
       functions,
-      admin: runtime.getAdmin(),
-      sql: nodeDevtoolsSqlSupport
+      admin: runtime.getAdmin()
     });
     const host = createDevtoolsSubscriptionHost({
       driver: hostDriver,
       schema,
       functions,
-      admin: runtime.getAdmin(),
-      sql: nodeDevtoolsSqlSupport
+      admin: runtime.getAdmin()
     });
     const schedulerSnapshots: SchedulerJob[][] = [];
 
@@ -1661,88 +1486,6 @@ describe("SyncoreRuntime schema + scheduler", () => {
     host.dispose();
     await hostDriver.close();
     await runtime.stop();
-  });
-
-  it("analyzes SQL for read, write, and watch flows without regex", async () => {
-    const databasePath = path.join(rootDirectory, "sql-analysis.db");
-    const driver = new TestSqliteDriver(databasePath);
-    await driver.exec(
-      'CREATE TABLE "tasks" (_id TEXT PRIMARY KEY, _creationTime INTEGER, _json TEXT)'
-    );
-    await driver.run(
-      'INSERT INTO "tasks" (_id, _creationTime, _json) VALUES (?, ?, ?)',
-      ["task-1", Date.now(), JSON.stringify({ text: "hello", done: false })]
-    );
-
-    const selectAnalysis = analyzeSqlStatement(
-      'SELECT _id, _json FROM "tasks" LIMIT 10'
-    );
-    expect(selectAnalysis.mode).toBe("read");
-    expect(selectAnalysis.readTables).toEqual(["tasks"]);
-
-    const updateAnalysis = analyzeSqlStatement(
-      'UPDATE "tasks" SET _json = json_set(_json, "$.done", true)'
-    );
-    expect(updateAnalysis.mode).toBe("write");
-    expect(updateAnalysis.writeTables).toEqual(["tasks"]);
-
-    expect(() => ensureSqlMode(updateAnalysis, "watch")).toThrow(
-      /read-only SQL/i
-    );
-
-    const queryResult = runReadonlyQuery(
-      databasePath,
-      'SELECT _id, _json FROM "tasks" LIMIT 10'
-    );
-    expect(queryResult.columns).toEqual(["_id", "_json"]);
-    expect(queryResult.rows).toHaveLength(1);
-    expect(queryResult.observedTables).toEqual(["tasks"]);
-
-    await driver.close();
-  });
-
-  it("reports SQL devtools unavailable without node SQL support", async () => {
-    const schema = defineSchema({
-      tasks: defineTable({
-        text: s.string(),
-        done: s.boolean()
-      })
-    });
-    const runtime = new SyncoreRuntime({
-      schema,
-      functions: {},
-      driver: new TestSqliteDriver(
-        path.join(rootDirectory, "no-sql-devtools.db")
-      ),
-      storage: new TrackingStorageAdapter(
-        path.join(rootDirectory, "no-sql-devtools-storage")
-      ),
-      platform: "browser"
-    });
-
-    await runtime.start();
-    try {
-      const hostDriver = new TestSqliteDriver(
-        path.join(rootDirectory, "no-sql-devtools-host.db")
-      );
-      const result = await createDevtoolsCommandHandler({
-        driver: hostDriver,
-        schema,
-        functions: {},
-        admin: runtime.getAdmin()
-      })({
-        kind: "sql.read",
-        query: 'SELECT _id FROM "tasks"'
-      });
-
-      expect(result.kind).toBe("sql.read.result");
-      if (result.kind === "sql.read.result") {
-        expect(result.error).toMatch(/not available for this runtime/i);
-      }
-      await hostDriver.close();
-    } finally {
-      await runtime.stop();
-    }
   });
 
   it("reconciles interrupted staged storage writes on restart", async () => {

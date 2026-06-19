@@ -8,14 +8,12 @@ import {
   Radio,
   ScrollText,
   Clock,
-  Terminal,
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useConnectedRuntimeCount,
-  useDevtoolsStore,
-  useSelectedTarget
+  useDevtoolsStore
 } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,8 +25,7 @@ const NAV_ITEMS = [
   { to: "/functions", label: "Functions", icon: Code2 },
   { to: "/queries", label: "Active Queries", icon: Radio },
   { to: "/logs", label: "Logs", icon: ScrollText },
-  { to: "/scheduler", label: "Scheduler", icon: Clock },
-  { to: "/sql", label: "SQL Console", icon: Terminal }
+  { to: "/scheduler", label: "Scheduler", icon: Clock }
 ] as const;
 
 interface SidebarProps {
@@ -41,7 +38,6 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
   const location = useRouterState({ select: (s) => s.location });
   const connected = useDevtoolsStore((s) => s.connected);
   const connectedRuntimeCount = useConnectedRuntimeCount();
-  const selectedTarget = useSelectedTarget();
 
   if (collapsed) return null;
 
@@ -73,12 +69,7 @@ export function Sidebar({ collapsed, onClose, onNavClick }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="mt-3 flex flex-1 flex-col gap-0.5 px-3">
-        {NAV_ITEMS.filter((item) => {
-          if (item.to !== "/sql") {
-            return true;
-          }
-          return selectedTarget?.sqlAvailable === true;
-        }).map((item) => {
+        {NAV_ITEMS.map((item) => {
           const isActive =
             item.to === "/"
               ? location.pathname === "/"

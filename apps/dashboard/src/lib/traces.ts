@@ -79,8 +79,11 @@ export function getTraceDocumentChanges(
 function traceFromEvent(event: SyncoreDevtoolsEvent): ExecutionTrace | null {
   switch (event.type) {
     case "query.executed":
+      if (!event.executionId) {
+        return null;
+      }
       return {
-        executionId: event.executionId ?? fallbackExecutionId(event),
+        executionId: event.executionId,
         ...(event.parentExecutionId
           ? { parentExecutionId: event.parentExecutionId }
           : {}),
@@ -91,8 +94,11 @@ function traceFromEvent(event: SyncoreDevtoolsEvent): ExecutionTrace | null {
         readScopes: event.readScopes ?? event.dependencies
       };
     case "mutation.committed":
+      if (!event.executionId) {
+        return null;
+      }
       return {
-        executionId: event.executionId ?? event.mutationId,
+        executionId: event.executionId,
         ...(event.parentExecutionId
           ? { parentExecutionId: event.parentExecutionId }
         : {}),
@@ -110,8 +116,11 @@ function traceFromEvent(event: SyncoreDevtoolsEvent): ExecutionTrace | null {
           : {})
       };
     case "action.completed":
+      if (!event.executionId) {
+        return null;
+      }
       return {
-        executionId: event.executionId ?? event.actionId,
+        executionId: event.executionId,
         ...(event.parentExecutionId
           ? { parentExecutionId: event.parentExecutionId }
         : {}),
@@ -140,8 +149,4 @@ function traceFromEvent(event: SyncoreDevtoolsEvent): ExecutionTrace | null {
     default:
       return null;
   }
-}
-
-function fallbackExecutionId(event: SyncoreDevtoolsEvent): string {
-  return `${event.type}:${event.runtimeId}:${event.timestamp}`;
 }

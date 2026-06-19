@@ -374,23 +374,11 @@ describe("platform-web sql.js runtime", () => {
       expect(helloPayload).toBeDefined();
       const hello = JSON.parse(helloPayload ?? "{}") as {
         dataSourceAlias?: string;
-        capabilities?: {
-          sql?: {
-            read: boolean;
-            write: boolean;
-            live: boolean;
-            reason?: string;
-          };
-        };
+        capabilities?: Record<string, unknown>;
       };
       expect(hello.dataSourceAlias).toEqual(expect.any(String));
       expect(hello.dataSourceAlias?.length).toBeGreaterThan(0);
-      expect(hello.capabilities?.sql).toMatchObject({
-        read: false,
-        write: false,
-        live: false,
-        reason: "SQL Console is not available for browser runtimes."
-      });
+      expect(hello.capabilities).not.toHaveProperty("sql");
       expect(
         sentMessages.some((payload) => payload.includes('"type":"event"'))
       ).toBe(true);
@@ -474,7 +462,7 @@ describe("platform-web sql.js runtime", () => {
 
   it("disables default file storage when web persistence uses IndexedDB", async () => {
     const runtime = await createWebSyncoreRuntime({
-      databaseName: "idb-no-file-storage",
+      databaseName: "indexeddb-no-file-storage",
       persistenceDatabaseName: "syncore-web-test",
       persistenceMode: "indexeddb",
       schema: storageSchema,
@@ -489,7 +477,7 @@ describe("platform-web sql.js runtime", () => {
         .localQueryResult();
       expect(status?.capabilities?.storage).toMatchObject({
         available: false,
-        protocol: "idb"
+        protocol: "indexeddb"
       });
       await expect(
         runtime

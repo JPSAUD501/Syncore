@@ -58,9 +58,6 @@ import {
   generateId,
   SyncoreRuntime,
   type AnyTableDefinition,
-  type DevtoolsSqlAnalysis,
-  type DevtoolsSqlReadResult,
-  type DevtoolsSqlSupport,
   createSchemaSnapshot,
   diffSchemaSnapshots,
   parseSchemaSnapshot,
@@ -2005,88 +2002,6 @@ function resolveHubStorageFilePath(directory: string, id: string): string {
   return filePath;
 }
 
-const hubDevtoolsSqlSupport: DevtoolsSqlSupport = {
-  analyzeSqlStatement(query: string): DevtoolsSqlAnalysis {
-    const normalized = query.trim().replace(/^\(+/, "").toUpperCase();
-    const firstKeyword = normalized.split(/\s+/, 1)[0] ?? "";
-    if (
-      firstKeyword === "SELECT" ||
-      firstKeyword === "WITH" ||
-      firstKeyword === "PRAGMA" ||
-      firstKeyword === "EXPLAIN"
-    ) {
-      return {
-        mode: "read",
-        readTables: [],
-        writeTables: [],
-        schemaChanged: false,
-        observedScopes: ["all"]
-      };
-    }
-    if (
-      firstKeyword === "INSERT" ||
-      firstKeyword === "UPDATE" ||
-      firstKeyword === "DELETE" ||
-      firstKeyword === "REPLACE"
-    ) {
-      return {
-        mode: "write",
-        readTables: [],
-        writeTables: [],
-        schemaChanged: false,
-        observedScopes: ["all"]
-      };
-    }
-    if (
-      firstKeyword === "CREATE" ||
-      firstKeyword === "DROP" ||
-      firstKeyword === "ALTER"
-    ) {
-      return {
-        mode: "ddl",
-        readTables: [],
-        writeTables: [],
-        schemaChanged: true,
-        observedScopes: ["all", "schema.tables"]
-      };
-    }
-    throw new Error(
-      `Unsupported SQL statement type: ${firstKeyword || "unknown"}`
-    );
-  },
-  ensureSqlMode(analysis, expected): void {
-    if (expected === "watch") {
-      if (analysis.mode !== "read") {
-        throw new Error("Live mode supports read-only SQL only.");
-      }
-      return;
-    }
-    if (analysis.mode !== expected) {
-      if (expected === "read") {
-        throw new Error("Use SQL Write for mutating statements.");
-      }
-      throw new Error("Use SQL Read or SQL Live for read-only statements.");
-    }
-  },
-  runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult {
-    const analysis = this.analyzeSqlStatement(query);
-    this.ensureSqlMode(analysis, "read");
-    const database = new DatabaseSync(databasePath, { readOnly: true });
-    try {
-      const statement = database.prepare(query);
-      const rows = statement.all() as Array<Record<string, unknown>>;
-      const columns = statement.columns().map((column) => column.name);
-      return {
-        columns,
-        rows: rows.map((row) => columns.map((column) => row[column])),
-        observedTables: []
-      };
-    } finally {
-      database.close();
-    }
-  }
-};
-
 async function createProjectTargetBackend(
   cwd: string,
   externalChangeSignal?: SyncoreExternalChangeSignal
@@ -2126,15 +2041,13 @@ async function createProjectTargetBackend(
     driver,
     schema,
     functions,
-    admin: runtime.getAdmin(),
-    sql: hubDevtoolsSqlSupport
+    admin: runtime.getAdmin()
   });
   const subscriptionHost = createDevtoolsSubscriptionHost({
     driver,
     schema,
     functions,
-    admin: runtime.getAdmin(),
-    sql: hubDevtoolsSqlSupport
+    admin: runtime.getAdmin()
   });
 
   return {
@@ -2171,11 +2084,6 @@ async function createProjectTargetBackend(
 
 function createProjectDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
   return {
-    sql: {
-      read: true,
-      write: true,
-      live: true
-    },
     data: {
       browse: true,
       mutate: true,

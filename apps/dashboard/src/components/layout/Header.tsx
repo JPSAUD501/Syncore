@@ -54,8 +54,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/functions": "Functions",
   "/queries": "Active Queries",
   "/logs": "Logs",
-  "/scheduler": "Scheduler",
-  "/sql": "SQL Console"
+  "/scheduler": "Scheduler"
 };
 
 type SelectedTarget = NonNullable<ReturnType<typeof useSelectedTarget>>;
@@ -570,13 +569,6 @@ function ContextSwitcherDialog({
                                 </span>
                               </InfoTooltip>
                             ) : null}
-                            {runtime.capabilities?.sql?.read && (
-                              <InfoTooltip termSlug="target.sql" side="top">
-                                <span className="cursor-default rounded border border-border/60 bg-bg-elevated px-1 py-0.5 text-[10px]">
-                                  SQL
-                                </span>
-                              </InfoTooltip>
-                            )}
                         {executor && (
                           <InfoTooltip termSlug="runtime.executor" side="top">
                               <span className="cursor-default rounded border border-success/30 bg-success/8 px-1 py-0.5 text-[10px] text-success">

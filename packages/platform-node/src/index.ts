@@ -1139,13 +1139,6 @@ function withRuntimeSummaryMeta(
 
 function createNodeDevtoolsCapabilities(): SyncoreDevtoolsCapabilities {
   return {
-    sql: {
-      read: false,
-      write: false,
-      live: false,
-      reason:
-        "SQL Console is provided by the Project Target for this data source."
-    },
     data: {
       browse: true,
       mutate: true,

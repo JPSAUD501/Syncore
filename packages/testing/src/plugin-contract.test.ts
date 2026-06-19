@@ -136,7 +136,7 @@ async function createNodeFactory(): Promise<RuntimeFactory> {
 function createWebFactory(): RuntimeFactory {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const databaseName = `syncore-plugin-web-${suffix}`;
-  const persistenceDatabaseName = `syncore-plugin-web-idb-${suffix}`;
+  const persistenceDatabaseName = `syncore-plugin-web-indexeddb-${suffix}`;
 
   return {
     label: "web",

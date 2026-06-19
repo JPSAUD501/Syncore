@@ -223,8 +223,6 @@ export interface DevtoolsCommandHandlerDeps {
     functions: SyncoreRuntimeOptions<SyncoreDataModel>["functions"];
     // (undocumented)
     schema: SyncoreDataModel;
-    // (undocumented)
-    sql?: DevtoolsSqlSupport;
 }
 
 // @public (undocumented)
@@ -261,43 +259,6 @@ export interface DevtoolsLiveQuerySnapshot {
 export interface DevtoolsSink {
     attachRuntime?(runtime: SyncoreRuntime<SyncoreDataModel>): void;
     emit(event: SyncoreDevtoolsEvent): void;
-}
-
-// @public (undocumented)
-export interface DevtoolsSqlAnalysis {
-    // (undocumented)
-    mode: DevtoolsSqlMode;
-    // (undocumented)
-    observedScopes: DevtoolsLiveQueryScope[];
-    // (undocumented)
-    readTables: string[];
-    // (undocumented)
-    schemaChanged: boolean;
-    // (undocumented)
-    writeTables: string[];
-}
-
-// @public (undocumented)
-export type DevtoolsSqlMode = "read" | "write" | "ddl";
-
-// @public (undocumented)
-export interface DevtoolsSqlReadResult {
-    // (undocumented)
-    columns: string[];
-    // (undocumented)
-    observedTables: string[];
-    // (undocumented)
-    rows: unknown[][];
-}
-
-// @public (undocumented)
-export interface DevtoolsSqlSupport {
-    // (undocumented)
-    analyzeSqlStatement(query: string): DevtoolsSqlAnalysis;
-    // (undocumented)
-    ensureSqlMode(analysis: DevtoolsSqlAnalysis, expected: DevtoolsSqlMode | "watch"): void;
-    // (undocumented)
-    runReadonlyQuery(databasePath: string, query: string): DevtoolsSqlReadResult;
 }
 
 // @public (undocumented)
@@ -1201,7 +1162,6 @@ export type SyncoreCoreCapability = "storage" | "scheduler" | "devtools" | "ownT
 export interface SyncoreDatabaseReader<TSchema extends SyncoreDataModel = SyncoreDataModel> {
     get<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<DocumentForTable<TSchema, TTableName> | null>;
     query<TTableName extends TableNames<TSchema>>(table: TTableName): QueryBuilder<TSchema["tables"][TTableName], DocumentForTable<TSchema, TTableName>>;
-    raw<TValue = unknown>(sql: string, params?: unknown[]): Promise<TValue[]>;
 }
 
 // @public
@@ -1901,7 +1861,7 @@ export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
 
 // Warnings were encountered during analysis:
 //
-// src/runtime/runtime.ts:1552:17 - (ae-forgotten-export) The symbol "StorageEntry" needs to be exported by the entry point index.d.mts
+// src/runtime/runtime.ts:1541:17 - (ae-forgotten-export) The symbol "StorageEntry" needs to be exported by the entry point index.d.mts
 // D:/GitHub/Syncore/packages/devtools-protocol/src/index.ts:102:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
 
 // (No @packageDocumentation comment for this package)

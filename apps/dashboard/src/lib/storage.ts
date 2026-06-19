@@ -4,7 +4,6 @@ export const EXECUTOR_RUNTIME_STORAGE_KEY =
   "syncore-dashboard-executor-runtime";
 export const DASHBOARD_ACTIVITY_STORAGE_KEY =
   "syncore-dashboard-include-dashboard-activity";
-export const SQL_HISTORY_STORAGE_KEY = "syncore-sql-history";
 
 export function safeReadLocalStorage(key: string): string | null {
   if (typeof window === "undefined") {

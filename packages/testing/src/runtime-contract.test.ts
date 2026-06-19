@@ -360,7 +360,7 @@ async function createNodeFactory(): Promise<NodeFactory> {
 function createWebFactory(): WebFactory {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const databaseName = `syncore-contract-web-${suffix}`;
-  const persistenceDatabaseName = `syncore-contract-idb-${suffix}`;
+  const persistenceDatabaseName = `syncore-contract-indexeddb-${suffix}`;
   const persistence = createMockWebPersistence();
 
   return {

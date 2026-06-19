@@ -289,13 +289,6 @@ export interface SyncoreDevtoolsCapabilities {
         edit: boolean;
     };
     // (undocumented)
-    sql?: {
-        read: boolean;
-        write: boolean;
-        live: boolean;
-        reason?: string;
-    };
-    // (undocumented)
     storage?: {
         browse: boolean;
         download: boolean;
@@ -352,12 +345,6 @@ export type SyncoreDevtoolsCommandPayload = {
     limit?: number;
     offset?: number;
 } | {
-    kind: "sql.read";
-    query: string;
-} | {
-    kind: "sql.write";
-    query: string;
-} | {
     kind: "storage.list";
     limit?: number;
     offset?: number;
@@ -413,16 +400,6 @@ export type SyncoreDevtoolsCommandResultPayload = {
     offset: number;
     hasMore: boolean;
     error?: string;
-} | {
-    kind: "sql.read.result";
-    columns: string[];
-    rows: unknown[][];
-    error?: string;
-} | {
-    kind: "sql.write.result";
-    rowsAffected: number;
-    error?: string;
-    invalidationScopes: string[];
 } | {
     kind: "storage.list.result";
     entries: StorageEntry[];
@@ -582,9 +559,9 @@ export interface SyncoreDevtoolsExternalChangeEvent {
 // @public (undocumented)
 export type SyncoreDevtoolsMessage = {
     type: "hello";
-    protocolVersion?: number;
-    minSupportedProtocolVersion?: number;
-    maxSupportedProtocolVersion?: number;
+    protocolVersion: number;
+    minSupportedProtocolVersion: number;
+    maxSupportedProtocolVersion: number;
     runtimeVersion?: string;
     runtimeId: string;
     platform: string;
@@ -670,9 +647,6 @@ export type SyncoreDevtoolsSubscriptionPayload = {
     limit?: number;
     offset?: number;
     search?: string;
-} | {
-    kind: "sql.watch";
-    query: string;
 };
 
 // @public (undocumented)
@@ -707,11 +681,6 @@ export type SyncoreDevtoolsSubscriptionResultPayload = {
     offset: number;
     hasMore: boolean;
     error?: string;
-} | {
-    kind: "sql.watch.result";
-    columns: string[];
-    rows: unknown[][];
-    observedTables: string[];
 };
 
 // @public (undocumented)

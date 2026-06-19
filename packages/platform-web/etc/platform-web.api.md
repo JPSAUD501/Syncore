@@ -284,7 +284,7 @@ export class SyncoreIndexedDbPersistence implements SyncoreWebPersistence {
     // (undocumented)
     saveDatabase(key: string, bytes: Uint8Array): Promise<void>;
     // (undocumented)
-    readonly storageProtocol: "idb";
+    readonly storageProtocol: "indexeddb";
 }
 
 // @public
@@ -320,7 +320,7 @@ export interface SyncoreWebPersistence {
     loadDatabase(key: string): Promise<Uint8Array | null>;
     putFile(namespace: string, id: string, bytes: Uint8Array, contentType: string | null): Promise<void>;
     saveDatabase(key: string, bytes: Uint8Array): Promise<void>;
-    readonly storageProtocol: "idb" | "opfs";
+    readonly storageProtocol: "indexeddb" | "opfs";
 }
 
 // @public

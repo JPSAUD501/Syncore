@@ -891,7 +891,6 @@ export type SyncoreCoreCapability = "storage" | "scheduler" | "devtools" | "ownT
 export interface SyncoreDatabaseReader<TSchema extends SyncoreDataModel = SyncoreDataModel> {
     get<TTableName extends TableNames<TSchema>>(table: TTableName, id: string): Promise<DocumentForTable<TSchema, TTableName> | null>;
     query<TTableName extends TableNames<TSchema>>(table: TTableName): QueryBuilder<TSchema["tables"][TTableName], DocumentForTable<TSchema, TTableName>>;
-    raw<TValue = unknown>(sql: string, params?: unknown[]): Promise<TValue[]>;
 }
 
 // @public

@@ -206,12 +206,6 @@ export interface SyncoreRuntimeSummary {
 }
 
 export interface SyncoreDevtoolsCapabilities {
-  sql?: {
-    read: boolean;
-    write: boolean;
-    live: boolean;
-    reason?: string;
-  };
   data?: {
     browse: boolean;
     mutate: boolean;
@@ -437,9 +431,9 @@ function stableHash(input: string, salt: number): number {
 export type SyncoreDevtoolsMessage =
   | {
       type: "hello";
-      protocolVersion?: number;
-      minSupportedProtocolVersion?: number;
-      maxSupportedProtocolVersion?: number;
+      protocolVersion: number;
+      minSupportedProtocolVersion: number;
+      maxSupportedProtocolVersion: number;
       runtimeVersion?: string;
       runtimeId: string;
       platform: string;
@@ -534,16 +528,13 @@ export type SyncoreDevtoolsCommandPayload =
     }
   | { kind: "data.delete"; table: string; id: string }
   | { kind: "data.export"; tables?: string[] }
-  | {
-      kind: "data.referenceOptions";
-      table: string;
-      search?: string;
-      limit?: number;
-      offset?: number;
-    }
-  /* SQL */
-  | { kind: "sql.read"; query: string }
-  | { kind: "sql.write"; query: string }
+    | {
+        kind: "data.referenceOptions";
+        table: string;
+        search?: string;
+        limit?: number;
+        offset?: number;
+      }
   /* Storage */
   | {
       kind: "storage.list";
@@ -598,8 +589,7 @@ export type SyncoreDevtoolsSubscriptionPayload =
       limit?: number;
       offset?: number;
       search?: string;
-    }
-  | { kind: "sql.watch"; query: string };
+    };
 
 export interface DataFilter {
   field: string;
@@ -649,18 +639,6 @@ export type SyncoreDevtoolsCommandResultPayload =
       offset: number;
       hasMore: boolean;
       error?: string;
-    }
-  | {
-      kind: "sql.read.result";
-      columns: string[];
-      rows: unknown[][];
-      error?: string;
-    }
-  | {
-      kind: "sql.write.result";
-      rowsAffected: number;
-      error?: string;
-      invalidationScopes: string[];
     }
   | {
       kind: "storage.list.result";
@@ -737,12 +715,6 @@ export type SyncoreDevtoolsSubscriptionResultPayload =
       offset: number;
       hasMore: boolean;
       error?: string;
-    }
-  | {
-      kind: "sql.watch.result";
-      columns: string[];
-      rows: unknown[][];
-      observedTables: string[];
     };
 
 /* ------------------------------------------------------------------ */
