@@ -45,7 +45,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "storage.protocol",
     title: "Storage protocol",
     short:
-      "Onde os dados deste data source são realmente persistidos (OPFS, IndexedDB ou arquivo).",
+      "Where this data source's data is actually persisted (OPFS, IndexedDB, or file).",
     docSlug: "storage-protocols",
     category: "storage"
   },
@@ -53,21 +53,21 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "storage.opfs",
     title: "opfs",
     short:
-      "Origin Private File System — um banco de dados em arquivo, privado do domínio no navegador.",
+      "Origin Private File System — a domain-private, file-backed database in the browser.",
     docSlug: "storage-protocols",
     category: "storage"
   },
   "storage.indexeddb": {
     slug: "storage.indexeddb",
     title: "indexeddb",
-    short: "IndexedDB — o armazenamento de documentos nativo do navegador.",
+    short: "IndexedDB — the browser's native document store.",
     docSlug: "storage-protocols",
     category: "storage"
   },
   "storage.file": {
     slug: "storage.file",
     title: "file",
-    short: "Um banco de dados em arquivo no disco, usado por Node e Electron.",
+    short: "A file-backed database on disk, used by Node and Electron.",
     docSlug: "storage-protocols",
     category: "storage"
   },
@@ -75,7 +75,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "storage.database-label",
     title: "Database",
     short:
-      "Um data source é o armazenamento lógico compartilhado por runtimes. O rótulo db= é o nome do banco nele.",
+      "A data source is the logical storage shared by runtimes. The db= label is the database name in it.",
     docSlug: "storage-protocols",
     category: "storage"
   },
@@ -83,7 +83,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "storage.public-id",
     title: "Data Source id",
     short:
-      "Um data source é o armazenamento lógico de um ou mais runtimes. Este id identifica esse data source de forma estável.",
+      "A data source is the logical storage of one or more runtimes. This id identifies this data source stably.",
     docSlug: "storage-protocols",
     category: "storage"
   },
@@ -91,7 +91,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "storage.metadata-incomplete",
     title: "Storage metadata incomplete",
     short:
-      "O runtime não anunciou metadados completos; alguns campos podem estar ausentes.",
+      "The runtime has not announced full metadata; some fields may be missing.",
     docSlug: "storage-protocols",
     category: "storage"
   },
@@ -101,35 +101,35 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.platform",
     title: "Platform",
     short:
-      "Um runtime é uma instância viva do seu app. A plataforma é o ambiente onde ele roda.",
+      "A runtime is a live instance of your app. The platform is the environment where it runs.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
   "platform.browser-worker": {
     slug: "platform.browser-worker",
     title: "browser-worker",
-    short: "Um runtime rodando dentro de um Web Worker, no navegador.",
+    short: "A runtime running inside a Web Worker, in the browser.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
   "platform.browser": {
     slug: "platform.browser",
     title: "browser",
-    short: "Um runtime rodando na thread principal do navegador.",
+    short: "A runtime running on the main browser thread.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
   "platform.node": {
     slug: "platform.node",
     title: "node",
-    short: "Um runtime rodando em Node.js (servidor, CLI, script).",
+    short: "A runtime running in Node.js (server, CLI, script).",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
   "platform.electron-main": {
     slug: "platform.electron-main",
     title: "electron-main",
-    short: "Um runtime rodando no processo principal do Electron.",
+    short: "A runtime running in the Electron main process.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -137,7 +137,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.session",
     title: "Runtime session",
     short:
-      "Um runtime é uma instância viva do seu app conectada ao hub. O rótulo da sessão a identifica.",
+      "A runtime is a live instance of your app connected to the hub. The session label identifies it.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -145,14 +145,14 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.public-id",
     title: "Runtime id",
     short:
-      "Um runtime é uma instância viva do seu app conectada ao hub. Este id identifica esse runtime de forma estável.",
+      "A runtime is a live instance of your app connected to the hub. This id identifies this runtime stably.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
   "runtime.browser": {
     slug: "runtime.browser",
     title: "Browser",
-    short: "A família de navegador/host do runtime, lida do rótulo da sessão.",
+    short: "The browser/host family of the runtime, parsed from the session label.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -160,7 +160,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.connection",
     title: "Connection",
     short:
-      "Se este runtime está conectado ao hub agora. Comandos só rodam em runtimes conectados.",
+      "Whether this runtime is connected to the hub right now. Commands only run on connected runtimes.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -168,7 +168,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "target.data-source",
     title: "Data source",
     short:
-      "O alvo de armazenamento lógico que um ou mais runtimes compartilham.",
+      "The logical storage target that one or more runtimes share.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -176,7 +176,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "target.kind-client",
     title: "Client target",
     short:
-      "Um alvo de cliente por runtime (mostrado como T<id>), escopado àquele runtime.",
+      "A per-runtime client target (shown as T<id>), scoped to that runtime.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -184,14 +184,14 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "target.kind-project",
     title: "Project target",
     short:
-      "Um alvo de projeto compartilhado que todos os runtimes do data source podem usar.",
+      "A shared project target that all runtimes on the data source can use.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
   "runtime.role-app": {
     slug: "runtime.role-app",
     title: "app",
-    short: "Um runtime executando o código do seu aplicativo.",
+    short: "A runtime executing your application code.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -199,7 +199,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.role-project-target",
     title: "project-target",
     short:
-      "Um runtime que hospeda o alvo de projeto compartilhado (administrativo).",
+      "A runtime hosting the shared project target (administrative).",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -207,7 +207,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.project-target",
     title: "Project",
     short:
-      "Runtime do Project Target: o runtime administrativo local que detém o armazenamento canônico.",
+      "Project Target runtime: the local administrative runtime holding canonical storage.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -215,7 +215,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.executor",
     title: "Executor",
     short:
-      "O runtime pelo qual os comandos rodam enquanto “All runtimes” está selecionado.",
+      "The runtime through which commands run while “All runtimes” is selected.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -223,7 +223,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "runtime.all-runtimes",
     title: "All runtimes",
     short:
-      "Mostra atividade de todos os runtimes conectados a este data source.",
+      "Shows activity from all runtimes connected to this data source.",
     docSlug: "runtime-and-targets",
     category: "runtime"
   },
@@ -231,49 +231,49 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "change.commit": {
     slug: "change.commit",
     title: "commit",
-    short: "Uma transação foi confirmada, alterando documentos.",
+    short: "A transaction was committed, modifying documents.",
     docSlug: "change-reasons",
     category: "reactivity"
   },
   "change.storage-put": {
     slug: "change.storage-put",
     title: "storage-put",
-    short: "Um item do armazenamento (key/value) foi gravado.",
+    short: "A storage (key/value) item was written.",
     docSlug: "change-reasons",
     category: "reactivity"
   },
   "change.storage-delete": {
     slug: "change.storage-delete",
     title: "storage-delete",
-    short: "Um item do armazenamento (key/value) foi removido.",
+    short: "A storage (key/value) item was removed.",
     docSlug: "change-reasons",
     category: "reactivity"
   },
   "change.reconcile": {
     slug: "change.reconcile",
     title: "reconcile",
-    short: "O cache local foi reconciliado com o armazenamento autoritativo.",
+    short: "The local cache was reconciled with authoritative storage.",
     docSlug: "change-reasons",
     category: "reactivity"
   },
   "invalidate.scope-database": {
     slug: "invalidate.scope-database",
     title: "scope: database",
-    short: "A invalidação afeta apenas o banco de documentos.",
+    short: "Invalidation affects only the document database.",
     docSlug: "change-reasons",
     category: "reactivity"
   },
   "invalidate.scope-storage": {
     slug: "invalidate.scope-storage",
     title: "scope: storage",
-    short: "A invalidação afeta apenas o armazenamento key/value.",
+    short: "Invalidation affects only the key/value storage.",
     docSlug: "change-reasons",
     category: "reactivity"
   },
   "invalidate.scope-all": {
     slug: "invalidate.scope-all",
     title: "scope: all",
-    short: "A invalidação afeta banco de dados e armazenamento.",
+    short: "Invalidation affects both database and storage.",
     docSlug: "change-reasons",
     category: "reactivity"
   },
@@ -282,14 +282,14 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "fn.query": {
     slug: "fn.query",
     title: "Query",
-    short: "Uma função de leitura que retorna dados e permanece reativa.",
+    short: "A read function that returns data and remains reactive.",
     docSlug: "function-types",
     category: "functions"
   },
   "fn.mutation": {
     slug: "fn.mutation",
     title: "Mutation",
-    short: "Uma função de escrita que altera documentos numa transação.",
+    short: "A write function that modifies documents in a transaction.",
     docSlug: "function-types",
     category: "functions"
   },
@@ -297,42 +297,42 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "fn.action",
     title: "Action",
     short:
-      "Uma função com efeitos colaterais (rede, fs) que roda fora de uma transação.",
+      "A side-effecting function (network, fs) that runs outside a transaction.",
     docSlug: "function-types",
     category: "functions"
   },
   "fn.cron": {
     slug: "fn.cron",
     title: "Cron",
-    short: "Uma função agendada para rodar de forma recorrente.",
+    short: "A scheduled function set to run on a recurring basis.",
     docSlug: "function-types",
     category: "functions"
   },
   "fn.registered": {
     slug: "fn.registered",
     title: "registered",
-    short: "Descoberta a partir do esquema/registro como uma função conhecida.",
+    short: "Discovered from the schema/registry as a known function.",
     docSlug: "function-types",
     category: "functions"
   },
   "fn.observed-only": {
     slug: "fn.observed-only",
     title: "observed only",
-    short: " vista em runtime, mas não registrada formalmente no esquema.",
+    short: "Seen at runtime but not formally registered in the schema.",
     docSlug: "function-types",
     category: "functions"
   },
   "fn.consumers": {
     slug: "fn.consumers",
     title: "Consumers",
-    short: "Funções e componentes que chamam esta função.",
+    short: "Functions and components that call this function.",
     docSlug: "function-types",
     category: "functions"
   },
   "fn.dependencies": {
     slug: "fn.dependencies",
     title: "Dependencies",
-    short: "Outras funções que esta função chama.",
+    short: "Other functions that this function calls.",
     docSlug: "function-types",
     category: "functions"
   },
@@ -340,14 +340,14 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     slug: "fn.active-queries",
     title: "Active queries",
     short:
-      "Assinaturas de query ativas que referenciam esta função agora mesmo.",
+      "Active query subscriptions referencing this function right now.",
     docSlug: "function-types",
     category: "functions"
   },
   "fn.reference": {
     slug: "fn.reference",
     title: "Function reference",
-    short: "O identificador tipado e serializável usado para invocar a função.",
+    short: "The typed, serializable identifier used to invoke the function.",
     docSlug: "function-types",
     category: "functions"
   },
@@ -356,42 +356,42 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "schema.owner-root": {
     slug: "schema.owner-root",
     title: "owner: root",
-    short: "Este campo/store pertence ao escopo raiz, compartilhado pelo app.",
+    short: "This field/store belongs to the root scope, shared by the app.",
     docSlug: "schema-ownership",
     category: "schema"
   },
   "schema.owner-component": {
     slug: "schema.owner-component",
     title: "owner: component",
-    short: "Este campo/store pertence ao escopo de um componente instalado.",
+    short: "This field/store belongs to an installed component's scope.",
     docSlug: "schema-ownership",
     category: "schema"
   },
   "schema.field-kind": {
     slug: "schema.field-kind",
     title: "Field kind",
-    short: "O tipo inferido do valor do campo (string, number, date, …).",
+    short: "The inferred type of the field value (string, number, date, …).",
     docSlug: "schema-ownership",
     category: "schema"
   },
   "schema.reference": {
     slug: "schema.reference",
     title: "Reference",
-    short: "Uma chave estrangeira para um documento em outra tabela.",
+    short: "A foreign key to a document in another table.",
     docSlug: "schema-ownership",
     category: "schema"
   },
   "schema.reference-missing": {
     slug: "schema.reference-missing",
     title: "missing",
-    short: "O documento referenciado não existe (referência quebrada).",
+    short: "The referenced document does not exist (broken reference).",
     docSlug: "schema-ownership",
     category: "schema"
   },
   "schema.indexes": {
     slug: "schema.indexes",
     title: "Indexes",
-    short: "Campos indexados que aceleram as consultas desta tabela.",
+    short: "Indexed fields that speed up queries on this table.",
     docSlug: "schema-ownership",
     category: "schema"
   },
@@ -400,42 +400,42 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "op.insert": {
     slug: "op.insert",
     title: "insert",
-    short: "Uma operação de mutação que cria um novo documento.",
+    short: "A mutation operation that creates a new document.",
     docSlug: "operations",
     category: "operations"
   },
   "op.patch": {
     slug: "op.patch",
     title: "patch",
-    short: "Uma operação de mutação que atualiza parte de um documento.",
+    short: "A mutation operation that updates part of a document.",
     docSlug: "operations",
     category: "operations"
   },
   "op.replace": {
     slug: "op.replace",
     title: "replace",
-    short: "Uma operação de mutação que substitui um documento inteiro.",
+    short: "A mutation operation that replaces an entire document.",
     docSlug: "operations",
     category: "operations"
   },
   "op.mut-delete": {
     slug: "op.mut-delete",
     title: "delete",
-    short: "Uma operação de mutação que remove um documento.",
+    short: "A mutation operation that removes a document.",
     docSlug: "operations",
     category: "operations"
   },
   "op.put": {
     slug: "op.put",
     title: "put",
-    short: "Uma operação de armazenamento que grava um item key/value.",
+    short: "A storage operation that writes a key/value item.",
     docSlug: "operations",
     category: "operations"
   },
   "op.storage-delete": {
     slug: "op.storage-delete",
     title: "delete",
-    short: "Uma operação de armazenamento que remove um item key/value.",
+    short: "A storage operation that removes a key/value item.",
     docSlug: "operations",
     category: "operations"
   },
@@ -444,42 +444,42 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "scheduler.cron": {
     slug: "scheduler.cron",
     title: "Cron",
-    short: "Uma função agendada que roda de forma recorrente.",
+    short: "A scheduled function that runs on a recurring basis.",
     docSlug: "scheduler",
     category: "scheduler"
   },
   "scheduler.schedule": {
     slug: "scheduler.schedule",
     title: "Schedule",
-    short: "A cadência (intervalo ou expressão cron) em que o job roda.",
+    short: "The cadence (interval or cron expression) at which the job runs.",
     docSlug: "scheduler",
     category: "scheduler"
   },
   "scheduler.status": {
     slug: "scheduler.status",
     title: "Status",
-    short: "Estado atual do job (active, paused, due, error).",
+    short: "Current state of the job (active, paused, due, error).",
     docSlug: "scheduler",
     category: "scheduler"
   },
   "scheduler.next-run": {
     slug: "scheduler.next-run",
     title: "Next run",
-    short: "Quando o job está agendado para rodar em seguida.",
+    short: "When the job is scheduled to run next.",
     docSlug: "scheduler",
     category: "scheduler"
   },
   "scheduler.last-run": {
     slug: "scheduler.last-run",
     title: "Last run",
-    short: "Quando o job executou pela última vez.",
+    short: "When the job executed last.",
     docSlug: "scheduler",
     category: "scheduler"
   },
   "scheduler.cron-expression": {
     slug: "scheduler.cron-expression",
     title: "Cron expression",
-    short: "Uma expressão de 5 campos que descreve quando o job roda.",
+    short: "A 5-field expression describing when the job runs.",
     docSlug: "scheduler",
     category: "scheduler"
   },
@@ -488,42 +488,42 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "query.status-running": {
     slug: "query.status-running",
     title: "running",
-    short: "A consulta está em execução no momento.",
+    short: "The query is currently executing.",
     docSlug: "queries",
     category: "queries"
   },
   "query.status-done": {
     slug: "query.status-done",
     title: "done",
-    short: "A consulta foi concluída com sucesso.",
+    short: "The query completed successfully.",
     docSlug: "queries",
     category: "queries"
   },
   "query.status-error": {
     slug: "query.status-error",
     title: "error",
-    short: "A consulta falhou durante a execução.",
+    short: "The query failed during execution.",
     docSlug: "queries",
     category: "queries"
   },
   "query.status-cancelled": {
     slug: "query.status-cancelled",
     title: "cancelled",
-    short: "A consulta foi cancelada antes de concluir.",
+    short: "The query was cancelled before completion.",
     docSlug: "queries",
     category: "queries"
   },
   "query.duration": {
     slug: "query.duration",
     title: "Duration",
-    short: "Quanto tempo a consulta levou para executar.",
+    short: "How long the query took to execute.",
     docSlug: "queries",
     category: "queries"
   },
   "query.rows": {
     slug: "query.rows",
     title: "Rows",
-    short: "Número de linhas/documentos retornados pela consulta.",
+    short: "Number of rows/documents returned by the query.",
     docSlug: "queries",
     category: "queries"
   },
@@ -532,14 +532,14 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "logs.level": {
     slug: "logs.level",
     title: "Level",
-    short: "Severidade de uma entrada de log (error, warn, info, …).",
+    short: "Severity of a log entry (error, warn, info, …).",
     docSlug: "logs",
     category: "logs"
   },
   "logs.scope": {
     slug: "logs.scope",
     title: "Scope",
-    short: "O componente ou função de onde a entrada de log se originou.",
+    short: "The component or function where the log entry originated.",
     docSlug: "logs",
     category: "logs"
   },
@@ -548,28 +548,28 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
   "traces.span": {
     slug: "traces.span",
     title: "Span",
-    short: "Uma unidade de trabalho cronometrada dentro de um trace.",
+    short: "A unit of timed work within a trace.",
     docSlug: "traces",
     category: "traces"
   },
   "traces.duration": {
     slug: "traces.duration",
     title: "Duration",
-    short: "Tempo de relógio do span, incluindo seus filhos.",
+    short: "Wall-clock time of the span, including its children.",
     docSlug: "traces",
     category: "traces"
   },
   "traces.children": {
     slug: "traces.children",
     title: "Children",
-    short: "Spans aninhados disparados dentro deste span.",
+    short: "Nested spans triggered within this span.",
     docSlug: "traces",
     category: "traces"
   },
   "traces.origin": {
     slug: "traces.origin",
     title: "Origin",
-    short: "O runtime/documento de onde o span se originou.",
+    short: "The runtime/document where the span originated.",
     docSlug: "traces",
     category: "traces"
   }
@@ -584,55 +584,55 @@ export const GLOSSARY_CATEGORIES: {
     category: "storage",
     title: "Storage Protocols",
     description:
-      "Como o Syncore persiste dados entre runtimes de navegador, Node e Electron."
+      "How Syncore persists data across browser, Node, and Electron runtimes."
   },
   {
     category: "runtime",
     title: "Runtime & Targets",
     description:
-      "Plataformas, sessões, data sources e a diferença entre alvos de cliente e de projeto."
+      "Platforms, sessions, data sources, and the difference between client and project targets."
   },
   {
     category: "reactivity",
     title: "Reactivity & Invalidation",
-    description: "Por que os caches mudam e como a invalidação é escopada."
+    description: "Why caches change and how invalidation is scoped."
   },
   {
     category: "functions",
     title: "Functions",
     description:
-      "Funções query, mutation, action e cron, e seu ciclo de vida."
+      "Query, mutation, action, and cron functions, and their lifecycle."
   },
   {
     category: "schema",
     title: "Schema & Documents",
-    description: "Posse, tipos de campo, referências e índices."
+    description: "Ownership, field types, references, and indexes."
   },
   {
     category: "operations",
     title: "Operations",
     description:
-      "Os códigos de operação de mutação e armazenamento mostrados nos logs de mudança."
+      "The mutation and storage opcodes shown in changelogs."
   },
   {
     category: "scheduler",
     title: "Scheduler",
-    description: "Jobs cron, agendamentos e status de execução."
+    description: "Cron jobs, schedules, and execution status."
   },
   {
     category: "queries",
     title: "Active Queries",
-    description: "Status, duração e métricas de resultado das queries ativas."
+    description: "Status, duration, and result metrics for active queries."
   },
   {
     category: "logs",
     title: "Logs",
-    description: "Níveis e escopos de log."
+    description: "Log levels and scopes."
   },
   {
     category: "traces",
     title: "Traces",
-    description: "Spans, duração e origens em um trace."
+    description: "Spans, duration, and origins in a trace."
   }
 ];
 
