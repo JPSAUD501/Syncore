@@ -414,7 +414,9 @@ button {
 /*  Theme toggle — circular reveal via the View Transitions API.       */
 /*  The animation itself is driven by WAAPI in lib/theme.ts            */
 /*  (animating ::view-transition-new(root)). Here we only disable the  */
-/*  default cross-fade so our circle reveal isn't double-animated.      */
+/*  default cross-fade so our circle reveal isn't double-animated,     */
+/*  and stack the NEW snapshot ABOVE the old one so the expanding      */
+/*  circle is actually visible as it grows.                            */
 /* ================================================================== */
 
 ::view-transition-old(root),
@@ -428,7 +430,7 @@ button {
 }
 
 ::view-transition-old(root) {
-  z-index: 9999;
+  z-index: 0;
 }
 
 /* ================================================================== */
