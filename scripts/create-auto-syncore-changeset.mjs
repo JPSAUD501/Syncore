@@ -85,6 +85,7 @@ async function hasPendingChangeset() {
     (entry) =>
       entry.isFile() &&
       entry.name.endsWith(".md") &&
+      entry.name !== "README.md" &&
       entry.name !== path.basename(autoChangesetPath)
   );
 }
