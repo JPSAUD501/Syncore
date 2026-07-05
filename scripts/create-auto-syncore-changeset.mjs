@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -63,6 +63,7 @@ async function main() {
     "Auto-generated patch release for published Syncore package changes.",
     ""
   ].join("\n");
+  await mkdir(changesetDir, { recursive: true });
   await writeFile(autoChangesetPath, content, "utf8");
 
   console.log(
@@ -71,12 +72,29 @@ async function main() {
 }
 
 async function hasPendingChangeset() {
-  const entries = await readdir(changesetDir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(changesetDir, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return false;
+    }
+    throw error;
+  }
   return entries.some(
     (entry) =>
       entry.isFile() &&
       entry.name.endsWith(".md") &&
       entry.name !== path.basename(autoChangesetPath)
+  );
+}
+
+function isMissingFileError(error) {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
   );
 }
 
@@ -165,11 +183,23 @@ async function readChangedFiles(diffBase) {
 }
 
 async function exec(command, args, cwd) {
-  return execFileAsync(command, args, {
+  const executable = resolveExecutable(command);
+  const executableArgs =
+    process.platform === "win32" && command === "npm"
+      ? ["/d", "/s", "/c", "npm.cmd", ...args]
+      : args;
+  return execFileAsync(executable, executableArgs, {
     cwd,
     env: process.env,
     windowsHide: true
   });
+}
+
+function resolveExecutable(command) {
+  if (process.platform === "win32" && command === "npm") {
+    return process.env.ComSpec ?? "cmd.exe";
+  }
+  return command;
 }
 
 function formatError(error) {
