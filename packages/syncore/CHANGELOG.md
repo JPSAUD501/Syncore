@@ -1,5 +1,11 @@
 # syncorejs
 
+## 0.2.8
+
+### Patch Changes
+
+- Fix packaged dashboard root resolution for CLI runtime startup.
+
 ## 0.2.7
 
 ### Patch Changes
