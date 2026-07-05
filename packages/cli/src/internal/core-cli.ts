@@ -3271,15 +3271,15 @@ export async function startDevHub(options: {
   return sessionState;
 }
 
-async function resolvePackagedDashboardRoot(): Promise<string | null> {
+export async function resolvePackagedDashboardRoot(
+  packageRoot: string = CORE_PACKAGE_ROOT
+): Promise<string | null> {
   const workspaceRoots = await resolveWorkspaceRoots([
-    CORE_PACKAGE_ROOT,
+    packageRoot,
     process.cwd()
   ]);
   const candidates = [
-    path.resolve(CORE_PACKAGE_ROOT, "..", "_dashboard"),
-    path.resolve(CORE_PACKAGE_ROOT, "_dashboard"),
-    path.resolve(CORE_PACKAGE_ROOT, "..", "syncore", "dist", "_dashboard"),
+    path.resolve(packageRoot, "..", "..", "_dashboard"),
     ...workspaceRoots.map((root) =>
       path.join(root, "packages", "syncore", "dist", "_dashboard")
     )
