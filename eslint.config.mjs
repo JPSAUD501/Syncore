@@ -42,6 +42,14 @@ export default tseslint.config(
       "@typescript-eslint/unbound-method": "off"
     }
   },
+  {
+    files: ["*.config.mjs", "scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        ...globals.node
+      }
+    }
+  },
   prettier,
   {
     files: ["**/*.test.ts", "**/*.test.tsx"],
