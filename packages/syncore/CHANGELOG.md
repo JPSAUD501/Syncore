@@ -1,5 +1,11 @@
 # syncorejs
 
+## 0.2.7
+
+### Patch Changes
+
+- Fix the release workflow configuration so Syncore publishes through Changesets.
+
 ## 0.2.6
 
 ### Patch Changes
