@@ -1,7 +1,7 @@
 {
   "name": "@syncore/platform-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,10 +25,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/core": "^0.1.0",
+    "@syncore/core": "^0.2.0",
     "@syncore/devtools-protocol": "^0.1.0",
     "@syncore/internal": "^0.1.0",
-    "@syncore/schema": "^0.1.0",
+    "@syncore/schema": "^0.2.0",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 {
   "name": "@syncore/platform-node",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -30,10 +30,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/core": "^0.1.0",
+    "@syncore/core": "^0.2.0",
     "@syncore/devtools-protocol": "^0.1.0",
     "@syncore/internal": "^0.1.0",
-    "@syncore/schema": "^0.1.0",
+    "@syncore/schema": "^0.2.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {

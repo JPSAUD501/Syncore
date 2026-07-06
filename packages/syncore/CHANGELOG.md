@@ -1,5 +1,11 @@
 # syncorejs
 
+## 0.3.0
+
+### Minor Changes
+
+- 47b6b6e: Improvements
+
 ## 0.2.8
 
 ### Patch Changes

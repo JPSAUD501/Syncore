@@ -1,7 +1,7 @@
 {
   "name": "@syncore/cli",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -26,11 +26,11 @@
     "syncorejs:codegen": "syncorejs codegen"
   },
   "dependencies": {
-    "@syncore/core": "^0.1.0",
+    "@syncore/core": "^0.2.0",
     "@syncore/devtools-protocol": "^0.1.0",
     "@syncore/internal": "^0.1.0",
-    "@syncore/platform-node": "^0.1.0",
-    "@syncore/schema": "^0.1.0",
+    "@syncore/platform-node": "^0.2.0",
+    "@syncore/schema": "^0.2.0",
     "adm-zip": "^0.5.17",
     "commander": "^14.0.3",
     "tsx": "^4.22.3",
