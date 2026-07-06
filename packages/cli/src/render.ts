@@ -1,5 +1,6 @@
 import type { CliContext } from "./context.js";
 import type { DoctorReport } from "./doctor.js";
+import { formatSchemaChange, getSchemaChangesBySeverity } from "@syncore/core";
 import type {
   ClientTargetDescriptor,
   SyncoreTargetDescriptor
@@ -209,14 +210,22 @@ export function printDoctorReport(
 
   process.stdout.write("  drift:\n");
   process.stdout.write(`    state: ${report.drift.state}\n`);
-  process.stdout.write(
-    `    current: ${report.drift.currentSchemaHash ?? "unavailable"}  stored: ${report.drift.storedSchemaHash ?? "none"}\n`
-  );
+  if (options.verbose) {
+    process.stdout.write(
+      `    current: ${report.drift.currentSchemaHash ?? "unavailable"}  stored: ${report.drift.storedSchemaHash ?? "none"}\n`
+    );
+  }
   if (report.drift.details) {
     process.stdout.write(`    ${report.drift.details}\n`);
   }
-  if (report.drift.destructiveChanges.length > 0) {
-    process.stdout.write(`    destructive: ${report.drift.destructiveChanges.join("; ")}\n`);
+  const destructiveChanges = getSchemaChangesBySeverity(
+    report.drift,
+    "destructive"
+  );
+  if (destructiveChanges.length > 0) {
+    process.stdout.write(
+      `    destructive: ${destructiveChanges.map(formatSchemaChange).join("; ")}\n`
+    );
   }
   if (report.projectTarget) {
     process.stdout.write("  project target:\n");

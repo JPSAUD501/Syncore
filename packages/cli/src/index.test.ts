@@ -689,13 +689,70 @@ describe("syncore CLI", () => {
     const statusPayload = JSON.parse(statusResult.stdout) as {
       command: string;
       data: {
+        changes: unknown[];
         statements: string[];
-        destructiveChanges: string[];
+        summary: {
+          destructiveChanges: number;
+        };
       };
     };
     expect(statusPayload.command).toBe("migrate status");
     expect(statusPayload.data.statements).toEqual([]);
-    expect(statusPayload.data.destructiveChanges).toEqual([]);
+    expect(statusPayload.data.changes).toEqual([]);
+    expect(statusPayload.data.summary.destructiveChanges).toBe(0);
+
+    const humanStatus = await runCli(cwd, ["migrate", "status"]);
+    expect(humanStatus.exitCode).toBe(0);
+    expect(humanStatus.stdout).toContain("Migration status:");
+    expect(humanStatus.stdout).toContain("Destructive changes: 0");
+    expect(humanStatus.stdout).not.toContain("Current schema hash:");
+  }, 30_000);
+
+  test("migrate generate requires explicit review for destructive changes", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    await runCli(cwd, ["migrate", "generate", "initial"]);
+
+    await writeFile(
+      path.join(cwd, "syncore", "schema.ts"),
+      `import { defineSchema, defineTable, s } from "syncorejs";
+
+export default defineSchema({
+  tasks: defineTable({
+    text: s.string()
+  })
+});
+`
+    );
+    await runCli(cwd, ["codegen"]);
+
+    const blocked = await runCli(cwd, ["migrate", "generate", "remove_done"]);
+    expect(blocked.exitCode).toBe(1);
+    expect(blocked.stderr).toContain(
+      "Destructive schema changes require manual review"
+    );
+
+    const allowed = await runCli(cwd, [
+      "migrate",
+      "generate",
+      "remove_done",
+      "--allow-destructive",
+      "--json"
+    ]);
+    expect(allowed.exitCode).toBe(0);
+    const payload = JSON.parse(allowed.stdout) as {
+      data: { path: string; changes: Array<{ severity: string }> };
+    };
+    expect(payload.data.changes.some((change) => change.severity === "destructive")).toBe(true);
+    const migrationSql = await readFile(path.join(cwd, payload.data.path), "utf8");
+    expect(migrationSql).toContain("-- destructive-review-required: true");
+
+    const status = await runCli(cwd, ["migrate", "status", "--json"]);
+    const statusPayload = JSON.parse(status.stdout) as {
+      data: { summary: { destructiveChanges: number } };
+    };
+    expect(statusPayload.data.summary.destructiveChanges).toBeGreaterThan(0);
   }, 30_000);
 
   test("run, data, export, and import work against the local runtime", async () => {

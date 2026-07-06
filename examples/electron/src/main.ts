@@ -1,9 +1,6 @@
 import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
-import {
-  bindElectronWindowToSyncoreRuntime,
-  createNodeSyncoreRuntime
-} from "syncorejs/node";
+import { createElectronSyncoreApp } from "syncorejs/node/ipc";
 import schema from "../syncore/_generated/schema.js";
 import { functions } from "../syncore/_generated/functions.js";
 
@@ -23,19 +20,15 @@ const userDataDirectory =
 
 app.setPath("userData", userDataDirectory);
 
-const runtime = createNodeSyncoreRuntime({
-  databasePath: path.join(userDataDirectory, "syncore.db"),
-  storageDirectory: path.join(userDataDirectory, "storage"),
+const syncore = createElectronSyncoreApp({
+  app,
+  ipcMain,
+  userDataPath: userDataDirectory,
   schema,
-  functions,
-  platform: "electron-main"
+  functions
 });
 
 let mainWindow: BrowserWindow | null = null;
-let attachedRuntime: {
-  ready: Promise<void>;
-  dispose(): Promise<void>;
-} | null = null;
 
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
@@ -48,16 +41,7 @@ async function createWindow(): Promise<void> {
     }
   });
 
-  attachedRuntime = bindElectronWindowToSyncoreRuntime({
-    runtime,
-    window: mainWindow,
-    ipcMain
-  });
-  const currentRuntime = attachedRuntime;
-  if (!currentRuntime) {
-    throw new Error("Failed to attach the Electron Syncore runtime.");
-  }
-  await currentRuntime.ready;
+  await syncore.bindWindow(mainWindow).ready;
 
   const rendererUrl = process.env.SYNCORE_ELECTRON_RENDERER_URL;
   if (rendererUrl) {
@@ -80,8 +64,5 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
-  void (async () => {
-    await attachedRuntime?.dispose();
-    await runtime.stop();
-  })();
+  void syncore.dispose();
 });

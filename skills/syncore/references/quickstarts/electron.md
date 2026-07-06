@@ -44,21 +44,17 @@ project-local database for Electron apps.
 ```ts
 import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
-import {
-  bindElectronWindowToSyncoreRuntime,
-  createNodeSyncoreRuntime
-} from "syncorejs/node";
+import { createElectronSyncoreApp } from "syncorejs/node/ipc";
 import schema from "../syncore/_generated/schema.js";
 import { resolvedComponents } from "../syncore/_generated/components.js";
 import { functions } from "../syncore/_generated/functions.js";
 
-const runtime = createNodeSyncoreRuntime({
-  databasePath: path.join(app.getPath("userData"), "syncore.db"),
-  storageDirectory: path.join(app.getPath("userData"), "storage"),
+const syncore = createElectronSyncoreApp({
+  app,
+  ipcMain,
   schema,
   functions,
-  components: resolvedComponents,
-  platform: "electron-main"
+  components: resolvedComponents
 });
 
 async function createWindow() {
@@ -69,21 +65,15 @@ async function createWindow() {
     }
   });
 
-  const binding = bindElectronWindowToSyncoreRuntime({
-    runtime,
-    window,
-    ipcMain
-  });
-
-  await binding.ready;
+  await syncore.bindWindow(window).ready;
   await window.loadURL("http://localhost:5173");
-
-  window.on("closed", () => {
-    void binding.dispose();
-  });
 }
 
 void app.whenReady().then(createWindow);
+
+app.on("will-quit", () => {
+  void syncore.dispose();
+});
 ```
 
 ## 6. Keep preload narrow

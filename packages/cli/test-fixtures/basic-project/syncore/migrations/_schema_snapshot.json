@@ -1,23 +1,23 @@
 {
-  "formatVersion": 3,
-  "plannerVersion": 2,
+  "formatVersion": 4,
+  "plannerVersion": 3,
   "tables": [
     {
       "name": "tasks",
       "validator": {
         "kind": "object",
         "shape": {
-          "done": {
-            "optional": false,
-            "validator": {
-              "kind": "boolean"
-            }
-          },
           "text": {
-            "optional": false,
             "validator": {
               "kind": "string"
-            }
+            },
+            "optional": false
+          },
+          "done": {
+            "validator": {
+              "kind": "boolean"
+            },
+            "optional": false
           }
         }
       },
@@ -58,5 +58,5 @@
       "searchIndexes": []
     }
   ],
-  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"text\",\"done\"],\"fields\":[{\"name\":\"done\",\"optional\":false,\"storage\":{\"kind\":\"boolean\"},\"validator\":{\"kind\":\"boolean\"}},{\"name\":\"text\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"done\"],\"name\":\"by_done\"}],\"name\":\"tasks\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"done\":{\"optional\":false,\"validator\":{\"kind\":\"boolean\"}},\"text\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}}]}"
+  "hash": "sha256:e9ddc71fa55720b6"
 }

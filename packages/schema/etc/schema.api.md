@@ -104,6 +104,9 @@ export class EnumValidator<TValues extends readonly [string, ...string[]]> exten
 export type FieldPaths<TValidator> = TValidator extends Validator<unknown, unknown, infer TFieldPaths> ? TFieldPaths : never;
 
 // @public (undocumented)
+export function formatSchemaChange(change: SchemaChange): string;
+
+// @public (undocumented)
 export type GenericTableIndexes = Record<string, readonly string[]>;
 
 // @public (undocumented)
@@ -111,6 +114,11 @@ export type GenericTableSearchIndexes = Record<string, {
     searchField: string;
     filterFields: readonly string[];
 }>;
+
+// @public (undocumented)
+export function getSchemaChangesBySeverity<TSeverity extends SchemaChangeSeverity>(plan: Pick<SchemaMigrationPlan, "changes">, severity: TSeverity): Array<Extract<SchemaChange, {
+    severity: TSeverity;
+}>>;
 
 // @public (undocumented)
 export class IdValidator<TTableName extends string> extends BaseValidator<string> {
@@ -256,35 +264,120 @@ export function renderMigrationSql(plan: SchemaMigrationPlan, options?: {
 export const s: ValidatorBuilderApi;
 
 // @public (undocumented)
+export type SchemaChange = {
+    kind: "table-added";
+    severity: "statement";
+    table: string;
+    statement: string;
+} | {
+    kind: "table-removed";
+    severity: "destructive";
+    table: string;
+    message: string;
+} | {
+    kind: "field-added";
+    severity: "warning";
+    table: string;
+    field: string;
+    validator: ValidatorDescription;
+    storage: ValidatorDescription;
+    optional: boolean;
+    message: string;
+} | {
+    kind: "field-removed";
+    severity: "destructive";
+    table: string;
+    field: string;
+    message: string;
+} | {
+    kind: "field-validator-changed";
+    severity: "warning";
+    table: string;
+    field?: string;
+    previousValidator: ValidatorDescription;
+    nextValidator: ValidatorDescription;
+    message: string;
+} | {
+    kind: "index-added";
+    severity: "statement";
+    table: string;
+    index: string;
+    fields: string[];
+    statement: string;
+} | {
+    kind: "index-removed";
+    severity: "destructive";
+    table: string;
+    index: string;
+    fields: string[];
+    message: string;
+} | {
+    kind: "index-changed";
+    severity: "destructive";
+    table: string;
+    index: string;
+    previousFields: string[];
+    nextFields: string[];
+    message: string;
+} | {
+    kind: "search-index-added";
+    severity: "statement";
+    table: string;
+    index: string;
+    searchField: string;
+    filterFields: string[];
+    statement: string;
+} | {
+    kind: "search-index-removed";
+    severity: "destructive";
+    table: string;
+    index: string;
+    searchField: string;
+    filterFields: string[];
+    message: string;
+} | {
+    kind: "search-index-changed";
+    severity: "destructive";
+    table: string;
+    index: string;
+    previousSearchField: string;
+    nextSearchField: string;
+    previousFilterFields: string[];
+    nextFilterFields: string[];
+    message: string;
+};
+
+// @public (undocumented)
+export type SchemaChangeSeverity = "statement" | "warning" | "destructive";
+
+// @public (undocumented)
 export interface SchemaMigrationPlan {
     // (undocumented)
-    destructiveChanges: string[];
+    changes: SchemaChange[];
     // (undocumented)
-    formatVersion: 3;
+    formatVersion: 4;
     // (undocumented)
     fromSchemaHash: string | null;
     // (undocumented)
     nextHash: string;
     // (undocumented)
-    plannerVersion: 2;
+    plannerVersion: 3;
     // (undocumented)
     previousHash: string | null;
     // (undocumented)
     statements: string[];
     // (undocumented)
     toSchemaHash: string;
-    // (undocumented)
-    warnings: string[];
 }
 
 // @public (undocumented)
 export interface SchemaSnapshot {
     // (undocumented)
-    formatVersion: 3;
+    formatVersion: 4;
     // (undocumented)
     hash: string;
     // (undocumented)
-    plannerVersion: 2;
+    plannerVersion: 3;
     // (undocumented)
     runtimeVersion?: string;
     // (undocumented)

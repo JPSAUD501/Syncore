@@ -1,7 +1,140 @@
 {
-  "formatVersion": 3,
-  "plannerVersion": 2,
+  "formatVersion": 4,
+  "plannerVersion": 3,
   "tables": [
+    {
+      "name": "contactAttachments",
+      "validator": {
+        "kind": "object",
+        "shape": {
+          "contactId": {
+            "validator": {
+              "kind": "id",
+              "tableName": "contacts"
+            },
+            "optional": false
+          },
+          "fileName": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "contentType": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "size": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          },
+          "storageId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
+          },
+          "createdAt": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
+          }
+        }
+      },
+      "fieldPaths": [
+        "contactId",
+        "fileName",
+        "contentType",
+        "size",
+        "storageId",
+        "createdAt"
+      ],
+      "fields": [
+        {
+          "name": "contactId",
+          "validator": {
+            "kind": "id",
+            "tableName": "contacts"
+          },
+          "storage": {
+            "kind": "id",
+            "tableName": "contacts"
+          },
+          "optional": false
+        },
+        {
+          "name": "contentType",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "fileName",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "size",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "storageId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "by_contact",
+          "fields": [
+            "contactId",
+            "createdAt"
+          ]
+        },
+        {
+          "name": "by_created",
+          "fields": [
+            "createdAt"
+          ]
+        }
+      ],
+      "searchIndexes": []
+    },
     {
       "name": "contacts",
       "validator": {
@@ -132,5 +265,5 @@
       ]
     }
   ],
-  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"name\",\"email\",\"company\",\"color\",\"favorite\",\"createdAt\"],\"fields\":[{\"name\":\"color\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"company\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"email\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"favorite\",\"optional\":true,\"storage\":{\"kind\":\"boolean\"},\"validator\":{\"kind\":\"boolean\"}},{\"name\":\"name\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"createdAt\"],\"name\":\"by_created\"}],\"name\":\"contacts\",\"searchIndexes\":[{\"filterFields\":[],\"name\":\"search_name\",\"searchField\":\"name\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"color\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"company\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"email\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"favorite\":{\"optional\":true,\"validator\":{\"kind\":\"boolean\"}},\"name\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}}]}"
+  "hash": "sha256:92562ddd6004a8e0"
 }

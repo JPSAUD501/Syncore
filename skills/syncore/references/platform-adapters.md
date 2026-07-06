@@ -55,22 +55,23 @@ await withNodeSyncoreClient(
 Run Syncore in the main process, not the renderer:
 
 ```ts
-import path from "node:path";
-import { app } from "electron";
-import { createNodeSyncoreRuntime } from "syncorejs/node";
+import { app, ipcMain } from "electron";
+import { createElectronSyncoreApp } from "syncorejs/node/ipc";
 import schema from "../syncore/schema";
 import { functions } from "../syncore/_generated/functions";
 import { resolvedComponents } from "../syncore/_generated/components";
 
-const runtime = createNodeSyncoreRuntime({
-  databasePath: path.join(app.getPath("userData"), "syncore.db"),
-  storageDirectory: path.join(app.getPath("userData"), "storage"),
+const syncore = createElectronSyncoreApp({
+  app,
+  ipcMain,
   schema,
   functions,
-  components: resolvedComponents,
-  platform: "electron-main"
+  components: resolvedComponents
 });
 ```
+
+Bind each `BrowserWindow` with `syncore.bindWindow(window)` and dispose the
+managed app on Electron `will-quit`.
 
 ## Browser Worker
 

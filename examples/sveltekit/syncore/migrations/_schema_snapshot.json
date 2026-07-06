@@ -1,6 +1,6 @@
 {
-  "formatVersion": 3,
-  "plannerVersion": 2,
+  "formatVersion": 4,
+  "plannerVersion": 3,
   "tables": [
     {
       "name": "completions",
@@ -172,5 +172,5 @@
       "searchIndexes": []
     }
   ],
-  "hash": "{\"formatVersion\":3,\"plannerVersion\":2,\"tables\":[{\"fieldPaths\":[\"habitId\",\"date\"],\"fields\":[{\"name\":\"date\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"habitId\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"date\"],\"name\":\"by_date\"},{\"fields\":[\"habitId\",\"date\"],\"name\":\"by_habit_date\"}],\"name\":\"completions\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"date\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"habitId\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}},{\"fieldPaths\":[\"name\",\"icon\",\"color\",\"archived\",\"createdAt\"],\"fields\":[{\"name\":\"archived\",\"optional\":false,\"storage\":{\"kind\":\"boolean\"},\"validator\":{\"kind\":\"boolean\"}},{\"name\":\"color\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"createdAt\",\"optional\":false,\"storage\":{\"kind\":\"number\"},\"validator\":{\"kind\":\"number\"}},{\"name\":\"icon\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}},{\"name\":\"name\",\"optional\":false,\"storage\":{\"kind\":\"string\"},\"validator\":{\"kind\":\"string\"}}],\"indexes\":[{\"fields\":[\"archived\",\"createdAt\"],\"name\":\"by_archived\"}],\"name\":\"habits\",\"searchIndexes\":[],\"validator\":{\"kind\":\"object\",\"shape\":{\"archived\":{\"optional\":false,\"validator\":{\"kind\":\"boolean\"}},\"color\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"createdAt\":{\"optional\":false,\"validator\":{\"kind\":\"number\"}},\"icon\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}},\"name\":{\"optional\":false,\"validator\":{\"kind\":\"string\"}}}}}]}"
+  "hash": "sha256:36bc0cfb48233390"
 }

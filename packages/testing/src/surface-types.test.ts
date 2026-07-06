@@ -2,11 +2,15 @@ import { describe, expectTypeOf, it } from "vitest";
 import {
   defineSchema,
   defineTable,
+  type Doc,
+  type DocInput,
+  type DocPatch,
   type FunctionArgsFromDefinition,
   type FunctionReferenceFor,
   type FunctionResultFromDefinition,
   type MutationCtx as BaseMutationCtx,
   type QueryCtx as BaseQueryCtx,
+  type TableNames,
   s
 } from "syncorejs";
 import { createNextSyncoreClient } from "syncorejs/next";
@@ -82,6 +86,7 @@ describe("syncorejs public type surface", () => {
     expectTypeOf<BrowserReactModule["SyncoreBrowserProvider"]>().toBeFunction();
     expectTypeOf<NodeModule["createNodeSyncoreRuntime"]>().toBeFunction();
     expectTypeOf<NodeIpcModule["createRendererSyncoreClient"]>().toBeFunction();
+    expectTypeOf<NodeIpcModule["createElectronSyncoreApp"]>().toBeFunction();
     expectTypeOf<NodeIpcReactModule["SyncoreElectronProvider"]>().toBeFunction();
     expectTypeOf<ExpoModule["createExpoSyncoreRuntime"]>().toBeFunction();
     expectTypeOf<ExpoModule["createExpoSyncoreBootstrap"]>().toBeFunction();
@@ -99,6 +104,23 @@ describe("syncorejs public type surface", () => {
     expectTypeOf<SearchedTask["title"]>().toEqualTypeOf<string>();
     expectTypeOf<SearchedTask["status"]>().toEqualTypeOf<"todo" | "done">();
     expectTypeOf<SearchedTask["projectId"]>().toEqualTypeOf<string | null>();
+  });
+
+  it("exposes ergonomic document aliases for schemas", () => {
+    expectTypeOf<TableNames<typeof localSchema>>().toEqualTypeOf<"tasks">();
+    expectTypeOf<Doc<typeof localSchema, "tasks">["status"]>().toEqualTypeOf<
+      "todo" | "done"
+    >();
+    expectTypeOf<DocInput<typeof localSchema, "tasks">>().toMatchTypeOf<{
+      title: string;
+      status: "todo" | "done";
+      projectId: string | null;
+    }>();
+    expectTypeOf<DocPatch<typeof localSchema, "tasks">>().toMatchTypeOf<{
+      title?: string;
+      status?: "todo" | "done";
+      projectId?: string | null;
+    }>();
   });
 });
 

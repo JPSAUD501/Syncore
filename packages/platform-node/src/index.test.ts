@@ -16,6 +16,7 @@ import {
 } from "../../core/src/index.ts";
 import {
   bindElectronWindowToSyncoreRuntime,
+  createElectronSyncoreApp,
   createManagedNodeSyncoreClient,
   createNodeSyncoreRuntime,
   NodeFileStorageAdapter
@@ -352,6 +353,76 @@ describe("Node Syncore runtime", () => {
     expect(messagesToWindow).toHaveLength(baseline);
 
     await binding.dispose();
+  });
+
+  it("creates a managed Electron app bootstrap", async () => {
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: s.string(),
+        done: s.boolean()
+      })
+    });
+    const appListeners = new Map<string, () => void>();
+    const appHost = {
+      getPath(name: "userData") {
+        expect(name).toBe("userData");
+        return path.join(rootDir, "managed-electron");
+      },
+      on(event: "will-quit", listener: () => void) {
+        appListeners.set(event, listener);
+      }
+    };
+    let registeredListener:
+      | ((event: { sender: unknown }, message: unknown) => void)
+      | undefined;
+    const ipcMain = {
+      on(
+        _channel: string,
+        listener: (event: { sender: unknown }, message: unknown) => void
+      ) {
+        registeredListener = listener;
+      },
+      off() {
+        registeredListener = undefined;
+      }
+    };
+    const windowListeners = new Map<string, () => void>();
+    const sentMessages: unknown[] = [];
+    const webContents = {
+      send(_channel: string, message: unknown) {
+        sentMessages.push(message);
+      }
+    };
+    const managed = createElectronSyncoreApp({
+      app: appHost,
+      ipcMain,
+      schema,
+      functions: {
+        "tasks/list": query({
+          args: {},
+          handler: async (ctx: QueryCtx<typeof schema>) =>
+            ctx.db.query("tasks").collect()
+        })
+      }
+    });
+
+    const binding = managed.bindWindow({
+      isDestroyed: () => false,
+      webContents,
+      on(event: "closed", listener: () => void) {
+        windowListeners.set(event, listener);
+      }
+    });
+
+    await binding.ready;
+    expect(sentMessages).toContainEqual({ type: "runtime.ready" });
+    expect(registeredListener).toBeDefined();
+
+    windowListeners.get("closed")?.();
+    await binding.dispose();
+    expect(registeredListener).toBeUndefined();
+    await managed.dispose();
+    appListeners.get("will-quit")?.();
   });
 
   it("creates a managed node client for scripts", async () => {

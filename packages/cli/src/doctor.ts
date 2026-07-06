@@ -3,6 +3,9 @@ import path from "node:path";
 import {
   createSchemaSnapshot,
   diffSchemaSnapshots,
+  formatSchemaChange,
+  getSchemaChangesBySeverity,
+  type SchemaChange,
   type SchemaSnapshot
 } from "@syncore/core";
 import {
@@ -106,8 +109,7 @@ export interface DriftState {
   currentSchemaHash: string | null;
   storedSchemaHash: string | null;
   statements: string[];
-  warnings: string[];
-  destructiveChanges: string[];
+  changes: SchemaChange[];
   details?: string;
 }
 
@@ -255,8 +257,7 @@ export async function buildDoctorReport(cwd: string): Promise<DoctorReport> {
     currentSchemaHash: null,
     storedSchemaHash: null,
     statements: [],
-    warnings: [],
-    destructiveChanges: [],
+    changes: [],
     details: "Syncore could not inspect schema drift yet."
   };
 
@@ -329,8 +330,7 @@ export async function applyDoctorFixes(
     missingGenerated || !report ? await buildDoctorReport(cwd) : currentReport;
   if (
     refreshedReport.drift.state === "missing-snapshot" ||
-    refreshedReport.drift.state === "snapshot-outdated" ||
-    refreshedReport.drift.state === "migration-pending"
+    refreshedReport.drift.state === "snapshot-outdated"
   ) {
     const generatedSchemaPath = path.join(
       cwd,
@@ -449,8 +449,10 @@ async function loadSchemaDrift(
     const currentSnapshot = createSchemaSnapshot(schema);
     const storedSnapshot = await readStoredSnapshot(cwd);
     const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
+    const warnings = getSchemaChangesBySeverity(plan, "warning");
+    const destructiveChanges = getSchemaChangesBySeverity(plan, "destructive");
     const state =
-      plan.destructiveChanges.length > 0
+      destructiveChanges.length > 0
         ? "destructive"
         : !storedSnapshot
           ? "missing-snapshot"
@@ -468,15 +470,14 @@ async function loadSchemaDrift(
         currentSchemaHash: currentSnapshot.hash,
         storedSchemaHash: storedSnapshot?.hash ?? null,
         statements: plan.statements,
-        warnings: plan.warnings,
-        destructiveChanges: plan.destructiveChanges,
+        changes: plan.changes,
         details:
           state === "clean"
             ? "Local schema snapshot matches the generated Syncore schema."
             : describeDriftState(
                 state,
                 plan.statements.length,
-                plan.warnings.length
+                warnings.length
               )
       }
     };
@@ -489,8 +490,7 @@ async function loadSchemaDrift(
         currentSchemaHash: null,
         storedSchemaHash: null,
         statements: [],
-        warnings: [],
-        destructiveChanges: [],
+        changes: [],
         details: `Syncore could not load the generated schema: ${formatError(error)}`
       }
     };
@@ -731,15 +731,18 @@ function buildSchemaDiagnostic(drift: DriftState): JourneyDiagnostic {
     };
   }
   if (drift.state === "destructive") {
+    const destructiveDetails = getSchemaChangesBySeverity(drift, "destructive")
+      .map(formatSchemaChange)
+      .join("; ");
     return {
       id: "schema.drift",
       category: "schema",
       severity: "error",
       status: "fail",
       summary: "Schema drift includes destructive changes.",
-      details: drift.destructiveChanges.join("; "),
+      details: destructiveDetails,
       suggestedAction:
-        "Review the schema change manually and create or edit a migration before continuing.",
+        "Review the schema change manually and generate a review-only migration with `npx syncorejs migrate generate --allow-destructive`.",
       canAutoFix: false
     };
   }
@@ -773,10 +776,12 @@ function buildSchemaDiagnostic(drift: DriftState): JourneyDiagnostic {
       ...(drift.details ? { details: drift.details } : {}),
       suggestedAction:
         drift.state === "migration-pending"
-          ? "Run `npx syncorejs migrate status` to inspect the diff, then `npx syncorejs doctor --fix` only if you just want to refresh the stored snapshot."
+          ? "Run `npx syncorejs migrate status` to inspect the diff, then `npx syncorejs migrate generate` if the change should become a migration."
           : "Run `npx syncorejs doctor --fix` to refresh the stored snapshot safely.",
-      canAutoFix: true,
-      fixCommand: "npx syncorejs doctor --fix"
+      canAutoFix: drift.state !== "migration-pending",
+      ...(drift.state !== "migration-pending"
+        ? { fixCommand: "npx syncorejs doctor --fix" }
+        : {})
     };
   }
   return {
@@ -893,13 +898,19 @@ function resolvePrimaryIssue(input: {
   }
 
   if (input.drift.state === "destructive") {
+    const destructiveDetails = getSchemaChangesBySeverity(
+      input.drift,
+      "destructive"
+    )
+      .map(formatSchemaChange)
+      .join("; ");
     return {
       code: "schema-destructive-drift",
       summary: "Schema drift is blocked by destructive changes.",
-      details: input.drift.destructiveChanges.join("; "),
+      details: destructiveDetails,
       impact: "Syncore cannot safely advance the local schema automatically.",
       suggestedAction:
-        "Review the schema change manually and generate a migration before continuing."
+        "Review the schema change manually and generate a review-only migration with `npx syncorejs migrate generate --allow-destructive` before continuing."
     };
   }
 
@@ -931,7 +942,7 @@ function resolvePrimaryIssue(input: {
         "The local dev loop can become confusing because the stored snapshot no longer matches the generated schema.",
       suggestedAction:
         input.drift.state === "migration-pending"
-          ? "Run `npx syncorejs migrate status` to inspect the diff, then use `npx syncorejs doctor --fix` if you only need to refresh the stored snapshot."
+          ? "Run `npx syncorejs migrate status` to inspect the diff, then `npx syncorejs migrate generate` if the change should become a migration."
           : "Run `npx syncorejs doctor --fix` to refresh the stored snapshot safely."
     };
   }

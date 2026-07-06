@@ -3,6 +3,8 @@ import {
   createSchemaSnapshot,
   deserializeValue,
   diffSchemaSnapshots,
+  formatSchemaChange,
+  getSchemaChangesBySeverity,
   parseSchemaSnapshot,
   renderCreateSearchIndexStatement,
   renderMigrationSql,
@@ -91,21 +93,21 @@ export class SchemaEngine<
       }
     }
     const plan = diffSchemaSnapshots(previousSnapshot, nextSnapshot);
+    const destructiveChanges = getSchemaChangesBySeverity(plan, "destructive");
+    const warnings = getSchemaChangesBySeverity(plan, "warning");
 
-    if (plan.destructiveChanges.length > 0) {
+    if (destructiveChanges.length > 0) {
       throw new Error(
-        `Syncore detected destructive schema changes that require a manual migration:\n${plan.destructiveChanges.join(
-          "\n"
-        )}`
+        `Syncore detected destructive schema changes that require a manual migration:\n${destructiveChanges.map(formatSchemaChange).join("\n")}`
       );
     }
 
-    for (const warning of plan.warnings) {
+    for (const warning of warnings) {
       this.deps.devtools.emit({
         type: "log",
         runtimeId: this.deps.runtimeId,
         level: "warn",
-        message: warning,
+        message: formatSchemaChange(warning),
         timestamp: Date.now()
       });
     }
@@ -130,7 +132,7 @@ export class SchemaEngine<
       }
     }
 
-    if (plan.statements.length > 0 || plan.warnings.length > 0) {
+    if (plan.changes.length > 0) {
       const migrationSql = renderMigrationSql(plan, {
         title: "Syncore automatic schema reconciliation"
       });

@@ -3,6 +3,7 @@ import { defineSchema, defineTable } from "./definition.js";
 import {
   createSchemaSnapshot,
   diffSchemaSnapshots,
+  getSchemaChangesBySeverity,
   parseSchemaSnapshot,
   renderMigrationSql
 } from "./planner.js";
@@ -23,11 +24,32 @@ describe("schema planner", () => {
     const plan = diffSchemaSnapshots(null, snapshot);
 
     expect(plan.statements).toHaveLength(3);
-    expect(plan.destructiveChanges).toHaveLength(0);
-    expect(plan.warnings).toHaveLength(0);
+    expect(getSchemaChangesBySeverity(plan, "destructive")).toHaveLength(0);
+    expect(getSchemaChangesBySeverity(plan, "warning")).toHaveLength(0);
+    expect(plan.changes.map((change) => change.kind)).toEqual([
+      "table-added",
+      "index-added",
+      "search-index-added"
+    ]);
   });
 
-  it("flags validator changes as warnings and index removals as destructive", () => {
+  it("creates short deterministic snapshot hashes", () => {
+    const schema = defineSchema({
+      tasks: defineTable({
+        text: s.string(),
+        done: s.boolean()
+      })
+    });
+
+    const first = createSchemaSnapshot(schema);
+    const second = createSchemaSnapshot(schema);
+
+    expect(first.hash).toMatch(/^sha256:[a-f0-9]{16}$/);
+    expect(first.hash).toBe(second.hash);
+    expect(first.hash.length).toBeLessThan(80);
+  });
+
+  it("flags field changes as warnings and removals as destructive", () => {
     const previous = createSchemaSnapshot(
       defineSchema({
         tasks: defineTable({
@@ -47,12 +69,29 @@ describe("schema planner", () => {
     );
 
     const plan = diffSchemaSnapshots(previous, next);
+    const warnings = getSchemaChangesBySeverity(plan, "warning");
+    const destructive = getSchemaChangesBySeverity(plan, "destructive");
 
-    expect(plan.warnings).toContain(
-      'Validator changed for table "tasks". Existing rows are not rewritten automatically.'
+    expect(warnings).toContainEqual(
+      expect.objectContaining({
+        kind: "field-added",
+        table: "tasks",
+        field: "status"
+      })
     );
-    expect(plan.destructiveChanges).toContain(
-      'Index "tasks.by_done" was removed and requires a manual migration.'
+    expect(destructive).toContainEqual(
+      expect.objectContaining({
+        kind: "field-removed",
+        table: "tasks",
+        field: "done"
+      })
+    );
+    expect(destructive).toContainEqual(
+      expect.objectContaining({
+        kind: "index-removed",
+        table: "tasks",
+        index: "by_done"
+      })
     );
     expect(renderMigrationSql(plan)).toContain("-- destructive:");
   });
@@ -202,7 +241,7 @@ describe("schema planner", () => {
     ]);
   });
 
-  it("upgrades legacy snapshots into the richer format", () => {
+  it("rejects legacy snapshots instead of upgrading them", () => {
     const legacySource = JSON.stringify({
       formatVersion: 2,
       plannerVersion: 1,
@@ -225,61 +264,20 @@ describe("schema planner", () => {
       hash: "legacy-hash"
     });
 
-    const parsed = parseSchemaSnapshot(legacySource);
-
-    expect(parsed.formatVersion).toBe(3);
-    expect(parsed.plannerVersion).toBe(2);
-    expect(parsed.tables[0]?.fieldPaths).toEqual(["title"]);
-    expect(parsed.tables[0]?.fields).toEqual([
-      {
-        name: "title",
-        optional: false,
-        validator: { kind: "string" },
-        storage: { kind: "string" }
-      }
-    ]);
+    expect(() => parseSchemaSnapshot(legacySource)).toThrow(
+      "Invalid schema snapshot file."
+    );
   });
 
-  it("upgrades legacy formatVersion 2 snapshots with raw object field validators", () => {
-    const legacySource = JSON.stringify({
-      formatVersion: 2,
-      plannerVersion: 1,
-      tables: [
-        {
-          name: "tasks",
-          validator: {
-            kind: "object",
-            shape: {
-              title: { kind: "string" },
-              archivedAt: {
-                kind: "optional",
-                inner: { kind: "number" }
-              }
-            }
-          },
-          indexes: [],
-          searchIndexes: []
-        }
-      ],
-      hash: "legacy-hash"
-    });
+  it("parses current snapshots only", () => {
+    const snapshot = createSchemaSnapshot(
+      defineSchema({
+        tasks: defineTable({
+          title: s.string()
+        })
+      })
+    );
 
-    const parsed = parseSchemaSnapshot(legacySource);
-
-    expect(parsed.tables[0]?.fieldPaths).toEqual(["title", "archivedAt"]);
-    expect(parsed.tables[0]?.fields).toEqual([
-      {
-        name: "archivedAt",
-        optional: true,
-        validator: { kind: "number" },
-        storage: { kind: "number" }
-      },
-      {
-        name: "title",
-        optional: false,
-        validator: { kind: "string" },
-        storage: { kind: "string" }
-      }
-    ]);
+    expect(parseSchemaSnapshot(JSON.stringify(snapshot))).toEqual(snapshot);
   });
 });

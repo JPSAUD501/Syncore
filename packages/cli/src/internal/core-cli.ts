@@ -60,6 +60,8 @@ import {
   type AnyTableDefinition,
   createSchemaSnapshot,
   diffSchemaSnapshots,
+  formatSchemaChange,
+  getSchemaChangesBySeverity,
   parseSchemaSnapshot,
   renderCreateIndexStatement,
   renderCreateSearchIndexStatement,
@@ -353,12 +355,16 @@ export async function runCodegen(cwd: string): Promise<void> {
     `import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncorejs";`,
     `import type {`,
     `  ActionCtx as BaseActionCtx,`,
+    `  Doc as BaseDoc,`,
+    `  DocInput as BaseDocInput,`,
+    `  DocPatch as BaseDocPatch,`,
     `  FunctionConfig,`,
     `  Infer,`,
     `  InferArgs,`,
     `  MutationCtx as BaseMutationCtx,`,
     `  QueryCtx as BaseQueryCtx,`,
     `  SyncoreFunctionDefinition,`,
+    `  TableNames as BaseTableNames,`,
     `  Validator,`,
     `  ValidatorMap`,
     `} from "syncorejs";`,
@@ -379,6 +385,26 @@ export async function runCodegen(cwd: string): Promise<void> {
     ` * The context object available inside Syncore action handlers in this app.`,
     ` */`,
     `export type ActionCtx = BaseActionCtx<typeof schema>;`,
+    ``,
+    `/**`,
+    ` * Table names available in this Syncore app.`,
+    ` */`,
+    `export type TableName = BaseTableNames<typeof schema>;`,
+    ``,
+    `/**`,
+    ` * Document shape for a table in this Syncore app.`,
+    ` */`,
+    `export type Doc<TTableName extends TableName> = BaseDoc<typeof schema, TTableName>;`,
+    ``,
+    `/**`,
+    ` * Insert/replace input shape for a table in this Syncore app.`,
+    ` */`,
+    `export type DocInput<TTableName extends TableName> = BaseDocInput<typeof schema, TTableName>;`,
+    ``,
+    `/**`,
+    ` * Patch input shape for a table in this Syncore app.`,
+    ` */`,
+    `export type DocPatch<TTableName extends TableName> = BaseDocPatch<typeof schema, TTableName>;`,
     ``,
     `export type { FunctionReference } from "syncorejs";`,
     ``,
@@ -3632,28 +3658,30 @@ export async function runDevProjectBootstrap(
     const currentSnapshot = createSchemaSnapshot(schema);
     const storedSnapshot = await readStoredSnapshot(cwd);
     const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
+    const destructiveChanges = getSchemaChangesBySeverity(plan, "destructive");
+    const warnings = getSchemaChangesBySeverity(plan, "warning");
 
-    if (plan.destructiveChanges.length > 0) {
+    if (destructiveChanges.length > 0) {
       console.error("Syncore dev blocked by destructive schema changes:");
-      for (const destructiveChange of plan.destructiveChanges) {
-        console.error(`- ${destructiveChange}`);
+      for (const destructiveChange of destructiveChanges) {
+        console.error(`- ${formatSchemaChange(destructiveChange)}`);
       }
       return;
     }
 
     if (storedSnapshot?.hash !== currentSnapshot.hash) {
       await writeStoredSnapshot(cwd, currentSnapshot);
-      if (plan.statements.length > 0 || plan.warnings.length > 0) {
+      if (plan.changes.length > 0) {
         console.log(
-          `Schema snapshot updated (${plan.statements.length} statement(s), ${plan.warnings.length} warning(s)).`
+          `Schema snapshot updated (${plan.statements.length} statement(s), ${warnings.length} warning(s)).`
         );
       } else {
         console.log("Schema snapshot updated.");
       }
     }
 
-    for (const warning of plan.warnings) {
-      console.warn(`Syncore dev warning: ${warning}`);
+    for (const warning of warnings) {
+      console.warn(`Syncore dev warning: ${formatSchemaChange(warning)}`);
     }
 
     if (templateUsesConnectedClients(template)) {

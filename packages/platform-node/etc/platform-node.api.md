@@ -43,6 +43,7 @@ export function bindElectronWindowToSyncoreRuntime(options: {
     window: SyncoreElectronBridgeWindow;
     onRendererMessage(listener: (message: unknown) => void): () => void;
     channel?: string;
+    stopRuntimeOnDispose?: boolean;
 }): SyncoreElectronIpcBinding;
 
 // @public (undocumented)
@@ -51,7 +52,29 @@ export function bindElectronWindowToSyncoreRuntime(options: {
     window: SyncoreElectronBridgeWindow;
     ipcMain: SyncoreElectronIpcMain;
     channel?: string;
+    stopRuntimeOnDispose?: boolean;
 }): SyncoreElectronIpcBinding;
+
+// @public (undocumented)
+export function createElectronSyncoreApp<TSchema extends NodeSyncoreSchema>(options: CreateElectronSyncoreAppOptions<TSchema>): ManagedElectronSyncoreApp<TSchema>;
+
+// @public (undocumented)
+export interface CreateElectronSyncoreAppOptions<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> extends Omit<CreateNodeRuntimeOptions<TSchema>, "databasePath" | "storageDirectory" | "platform"> {
+    // (undocumented)
+    app: SyncoreElectronAppHost;
+    // (undocumented)
+    channel?: string;
+    // (undocumented)
+    databasePath?: string;
+    // (undocumented)
+    ipcMain: SyncoreElectronIpcMain;
+    // (undocumented)
+    platform?: string;
+    // (undocumented)
+    storageDirectory?: string;
+    // (undocumented)
+    userDataPath?: string;
+}
 
 // @public
 export function createElectronSyncoreBridge(options: CreateElectronSyncoreBridgeOptions): SyncoreBridgeMessageEndpoint & {
@@ -118,6 +141,16 @@ export interface CreateSyncoreRendererWindowClientOptions {
 export function installSyncoreWindowBridge(options?: {
     bridgeName?: string;
 }): string;
+
+// @public (undocumented)
+export interface ManagedElectronSyncoreApp<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> {
+    // (undocumented)
+    bindWindow(window: SyncoreElectronManagedWindow): SyncoreElectronIpcBinding;
+    // (undocumented)
+    dispose(): Promise<void>;
+    // (undocumented)
+    runtime: SyncoreRuntime<TSchema>;
+}
 
 // @public
 export interface ManagedNodeSyncoreClient<TSchema extends NodeSyncoreSchema = NodeSyncoreSchema> {
@@ -226,6 +259,14 @@ export { SyncoreActiveQueryInfo }
 
 export { SyncoreDevtoolsEvent }
 
+// @public (undocumented)
+export interface SyncoreElectronAppHost {
+    // (undocumented)
+    getPath(name: "userData"): string;
+    // (undocumented)
+    on(event: "will-quit", listener: () => void): void;
+}
+
 // @public
 export interface SyncoreElectronBridgeWindow {
     // (undocumented)
@@ -254,6 +295,12 @@ export interface SyncoreElectronIpcMain {
     on(channel: string, listener: (event: {
         sender: unknown;
     }, message: unknown) => void): void;
+}
+
+// @public (undocumented)
+export interface SyncoreElectronManagedWindow extends SyncoreElectronBridgeWindow {
+    // (undocumented)
+    on(event: "closed", listener: () => void): void;
 }
 
 // @public (undocumented)

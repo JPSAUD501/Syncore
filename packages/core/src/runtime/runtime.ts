@@ -1008,10 +1008,20 @@ export type DocumentForTable<
   TTableName extends TableNames<TSchema>
 > = InferDocument<TSchema["tables"][TTableName]>;
 
+export type Doc<
+  TSchema extends SyncoreDataModel,
+  TTableName extends TableNames<TSchema>
+> = DocumentForTable<TSchema, TTableName>;
+
 export type InsertValueForTable<
   TSchema extends SyncoreDataModel,
   TTableName extends TableNames<TSchema>
 > = InferTableInput<TSchema["tables"][TTableName]>;
+
+export type DocInput<
+  TSchema extends SyncoreDataModel,
+  TTableName extends TableNames<TSchema>
+> = InsertValueForTable<TSchema, TTableName>;
 
 type OptionalPropertyNames<TValue> = TValue extends object
   ? {
@@ -1021,7 +1031,7 @@ type OptionalPropertyNames<TValue> = TValue extends object
     }[keyof TValue]
   : never;
 
-type PatchValue<TValue> = TValue extends object
+export type PatchValue<TValue> = TValue extends object
   ? {
       [TKey in keyof TValue]?: TKey extends OptionalPropertyNames<TValue>
         ? TValue[TKey] | undefined
@@ -1033,6 +1043,11 @@ export type PatchValueForTable<
   TSchema extends SyncoreDataModel,
   TTableName extends TableNames<TSchema>
 > = PatchValue<InsertValueForTable<TSchema, TTableName>>;
+
+export type DocPatch<
+  TSchema extends SyncoreDataModel,
+  TTableName extends TableNames<TSchema>
+> = PatchValueForTable<TSchema, TTableName>;
 
 type OptionalArgsTuple<TArgs> =
   Record<never, never> extends TArgs ? [args?: TArgs] : [args: TArgs];

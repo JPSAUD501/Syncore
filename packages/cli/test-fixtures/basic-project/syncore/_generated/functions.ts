@@ -8,14 +8,16 @@
  */
 
 import type { SyncoreFunctionRegistry } from "syncorejs";
-
+import { composeProjectFunctionRegistry } from "syncorejs";
 import { create as tasks__create } from "../functions/tasks";
 import { list as tasks__list } from "../functions/tasks";
+
+const componentsManifest = {} as const;
 
 /**
  * Type-safe runtime definitions for every function exported from `syncore/functions`.
  */
-export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
+export interface SyncoreRootFunctionsRegistry extends SyncoreFunctionRegistry {
   /**
    * Runtime definition for the public Syncore mutation `tasks/create`.
    */
@@ -31,7 +33,9 @@ export interface SyncoreFunctionsRegistry extends SyncoreFunctionRegistry {
  *
  * Most application code should import from `./api` instead of using this map directly.
  */
-export const functions: SyncoreFunctionsRegistry = {
+const rootFunctions: SyncoreRootFunctionsRegistry = {
   "tasks/list": tasks__list,
   "tasks/create": tasks__create,
 } as const;
+
+export const functions: SyncoreFunctionRegistry = composeProjectFunctionRegistry(rootFunctions, componentsManifest);

@@ -80,6 +80,7 @@ describe("syncorejs public surface", () => {
     expect(svelteModule.createQueryStore).toBeTypeOf("function");
     expect(nodeModule.createNodeSyncoreRuntime).toBeTypeOf("function");
     expect(nodeIpcModule.createRendererSyncoreClient).toBeTypeOf("function");
+    expect(nodeIpcModule.createElectronSyncoreApp).toBeTypeOf("function");
     expect(nodeIpcReactModule.SyncoreElectronProvider).toBeTypeOf("function");
     expect(nextModule.createNextSyncoreClient).toBeTypeOf("function");
     expect(nextConfigModule.withSyncoreNext).toBeTypeOf("function");

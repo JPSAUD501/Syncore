@@ -11,12 +11,16 @@ import type schema from "../schema.js";
 import { action as baseAction, mutation as baseMutation, query as baseQuery } from "syncorejs";
 import type {
   ActionCtx as BaseActionCtx,
+  Doc as BaseDoc,
+  DocInput as BaseDocInput,
+  DocPatch as BaseDocPatch,
   FunctionConfig,
   Infer,
   InferArgs,
   MutationCtx as BaseMutationCtx,
   QueryCtx as BaseQueryCtx,
   SyncoreFunctionDefinition,
+  TableNames as BaseTableNames,
   Validator,
   ValidatorMap
 } from "syncorejs";
@@ -37,6 +41,26 @@ export type MutationCtx = BaseMutationCtx<typeof schema>;
  * The context object available inside Syncore action handlers in this app.
  */
 export type ActionCtx = BaseActionCtx<typeof schema>;
+
+/**
+ * Table names available in this Syncore app.
+ */
+export type TableName = BaseTableNames<typeof schema>;
+
+/**
+ * Document shape for a table in this Syncore app.
+ */
+export type Doc<TTableName extends TableName> = BaseDoc<typeof schema, TTableName>;
+
+/**
+ * Insert/replace input shape for a table in this Syncore app.
+ */
+export type DocInput<TTableName extends TableName> = BaseDocInput<typeof schema, TTableName>;
+
+/**
+ * Patch input shape for a table in this Syncore app.
+ */
+export type DocPatch<TTableName extends TableName> = BaseDocPatch<typeof schema, TTableName>;
 
 export type { FunctionReference } from "syncorejs";
 

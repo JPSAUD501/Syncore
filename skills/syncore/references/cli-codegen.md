@@ -115,13 +115,20 @@ Startup should stay compact and phase-based:
 ## Migrations
 
 The CLI compares the current schema against a stored snapshot and renders SQL
-for safe changes:
+for safe changes. `migrate status` is compact by default and groups changes by
+table; use `--verbose` or `--json` for snapshot hashes and full structured
+`SchemaChange` details.
 
 ```bash
 npx syncorejs migrate status
 npx syncorejs migrate generate add_notes_table
 npx syncorejs migrate apply
 ```
+
+`migrate generate` blocks destructive changes unless
+`--allow-destructive` is passed. That flag only creates a review-only SQL file;
+it does not make `migrate apply` destructive by itself. `doctor --fix` should
+not refresh snapshots when migration SQL is pending or destructive drift exists.
 
 ## Best Practices
 

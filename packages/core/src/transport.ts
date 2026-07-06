@@ -509,6 +509,7 @@ export interface AttachRuntimeBridgeOptions<
   createRuntime:
     | (() => Promise<SyncoreRuntime<TSchema>>)
     | (() => SyncoreRuntime<TSchema>);
+  stopRuntimeOnDispose?: boolean;
 }
 
 export interface AttachedRuntimeBridge {
@@ -702,7 +703,9 @@ export function attachRuntimeBridge<TSchema extends SyncoreSchema<any>>(
       detachRuntimeStatus?.();
       runtimeStatusWatch?.dispose?.();
       const runtime = await runtimePromise;
-      await runtime.stop();
+      if (options.stopRuntimeOnDispose !== false) {
+        await runtime.stop();
+      }
     }
   };
 }

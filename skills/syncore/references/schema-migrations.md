@@ -137,6 +137,50 @@ Authoring rules:
 ## Drift Safety
 
 Expect the CLI to block or warn on changes that can destroy data silently.
+`migrate status` prints a compact table-oriented summary by default:
+
+```text
+Migration status:
+  Statements: 2
+  Warnings: 1
+  Destructive changes: 0
+
+Changed tables:
+  tasks
+    + index by_status
+    + field archivedAt
+```
+
+Hashes and longer diagnostic details are available through `--verbose` and
+`--json`; normal human output should stay focused on actionable schema changes.
+
+Destructive changes are explicit `SchemaChange` entries, not parsed strings.
+`migrate generate` blocks them by default. Use
+`npx syncorejs migrate generate --allow-destructive` only to create a
+review-only SQL file with destructive comments. Edit that file into a real data
+migration before applying it.
+
+`doctor --fix` is intentionally conservative. It can refresh generated files and
+safe snapshots, but it does not advance snapshots when SQL is pending and it
+does not clear destructive drift.
+
+## Snapshot Hashes
+
+`syncore/migrations/_schema_snapshot.json` uses `formatVersion: 4` and
+`plannerVersion: 3`. The `hash` field is a short stable digest of the canonical
+snapshot body:
+
+```json
+{
+  "formatVersion": 4,
+  "plannerVersion": 3,
+  "hash": "sha256:8f4c2a9b1e6d1234",
+  "tables": []
+}
+```
+
+The snapshot file may be large because it describes the schema. The hash should
+not duplicate the JSON body; it is only a compact identifier for drift checks.
 
 ## Indexes and Search Indexes
 
@@ -159,6 +203,16 @@ metadata, indexes, and search indexes. The runtime still stores `_json` as the
 base payload in this phase, but the schema surface should already be structured
 enough to support later projection work without another public redesign.
 
+Generated server utilities also expose app-local document aliases:
+
+```ts
+import type { Doc, DocInput, DocPatch } from "./_generated/server";
+
+type Task = Doc<"tasks">;
+type NewTask = DocInput<"tasks">;
+type TaskPatch = DocPatch<"tasks">;
+```
+
 ## Best Practices
 
 - treat `syncore/schema.ts` as the canonical root data model
@@ -174,7 +228,7 @@ enough to support later projection work without another public redesign.
 ## Common Pitfalls
 
 1. changing schema without regenerating codegen outputs
-2. removing fields without checking migration warnings or destructive changes
+2. removing fields without checking `migrate status` warnings or destructive changes
 3. updating schema but forgetting functions and UI that consume it
 4. assuming search indexes exist just because a query needs them
 5. forgetting that `syncore/components.ts` can affect the effective schema

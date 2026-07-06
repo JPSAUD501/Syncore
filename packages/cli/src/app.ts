@@ -6,8 +6,11 @@ import type { SyncoreDevtoolsSubscriptionResultPayload } from "@syncore/devtools
 import {
   createSchemaSnapshot,
   diffSchemaSnapshots,
+  formatSchemaChange,
+  getSchemaChangesBySeverity,
   renderMigrationSql
 } from "@syncore/core";
+import type { SchemaChange, SchemaMigrationPlan } from "@syncore/core";
 import {
   type DevHubSessionState,
   type SyncoreTemplateName,
@@ -618,6 +621,7 @@ function addMigrateCommand(program: Command): void {
         const currentSnapshot = createSchemaSnapshot(schema);
         const storedSnapshot = await readStoredSnapshot(ctx.cwd);
         const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
+        const summary = summarizeSchemaMigrationPlan(plan);
 
         ctx.printResult({
           summary: "Migration status computed.",
@@ -625,32 +629,14 @@ function addMigrateCommand(program: Command): void {
           data: {
             currentSchemaHash: currentSnapshot.hash,
             storedSchemaHash: storedSnapshot?.hash ?? null,
-            statements: plan.statements,
-            warnings: plan.warnings,
-            destructiveChanges: plan.destructiveChanges
+            summary,
+            changes: plan.changes,
+            statements: plan.statements
           }
         });
 
         if (!ctx.json) {
-          process.stdout.write(
-            `Current schema hash: ${currentSnapshot.hash}\n`
-          );
-          process.stdout.write(
-            `Stored snapshot: ${storedSnapshot?.hash ?? "none"}\n`
-          );
-          process.stdout.write(
-            `Statements to generate: ${plan.statements.length}\n`
-          );
-          process.stdout.write(`Warnings: ${plan.warnings.length}\n`);
-          process.stdout.write(
-            `Destructive changes: ${plan.destructiveChanges.length}\n`
-          );
-          for (const warning of plan.warnings) {
-            ctx.warn(warning);
-          }
-          for (const change of plan.destructiveChanges) {
-            ctx.error(change);
-          }
+          printSchemaMigrationSummary(plan, ctx.verbose);
         }
       });
     });
@@ -658,11 +644,15 @@ function addMigrateCommand(program: Command): void {
   migrate
     .command("generate")
     .argument("[name]", "Optional migration name", "auto")
+    .option(
+      "--allow-destructive",
+      "Generate a review-only migration file even when destructive schema changes are present"
+    )
     .summary("Generate a SQL migration from the current schema diff")
     .action(
       async (
         name: string,
-        _options: Record<string, never>,
+        options: { allowDestructive?: boolean },
         command: Command
       ) => {
         const ctx = createContext(command);
@@ -671,13 +661,26 @@ function addMigrateCommand(program: Command): void {
           const currentSnapshot = createSchemaSnapshot(schema);
           const storedSnapshot = await readStoredSnapshot(ctx.cwd);
           const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
+          const destructiveChanges = getSchemaChangesBySeverity(
+            plan,
+            "destructive"
+          );
+          const warnings = getSchemaChangesBySeverity(plan, "warning");
 
-          if (plan.destructiveChanges.length > 0) {
+          if (destructiveChanges.length > 0 && !options.allowDestructive) {
             ctx.fail(
-              `Destructive schema changes require a manual migration: ${plan.destructiveChanges.join("; ")}`
+              `Destructive schema changes require manual review: ${destructiveChanges.map(formatSchemaChange).join("; ")}`,
+              1,
+              { changes: destructiveChanges },
+              {
+                nextSteps: [
+                  "Run `npx syncorejs migrate status --verbose` to inspect the diff.",
+                  "Run `npx syncorejs migrate generate --allow-destructive` only to create a review-only SQL file."
+                ]
+              }
             );
           }
-          if (plan.statements.length === 0 && plan.warnings.length === 0) {
+          if (plan.changes.length === 0) {
             ctx.printResult({
               summary: "No schema changes detected."
             });
@@ -701,18 +704,23 @@ function addMigrateCommand(program: Command): void {
             path.join(migrationsDirectory, fileName),
             migrationSql
           );
-          await writeStoredSnapshot(ctx.cwd, currentSnapshot);
+          if (destructiveChanges.length === 0) {
+            await writeStoredSnapshot(ctx.cwd, currentSnapshot);
+          }
 
           ctx.printResult({
             summary: `Generated syncore/migrations/${fileName}.`,
             command: "migrate generate",
             data: {
               path: path.join("syncore", "migrations", fileName),
+              changes: plan.changes,
               statements: plan.statements,
-              warnings: plan.warnings
+              warnings
             },
             nextSteps: [
-              "Run `npx syncorejs migrate apply` to apply pending migrations."
+              destructiveChanges.length > 0
+                ? "Review the generated SQL and edit it into a real data migration before applying it."
+                : "Run `npx syncorejs migrate apply` to apply pending migrations."
             ]
           });
         });
@@ -735,6 +743,93 @@ function addMigrateCommand(program: Command): void {
         });
       });
     });
+}
+
+function summarizeSchemaMigrationPlan(plan: SchemaMigrationPlan): {
+  statements: number;
+  warnings: number;
+  destructiveChanges: number;
+  changedTables: string[];
+} {
+  return {
+    statements: plan.statements.length,
+    warnings: getSchemaChangesBySeverity(plan, "warning").length,
+    destructiveChanges: getSchemaChangesBySeverity(plan, "destructive").length,
+    changedTables: [...new Set(plan.changes.map((change) => change.table))].sort(
+      (left, right) => left.localeCompare(right)
+    )
+  };
+}
+
+function printSchemaMigrationSummary(
+  plan: SchemaMigrationPlan,
+  verbose: boolean
+): void {
+  const warnings = getSchemaChangesBySeverity(plan, "warning");
+  const destructiveChanges = getSchemaChangesBySeverity(plan, "destructive");
+  process.stdout.write("Migration status:\n");
+  process.stdout.write(`  Statements: ${plan.statements.length}\n`);
+  process.stdout.write(`  Warnings: ${warnings.length}\n`);
+  process.stdout.write(`  Destructive changes: ${destructiveChanges.length}\n`);
+
+  if (plan.changes.length === 0) {
+    process.stdout.write("\nChanged tables:\n  none\n");
+  } else {
+    process.stdout.write("\nChanged tables:\n");
+    for (const [table, changes] of groupSchemaChangesByTable(plan.changes)) {
+      process.stdout.write(`  ${table}\n`);
+      for (const change of changes) {
+        process.stdout.write(`    ${formatSchemaChangeBullet(change)}\n`);
+      }
+    }
+  }
+
+  if (verbose) {
+    process.stdout.write("\nSnapshot hashes:\n");
+    process.stdout.write(`  current: ${plan.nextHash}\n`);
+    process.stdout.write(`  stored: ${plan.previousHash ?? "none"}\n`);
+  }
+}
+
+function groupSchemaChangesByTable(
+  changes: SchemaChange[]
+): Array<[string, SchemaChange[]]> {
+  const grouped = new Map<string, SchemaChange[]>();
+  for (const change of changes) {
+    const entries = grouped.get(change.table) ?? [];
+    entries.push(change);
+    grouped.set(change.table, entries);
+  }
+  return [...grouped.entries()].sort(([left], [right]) =>
+    left.localeCompare(right)
+  );
+}
+
+function formatSchemaChangeBullet(change: SchemaChange): string {
+  switch (change.kind) {
+    case "table-added":
+      return "+ table";
+    case "table-removed":
+      return "- table";
+    case "field-added":
+      return `+ field ${change.field}`;
+    case "field-removed":
+      return `- field ${change.field}`;
+    case "field-validator-changed":
+      return change.field ? `~ validator ${change.field}` : "~ validator";
+    case "index-added":
+      return `+ index ${change.index}`;
+    case "index-removed":
+      return `- index ${change.index}`;
+    case "index-changed":
+      return `~ index ${change.index}`;
+    case "search-index-added":
+      return `+ search index ${change.index}`;
+    case "search-index-removed":
+      return `- search index ${change.index}`;
+    case "search-index-changed":
+      return `~ search index ${change.index}`;
+  }
 }
 
 function addRunCommand(program: Command): void {

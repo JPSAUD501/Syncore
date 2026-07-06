@@ -462,6 +462,11 @@ export interface SyncoreElectronBridgeWindow {
   };
 }
 
+export interface SyncoreElectronManagedWindow
+  extends SyncoreElectronBridgeWindow {
+  on(event: "closed", listener: () => void): void;
+}
+
 /**
  * Options for setting up Syncore’s Electron main-process IPC bridge.
  *
@@ -504,6 +509,34 @@ export interface SyncoreElectronIpcMain {
     channel: string,
     listener: (event: { sender: unknown }, message: unknown) => void
   ): void;
+}
+
+export interface SyncoreElectronAppHost {
+  getPath(name: "userData"): string;
+  on(event: "will-quit", listener: () => void): void;
+}
+
+export interface CreateElectronSyncoreAppOptions<
+  TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
+> extends Omit<
+    CreateNodeRuntimeOptions<TSchema>,
+    "databasePath" | "storageDirectory" | "platform"
+  > {
+  app: SyncoreElectronAppHost;
+  ipcMain: SyncoreElectronIpcMain;
+  databasePath?: string;
+  storageDirectory?: string;
+  userDataPath?: string;
+  channel?: string;
+  platform?: string;
+}
+
+export interface ManagedElectronSyncoreApp<
+  TSchema extends NodeSyncoreSchema = NodeSyncoreSchema
+> {
+  runtime: SyncoreRuntime<TSchema>;
+  bindWindow(window: SyncoreElectronManagedWindow): SyncoreElectronIpcBinding;
+  dispose(): Promise<void>;
 }
 
 /**
@@ -722,12 +755,14 @@ export function bindElectronWindowToSyncoreRuntime(options: {
   window: SyncoreElectronBridgeWindow;
   onRendererMessage(listener: (message: unknown) => void): () => void;
   channel?: string;
+  stopRuntimeOnDispose?: boolean;
 }): SyncoreElectronIpcBinding;
 export function bindElectronWindowToSyncoreRuntime(options: {
   runtime: SyncoreRuntime<NodeSyncoreSchema>;
   window: SyncoreElectronBridgeWindow;
   ipcMain: SyncoreElectronIpcMain;
   channel?: string;
+  stopRuntimeOnDispose?: boolean;
 }): SyncoreElectronIpcBinding;
 export function bindElectronWindowToSyncoreRuntime(options: {
   runtime: SyncoreRuntime<NodeSyncoreSchema>;
@@ -735,6 +770,7 @@ export function bindElectronWindowToSyncoreRuntime(options: {
   onRendererMessage?(listener: (message: unknown) => void): () => void;
   ipcMain?: SyncoreElectronIpcMain;
   channel?: string;
+  stopRuntimeOnDispose?: boolean;
 }): SyncoreElectronIpcBinding {
   const cleanupCallbacks: Array<() => void> = [];
   const channel = options.channel ?? "syncore:message";
@@ -780,7 +816,10 @@ export function bindElectronWindowToSyncoreRuntime(options: {
   });
   const attachedRuntime = attachNodeIpcRuntime({
     endpoint,
-    createRuntime: () => options.runtime
+    createRuntime: () => options.runtime,
+    ...(options.stopRuntimeOnDispose !== undefined
+      ? { stopRuntimeOnDispose: options.stopRuntimeOnDispose }
+      : {})
   });
 
   return {
@@ -792,6 +831,69 @@ export function bindElectronWindowToSyncoreRuntime(options: {
         cleanup();
       }
     }
+  };
+}
+
+export function createElectronSyncoreApp<TSchema extends NodeSyncoreSchema>(
+  options: CreateElectronSyncoreAppOptions<TSchema>
+): ManagedElectronSyncoreApp<TSchema> {
+  const {
+    app,
+    ipcMain,
+    databasePath,
+    storageDirectory,
+    userDataPath: configuredUserDataPath,
+    channel,
+    platform,
+    ...runtimeOptions
+  } = options;
+  const userDataPath = configuredUserDataPath ?? app.getPath("userData");
+  const runtime = createNodeSyncoreRuntime({
+    ...runtimeOptions,
+    databasePath: databasePath ?? path.join(userDataPath, "syncore.db"),
+    storageDirectory:
+      storageDirectory ?? path.join(userDataPath, "syncore-storage"),
+    platform: platform ?? "electron-main"
+  });
+  const bindings = new Set<SyncoreElectronIpcBinding>();
+  let disposed = false;
+
+  const dispose = async () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    const pending = [...bindings].map((binding) => binding.dispose());
+    bindings.clear();
+    await Promise.all(pending);
+    await runtime.stop();
+  };
+
+  app.on("will-quit", () => {
+    void dispose();
+  });
+
+  return {
+    runtime,
+    bindWindow(window) {
+      if (disposed) {
+        throw new Error("Cannot bind a BrowserWindow after Syncore was disposed.");
+      }
+      const binding = bindElectronWindowToSyncoreRuntime({
+        runtime,
+        window,
+        ipcMain,
+        stopRuntimeOnDispose: false,
+        ...(channel ? { channel } : {})
+      });
+      bindings.add(binding);
+      window.on("closed", () => {
+        bindings.delete(binding);
+        void binding.dispose();
+      });
+      return binding;
+    },
+    dispose
   };
 }
 

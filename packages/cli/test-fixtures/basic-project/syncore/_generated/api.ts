@@ -9,6 +9,8 @@
 
 import { createFunctionReferenceFor } from "syncorejs";
 import type { FunctionReferenceFor } from "syncorejs";
+export { components } from "./components";
+
 import type { create as tasks__create } from "../functions/tasks";
 import type { list as tasks__list } from "../functions/tasks";
 

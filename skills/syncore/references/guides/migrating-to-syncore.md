@@ -135,7 +135,7 @@ for your host. See the matching quickstart for the full bootstrap code:
 - React web → `syncorejs/browser` + browser worker
 - Next → `syncorejs/next/config` + `SyncoreNextProvider`
 - Expo → `syncorejs/expo` + `SyncoreExpoProvider`
-- Electron → `syncorejs/node` + `bindElectronWindowToSyncoreRuntime`
+- Electron → `syncorejs/node/ipc` + `createElectronSyncoreApp`
 - Node script → `syncorejs/node` + `withNodeSyncoreClient`
 - Svelte → `syncorejs/svelte` + browser worker
 

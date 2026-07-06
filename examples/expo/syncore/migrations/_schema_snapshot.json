@@ -1,6 +1,6 @@
 {
-  "formatVersion": 2,
-  "plannerVersion": 1,
+  "formatVersion": 4,
+  "plannerVersion": 3,
   "tables": [
     {
       "name": "notes",
@@ -8,25 +8,181 @@
         "kind": "object",
         "shape": {
           "title": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "body": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "color": {
-            "kind": "string"
+            "validator": {
+              "kind": "string"
+            },
+            "optional": false
           },
           "pinned": {
-            "kind": "boolean"
+            "validator": {
+              "kind": "boolean"
+            },
+            "optional": false
+          },
+          "photoStorageId": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": true
+          },
+          "photoContentType": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": true
+          },
+          "photoSize": {
+            "validator": {
+              "kind": "number"
+            },
+            "optional": true
+          },
+          "photoFileName": {
+            "validator": {
+              "kind": "string"
+            },
+            "optional": true
           },
           "createdAt": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           },
           "updatedAt": {
-            "kind": "number"
+            "validator": {
+              "kind": "number"
+            },
+            "optional": false
           }
         }
       },
+      "fieldPaths": [
+        "title",
+        "body",
+        "color",
+        "pinned",
+        "photoStorageId",
+        "photoContentType",
+        "photoSize",
+        "photoFileName",
+        "createdAt",
+        "updatedAt"
+      ],
+      "fields": [
+        {
+          "name": "body",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "color",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "createdAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        },
+        {
+          "name": "photoContentType",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": true
+        },
+        {
+          "name": "photoFileName",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": true
+        },
+        {
+          "name": "photoSize",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": true
+        },
+        {
+          "name": "photoStorageId",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": true
+        },
+        {
+          "name": "pinned",
+          "validator": {
+            "kind": "boolean"
+          },
+          "storage": {
+            "kind": "boolean"
+          },
+          "optional": false
+        },
+        {
+          "name": "title",
+          "validator": {
+            "kind": "string"
+          },
+          "storage": {
+            "kind": "string"
+          },
+          "optional": false
+        },
+        {
+          "name": "updatedAt",
+          "validator": {
+            "kind": "number"
+          },
+          "storage": {
+            "kind": "number"
+          },
+          "optional": false
+        }
+      ],
       "indexes": [
         {
           "name": "by_color",
@@ -54,5 +210,5 @@
       ]
     }
   ],
-  "hash": "{\"formatVersion\":2,\"plannerVersion\":1,\"tables\":[{\"indexes\":[{\"fields\":[\"color\",\"createdAt\"],\"name\":\"by_color\"},{\"fields\":[\"pinned\",\"createdAt\"],\"name\":\"by_pinned_created\"}],\"name\":\"notes\",\"searchIndexes\":[{\"filterFields\":[\"pinned\"],\"name\":\"search_body\",\"searchField\":\"body\"}],\"validator\":{\"kind\":\"object\",\"shape\":{\"body\":{\"kind\":\"string\"},\"color\":{\"kind\":\"string\"},\"createdAt\":{\"kind\":\"number\"},\"pinned\":{\"kind\":\"boolean\"},\"title\":{\"kind\":\"string\"},\"updatedAt\":{\"kind\":\"number\"}}}}]}"
+  "hash": "sha256:f4dc578ef8e1c697"
 }
