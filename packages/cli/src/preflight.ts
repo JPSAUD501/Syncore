@@ -1,8 +1,22 @@
 import process from "node:process";
+import { readFileSync } from "node:fs";
 
 const MINIMUM_NODE_MAJOR = 22;
 
-export const CLI_VERSION = "0.1.0";
+declare const __SYNCORE_CLI_VERSION__: string | undefined;
+
+function resolveCliVersion(): string {
+  if (typeof __SYNCORE_CLI_VERSION__ !== "undefined") {
+    return __SYNCORE_CLI_VERSION__;
+  }
+
+  const packageJson = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8")
+  ) as { version: string };
+  return packageJson.version;
+}
+
+export const CLI_VERSION = resolveCliVersion();
 
 export function installCliWarningFilters(): void {
   const originalEmitWarning = process.emitWarning.bind(process);
