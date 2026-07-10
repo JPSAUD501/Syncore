@@ -257,6 +257,18 @@ export interface DevtoolsLiveQuerySnapshot {
     summary: SyncoreRuntimeSummary;
 }
 
+// @public (undocumented)
+export type DevtoolsPreview = {
+    kind: "value";
+    value: unknown;
+    truncated?: boolean;
+    note?: string;
+} | {
+    kind: "error";
+    message: string;
+    truncated?: boolean;
+};
+
 // @public
 export interface DevtoolsSink {
     attachRuntime?(runtime: SyncoreRuntime<SyncoreDataModel>): void;
@@ -1022,6 +1034,22 @@ export function serializeValue<TValue, TStorage, TFieldPaths extends string>(val
 
 // @public
 export function stableStringify(value: unknown): string;
+
+// @public (undocumented)
+export interface StorageEntry {
+    // (undocumented)
+    contentType?: string;
+    // (undocumented)
+    createdAt: number;
+    // (undocumented)
+    fileName?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    path: string;
+    // (undocumented)
+    size: number;
+}
 
 // @public
 export interface StorageObject {
@@ -1965,11 +1993,6 @@ export type ValidatorKind = "string" | "number" | "boolean" | "literal" | "enum"
 
 // @public (undocumented)
 export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
-
-// Warnings were encountered during analysis:
-//
-// src/runtime/runtime.ts:1556:17 - (ae-forgotten-export) The symbol "StorageEntry" needs to be exported by the entry point index.d.mts
-// D:/GitHub/Syncore/packages/devtools-protocol/src/index.ts:102:7 - (ae-forgotten-export) The symbol "DevtoolsPreview" needs to be exported by the entry point index.d.mts
 
 // (No @packageDocumentation comment for this package)
 

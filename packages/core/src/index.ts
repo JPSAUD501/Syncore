@@ -5,6 +5,8 @@
  * helpers, validators, and devtools types used by app code.
  */
 export type {
+  DevtoolsPreview,
+  StorageEntry,
   SyncoreActiveQueryInfo,
   SyncoreDevtoolsEvent,
   SyncoreRuntimeSummary

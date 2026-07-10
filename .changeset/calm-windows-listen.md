@@ -1,5 +1,6 @@
 ---
 "@syncore/platform-node": patch
+"@syncore/core": patch
 "@syncore/cli": patch
 "syncorejs": patch
 ---
