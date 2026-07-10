@@ -27,6 +27,7 @@ import type {
 import {
   findWorkspaceSyncoreProjects,
   listConnectedClientTargets,
+  resolveActiveDevtoolsUrl,
   resolveDashboardUrl,
   resolveDevtoolsUrl,
   resolveProjectTargetDescriptor
@@ -220,7 +221,9 @@ export async function buildDoctorReport(cwd: string): Promise<DoctorReport> {
     templateUsesConnectedClients(template) ||
     (!projectTarget && template !== "node");
 
-  const clientTargets = await listConnectedClientTargets();
+  const clientTargets = await listConnectedClientTargets(
+    await resolveActiveDevtoolsUrl(cwd)
+  );
   const targets: SyncoreTargetDescriptor[] = [
     ...(projectTarget ? [projectTarget] : []),
     ...clientTargets

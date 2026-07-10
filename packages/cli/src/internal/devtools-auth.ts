@@ -86,6 +86,21 @@ export function isAuthorizedDashboardRequest(input: {
   return tokensMatch(providedToken, input.expectedToken);
 }
 
+export function isAuthorizedLocalCliRequest(input: {
+  requestUrl: string | undefined;
+  originHeader: string | undefined;
+  expectedToken: string;
+}): boolean {
+  if (input.originHeader) {
+    return false;
+  }
+  const providedToken = readDevtoolsTokenFromUrl(input.requestUrl);
+  if (!providedToken) {
+    return false;
+  }
+  return tokensMatch(providedToken, input.expectedToken);
+}
+
 function isLoopbackHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
   return (

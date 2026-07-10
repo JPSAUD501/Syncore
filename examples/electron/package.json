@@ -16,7 +16,7 @@
     "build:renderer": "vite build --config vite.renderer.config.ts && node ./scripts/fix-renderer-html.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"syncore/**/*.ts\"",
-    "prebuild": "npm run build:deps && npm run syncorejs:codegen",
+    "prebuild": "npm run syncorejs:codegen",
     "predev": "npm run build:deps && npm run syncorejs:codegen",
     "prelint": "npm run syncorejs:codegen",
     "pretypecheck": "npm run syncorejs:codegen",

@@ -46,6 +46,7 @@ import {
   generateDevtoolsToken,
   isAllowedDashboardOrigin,
   isAuthorizedDashboardRequest,
+  isAuthorizedLocalCliRequest,
   sanitizeDevtoolsToken
 } from "./devtools-auth.js";
 import {
@@ -2842,17 +2843,23 @@ export async function startDevHub(options: {
       request.headers.origin,
       dashboardPort
     );
-    const isAuthorizedDashboardClient = isAuthorizedDashboardRequest({
-      requestUrl: request.url,
-      originHeader: request.headers.origin,
-      dashboardPort,
-      expectedToken: hubAccessToken
-    });
-    if (isBrowserDashboardClient && !isAuthorizedDashboardClient) {
+    const isAuthorizedControlClient =
+      isAuthorizedDashboardRequest({
+        requestUrl: request.url,
+        originHeader: request.headers.origin,
+        dashboardPort,
+        expectedToken: hubAccessToken
+      }) ||
+      isAuthorizedLocalCliRequest({
+        requestUrl: request.url,
+        originHeader: request.headers.origin,
+        expectedToken: hubAccessToken
+      });
+    if (isBrowserDashboardClient && !isAuthorizedControlClient) {
       socket.close(1008, "Unauthorized devtools client");
       return;
     }
-    if (isAuthorizedDashboardClient) {
+    if (isAuthorizedControlClient) {
       dashboardSockets.add(socket);
       socket.send(JSON.stringify(hello));
       for (const runtimeHello of runtimeHellos.values()) {
@@ -2884,7 +2891,7 @@ export async function startDevHub(options: {
         | SyncoreDevtoolsMessage
         | (SyncoreDevtoolsClientMessage & { targetRuntimeId?: string });
       if (message.type === "ping") {
-        if (!isAuthorizedDashboardClient) {
+        if (!isAuthorizedControlClient) {
           socket.close(1008, "Unauthorized devtools client");
           return;
         }
@@ -2910,7 +2917,7 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "command") {
-        if (!isAuthorizedDashboardClient) {
+        if (!isAuthorizedControlClient) {
           return;
         }
         const targetRuntimeId = message.targetRuntimeId;
@@ -2983,7 +2990,7 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "subscribe") {
-        if (!isAuthorizedDashboardClient) {
+        if (!isAuthorizedControlClient) {
           return;
         }
         const targetRuntimeId = message.targetRuntimeId;
@@ -3041,7 +3048,7 @@ export async function startDevHub(options: {
         return;
       }
       if (message.type === "unsubscribe") {
-        if (!isAuthorizedDashboardClient) {
+        if (!isAuthorizedControlClient) {
           return;
         }
         const subscriptions = dashboardSubscriptions.get(socket);

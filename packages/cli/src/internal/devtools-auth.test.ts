@@ -3,6 +3,7 @@ import {
   generateDevtoolsToken,
   isAllowedDashboardOrigin,
   isAuthorizedDashboardRequest,
+  isAuthorizedLocalCliRequest,
   readDevtoolsTokenFromUrl,
   sanitizeDevtoolsToken
 } from "./devtools-auth.js";
@@ -97,5 +98,43 @@ describe("isAuthorizedDashboardRequest", () => {
 
   it("does not classify non-dashboard browser origins as dashboard auth requests", () => {
     expect(isAllowedDashboardOrigin("http://localhost:3000", 4310)).toBe(false);
+  });
+});
+
+describe("isAuthorizedLocalCliRequest", () => {
+  const expectedToken = "abc123token";
+
+  it("authorizes originless local clients with the correct token", () => {
+    expect(
+      isAuthorizedLocalCliRequest({
+        requestUrl: "/?token=abc123token",
+        originHeader: undefined,
+        expectedToken
+      })
+    ).toBe(true);
+  });
+
+  it("rejects browser origins and missing or incorrect tokens", () => {
+    expect(
+      isAuthorizedLocalCliRequest({
+        requestUrl: "/?token=abc123token",
+        originHeader: "http://localhost:4310",
+        expectedToken
+      })
+    ).toBe(false);
+    expect(
+      isAuthorizedLocalCliRequest({
+        requestUrl: "/",
+        originHeader: undefined,
+        expectedToken
+      })
+    ).toBe(false);
+    expect(
+      isAuthorizedLocalCliRequest({
+        requestUrl: "/?token=wrongtoken",
+        originHeader: undefined,
+        expectedToken
+      })
+    ).toBe(false);
   });
 });
