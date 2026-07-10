@@ -1,6 +1,6 @@
 {
   "name": "syncorejs",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Local-first reactive backend toolkit for offline apps",
   "license": "Apache-2.0",
   "type": "module",
@@ -152,7 +152,7 @@
     "@syncore/internal": "^0.1.0",
     "@syncore/next": "^0.1.1",
     "@syncore/platform-expo": "^0.1.1",
-    "@syncore/platform-node": "^0.2.1",
+    "@syncore/platform-node": "^0.2.2",
     "@syncore/platform-web": "^0.1.1",
     "@syncore/react": "^0.1.1",
     "@syncore/schema": "^0.2.0",
