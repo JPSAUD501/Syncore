@@ -12,7 +12,7 @@
     "dev": "turbo run dev:app --filter=syncore-example-browser-esm",
     "dev:app": "vite",
     "dev:syncore": "npm run syncorejs:dev",
-    "prebuild": "npm run syncorejs:codegen",
+    "prebuild": "npm run build:deps && npm run syncorejs:codegen",
     "pretypecheck": "npm run syncorejs:codegen",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
