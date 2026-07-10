@@ -31,7 +31,9 @@ jobs:
         run: npm ci
 
       - name: API check
-        run: npm run api:check
+        run: |
+          npm run api:update
+          git diff --exit-code -- ':(glob)packages/*/etc/*.api.md'
 
       - name: Lint
         run: npm run lint
