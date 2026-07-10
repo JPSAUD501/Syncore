@@ -1,5 +1,11 @@
 # @syncore/platform-node
 
+## 0.2.2
+
+### Patch Changes
+
+- d79e743: Normalize boolean SQL parameters to SQLite integer bindings in the Node runtime.
+
 ## 0.2.1
 
 ### Patch Changes
