@@ -1,5 +1,11 @@
 # syncorejs
 
+## 0.3.3
+
+### Patch Changes
+
+- cd005e3: Authenticate local CLI hub connections with the active devtools session token so targets, doctor, and remote commands can discover connected client runtimes.
+
 ## 0.3.2
 
 ### Patch Changes
