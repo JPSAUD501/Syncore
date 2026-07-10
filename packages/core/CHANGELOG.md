@@ -1,5 +1,11 @@
 # @syncore/core
 
+## 0.2.1
+
+### Patch Changes
+
+- 12e06a4: Keep the Electron renderer client alive during React Strict Mode effect replay, share it safely across providers in the same renderer window, and derive the CLI version from package metadata.
+
 ## 0.2.0
 
 ### Minor Changes
