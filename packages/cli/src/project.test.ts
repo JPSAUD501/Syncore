@@ -10,6 +10,7 @@ import {
   loadImportDocumentBatches,
   normalizeFunctionName,
   resolveActiveDashboardUrl,
+  resolveActiveDevtoolsUrl,
   resolveDevtoolsUrl
 } from "./project.js";
 import type { SyncoreFunctionRegistry } from "@syncore/core";
@@ -56,6 +57,29 @@ describe("project hub discovery", () => {
 
       await expect(resolveActiveDashboardUrl(cwd)).resolves.toBe(
         "http://localhost:4310/?token=testtoken"
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("authenticates CLI connections with the local devtools session token", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "syncore-cli-devtools-"));
+
+    try {
+      await mkdir(path.join(cwd, ".syncore"), { recursive: true });
+      await writeFile(
+        path.join(cwd, ".syncore", "devtools-session.json"),
+        JSON.stringify({
+          dashboardUrl: "http://localhost:4310",
+          authenticatedDashboardUrl: "http://localhost:4310/?token=testtoken",
+          devtoolsUrl: "ws://127.0.0.1:4311",
+          token: "testtoken"
+        })
+      );
+
+      await expect(resolveActiveDevtoolsUrl(cwd)).resolves.toBe(
+        "ws://127.0.0.1:4311/?token=testtoken"
       );
     } finally {
       await rm(cwd, { recursive: true, force: true });

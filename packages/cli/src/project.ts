@@ -704,6 +704,17 @@ export async function resolveActiveDashboardUrl(cwd: string): Promise<string> {
   return session?.authenticatedDashboardUrl ?? resolveDashboardUrl();
 }
 
+export async function resolveActiveDevtoolsUrl(cwd: string): Promise<string> {
+  const session = await readDevtoolsSessionState(cwd);
+  if (!session) {
+    return resolveDevtoolsUrl();
+  }
+
+  const url = new URL(session.devtoolsUrl);
+  url.searchParams.set("token", session.token);
+  return url.toString();
+}
+
 export function resolveDevtoolsUrl(): string {
   return `ws://127.0.0.1:${resolvePortFromEnv("SYNCORE_DEVTOOLS_PORT", 4311)}`;
 }
@@ -788,9 +799,10 @@ export async function listConnectedClientTargets(
 export async function listAvailableTargets(
   cwd: string
 ): Promise<SyncoreTargetDescriptor[]> {
+  const devtoolsUrl = await resolveActiveDevtoolsUrl(cwd);
   const [projectTarget, clientTargets] = await Promise.all([
     resolveProjectTargetDescriptor(cwd),
-    listConnectedClientTargets()
+    listConnectedClientTargets(devtoolsUrl)
   ]);
 
   return [...(projectTarget ? [projectTarget] : []), ...clientTargets];

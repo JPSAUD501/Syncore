@@ -72,6 +72,7 @@ import {
   listConnectedClientTargets,
   listProjectTables,
   resolveActiveDashboardUrl,
+  resolveActiveDevtoolsUrl,
   loadImportDocumentBatches,
   readProjectTable,
   resolveDashboardUrl,
@@ -1724,7 +1725,9 @@ async function monitorLiveDevSession(
   let knownTargets = new Set<string>();
   let waitingNoticeVisible = false;
   const refreshTargets = async () => {
-    const nextTargets = await listConnectedClientTargets();
+    const nextTargets = await listConnectedClientTargets(
+      await resolveActiveDevtoolsUrl(context.cwd)
+    );
     const nextIds = new Set(nextTargets.map((target) => target.id));
 
     for (const target of nextTargets) {
@@ -2001,7 +2004,9 @@ function describeDevDriftStatus(report: DoctorReport): string {
 async function requireHubConnection(
   context: CliContext
 ): Promise<ConnectedHub> {
-  const hub = await connectToProjectHub();
+  const hub = await connectToProjectHub(
+    await resolveActiveDevtoolsUrl(context.cwd)
+  );
   if (!hub) {
     context.fail("The local devtools hub is not running.", 1, undefined, {
       category: "hub",
