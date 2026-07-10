@@ -1,4 +1,5 @@
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -566,10 +567,21 @@ describe("syncore CLI", () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
     await mkdir(path.join(cwd, "node_modules", ".bin"), { recursive: true });
-    await writeFile(
-      path.join(cwd, "node_modules", ".bin", "tsc.cmd"),
-      "@echo typecheck failed\r\n@exit /b 2\r\n"
+    const compilerPath = path.join(
+      cwd,
+      "node_modules",
+      ".bin",
+      process.platform === "win32" ? "tsc.cmd" : "tsc"
     );
+    await writeFile(
+      compilerPath,
+      process.platform === "win32"
+        ? "@echo typecheck failed\r\n@exit /b 2\r\n"
+        : "#!/bin/sh\necho typecheck failed >&2\nexit 2\n"
+    );
+    if (process.platform !== "win32") {
+      await chmod(compilerPath, 0o755);
+    }
 
     const result = await runCli(
       cwd,
