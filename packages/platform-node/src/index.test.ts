@@ -61,6 +61,17 @@ describe("Node Syncore runtime", () => {
         handler: async (ctx: QueryCtx<typeof schema>) =>
           ctx.db.query("tasks").order("desc").collect()
       }),
+      "tasks/byDone": query({
+        args: { done: s.boolean() },
+        handler: async (
+          ctx: QueryCtx<typeof schema>,
+          args: { done: boolean }
+        ) =>
+          ctx.db
+            .query("tasks")
+            .withIndex("by_done", (q) => q.eq("done", args.done))
+            .collect()
+      }),
       "tasks/create": mutation({
         args: { text: s.string() },
         handler: async (
@@ -103,6 +114,16 @@ describe("Node Syncore runtime", () => {
       { text: string },
       string
     >("mutation", "tasks/create");
+    const tasksByDone = createFunctionReference<
+      "query",
+      { done: boolean },
+      Array<{ _id: string; text: string; done: boolean }>
+    >("query", "tasks/byDone");
+    const markDone = createFunctionReference<
+      "mutation",
+      { id: string },
+      null
+    >("mutation", "tasks/markDone");
 
     const watch = client.watchQuery(listTasks);
     await client.mutation(createTask, {
@@ -113,6 +134,11 @@ describe("Node Syncore runtime", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0]?.text).toBe("Ship Syncore");
     expect(watch.localQueryResult()).toBeDefined();
+
+    expect(await client.query(tasksByDone, { done: false })).toHaveLength(1);
+    await client.mutation(markDone, { id: tasks[0]!._id });
+    expect(await client.query(tasksByDone, { done: true })).toHaveLength(1);
+    expect(await client.query(tasksByDone, { done: false })).toHaveLength(0);
 
     await runtime.stop();
   });

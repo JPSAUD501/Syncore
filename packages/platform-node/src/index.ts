@@ -69,7 +69,9 @@ function normalizeData(input: StorageWriteInput["data"]): Uint8Array {
 }
 
 function toSqlParameters(params: unknown[]): SQLInputValue[] {
-  return params as SQLInputValue[];
+  return params.map((value) =>
+    typeof value === "boolean" ? (value ? 1 : 0) : (value as SQLInputValue)
+  );
 }
 
 /**
