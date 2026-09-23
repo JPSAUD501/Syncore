@@ -15,7 +15,13 @@ import type {
   SchedulerJob,
   SyncoreDevtoolsEvent
 } from "@syncore/devtools-protocol";
-import { defineSchema, defineTable, s } from "../../../schema/src/index.js";
+import {
+  defineSchema,
+  defineTable,
+  isSyncoreValidationError,
+  s,
+  type SyncoreValidationError
+} from "../../../schema/src/index.js";
 import { cronJobs, mutation, query } from "./functions.js";
 import {
   createFunctionReference,
@@ -1661,3 +1667,316 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+
+describe("SyncoreRuntime strict validation", () => {
+  let rootDirectory: string;
+
+  beforeEach(async () => {
+    rootDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-strict-"));
+  });
+
+  afterEach(async () => {
+    await rm(rootDirectory, { recursive: true, force: true });
+  });
+
+  const schema = defineSchema({
+    settings: defineTable({
+      theme: s.string(),
+      zoom: s.optional(s.number())
+    })
+  });
+  const settingsFields = schema.tables.settings.validator;
+
+  const functions = {
+    "settings/create": mutation({
+      args: settingsFields,
+      returns: s.string(),
+      handler: async (ctx, args) =>
+        (ctx as MutationCtx).db.insert("settings", args as { theme: string })
+    }),
+    "settings/insertRaw": mutation({
+      args: { value: s.any() },
+      returns: s.string(),
+      handler: async (ctx, args) =>
+        (ctx as MutationCtx).db.insert(
+          "settings",
+          (args as { value: { theme: string } }).value
+        )
+    }),
+    "settings/replaceWith": mutation({
+      args: { id: s.id("settings"), value: s.any() },
+      returns: s.null(),
+      handler: async (ctx, args) => {
+        const typed = args as { id: string; value: { theme: string } };
+        await (ctx as MutationCtx).db.replace("settings", typed.id, typed.value);
+        return null;
+      }
+    }),
+    "settings/patchWith": mutation({
+      args: { id: s.id("settings"), value: s.any() },
+      returns: s.null(),
+      handler: async (ctx, args) => {
+        const typed = args as { id: string; value: { theme: string } };
+        await (ctx as MutationCtx).db.patch("settings", typed.id, typed.value);
+        return null;
+      }
+    }),
+    "settings/get": query({
+      args: { id: s.id("settings") },
+      returns: s.any(),
+      handler: async (ctx, args) =>
+        (ctx as QueryCtx).db.get("settings", (args as { id: string }).id)
+    }),
+    "settings/getStrict": query({
+      args: { id: s.id("settings") },
+      returns: s.nullable(settingsFields),
+      // Deliberately returns the whole document, system fields included.
+      handler: async (ctx, args) =>
+        (await (ctx as QueryCtx).db.get(
+          "settings",
+          (args as { id: string }).id
+        )) as { theme: string } | null
+    })
+  };
+
+  function mutationRef(name: string) {
+    return createFunctionReference<"mutation", Record<string, unknown>, unknown>(
+      "mutation",
+      name
+    );
+  }
+
+  function queryRef(name: string) {
+    return createFunctionReference<"query", Record<string, unknown>, unknown>(
+      "query",
+      name
+    );
+  }
+
+  async function startRuntime(databasePath = path.join(rootDirectory, "db.sqlite")) {
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(path.join(rootDirectory, "storage"))
+    });
+    await runtime.start();
+    return runtime;
+  }
+
+  it("rejects an undeclared argument and names the function and field", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      const error = await client
+        .mutation(mutationRef("settings/create"), {
+          theme: "dark",
+          zeroDataRetention: true
+        })
+        .then(
+          () => null,
+          (caught: unknown) => caught
+        );
+      expect(isSyncoreValidationError(error)).toBe(true);
+      expect((error as SyncoreValidationError).code).toBe("unknown_field");
+      expect((error as SyncoreValidationError).path).toBe(
+        "args.zeroDataRetention"
+      );
+      expect((error as Error).message).toBe(
+        'Invalid arguments for mutation "settings/create": args.zeroDataRetention is not an allowed field (expected one of: theme, zoom).'
+      );
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("rejects undeclared fields and system fields on insert", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      await expect(
+        client.mutation(mutationRef("settings/insertRaw"), {
+          value: { theme: "dark", extra: 1 }
+        })
+      ).rejects.toThrow(
+        'Invalid document for table "settings": document.extra is not an allowed field (expected one of: theme, zoom).'
+      );
+      await expect(
+        client.mutation(mutationRef("settings/insertRaw"), {
+          value: { theme: "dark", _id: "copied" }
+        })
+      ).rejects.toThrow(/_id is set by Syncore.*withoutSystemFields/);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("accepts unchanged system fields on replace and patch, rejects changed ones", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      const id = (await client.mutation(mutationRef("settings/create"), {
+        theme: "light"
+      })) as string;
+      const doc = (await client.query(queryRef("settings/get"), { id })) as {
+        _id: string;
+        _creationTime: number;
+        theme: string;
+      };
+
+      await client.mutation(mutationRef("settings/replaceWith"), {
+        id,
+        value: { ...doc, theme: "dark" }
+      });
+      await client.mutation(mutationRef("settings/patchWith"), {
+        id,
+        value: { _id: id, zoom: 2 }
+      });
+      expect(await client.query(queryRef("settings/get"), { id })).toEqual({
+        ...doc,
+        theme: "dark",
+        zoom: 2
+      });
+
+      await expect(
+        client.mutation(mutationRef("settings/replaceWith"), {
+          id,
+          value: { ...doc, _id: "other" }
+        })
+      ).rejects.toThrow(/_id is set by Syncore and cannot be changed/);
+      await expect(
+        client.mutation(mutationRef("settings/patchWith"), {
+          id,
+          value: { _creationTime: 1 }
+        })
+      ).rejects.toThrow(/_creationTime is set by Syncore and cannot be changed/);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("validates return values strictly, including system fields", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      const id = (await client.mutation(mutationRef("settings/create"), {
+        theme: "light"
+      })) as string;
+      await expect(
+        client.query(queryRef("settings/getStrict"), { id })
+      ).rejects.toThrow(
+        /^Invalid return value from query "settings\/getStrict": returns has fields that are not allowed: (_id, _creationTime|_creationTime, _id)/
+      );
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("reads rows with removed fields and drops them on the next write", async () => {
+    const databasePath = path.join(rootDirectory, "stale.sqlite");
+    const runtime = await startRuntime(databasePath);
+    const client = runtime.createClient();
+    const id = (await client.mutation(mutationRef("settings/create"), {
+      theme: "light"
+    })) as string;
+    await runtime.stop();
+
+    const database = new DatabaseSync(databasePath);
+    database
+      .prepare(`UPDATE "settings" SET _json = ? WHERE _id = ?`)
+      .run(JSON.stringify({ theme: "light", removedField: true }), id);
+    database.close();
+
+    const reopened = await startRuntime(databasePath);
+    try {
+      const reopenedClient = reopened.createClient();
+      expect(
+        await reopenedClient.query(queryRef("settings/get"), { id })
+      ).toMatchObject({ theme: "light" });
+      await reopenedClient.mutation(mutationRef("settings/patchWith"), {
+        id,
+        value: { zoom: 1 }
+      });
+    } finally {
+      await reopened.stop();
+    }
+
+    const check = new DatabaseSync(databasePath);
+    const row = check
+      .prepare(`SELECT _json FROM "settings" WHERE _id = ?`)
+      .get(id) as { _json: string };
+    check.close();
+    expect(JSON.parse(row._json)).toEqual({ theme: "light", zoom: 1 });
+  });
+
+  it("refreshes recurring jobs and keeps failing ones on schedule", async () => {
+    const databasePath = path.join(rootDirectory, "crons.sqlite");
+    const storagePath = path.join(rootDirectory, "storage");
+    const createRuntime = (args: Record<string, unknown>) =>
+      new SyncoreRuntime({
+        schema,
+        functions,
+        driver: new TestSqliteDriver(databasePath),
+        storage: new TestStorageAdapter(storagePath),
+        scheduler: {
+          pollIntervalMs: 10,
+          recurringJobs: cronJobs().interval(
+            "seed",
+            { minutes: 5 },
+            createFunctionReference("mutation", "settings/create"),
+            args
+          ).jobs
+        }
+      });
+    const readJob = () => {
+      const database = new DatabaseSync(databasePath);
+      try {
+        return database
+          .prepare(
+            `SELECT args_json, status, run_at, last_run_at FROM "_scheduled_functions" WHERE id = 'recurring:seed'`
+          )
+          .get() as {
+          args_json: string;
+          status: string;
+          run_at: number;
+          last_run_at: number | null;
+        };
+      } finally {
+        database.close();
+      }
+    };
+
+    const first = createRuntime({ theme: "old" });
+    await first.start();
+    await first.stop();
+    expect(JSON.parse(readJob().args_json)).toEqual({ theme: "old" });
+
+    const second = createRuntime({ theme: "new", legacy: true });
+    await second.start();
+    await second.stop();
+    expect(JSON.parse(readJob().args_json)).toEqual({
+      theme: "new",
+      legacy: true
+    });
+
+    const database = new DatabaseSync(databasePath);
+    database
+      .prepare(`UPDATE "_scheduled_functions" SET run_at = 0 WHERE id = 'recurring:seed'`)
+      .run();
+    database.close();
+
+    const third = createRuntime({ theme: "new", legacy: true });
+    await third.start();
+    try {
+      await waitFor(
+        () => readJob().last_run_at !== null,
+        "The recurring job did not run."
+      );
+    } finally {
+      await third.stop();
+    }
+    const job = readJob();
+    expect(job.status).toBe("scheduled");
+    expect(job.run_at).toBeGreaterThan(Date.now());
+  });
+});
