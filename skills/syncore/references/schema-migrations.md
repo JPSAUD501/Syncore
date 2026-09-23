@@ -182,6 +182,27 @@ snapshot body:
 The snapshot file may be large because it describes the schema. The hash should
 not duplicate the JSON body; it is only a compact identifier for drift checks.
 
+## Upgrading From syncorejs < 0.3
+
+Snapshots written before 0.3 use `formatVersion: 3` / `plannerVersion: 2`, and
+their `hash` holds the whole JSON body. The tables are the same, so Syncore
+upgrades them in memory:
+
+- `migrate status` works and prints a notice (`legacySnapshotUpgraded: true` in
+  `--json` output). Pending schema changes are still reported.
+- `doctor` reports `snapshot-legacy`, and `doctor --fix` saves the upgraded
+  snapshot in place, keeping pending changes.
+- `migrate generate` and `dev` save the upgraded snapshot when they write it.
+- The runtime upgrades the stored schema state the same way, so destructive
+  changes are still detected on the first start after upgrading.
+
+A snapshot that is not valid JSON, is older than format 3, or was written by a
+newer syncorejs fails with a `validation` error that says which case applies,
+and `doctor` reports `snapshot-invalid`. Restore the file from version control,
+or delete it and run `npx syncorejs doctor --fix`: the current schema then
+becomes the new baseline, and changes made since the old snapshot are no longer
+reported as pending.
+
 ## Indexes and Search Indexes
 
 Model them in schema first, then query through the exposed API:

@@ -247,11 +247,24 @@ export class OptionalValidator<TValue, TStorage = TValue, TFieldPaths extends st
     serialize(value: TValue | undefined, path?: string, options?: ValidationOptions): TStorage | undefined;
 }
 
-// @public (undocumented)
+// @public
 export function parseSchemaSnapshot(source: string): SchemaSnapshot;
 
 // @public
 export type PartialShape<TShape extends ObjectValidatorShape> = { [TKey in keyof TShape]: TShape[TKey] extends OptionalValidator<unknown, unknown, string> ? TShape[TKey] : TShape[TKey] extends Validator<infer TValue, infer TStorage, infer TFieldPaths extends string> ? OptionalValidator<TValue, TStorage, TFieldPaths> : never };
+
+// @public
+export function readSchemaSnapshot(source: string): ReadSchemaSnapshotResult;
+
+// @public
+export interface ReadSchemaSnapshotResult {
+    // (undocumented)
+    snapshot: SchemaSnapshot;
+    upgradedFrom: {
+        formatVersion: number;
+        plannerVersion: number;
+    } | null;
+}
 
 // @public (undocumented)
 export class RecordValidator<TKey extends string, TValue, TStorage, TKeyValidator extends Validator<TKey, string, string>, TValueValidator extends Validator<TValue, TStorage, string>> extends BaseValidator<Record<TKey, TValue>, Record<TKey, TStorage>, never> {
@@ -407,6 +420,22 @@ export interface SchemaSnapshot {
     // (undocumented)
     tables: TableSnapshot[];
 }
+
+// @public
+export class SchemaSnapshotFormatError extends Error {
+    constructor(message: string, reason: SchemaSnapshotFormatErrorReason, formatVersion?: unknown | undefined, plannerVersion?: unknown | undefined);
+    // (undocumented)
+    readonly formatVersion?: unknown | undefined;
+    // (undocumented)
+    readonly name = "SchemaSnapshotFormatError";
+    // (undocumented)
+    readonly plannerVersion?: unknown | undefined;
+    // (undocumented)
+    readonly reason: SchemaSnapshotFormatErrorReason;
+}
+
+// @public
+export type SchemaSnapshotFormatErrorReason = "invalid-json" | "malformed" | "legacy" | "newer";
 
 // @public (undocumented)
 export interface SearchIndexDefinition {
@@ -615,6 +644,9 @@ export class UnionValidator<TMembers extends readonly Validator<unknown, unknown
 
 // @public
 export type UnknownKeysPolicy = "strict" | "strip";
+
+// @public
+export function upgradeSchemaSnapshot(value: unknown): ReadSchemaSnapshotResult;
 
 // @public
 export interface ValidationOptions {

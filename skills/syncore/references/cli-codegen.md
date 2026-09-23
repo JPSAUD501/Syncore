@@ -130,6 +130,11 @@ npx syncorejs migrate apply
 it does not make `migrate apply` destructive by itself. `doctor --fix` should
 not refresh snapshots when migration SQL is pending or destructive drift exists.
 
+Snapshots written by syncorejs < 0.3 are upgraded in memory; run
+`npx syncorejs doctor --fix` to save the upgrade. A snapshot the CLI cannot read
+fails with a `validation` error whose `nextSteps` explain how to recover. See
+`schema-migrations.md` → "Upgrading From syncorejs < 0.3".
+
 ## Best Practices
 
 - treat codegen regressions as high-priority DX issues

@@ -42,6 +42,7 @@ import {
   createPublicTargetId
 } from "@syncore/devtools-protocol";
 import { quoteIdentifier, stableStringify } from "@syncore/internal";
+import { CliError } from "../errors.js";
 import {
   generateDevtoolsToken,
   isAllowedDashboardOrigin,
@@ -63,7 +64,9 @@ import {
   diffSchemaSnapshots,
   formatSchemaChange,
   getSchemaChangesBySeverity,
-  parseSchemaSnapshot,
+  readSchemaSnapshot,
+  SchemaSnapshotFormatError,
+  type ReadSchemaSnapshotResult,
   renderCreateIndexStatement,
   renderCreateSearchIndexStatement,
   renderCreateTableStatement,
@@ -2157,19 +2160,59 @@ function toSqlParameters(params: unknown[]): SQLInputValue[] {
   });
 }
 
-export async function readStoredSnapshot(
+export interface StoredSnapshotRead {
+  snapshot: SchemaSnapshot | null;
+  /**
+   * Set when the file was written by syncorejs < 0.3 and upgraded in memory.
+   * Writing `snapshot` back persists the upgrade.
+   */
+  upgradedFrom: ReadSchemaSnapshotResult["upgradedFrom"];
+}
+
+/**
+ * Reads `syncore/migrations/_schema_snapshot.json`, upgrading the pre-0.3
+ * format in memory.
+ *
+ * @throws CliError (category `validation`) when the file cannot be read, with
+ *   next steps that explain how to recover.
+ */
+export async function readStoredSnapshotWithStatus(
   cwd: string
-): Promise<SchemaSnapshot | null> {
-  const snapshotPath = path.join(
-    cwd,
+): Promise<StoredSnapshotRead> {
+  const relativePath = path.join(
     "syncore",
     "migrations",
     SYNCORE_MIGRATION_SNAPSHOT_FILE_NAME
   );
+  const snapshotPath = path.join(cwd, relativePath);
   if (!(await fileExists(snapshotPath))) {
-    return null;
+    return { snapshot: null, upgradedFrom: null };
   }
-  return parseSchemaSnapshot(await readFile(snapshotPath, "utf8"));
+  try {
+    return readSchemaSnapshot(await readFile(snapshotPath, "utf8"));
+  } catch (error) {
+    if (!(error instanceof SchemaSnapshotFormatError)) {
+      throw error;
+    }
+    throw new CliError(`${relativePath}: ${error.message}`, {
+      category: "validation",
+      details: {
+        path: relativePath,
+        reason: error.reason,
+        formatVersion: error.formatVersion ?? null,
+        plannerVersion: error.plannerVersion ?? null
+      },
+      nextSteps:
+        error.reason === "newer"
+          ? [
+              "Upgrade syncorejs in this project to the version that wrote the snapshot."
+            ]
+          : [
+              `Restore ${relativePath} from version control if it was edited by mistake.`,
+              "Otherwise delete it and run `npx syncorejs doctor --fix` to write a new snapshot from the current schema. It becomes the new baseline: schema changes made since the old snapshot are no longer reported as pending."
+            ]
+    });
+  }
 }
 
 export async function writeStoredSnapshot(
@@ -3671,7 +3714,8 @@ export async function runDevProjectBootstrap(
     await runCodegen(cwd);
     const schema = await loadProjectSchema(cwd);
     const currentSnapshot = createSchemaSnapshot(schema);
-    const storedSnapshot = await readStoredSnapshot(cwd);
+    const { snapshot: storedSnapshot, upgradedFrom } =
+      await readStoredSnapshotWithStatus(cwd);
     const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
     const destructiveChanges = getSchemaChangesBySeverity(plan, "destructive");
     const warnings = getSchemaChangesBySeverity(plan, "warning");
@@ -3684,7 +3728,7 @@ export async function runDevProjectBootstrap(
       return;
     }
 
-    if (storedSnapshot?.hash !== currentSnapshot.hash) {
+    if (upgradedFrom || storedSnapshot?.hash !== currentSnapshot.hash) {
       await writeStoredSnapshot(cwd, currentSnapshot);
       if (plan.changes.length > 0) {
         console.log(

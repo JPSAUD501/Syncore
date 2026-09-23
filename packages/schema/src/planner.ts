@@ -419,18 +419,170 @@ export function renderMigrationSql(
   return `${lines.join("\n")}\n`;
 }
 
-export function parseSchemaSnapshot(source: string): SchemaSnapshot {
-  const parsed = JSON.parse(source) as SchemaSnapshot;
-  if (
-    parsed.formatVersion !== 4 ||
-    parsed.plannerVersion !== 3 ||
-    !Array.isArray(parsed.tables) ||
-    typeof parsed.hash !== "string" ||
-    !parsed.hash.startsWith("sha256:")
+/**
+ * Why a schema snapshot could not be read.
+ *
+ * - `invalid-json` — the file is not JSON.
+ * - `malformed` — JSON, but not shaped like a snapshot.
+ * - `legacy` — written by a syncorejs release too old to upgrade automatically.
+ * - `newer` — written by a newer syncorejs than the one reading it.
+ */
+export type SchemaSnapshotFormatErrorReason =
+  | "invalid-json"
+  | "malformed"
+  | "legacy"
+  | "newer";
+
+/** Thrown by {@link parseSchemaSnapshot} when a snapshot cannot be read. */
+export class SchemaSnapshotFormatError extends Error {
+  override readonly name = "SchemaSnapshotFormatError";
+
+  constructor(
+    message: string,
+    readonly reason: SchemaSnapshotFormatErrorReason,
+    readonly formatVersion?: unknown,
+    readonly plannerVersion?: unknown
   ) {
-    throw new Error("Invalid schema snapshot file.");
+    super(message);
   }
-  return parsed;
+}
+
+/** The result of {@link readSchemaSnapshot}. */
+export interface ReadSchemaSnapshotResult {
+  snapshot: SchemaSnapshot;
+  /**
+   * The versions the snapshot was written with when it had to be upgraded in
+   * memory, or `null` when it was already current. Persist `snapshot` to make
+   * the upgrade permanent.
+   */
+  upgradedFrom: { formatVersion: number; plannerVersion: number } | null;
+}
+
+const LEGACY_FORMAT_VERSION = 3;
+const LEGACY_PLANNER_VERSION = 2;
+
+/**
+ * Parses a stored schema snapshot, upgrading the format written by
+ * syncorejs < 0.3 (format 3, planner 2) in memory. Its tables are identical;
+ * only the version fields and the hash encoding changed, so the upgrade keeps
+ * every pending schema change visible.
+ *
+ * @throws {@link SchemaSnapshotFormatError} for anything else.
+ */
+export function readSchemaSnapshot(source: string): ReadSchemaSnapshotResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch (error) {
+    throw new SchemaSnapshotFormatError(
+      `Invalid schema snapshot file: it is not valid JSON (${error instanceof Error ? error.message : String(error)}).`,
+      "invalid-json"
+    );
+  }
+  return upgradeSchemaSnapshot(parsed);
+}
+
+/**
+ * Validates an already-parsed snapshot and upgrades the syncorejs < 0.3 format.
+ * See {@link readSchemaSnapshot}.
+ */
+export function upgradeSchemaSnapshot(value: unknown): ReadSchemaSnapshotResult {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new SchemaSnapshotFormatError(
+      "Invalid schema snapshot file: expected a JSON object.",
+      "malformed"
+    );
+  }
+  const candidate = value as Partial<Record<keyof SchemaSnapshot, unknown>>;
+  const { formatVersion, plannerVersion } = candidate;
+
+  if (formatVersion === 4 && plannerVersion === 3) {
+    if (
+      !Array.isArray(candidate.tables) ||
+      typeof candidate.hash !== "string" ||
+      !candidate.hash.startsWith("sha256:")
+    ) {
+      throw new SchemaSnapshotFormatError(
+        "Invalid schema snapshot file: it is missing its tables or hash.",
+        "malformed",
+        formatVersion,
+        plannerVersion
+      );
+    }
+    return { snapshot: value as SchemaSnapshot, upgradedFrom: null };
+  }
+
+  if (
+    formatVersion === LEGACY_FORMAT_VERSION &&
+    plannerVersion === LEGACY_PLANNER_VERSION
+  ) {
+    if (!Array.isArray(candidate.tables)) {
+      throw new SchemaSnapshotFormatError(
+        "Invalid schema snapshot file: it is missing its tables.",
+        "malformed",
+        formatVersion,
+        plannerVersion
+      );
+    }
+    const tables = (candidate.tables as TableSnapshot[]).map((table) => ({
+      ...table,
+      fieldPaths: table.fieldPaths ?? extractFieldPaths(table.validator),
+      fields: table.fields ?? extractTopLevelFields(table.validator)
+    }));
+    const base = {
+      formatVersion: 4 as const,
+      plannerVersion: 3 as const,
+      tables
+    };
+    return {
+      snapshot: {
+        ...base,
+        ...(typeof candidate.runtimeVersion === "string"
+          ? { runtimeVersion: candidate.runtimeVersion }
+          : {}),
+        hash: createSchemaHash(base)
+      },
+      upgradedFrom: {
+        formatVersion: LEGACY_FORMAT_VERSION,
+        plannerVersion: LEGACY_PLANNER_VERSION
+      }
+    };
+  }
+
+  const versions = `format ${String(formatVersion)}, planner ${String(plannerVersion)}`;
+  if (typeof formatVersion === "number" && formatVersion > 4) {
+    throw new SchemaSnapshotFormatError(
+      `Invalid schema snapshot file: it was written by a newer syncorejs (${versions}). Upgrade syncorejs to read it.`,
+      "newer",
+      formatVersion,
+      plannerVersion
+    );
+  }
+  if (typeof formatVersion === "number") {
+    throw new SchemaSnapshotFormatError(
+      `Invalid schema snapshot file: ${versions} was written by an older syncorejs and cannot be upgraded automatically.`,
+      "legacy",
+      formatVersion,
+      plannerVersion
+    );
+  }
+  throw new SchemaSnapshotFormatError(
+    "Invalid schema snapshot file: it has no formatVersion.",
+    "malformed",
+    formatVersion,
+    plannerVersion
+  );
+}
+
+/**
+ * Parses a stored schema snapshot. Snapshots written by syncorejs < 0.3 are
+ * upgraded in memory; use {@link readSchemaSnapshot} to find out whether that
+ * happened.
+ *
+ * @throws {@link SchemaSnapshotFormatError} when the snapshot cannot be read.
+ */
+export function parseSchemaSnapshot(source: string): SchemaSnapshot {
+  return readSchemaSnapshot(source).snapshot;
 }
 
 export function renderCreateTableStatement(tableName: string): string {

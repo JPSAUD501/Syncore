@@ -337,6 +337,51 @@ describe("SyncoreRuntime schema + scheduler", () => {
     await secondRuntime.stop();
   });
 
+  it("detects destructive changes against schema state stored by syncorejs < 0.3", async () => {
+    const databasePath = path.join(rootDirectory, "legacy-state.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const functions = {};
+
+    const firstRuntime = new SyncoreRuntime({
+      schema: defineSchema({
+        tasks: defineTable({ text: s.string() }).index("by_text", ["text"])
+      }),
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath)
+    });
+    await firstRuntime.start();
+    await firstRuntime.stop();
+
+    const database = new DatabaseSync(databasePath);
+    const row = database
+      .prepare(
+        `SELECT schema_json FROM "_syncore_schema_state" WHERE id = 'current'`
+      )
+      .get() as { schema_json: string };
+    const { tables } = JSON.parse(row.schema_json) as { tables: unknown[] };
+    const legacyBase = { formatVersion: 3, plannerVersion: 2, tables };
+    database
+      .prepare(
+        `UPDATE "_syncore_schema_state" SET schema_json = ? WHERE id = 'current'`
+      )
+      .run(
+        JSON.stringify({ ...legacyBase, hash: JSON.stringify(legacyBase) })
+      );
+    database.close();
+
+    const secondRuntime = new SyncoreRuntime({
+      schema: defineSchema({ tasks: defineTable({ text: s.string() }) }),
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath)
+    });
+    await expect(secondRuntime.start()).rejects.toThrow(
+      /requires a manual migration/i
+    );
+    await secondRuntime.stop();
+  });
+
   it("runs scheduled mutations and reconciles local state", async () => {
     const databasePath = path.join(rootDirectory, "scheduled.db");
     const storagePath = path.join(rootDirectory, "storage");
