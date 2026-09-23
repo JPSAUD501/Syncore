@@ -15,7 +15,7 @@ import {
   hasSyncoreProject,
   isLocalPortInUse,
   loadProjectSchema,
-  readStoredSnapshot,
+  readStoredSnapshotWithStatus,
   runCodegen,
   writeStoredSnapshot
 } from "./internal/core-cli.js";
@@ -32,6 +32,7 @@ import {
   resolveDevtoolsUrl,
   resolveProjectTargetDescriptor
 } from "./project.js";
+import { CliError } from "./errors.js";
 import { templateUsesConnectedClients } from "./messages.js";
 
 export type DoctorStatus =
@@ -40,6 +41,7 @@ export type DoctorStatus =
   | "missing-project"
   | "missing-generated"
   | "schema-drift"
+  | "schema-snapshot-invalid"
   | "schema-destructive-drift"
   | "hub-down"
   | "waiting-for-client";
@@ -103,6 +105,8 @@ export interface DriftState {
   state:
     | "clean"
     | "missing-snapshot"
+    | "snapshot-legacy"
+    | "snapshot-invalid"
     | "snapshot-outdated"
     | "migration-pending"
     | "destructive"
@@ -331,6 +335,17 @@ export async function applyDoctorFixes(
 
   const refreshedReport =
     missingGenerated || !report ? await buildDoctorReport(cwd) : currentReport;
+  if (refreshedReport.drift.state === "snapshot-legacy") {
+    // Upgrade in place rather than regenerating from the current schema, so
+    // schema changes made since the old snapshot stay pending.
+    const { snapshot } = await readStoredSnapshotWithStatus(cwd);
+    if (snapshot) {
+      await writeStoredSnapshot(cwd, snapshot);
+      appliedFixes.push(
+        "Upgraded the stored schema snapshot to the current format."
+      );
+    }
+  }
   if (
     refreshedReport.drift.state === "missing-snapshot" ||
     refreshedReport.drift.state === "snapshot-outdated"
@@ -447,57 +462,81 @@ async function loadSchemaDrift(
     return null;
   }
 
+  let currentSnapshot: SchemaSnapshot;
   try {
-    const schema = await loadProjectSchema(cwd);
-    const currentSnapshot = createSchemaSnapshot(schema);
-    const storedSnapshot = await readStoredSnapshot(cwd);
-    const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
-    const warnings = getSchemaChangesBySeverity(plan, "warning");
-    const destructiveChanges = getSchemaChangesBySeverity(plan, "destructive");
-    const state =
-      destructiveChanges.length > 0
-        ? "destructive"
-        : !storedSnapshot
-          ? "missing-snapshot"
+    currentSnapshot = createSchemaSnapshot(await loadProjectSchema(cwd));
+  } catch (error) {
+    return unavailableDrift(
+      `Syncore could not load the generated schema: ${formatError(error)}`
+    );
+  }
+
+  let stored: Awaited<ReturnType<typeof readStoredSnapshotWithStatus>>;
+  try {
+    stored = await readStoredSnapshotWithStatus(cwd);
+  } catch (error) {
+    const nextSteps = error instanceof CliError ? (error.nextSteps ?? []) : [];
+    return {
+      currentSnapshot,
+      storedSnapshot: null,
+      drift: {
+        state: "snapshot-invalid",
+        currentSchemaHash: currentSnapshot.hash,
+        storedSchemaHash: null,
+        statements: [],
+        changes: [],
+        details: [formatError(error), ...nextSteps].join(" ")
+      }
+    };
+  }
+
+  const storedSnapshot = stored.snapshot;
+  const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
+  const warnings = getSchemaChangesBySeverity(plan, "warning");
+  const destructiveChanges = getSchemaChangesBySeverity(plan, "destructive");
+  const state: DriftState["state"] =
+    destructiveChanges.length > 0
+      ? "destructive"
+      : !storedSnapshot
+        ? "missing-snapshot"
+        : stored.upgradedFrom
+          ? "snapshot-legacy"
           : storedSnapshot.hash !== currentSnapshot.hash &&
               plan.statements.length > 0
             ? "migration-pending"
             : storedSnapshot.hash !== currentSnapshot.hash
               ? "snapshot-outdated"
               : "clean";
-    return {
-      currentSnapshot,
-      storedSnapshot,
-      drift: {
-        state,
-        currentSchemaHash: currentSnapshot.hash,
-        storedSchemaHash: storedSnapshot?.hash ?? null,
-        statements: plan.statements,
-        changes: plan.changes,
-        details:
-          state === "clean"
-            ? "Local schema snapshot matches the generated Syncore schema."
-            : describeDriftState(
-                state,
-                plan.statements.length,
-                warnings.length
-              )
-      }
-    };
-  } catch (error) {
-    return {
-      currentSnapshot: null,
-      storedSnapshot: null,
-      drift: {
-        state: "unavailable",
-        currentSchemaHash: null,
-        storedSchemaHash: null,
-        statements: [],
-        changes: [],
-        details: `Syncore could not load the generated schema: ${formatError(error)}`
-      }
-    };
-  }
+  return {
+    currentSnapshot,
+    storedSnapshot,
+    drift: {
+      state,
+      currentSchemaHash: currentSnapshot.hash,
+      storedSchemaHash: storedSnapshot?.hash ?? null,
+      statements: plan.statements,
+      changes: plan.changes,
+      details:
+        state === "clean"
+          ? "Local schema snapshot matches the generated Syncore schema."
+          : describeDriftState(state, plan.statements.length, warnings.length)
+    }
+  };
+}
+
+function unavailableDrift(details: string): LoadedSchemaDrift {
+  return {
+    currentSnapshot: null,
+    storedSnapshot: null,
+    drift: {
+      state: "unavailable",
+      currentSchemaHash: null,
+      storedSchemaHash: null,
+      statements: [],
+      changes: [],
+      details
+    }
+  };
 }
 
 function describeDriftState(
@@ -507,6 +546,13 @@ function describeDriftState(
 ): string {
   if (state === "missing-snapshot") {
     return "No stored schema snapshot was found yet.";
+  }
+  if (state === "snapshot-legacy") {
+    const pending =
+      statementCount > 0 || warningCount > 0
+        ? ` After the upgrade, ${statementCount} SQL statement(s) and ${warningCount} warning(s) remain pending.`
+        : "";
+    return `The stored schema snapshot uses the format written by syncorejs < 0.3. Syncore upgraded it in memory; \`doctor --fix\` saves the upgrade.${pending}`;
   }
   if (state === "migration-pending") {
     return `Schema drift detected with ${statementCount} SQL statement(s) pending and ${warningCount} warning(s).`;
@@ -749,6 +795,33 @@ function buildSchemaDiagnostic(drift: DriftState): JourneyDiagnostic {
       canAutoFix: false
     };
   }
+  if (drift.state === "snapshot-legacy") {
+    return {
+      id: "schema.drift",
+      category: "schema",
+      severity: "warning",
+      status: "warn",
+      summary: "The stored schema snapshot uses an older format.",
+      ...(drift.details ? { details: drift.details } : {}),
+      suggestedAction:
+        "Run `npx syncorejs doctor --fix` to upgrade the snapshot in place. Pending schema changes are kept.",
+      canAutoFix: true,
+      fixCommand: "npx syncorejs doctor --fix"
+    };
+  }
+  if (drift.state === "snapshot-invalid") {
+    return {
+      id: "schema.drift",
+      category: "schema",
+      severity: "error",
+      status: "fail",
+      summary: "The stored schema snapshot cannot be read.",
+      ...(drift.details ? { details: drift.details } : {}),
+      suggestedAction:
+        "Restore syncore/migrations/_schema_snapshot.json from version control, or delete it and run `npx syncorejs doctor --fix` to start a new baseline from the current schema.",
+      canAutoFix: false
+    };
+  }
   if (drift.state === "missing-snapshot") {
     return {
       id: "schema.drift",
@@ -900,6 +973,18 @@ function resolvePrimaryIssue(input: {
     };
   }
 
+  if (input.drift.state === "snapshot-invalid") {
+    return {
+      code: "schema-snapshot-invalid",
+      summary: "The stored schema snapshot cannot be read.",
+      details: input.drift.details ?? "The schema snapshot file is invalid.",
+      impact:
+        "Migrations and schema drift checks cannot run until the snapshot is restored or recreated.",
+      suggestedAction:
+        "Restore syncore/migrations/_schema_snapshot.json from version control, or delete it and run `npx syncorejs doctor --fix` to start a new baseline from the current schema."
+    };
+  }
+
   if (input.drift.state === "destructive") {
     const destructiveDetails = getSchemaChangesBySeverity(
       input.drift,
@@ -934,6 +1019,7 @@ function resolvePrimaryIssue(input: {
 
   if (
     input.drift.state === "missing-snapshot" ||
+    input.drift.state === "snapshot-legacy" ||
     input.drift.state === "snapshot-outdated" ||
     input.drift.state === "migration-pending"
   ) {

@@ -644,7 +644,7 @@ export interface PaginationResult<TItem> {
     page: TItem[];
 }
 
-// @public (undocumented)
+// @public
 export function parseSchemaSnapshot(source: string): SchemaSnapshot;
 
 // Warning: (ae-forgotten-export) The symbol "OptionalPropertyNames" needs to be exported by the entry point index.d.mts
@@ -711,6 +711,19 @@ export type QueryExpression = {
     type: "or";
     expressions: QueryExpression[];
 };
+
+// @public
+export function readSchemaSnapshot(source: string): ReadSchemaSnapshotResult;
+
+// @public
+export interface ReadSchemaSnapshotResult {
+    // (undocumented)
+    snapshot: SchemaSnapshot;
+    upgradedFrom: {
+        formatVersion: number;
+        plannerVersion: number;
+    } | null;
+}
 
 // @public (undocumented)
 export class RecordValidator<TKey extends string, TValue, TStorage, TKeyValidator extends Validator<TKey, string, string>, TValueValidator extends Validator<TValue, TStorage, string>> extends BaseValidator<Record<TKey, TValue>, Record<TKey, TStorage>, never> {
@@ -995,6 +1008,22 @@ export interface SchemaSnapshot {
     // (undocumented)
     tables: TableSnapshot[];
 }
+
+// @public
+export class SchemaSnapshotFormatError extends Error {
+    constructor(message: string, reason: SchemaSnapshotFormatErrorReason, formatVersion?: unknown | undefined, plannerVersion?: unknown | undefined);
+    // (undocumented)
+    readonly formatVersion?: unknown | undefined;
+    // (undocumented)
+    readonly name = "SchemaSnapshotFormatError";
+    // (undocumented)
+    readonly plannerVersion?: unknown | undefined;
+    // (undocumented)
+    readonly reason: SchemaSnapshotFormatErrorReason;
+}
+
+// @public
+export type SchemaSnapshotFormatErrorReason = "invalid-json" | "malformed" | "legacy" | "newer";
 
 // @public (undocumented)
 export interface SearchIndexBuilder<TSearchField extends string = string, TFilterFields extends string | readonly string[] = string> {
@@ -1889,6 +1918,9 @@ export interface UpdateScheduledJobOptions {
     // (undocumented)
     schedule?: RecurringSchedule;
 }
+
+// @public
+export function upgradeSchemaSnapshot(value: unknown): ReadSchemaSnapshotResult;
 
 // @public
 export interface UsePaginatedQueryResult<TItem> {

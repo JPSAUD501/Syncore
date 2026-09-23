@@ -23,7 +23,7 @@ import {
   hasSyncoreProject,
   isLocalPortInUse,
   loadProjectSchema,
-  readStoredSnapshot,
+  readStoredSnapshotWithStatus,
   resolveRequestedTemplate,
   runCodegen,
   runDevProjectBootstrap,
@@ -620,16 +620,23 @@ function addMigrateCommand(program: Command): void {
       await executeCommand(ctx, async () => {
         const schema = await loadProjectSchema(ctx.cwd);
         const currentSnapshot = createSchemaSnapshot(schema);
-        const storedSnapshot = await readStoredSnapshot(ctx.cwd);
+        const { snapshot: storedSnapshot, upgradedFrom } =
+          await readStoredSnapshotWithStatus(ctx.cwd);
         const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
         const summary = summarizeSchemaMigrationPlan(plan);
 
+        if (upgradedFrom && !ctx.json) {
+          ctx.warn(
+            "The stored schema snapshot uses the format written by syncorejs < 0.3 and was upgraded in memory. Run `npx syncorejs doctor --fix` to save the upgrade."
+          );
+        }
         ctx.printResult({
           summary: "Migration status computed.",
           command: "migrate status",
           data: {
             currentSchemaHash: currentSnapshot.hash,
             storedSchemaHash: storedSnapshot?.hash ?? null,
+            legacySnapshotUpgraded: upgradedFrom !== null,
             summary,
             changes: plan.changes,
             statements: plan.statements
@@ -660,7 +667,8 @@ function addMigrateCommand(program: Command): void {
         await executeCommand(ctx, async () => {
           const schema = await loadProjectSchema(ctx.cwd);
           const currentSnapshot = createSchemaSnapshot(schema);
-          const storedSnapshot = await readStoredSnapshot(ctx.cwd);
+          const { snapshot: storedSnapshot, upgradedFrom } =
+            await readStoredSnapshotWithStatus(ctx.cwd);
           const plan = diffSchemaSnapshots(storedSnapshot, currentSnapshot);
           const destructiveChanges = getSchemaChangesBySeverity(
             plan,
@@ -682,8 +690,13 @@ function addMigrateCommand(program: Command): void {
             );
           }
           if (plan.changes.length === 0) {
+            if (upgradedFrom && storedSnapshot) {
+              await writeStoredSnapshot(ctx.cwd, storedSnapshot);
+            }
             ctx.printResult({
-              summary: "No schema changes detected."
+              summary: upgradedFrom
+                ? "No schema changes detected. Upgraded the stored schema snapshot to the current format."
+                : "No schema changes detected."
             });
             return;
           }
@@ -1990,6 +2003,10 @@ function describeDevDriftStatus(report: DoctorReport): string {
       return "clean";
     case "missing-snapshot":
       return "snapshot refreshed";
+    case "snapshot-legacy":
+      return "snapshot upgraded";
+    case "snapshot-invalid":
+      return "snapshot unreadable";
     case "snapshot-outdated":
       return "snapshot refreshed";
     case "migration-pending":

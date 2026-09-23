@@ -87,9 +87,18 @@ export class SchemaEngine<
     let previousSnapshot = null;
     if (stateRow?.schema_json && stateRow.schema_json !== "{}") {
       try {
+        // Also upgrades state written by syncorejs < 0.3, so destructive
+        // changes are still detected on the first start after upgrading.
         previousSnapshot = parseSchemaSnapshot(stateRow.schema_json);
-      } catch {
+      } catch (error) {
         previousSnapshot = null;
+        this.deps.devtools.emit({
+          type: "log",
+          runtimeId: this.deps.runtimeId,
+          level: "warn",
+          message: `Syncore could not read the stored schema state, so destructive schema changes were not checked on this start: ${error instanceof Error ? error.message : String(error)}`,
+          timestamp: Date.now()
+        });
       }
     }
     const plan = diffSchemaSnapshots(previousSnapshot, nextSnapshot);
