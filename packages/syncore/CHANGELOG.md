@@ -22,7 +22,15 @@
 
 ### Minor Changes
 
-- 47b6b6e: Improvements
+- 47b6b6e: Schema migrations now describe each change, and Electron apps get a one-call setup. (This entry was rewritten after the release; it originally said only "Improvements".)
+
+  - `migrate status` and `migrate generate` report structured changes (tables, fields and indexes added, removed or changed) with a severity, and the generated SQL includes them.
+  - `createElectronSyncoreApp` in `syncorejs/node/ipc` sets up the runtime, IPC bridge and window binding for an Electron main process.
+  - `Doc`, `DocInput`, `DocPatch`, `PatchValue` and `PatchValueForTable` are exported from `syncorejs`.
+
+  ### Breaking changes
+
+  - Schema snapshots (`syncore/migrations/_schema_snapshot.json`) moved to format version 4 (planner version 3). Snapshots written by syncorejs 0.2.x are rejected with `Invalid schema snapshot file.`, and the runtime stops comparing against schema state stored by 0.2.x.
 
 ## 0.2.8
 
