@@ -897,6 +897,18 @@ export interface RunResult {
 }
 
 // @public
+export interface RunScheduledJobsOptions {
+    includeFuture?: boolean;
+    includeRecurring?: boolean;
+}
+
+// @public
+export interface RunScheduledJobsResult {
+    executed: number;
+    failed: number;
+}
+
+// @public
 export const s: ValidatorBuilderApi;
 
 // @public
@@ -908,6 +920,7 @@ export interface SchedulerApi {
 
 // @public
 export interface SchedulerOptions {
+    autoRun?: boolean;
     pollIntervalMs?: number;
     recurringJobs?: RecurringJobDefinition[];
 }
@@ -1634,6 +1647,7 @@ export interface SyncoreRuntimeAdmin<TSchema extends SyncoreDataModel = SyncoreD
     runMutation<TArgs, TResult>(reference: FunctionReference<"mutation", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
     // (undocumented)
     runQuery<TArgs, TResult>(reference: FunctionReference<"query", TArgs, TResult>, args?: JsonObject, meta?: DevtoolsEventMeta): Promise<TResult>;
+    runScheduledJobs(options?: RunScheduledJobsOptions): Promise<RunScheduledJobsResult>;
     // (undocumented)
     subscribeToDevtoolsEvents(listener: (event: SyncoreDevtoolsEvent) => void): () => void;
     // (undocumented)

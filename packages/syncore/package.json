@@ -88,6 +88,11 @@
       "types": "./dist/node-ipc-react.d.ts",
       "import": "./dist/node-ipc-react.js"
     },
+    "./testing": {
+      "default": "./dist/testing.js",
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
     "./next": {
       "default": "./dist/next.js",
       "types": "./dist/next.d.ts",

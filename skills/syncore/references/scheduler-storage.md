@@ -58,6 +58,21 @@ crons.interval(
 
 Syncore does not auto-discover a magic `syncore/crons.ts` file.
 
+## Running Jobs Manually
+
+The runtime polls for due jobs every `pollIntervalMs` (default 1000). Set
+`scheduler: { autoRun: false }` to turn polling off, then run jobs yourself:
+
+```ts
+const { executed, failed } = await runtime.getAdmin().runScheduledJobs();
+```
+
+`runScheduledJobs({ includeFuture: true })` also runs jobs scheduled for later,
+and `includeRecurring: false` leaves recurring jobs alone. Runs never overlap:
+a call made while one is in progress waits for it, so a slow job is not picked
+up twice. Tests usually get this through `createTestSyncore` (see
+[testing.md](testing.md)).
+
 ## Storage APIs
 
 Queries, mutations, and actions can use `ctx.storage`:

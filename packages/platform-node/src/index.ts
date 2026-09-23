@@ -92,9 +92,15 @@ export class NodeSqliteDriver implements SyncoreSqlDriver {
   private transactionDepth = 0;
 
   constructor(readonly databasePath: string) {
+    if (databasePath !== ":memory:" && !databasePath.startsWith("file:")) {
+      mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
+    }
     this.database = new DatabaseSync(databasePath);
     this.database.exec("PRAGMA foreign_keys = ON;");
     this.database.exec("PRAGMA journal_mode = WAL;");
+    // Wait for another connection's write lock (e.g. the CLI or a second
+    // process) instead of failing immediately with SQLITE_BUSY.
+    this.database.exec("PRAGMA busy_timeout = 5000;");
   }
 
   async exec(sql: string): Promise<void> {
@@ -398,8 +404,10 @@ export interface CreateNodeRuntimeOptions<
    */
   devtools?: DevtoolsSink | false;
   /**
-   * Explicit devtools WebSocket server URL. Defaults to
-   * `ws://localhost:3099` (the Syncore devtools default port).
+   * Explicit devtools WebSocket server URL. Defaults to `SYNCORE_DEVTOOLS_URL`
+   * or `ws://127.0.0.1:4311` (the Syncore devtools default port). The default
+   * is not used under test runners (`NODE_ENV=test` or `VITEST`); pass a URL
+   * explicitly to connect there.
    */
   devtoolsUrl?: string;
   /**
@@ -1095,6 +1103,9 @@ export function createNodeWebSocketDevtoolsSink(
       connectTimer = undefined;
       connect();
     }, options.reconnectDelayMs ?? 1200);
+    // Retrying a devtools server that is not running must not keep the
+    // process alive.
+    (connectTimer as { unref?: () => void }).unref?.();
   };
 
   const sendNow = (message: SyncoreDevtoolsMessage) => {
@@ -1270,7 +1281,19 @@ function resolveDefaultNodeDevtoolsUrl(): string | undefined {
   if (process.env.SYNCORE_DISABLE_DEVTOOLS === "1") {
     return undefined;
   }
-  return process.env.SYNCORE_DEVTOOLS_URL ?? "ws://127.0.0.1:4311";
+  if (process.env.SYNCORE_DEVTOOLS_URL) {
+    return process.env.SYNCORE_DEVTOOLS_URL;
+  }
+  // Test runs would otherwise try (and retry) a devtools server that is
+  // almost never running, slowing every test that creates a runtime.
+  if (isRunningUnderTestRunner()) {
+    return undefined;
+  }
+  return "ws://127.0.0.1:4311";
+}
+
+function isRunningUnderTestRunner(): boolean {
+  return process.env.NODE_ENV === "test" || Boolean(process.env.VITEST);
 }
 
 function isTrustedLoopbackWebSocketUrl(value: string): boolean {

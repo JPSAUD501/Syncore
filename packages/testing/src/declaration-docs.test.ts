@@ -130,6 +130,9 @@ describe("published declaration docs", () => {
     const ipcReactDeclarations = await readDeclarationFile(
       "../../platform-node/dist/ipc-react.d.mts"
     );
+    const testingDeclarations = await readDeclarationFile(
+      "../../platform-node/dist/testing.d.mts"
+    );
 
     expectPublicDeclarationsToBeDocumented(declarations, [
       { symbol: "WithNodeSyncoreClientOptions", kind: "type" },
@@ -152,6 +155,14 @@ describe("published declaration docs", () => {
     expectPublicDeclarationsToBeDocumented(ipcReactDeclarations, [
       { symbol: "SyncoreElectronProviderProps", kind: "interface" },
       { symbol: "SyncoreElectronProvider", kind: "function" }
+    ]);
+
+    expectPublicDeclarationsToBeDocumented(testingDeclarations, [
+      { symbol: "CreateTestSyncoreOptions", kind: "interface" },
+      { symbol: "FinishScheduledJobsOptions", kind: "interface" },
+      { symbol: "TestSyncore", kind: "interface" },
+      { symbol: "createTestSyncore", kind: "function" },
+      { symbol: "InMemoryStorageAdapter", kind: "class" }
     ]);
   });
 

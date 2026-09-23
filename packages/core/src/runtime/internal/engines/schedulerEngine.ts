@@ -5,6 +5,8 @@ import type {
 } from "../../functions.js";
 import type {
   JsonObject,
+  RunScheduledJobsOptions,
+  RunScheduledJobsResult,
   SyncoreSqlDriver,
   UpdateScheduledJobOptions
 } from "../../runtime.js";
@@ -39,6 +41,7 @@ type SchedulerEngineDeps = {
 
 export class SchedulerEngine {
   private timer: ReturnType<typeof setInterval> | undefined;
+  private inFlight: Promise<RunScheduledJobsResult> | undefined;
 
   constructor(private readonly deps: SchedulerEngineDeps) {}
 
@@ -68,7 +71,11 @@ export class SchedulerEngine {
       return;
     }
     this.timer = setInterval(() => {
-      void this.processDueJobs();
+      // A slow job must not start a second pass over the same rows.
+      if (this.inFlight) {
+        return;
+      }
+      void this.runDueJobs().catch(() => undefined);
     }, this.deps.pollIntervalMs);
   }
 
@@ -78,6 +85,32 @@ export class SchedulerEngine {
     }
     clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  /**
+   * Runs the jobs that are due, one pass at a time: a call made while a pass
+   * is in progress waits for it and then starts its own.
+   */
+  async runDueJobs(
+    options: RunScheduledJobsOptions = {}
+  ): Promise<RunScheduledJobsResult> {
+    while (this.inFlight) {
+      await this.inFlight.catch(() => undefined);
+    }
+    const pass = this.processDueJobs(options);
+    this.inFlight = pass;
+    try {
+      return await pass;
+    } finally {
+      this.inFlight = undefined;
+    }
+  }
+
+  /** Resolves once the pass in progress, if any, has finished. */
+  async whenIdle(): Promise<void> {
+    while (this.inFlight) {
+      await this.inFlight.catch(() => undefined);
+    }
   }
 
   async scheduleJob(
@@ -271,12 +304,22 @@ export class SchedulerEngine {
     this.deps.devtools.notifyScopes(["scheduler.jobs"]);
   }
 
-  private async processDueJobs(): Promise<void> {
+  private async processDueJobs(
+    options: RunScheduledJobsOptions
+  ): Promise<RunScheduledJobsResult> {
     const now = Date.now();
-    const dueJobs = await this.deps.driver.all<ScheduledJobRow>(
-      `SELECT * FROM "_scheduled_functions" WHERE status = 'scheduled' AND run_at <= ? ORDER BY run_at ASC`,
-      [now]
-    );
+    const includeRecurring = options.includeRecurring ?? true;
+    const dueJobs = (
+      options.includeFuture
+        ? await this.deps.driver.all<ScheduledJobRow>(
+            `SELECT * FROM "_scheduled_functions" WHERE status = 'scheduled' ORDER BY run_at ASC`
+          )
+        : await this.deps.driver.all<ScheduledJobRow>(
+            `SELECT * FROM "_scheduled_functions" WHERE status = 'scheduled' AND run_at <= ? ORDER BY run_at ASC`,
+            [now]
+          )
+    ).filter((job) => includeRecurring || !job.recurring_name);
+    let failed = 0;
     const executedJobIds: string[] = [];
     const jobExecutions: Array<{
       jobId: string;
@@ -329,6 +372,7 @@ export class SchedulerEngine {
         });
         await this.advanceOrFinalizeJob(job, "completed", now);
       } catch (error) {
+        failed += 1;
         jobExecutions.push({
           jobId: job.id,
           functionName: job.function_name,
@@ -361,6 +405,7 @@ export class SchedulerEngine {
       });
       this.notifySchedulerJobsChanged();
     }
+    return { executed: executedJobIds.length, failed };
   }
 
   private async advanceOrFinalizeJob(

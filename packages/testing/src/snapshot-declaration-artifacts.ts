@@ -17,6 +17,7 @@ const declarationArtifacts = [
   "packages/platform-node/dist/index.d.mts",
   "packages/platform-node/dist/ipc.d.mts",
   "packages/platform-node/dist/ipc-react.d.mts",
+  "packages/platform-node/dist/testing.d.mts",
   "packages/platform-expo/dist/index.d.ts",
   "packages/platform-expo/dist/react.d.ts",
   "packages/next/dist/index.d.ts",

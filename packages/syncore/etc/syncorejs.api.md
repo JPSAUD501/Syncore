@@ -740,6 +740,7 @@ export interface SchedulerApi {
 
 // @public
 export interface SchedulerOptions {
+    autoRun?: boolean;
     pollIntervalMs?: number;
     recurringJobs?: RecurringJobDefinition[];
 }

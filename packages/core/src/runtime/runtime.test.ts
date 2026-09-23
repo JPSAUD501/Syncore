@@ -22,7 +22,7 @@ import {
   s,
   type SyncoreValidationError
 } from "../../../schema/src/index.js";
-import { cronJobs, mutation, query } from "./functions.js";
+import { action, cronJobs, mutation, query } from "./functions.js";
 import {
   createFunctionReference,
   type ImpactScope,
@@ -31,6 +31,7 @@ import {
   type SyncoreExternalChangeSignal,
   type QueryCtx,
   type MutationCtx,
+  type RegisteredSyncoreFunction,
   type StorageObject,
   type StorageWriteInput,
   SyncoreRuntime,
@@ -2023,5 +2024,366 @@ describe("SyncoreRuntime strict validation", () => {
     const job = readJob();
     expect(job.status).toBe("scheduled");
     expect(job.run_at).toBeGreaterThan(Date.now());
+  });
+});
+
+class RecordingSqliteDriver extends TestSqliteDriver {
+  readonly statements: string[] = [];
+  transactions = 0;
+  failOn: RegExp | undefined;
+  private depth = 0;
+
+  private record(sql: string): void {
+    if (this.failOn?.test(sql)) {
+      throw new Error(`Simulated failure for: ${sql.trim().split("\n")[0]}`);
+    }
+    this.statements.push(sql.trim());
+  }
+
+  override async exec(sql: string): Promise<void> {
+    this.record(sql);
+    return super.exec(sql);
+  }
+
+  override async run(sql: string, params?: unknown[]) {
+    this.record(sql);
+    return super.run(sql, params);
+  }
+
+  override async get<T>(sql: string, params?: unknown[]) {
+    this.record(sql);
+    return super.get<T>(sql, params);
+  }
+
+  override async all<T>(sql: string, params?: unknown[]) {
+    this.record(sql);
+    return super.all<T>(sql, params);
+  }
+
+  override async withTransaction<T>(callback: () => Promise<T>): Promise<T> {
+    if (this.depth === 0) {
+      this.transactions += 1;
+    }
+    this.depth += 1;
+    try {
+      return await super.withTransaction(callback);
+    } finally {
+      this.depth -= 1;
+    }
+  }
+
+  writes(): string[] {
+    return this.statements.filter(
+      (sql) => !/^(SELECT|PRAGMA table_info)/i.test(sql)
+    );
+  }
+}
+
+describe("SyncoreRuntime boot", () => {
+  let rootDirectory: string;
+
+  beforeEach(async () => {
+    rootDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-boot-"));
+  });
+
+  afterEach(async () => {
+    await rm(rootDirectory, { recursive: true, force: true });
+  });
+
+  const bootSchema = defineSchema({
+    tasks: defineTable({
+      text: s.string(),
+      done: s.boolean()
+    })
+      .index("by_done", ["done"])
+      .searchIndex("search_text", { searchField: "text" })
+  });
+
+  const createTask = createFunctionReference<"mutation", { text: string }, string>(
+    "mutation",
+    "tasks/create"
+  );
+
+  const bootFunctions = {
+    "tasks/search": query({
+      args: { text: s.string() },
+      handler: async (ctx, args) =>
+        (ctx as QueryCtx<typeof bootSchema>).db
+          .query("tasks")
+          .withSearchIndex("search_text", (search) =>
+            search.search("text", (args as { text: string }).text)
+          )
+          .collect()
+    }),
+    "tasks/create": mutation({
+      args: { text: s.string() },
+      handler: async (ctx, args) =>
+        (ctx as MutationCtx<typeof bootSchema>).db.insert("tasks", {
+          text: (args as { text: string }).text,
+          done: false
+        })
+    })
+  };
+
+  function createBootRuntime(driver: SyncoreSqlDriver) {
+    return new SyncoreRuntime({
+      schema: bootSchema,
+      functions: bootFunctions,
+      driver,
+      storage: new TestStorageAdapter(path.join(rootDirectory, "storage"))
+    });
+  }
+
+  it("prepares a new database in one transaction", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    const runtime = createBootRuntime(driver);
+
+    await runtime.start();
+    await runtime.stop();
+
+    expect(driver.transactions).toBe(1);
+    expect(driver.writes().some((sql) => sql.startsWith("CREATE TABLE"))).toBe(
+      true
+    );
+  });
+
+  it("does not write anything when booting an up-to-date database", async () => {
+    const databasePath = path.join(rootDirectory, "a.db");
+    const first = createBootRuntime(new TestSqliteDriver(databasePath));
+    await first.start();
+    await first.stop();
+
+    const driver = new RecordingSqliteDriver(databasePath);
+    const second = createBootRuntime(driver);
+    await second.start();
+    await second.stop();
+
+    expect(driver.transactions).toBe(1);
+    expect(
+      driver
+        .writes()
+        .filter((sql) => !/^CREATE (TABLE|INDEX) IF NOT EXISTS/i.test(sql))
+    ).toEqual([]);
+  });
+
+  it("prepares once when start and direct access race", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    const runtime = createBootRuntime(driver);
+
+    await Promise.all([
+      runtime.prepareForDirectAccess(),
+      runtime.getAdmin().prepareForDirectAccess(),
+      runtime.start()
+    ]);
+    await runtime.stop();
+
+    expect(driver.transactions).toBe(1);
+  });
+
+  it("leaves nothing behind when boot fails, and can be retried", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    driver.failOn = /CREATE TABLE IF NOT EXISTS "tasks"/;
+    const runtime = createBootRuntime(driver);
+
+    await expect(runtime.start()).rejects.toThrow("Simulated failure");
+    expect(
+      runtime.createClient().watchRuntimeStatus().localQueryResult()
+    ).toMatchObject({ kind: "error" });
+    expect(
+      await driver.all<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+      )
+    ).toEqual([]);
+
+    driver.failOn = undefined;
+    await runtime.start();
+    try {
+      await expect(
+        runtime.createClient().mutation(createTask, { text: "after retry" })
+      ).resolves.toEqual(expect.any(String));
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("falls back to LIKE search when FTS5 is unavailable", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    driver.failOn = /USING fts5/i;
+    const runtime = createBootRuntime(driver);
+
+    await runtime.start();
+    try {
+      const client = runtime.createClient();
+      await client.mutation(createTask, { text: "buy oat milk" });
+      await client.mutation(createTask, { text: "walk the dog" });
+      const results = await client.query(
+        createFunctionReference<
+          "query",
+          { text: string },
+          Array<{ text: string }>
+        >("query", "tasks/search"),
+        { text: "milk" }
+      );
+      expect(results.map((task) => task.text)).toEqual(["buy oat milk"]);
+    } finally {
+      await runtime.stop();
+    }
+  });
+});
+
+describe("SyncoreRuntime scheduled job runs", () => {
+  let rootDirectory: string;
+
+  beforeEach(async () => {
+    rootDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-jobs-"));
+  });
+
+  afterEach(async () => {
+    await rm(rootDirectory, { recursive: true, force: true });
+  });
+
+  const jobsSchema = defineSchema({
+    tasks: defineTable({ text: s.string() })
+  });
+
+  const listTasks = createFunctionReference<
+    "query",
+    Record<never, never>,
+    Array<{ text: string }>
+  >("query", "tasks/list");
+
+  const scheduleCreate = mutation({
+    args: { text: s.string() },
+    returns: s.null(),
+    handler: async (ctx, args) => {
+      await (ctx as MutationCtx).scheduler.runAfter(
+        0,
+        createFunctionReference("mutation", "tasks/create"),
+        { text: (args as { text: string }).text }
+      );
+      return null;
+    }
+  });
+
+  function createJobsRuntime(
+    extraFunctions: Record<string, RegisteredSyncoreFunction> = {},
+    autoRun?: boolean
+  ) {
+    return new SyncoreRuntime({
+      schema: jobsSchema,
+      functions: {
+        "tasks/create": mutation({
+          args: { text: s.string() },
+          handler: async (ctx, args) =>
+            (ctx as MutationCtx<typeof jobsSchema>).db.insert("tasks", {
+              text: (args as { text: string }).text
+            })
+        }),
+        "tasks/list": query({
+          args: {},
+          handler: async (ctx) =>
+            (ctx as QueryCtx<typeof jobsSchema>).db.query("tasks").collect()
+        }),
+        "tasks/scheduleCreate": scheduleCreate,
+        ...extraFunctions
+      },
+      driver: new TestSqliteDriver(path.join(rootDirectory, "jobs.db")),
+      storage: new TestStorageAdapter(path.join(rootDirectory, "storage")),
+      scheduler: {
+        pollIntervalMs: 10,
+        ...(autoRun === undefined ? {} : { autoRun })
+      }
+    });
+  }
+
+  it("does not poll when autoRun is false", async () => {
+    const runtime = createJobsRuntime({}, false);
+    await runtime.start();
+    try {
+      const client = runtime.createClient();
+      await client.mutation(
+        createFunctionReference("mutation", "tasks/scheduleCreate"),
+        { text: "scheduled" }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(await client.query(listTasks)).toEqual([]);
+
+      expect(await runtime.getAdmin().runScheduledJobs()).toEqual({
+        executed: 1,
+        failed: 0
+      });
+      expect(await client.query(listTasks)).toMatchObject([
+        { text: "scheduled" }
+      ]);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("keeps polling by default", async () => {
+    const runtime = createJobsRuntime();
+    await runtime.start();
+    try {
+      const client = runtime.createClient();
+      await client.mutation(
+        createFunctionReference("mutation", "tasks/scheduleCreate"),
+        { text: "polled" }
+      );
+      await expect
+        .poll(() => client.query(listTasks))
+        .toMatchObject([{ text: "polled" }]);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("never runs the same job twice when runs overlap", async () => {
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runtime = createJobsRuntime(
+      {
+        "jobs/slow": action({
+          args: {},
+          handler: async () => {
+            calls += 1;
+            await blocked;
+            return null;
+          }
+        }),
+        "jobs/schedule": mutation({
+          args: {},
+          returns: s.null(),
+          handler: async (ctx) => {
+            await (ctx as MutationCtx).scheduler.runAfter(
+              0,
+              createFunctionReference("action", "jobs/slow"),
+              {}
+            );
+            return null;
+          }
+        })
+      },
+      false
+    );
+    await runtime.start();
+    try {
+      await runtime
+        .createClient()
+        .mutation(createFunctionReference("mutation", "jobs/schedule"));
+      const admin = runtime.getAdmin();
+      const first = admin.runScheduledJobs();
+      const second = admin.runScheduledJobs();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      release();
+
+      expect(await first).toEqual({ executed: 1, failed: 0 });
+      expect(await second).toEqual({ executed: 0, failed: 0 });
+      expect(calls).toBe(1);
+    } finally {
+      await runtime.stop();
+    }
   });
 });

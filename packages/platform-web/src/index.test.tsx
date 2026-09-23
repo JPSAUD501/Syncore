@@ -260,6 +260,39 @@ describe("platform-web sql.js runtime", () => {
     await secondRuntime.stop();
   });
 
+  it("saves the database once when a runtime starts", async () => {
+    const persistence = createMockWebPersistence();
+    const saveDatabase = persistence.saveDatabase.bind(persistence);
+    let saves = 0;
+    persistence.saveDatabase = async (key, bytes) => {
+      saves += 1;
+      await saveDatabase(key, bytes);
+    };
+    const schema = defineSchema({
+      todos: defineTable({
+        title: s.string(),
+        complete: s.boolean()
+      })
+        .index("by_complete", ["complete"])
+        .searchIndex("search_title", { searchField: "title" })
+    });
+
+    const runtime = await createWebSyncoreRuntime({
+      databaseName: "boot-saves",
+      persistence,
+      schema,
+      functions: {},
+      locateFile: () => wasmFilePath
+    });
+    const savesBeforeStart = saves;
+    await runtime.start();
+    try {
+      expect(saves - savesBeforeStart).toBe(1);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
   it("creates a worker runtime attachment with one helper", async () => {
     const messages: unknown[] = [];
     const listeners = new Set<(event: MessageEvent<unknown>) => void>();
