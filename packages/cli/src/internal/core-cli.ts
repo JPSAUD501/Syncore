@@ -69,6 +69,7 @@ import {
   renderCreateTableStatement,
   renderMigrationSql,
   searchIndexTableName,
+  serializeValue,
   type SchemaSnapshot,
   type StorageObject,
   type StorageWriteInput,
@@ -1076,16 +1077,14 @@ export async function importJsonlIntoProject(
   const source = await readFile(sourceFilePath, "utf8");
   const rows = source
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
+    .filter(({ line }) => line.length > 0);
 
   const database = new DatabaseSync(databasePath);
   try {
     ensureDatabaseReadyForImport(database, schema);
     let importedCount = 0;
-    let lineNumber = 0;
-    for (const line of rows) {
-      lineNumber += 1;
+    for (const { line, lineNumber } of rows) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(line);
@@ -1103,10 +1102,19 @@ export async function importJsonlIntoProject(
       const payload = { ...(parsed as Record<string, unknown>) };
       delete payload._id;
       delete payload._creationTime;
-      const validated = table.validator.parse(payload) as Record<
-        string,
-        unknown
-      >;
+      let validated: Record<string, unknown>;
+      try {
+        validated = serializeValue(
+          table.validator,
+          table.validator.parse(payload, "document"),
+          "document"
+        ) as Record<string, unknown>;
+      } catch (error) {
+        throw new Error(
+          `Invalid document on line ${lineNumber} of ${sourcePath} for table "${tableName}": ${formatError(error)}`,
+          { cause: error }
+        );
+      }
       const id = generateId();
       const creationTime = Date.now() + importedCount;
       const json = stableStringify(validated);

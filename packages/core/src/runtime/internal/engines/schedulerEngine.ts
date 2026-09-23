@@ -178,6 +178,7 @@ export class SchedulerEngine {
         [id]
       );
       if (existing) {
+        await this.refreshRecurringJob(job, existing);
         continue;
       }
       const nextRunAt = computeNextRun(job.schedule, Date.now());
@@ -204,6 +205,66 @@ export class SchedulerEngine {
       );
       this.notifySchedulerJobsChanged();
     }
+  }
+
+  /**
+   * Brings a stored recurring job in line with its current definition, so
+   * changing a cron's args, target or schedule takes effect on the next start.
+   * Cancelled jobs are left alone; jobs frozen as `failed` by older versions
+   * are rescheduled.
+   */
+  private async refreshRecurringJob(
+    job: RecurringJobDefinition,
+    existing: ScheduledJobRow
+  ): Promise<void> {
+    if (existing.status === "cancelled") {
+      return;
+    }
+    const next = {
+      function_name: job.function.name,
+      function_kind: job.function.kind,
+      args_json: stableStringify(job.args),
+      schedule_json: stableStringify(job.schedule),
+      timezone:
+        "timezone" in job.schedule ? (job.schedule.timezone ?? null) : null,
+      misfire_policy: job.misfirePolicy.type,
+      window_ms:
+        job.misfirePolicy.type === "windowed" ? job.misfirePolicy.windowMs : null
+    };
+    const scheduleChanged = existing.schedule_json !== next.schedule_json;
+    const revive = existing.status !== "scheduled";
+    const unchanged =
+      !scheduleChanged &&
+      !revive &&
+      (Object.keys(next) as Array<keyof typeof next>).every(
+        (key) => existing[key] === next[key]
+      );
+    if (unchanged) {
+      return;
+    }
+    const now = Date.now();
+    const runAt =
+      scheduleChanged || revive
+        ? computeNextRun(job.schedule, now)
+        : existing.run_at;
+    await this.deps.driver.run(
+      `UPDATE "_scheduled_functions"
+       SET function_name = ?, function_kind = ?, args_json = ?, schedule_json = ?, timezone = ?, misfire_policy = ?, window_ms = ?, status = 'scheduled', run_at = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        next.function_name,
+        next.function_kind,
+        next.args_json,
+        next.schedule_json,
+        next.timezone,
+        next.misfire_policy,
+        next.window_ms,
+        runAt,
+        now,
+        existing.id
+      ]
+    );
+    this.notifySchedulerJobsChanged();
   }
 
   private notifySchedulerJobsChanged(): void {
@@ -274,11 +335,9 @@ export class SchedulerEngine {
           functionType: job.function_kind === "mutation" ? "mutation" : "action",
           error: error instanceof Error ? error.message : String(error)
         });
-        await this.deps.driver.run(
-          `UPDATE "_scheduled_functions" SET status = 'failed', updated_at = ? WHERE id = ?`,
-          [Date.now(), job.id]
-        );
-        this.notifySchedulerJobsChanged();
+        // A failing recurring job still moves on to its next run instead of
+        // stopping for good.
+        await this.advanceOrFinalizeJob(job, "failed", now);
         this.deps.devtools.emit({
           type: "log",
           runtimeId: this.deps.runtimeId,

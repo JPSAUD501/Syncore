@@ -2,6 +2,7 @@ import {
   ensureObjectValidator,
   isValidator,
   type Infer,
+  type InferObjectInput,
   type Validator,
   type ValidatorMap
 } from "@syncore/schema";
@@ -238,9 +239,7 @@ export type InferArgs<
 > = TArgs extends Validator<unknown, unknown, string>
     ? Infer<TArgs>
     : TArgs extends ValidatorMap
-      ? {
-          [TKey in keyof TArgs]: Infer<TArgs[TKey]>;
-        }
+      ? InferObjectInput<TArgs>
       : never;
 
 function createFunctionDefinition<

@@ -974,7 +974,10 @@ function FunctionLogs({
                     : "action.completed";
               const fnType = inferFunctionType(eventType);
               const args =
+                // A truncated preview is not the real args (and may hold
+                // markers such as __truncatedKeys), so it cannot be re-run.
                 trace.argsPreview?.kind === "value" &&
+                !trace.argsPreview.truncated &&
                 trace.argsPreview.value &&
                 typeof trace.argsPreview.value === "object" &&
                 !Array.isArray(trace.argsPreview.value)
