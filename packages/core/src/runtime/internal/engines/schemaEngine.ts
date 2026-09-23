@@ -25,6 +25,7 @@ import {
   resolveSearchIndexTableName,
   searchIndexKey,
   toSearchValue,
+  withValidationContext,
   type DatabaseRow
 } from "./shared.js";
 import { quoteIdentifier, stableStringify } from "@syncore/internal";
@@ -88,9 +89,18 @@ export class SchemaEngine<
     let previousSnapshot = null;
     if (stateRow?.schema_json && stateRow.schema_json !== "{}") {
       try {
+        // Also upgrades state written by syncorejs < 0.3, so destructive
+        // changes are still detected on the first start after upgrading.
         previousSnapshot = parseSchemaSnapshot(stateRow.schema_json);
-      } catch {
+      } catch (error) {
         previousSnapshot = null;
+        this.deps.devtools.emit({
+          type: "log",
+          runtimeId: this.deps.runtimeId,
+          level: "warn",
+          message: `Syncore could not read the stored schema state, so destructive schema changes were not checked on this start: ${error instanceof Error ? error.message : String(error)}`,
+          timestamp: Date.now()
+        });
       }
     }
     const plan = diffSchemaSnapshots(previousSnapshot, nextSnapshot);
@@ -214,9 +224,12 @@ export class SchemaEngine<
   validateDocument(tableName: string, value: JsonObject): JsonObject {
     const table = this.getTableDefinition(tableName);
     const validator: StructuredValidator = table.validator;
-    const parsed = validator.parse(value);
+    const serialized = withValidationContext(
+      `Invalid document for ${describeTable(tableName, table)}`,
+      () => serializeValue(validator, validator.parse(value, "document"), "document")
+    );
     return this.ensureRecordDocument(
-      serializeValue(validator, parsed),
+      serialized,
       "Validated Syncore document payload must serialize to a JSON object."
     );
   }
@@ -372,4 +385,14 @@ export class SchemaEngine<
     }
     return null;
   }
+}
+
+function describeTable(
+  tableName: string,
+  table: StructuredTableDefinition
+): string {
+  const { tableName: localName, componentPath } = table.options;
+  return componentPath
+    ? `table "${localName ?? tableName}" in component "${componentPath}"`
+    : `table "${tableName}"`;
 }

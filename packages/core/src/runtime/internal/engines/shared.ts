@@ -7,6 +7,8 @@ import type {
 } from "@syncore/devtools-protocol";
 import {
   searchIndexTableName,
+  SyncoreValidationError,
+  withoutSystemFields,
   type TableDefinition,
   type Validator
 } from "@syncore/schema";
@@ -238,10 +240,31 @@ export { quoteIdentifier, sortValue, stableStringify };
 export function omitSystemFields<TDocument extends object>(
   document: TDocument
 ): JsonObject {
-  const clone = { ...(document as Record<string, unknown>) };
-  delete clone._id;
-  delete clone._creationTime;
-  return clone;
+  return withoutSystemFields(document) as JsonObject;
+}
+
+/**
+ * Runs `run` and prefixes any {@link SyncoreValidationError} it throws with
+ * `context`, keeping its code, path and issues. The prefix makes the message
+ * self-describing after it crosses a transport that only keeps `message`.
+ */
+export function withValidationContext<TResult>(
+  context: string,
+  run: () => TResult
+): TResult {
+  try {
+    return run();
+  } catch (error) {
+    if (error instanceof SyncoreValidationError) {
+      throw new SyncoreValidationError(
+        `${context}: ${error.message}`,
+        error.code,
+        error.path,
+        error.issues
+      );
+    }
+    throw error;
+  }
 }
 
 export function toSearchValue(value: unknown): string {

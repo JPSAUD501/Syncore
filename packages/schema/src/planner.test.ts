@@ -5,7 +5,9 @@ import {
   diffSchemaSnapshots,
   getSchemaChangesBySeverity,
   parseSchemaSnapshot,
-  renderMigrationSql
+  readSchemaSnapshot,
+  renderMigrationSql,
+  SchemaSnapshotFormatError
 } from "./planner.js";
 import { s } from "./validators.js";
 
@@ -241,7 +243,7 @@ describe("schema planner", () => {
     ]);
   });
 
-  it("rejects legacy snapshots instead of upgrading them", () => {
+  it("rejects snapshots older than the 0.2 format", () => {
     const legacySource = JSON.stringify({
       formatVersion: 2,
       plannerVersion: 1,
@@ -265,8 +267,61 @@ describe("schema planner", () => {
     });
 
     expect(() => parseSchemaSnapshot(legacySource)).toThrow(
-      "Invalid schema snapshot file."
+      /^Invalid schema snapshot file: format 2, planner 1 was written by an older syncorejs/
     );
+    expect(() => parseSchemaSnapshot(legacySource)).toThrow(
+      expect.objectContaining({ reason: "legacy", formatVersion: 2 })
+    );
+  });
+
+  it("upgrades syncorejs < 0.3 snapshots in memory", () => {
+    const schema = defineSchema({
+      tasks: defineTable({ title: s.string(), done: s.boolean() }).index(
+        "by_done",
+        ["done"]
+      )
+    });
+    const current = createSchemaSnapshot(schema);
+    const legacyBase = {
+      formatVersion: 3,
+      plannerVersion: 2,
+      tables: current.tables
+    };
+    const legacySource = JSON.stringify({
+      ...legacyBase,
+      // syncorejs < 0.3 stored the whole stringified snapshot as its hash.
+      hash: JSON.stringify(legacyBase)
+    });
+
+    const result = readSchemaSnapshot(legacySource);
+    expect(result.upgradedFrom).toEqual({ formatVersion: 3, plannerVersion: 2 });
+    expect(result.snapshot).toEqual(current);
+    expect(parseSchemaSnapshot(legacySource)).toEqual(current);
+
+    const withoutFieldMetadata = JSON.stringify({
+      ...legacyBase,
+      tables: current.tables.map(({ fields: _fields, fieldPaths: _paths, ...table }) => table),
+      hash: "legacy"
+    });
+    expect(parseSchemaSnapshot(withoutFieldMetadata)).toEqual(current);
+  });
+
+  it("explains snapshots it cannot read", () => {
+    expect(() => parseSchemaSnapshot("{ not json")).toThrow(
+      expect.objectContaining({
+        name: "SchemaSnapshotFormatError",
+        reason: "invalid-json"
+      })
+    );
+    expect(() =>
+      parseSchemaSnapshot(
+        JSON.stringify({ formatVersion: 5, plannerVersion: 4, tables: [], hash: "x" })
+      )
+    ).toThrow(/written by a newer syncorejs \(format 5, planner 4\)/);
+    expect(() =>
+      parseSchemaSnapshot(JSON.stringify({ formatVersion: 4, plannerVersion: 3 }))
+    ).toThrow(expect.objectContaining({ reason: "malformed" }));
+    expect(() => parseSchemaSnapshot("[]")).toThrow(SchemaSnapshotFormatError);
   });
 
   it("parses current snapshots only", () => {
