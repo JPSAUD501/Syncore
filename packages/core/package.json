@@ -1,7 +1,7 @@
 {
   "name": "@syncore/core",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -27,7 +27,7 @@
   "dependencies": {
     "@syncore/devtools-protocol": "^0.1.0",
     "@syncore/internal": "^0.1.0",
-    "@syncore/schema": "^0.2.0",
+    "@syncore/schema": "^0.3.0",
     "date-fns-tz": "^3.2.0"
   }
 }

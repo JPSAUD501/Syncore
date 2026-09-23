@@ -1,7 +1,7 @@
 {
   "name": "@syncore/next",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,9 +25,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@syncore/core": "^0.2.0",
-    "@syncore/platform-web": "^0.1.1",
-    "@syncore/react": "^0.1.1"
+    "@syncore/core": "^0.3.0",
+    "@syncore/platform-web": "^0.1.2",
+    "@syncore/react": "^0.1.2"
   },
   "peerDependencies": {
     "next": "^15.0.0 || ^16.0.0",

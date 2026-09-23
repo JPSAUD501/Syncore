@@ -1,7 +1,7 @@
 {
   "name": "syncore-example-browser-esm",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "syncorejs": "tsx --tsconfig ../../packages/cli/tsconfig.json ../../packages/cli/src/index.ts",
@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "syncorejs": "^0.3.0"
+    "syncorejs": "^0.4.0"
   },
   "devDependencies": {
     "vite": "^8.0.14"
