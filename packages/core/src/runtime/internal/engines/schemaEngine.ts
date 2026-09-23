@@ -67,12 +67,13 @@ export class SchemaEngine<
         updated_at INTEGER NOT NULL
       );
     `);
-    try {
+    const columns = await this.deps.driver.all<{ name: string }>(
+      `PRAGMA table_info("_syncore_schema_state")`
+    );
+    if (!columns.some((column) => column.name === "schema_json")) {
       await this.deps.driver.exec(
         `ALTER TABLE "_syncore_schema_state" ADD COLUMN schema_json TEXT NOT NULL DEFAULT '{}'`
       );
-    } catch {
-      // Column already exists.
     }
   }
 
@@ -115,7 +116,13 @@ export class SchemaEngine<
     for (const statement of plan.statements) {
       const searchKey = this.findSearchIndexKeyForStatement(statement);
       try {
-        await this.deps.driver.exec(statement);
+        // FTS5 may be missing; a savepoint keeps that failure from breaking
+        // the surrounding boot transaction.
+        await (searchKey
+          ? this.deps.driver.withSavepoint("syncore_fts", () =>
+              this.deps.driver.exec(statement)
+            )
+          : this.deps.driver.exec(statement));
       } catch (error) {
         if (searchKey) {
           this.disabledSearchIndexes.add(searchKey);
@@ -142,20 +149,39 @@ export class SchemaEngine<
       );
     }
 
-    await this.deps.driver.run(
-      `INSERT INTO "_syncore_schema_state" (id, schema_hash, schema_json, updated_at)
-       VALUES ('current', ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET schema_hash = excluded.schema_hash, schema_json = excluded.schema_json, updated_at = excluded.updated_at`,
-      [nextSnapshot.hash, stableStringify(nextSnapshot), Date.now()]
-    );
+    if (stateRow?.schema_hash !== nextSnapshot.hash) {
+      await this.deps.driver.run(
+        `INSERT INTO "_syncore_schema_state" (id, schema_hash, schema_json, updated_at)
+         VALUES ('current', ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET schema_hash = excluded.schema_hash, schema_json = excluded.schema_json, updated_at = excluded.updated_at`,
+        [nextSnapshot.hash, stableStringify(nextSnapshot), Date.now()]
+      );
+    }
 
+    const existingTables = new Set(
+      (
+        await this.deps.driver.all<{ name: string }>(
+          `SELECT name FROM sqlite_master WHERE type = 'table'`
+        )
+      ).map((row) => row.name)
+    );
     for (const tableName of this.deps.schema.tableNames()) {
       const table = this.getTableDefinition(tableName);
       for (const searchIndex of table.searchIndexes) {
         const key = searchIndexKey(tableName, searchIndex.name);
+        if (
+          existingTables.has(
+            resolveSearchIndexTableName(tableName, searchIndex.name)
+          )
+        ) {
+          this.disabledSearchIndexes.delete(key);
+          continue;
+        }
         try {
-          await this.deps.driver.exec(
-            renderCreateSearchIndexStatement(tableName, searchIndex)
+          await this.deps.driver.withSavepoint("syncore_fts", () =>
+            this.deps.driver.exec(
+              renderCreateSearchIndexStatement(tableName, searchIndex)
+            )
           );
           this.disabledSearchIndexes.delete(key);
         } catch {

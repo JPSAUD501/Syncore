@@ -541,6 +541,37 @@ export interface SchedulerOptions {
    * {@link cronJobs}.
    */
   recurringJobs?: RecurringJobDefinition[];
+  /**
+   * Whether the runtime polls for due jobs on its own. Defaults to `true`.
+   * Set it to `false` in tests and call
+   * {@link SyncoreRuntimeAdmin.runScheduledJobs} to run jobs deterministically.
+   */
+  autoRun?: boolean;
+}
+
+/**
+ * Options for {@link SyncoreRuntimeAdmin.runScheduledJobs}.
+ */
+export interface RunScheduledJobsOptions {
+  /**
+   * Also run jobs whose `runAt` is still in the future. Defaults to `false`.
+   */
+  includeFuture?: boolean;
+  /**
+   * Run recurring (cron) jobs. Defaults to `true`. A recurring job runs at
+   * most once per call and is then rescheduled.
+   */
+  includeRecurring?: boolean;
+}
+
+/**
+ * Result of {@link SyncoreRuntimeAdmin.runScheduledJobs}.
+ */
+export interface RunScheduledJobsResult {
+  /** Jobs whose function finished successfully. */
+  executed: number;
+  /** Jobs whose function threw. */
+  failed: number;
 }
 
 export type SyncoreResolvedComponents = readonly ResolvedSyncoreComponent[];
@@ -1573,6 +1604,13 @@ export interface SyncoreRuntimeAdmin<
   deleteStorageObject(id: string, meta?: DevtoolsEventMeta): Promise<boolean>;
   cancelScheduledJob(id: string): Promise<boolean>;
   updateScheduledJob(options: UpdateScheduledJobOptions): Promise<boolean>;
+  /**
+   * Runs scheduled jobs now instead of waiting for the poller. Waits for a
+   * run that is already in progress before starting.
+   */
+  runScheduledJobs(
+    options?: RunScheduledJobsOptions
+  ): Promise<RunScheduledJobsResult>;
 }
 
 type DevtoolsEventMeta = {

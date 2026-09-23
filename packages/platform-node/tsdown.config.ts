@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/ipc.ts", "src/ipc-react.tsx"],
+  entry: ["src/index.ts", "src/ipc.ts", "src/ipc-react.tsx", "src/testing.ts"],
   platform: "node",
   target: "node22",
   format: "esm",

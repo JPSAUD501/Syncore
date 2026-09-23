@@ -30,6 +30,7 @@
       "syncorejs/node": ["./packages/syncore/src/node.ts"],
       "syncorejs/node/ipc": ["./packages/syncore/src/node-ipc.ts"],
       "syncorejs/node/ipc/react": ["./packages/syncore/src/node-ipc-react.tsx"],
+      "syncorejs/testing": ["./packages/syncore/src/testing.ts"],
       "syncorejs/next": ["./packages/syncore/src/next.ts"],
       "syncorejs/next/config": ["./packages/syncore/src/next-config.ts"],
       "@syncore/core": ["./packages/core/src/index.ts"],
@@ -45,6 +46,9 @@
       "@syncore/platform-node/ipc": ["./packages/platform-node/src/ipc.ts"],
       "@syncore/platform-node/ipc/react": [
         "./packages/platform-node/src/ipc-react.tsx"
+      ],
+      "@syncore/platform-node/testing": [
+        "./packages/platform-node/src/testing.ts"
       ],
       "@syncore/platform-web": ["./packages/platform-web/src/index.ts"],
       "@syncore/platform-expo": ["./packages/platform-expo/src/index.ts"],

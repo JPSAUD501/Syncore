@@ -68,6 +68,7 @@ async function main(): Promise<void> {
         `await import(${JSON.stringify(`${syncorePublishedPackageName}/node`)});`,
         `await import(${JSON.stringify(`${syncorePublishedPackageName}/node/ipc`)});`,
         `await import(${JSON.stringify(`${syncorePublishedPackageName}/node/ipc/react`)});`,
+        `await import(${JSON.stringify(`${syncorePublishedPackageName}/testing`)});`,
         `await import(${JSON.stringify(`${syncorePublishedPackageName}/next`)});`,
         `await import(${JSON.stringify(`${syncorePublishedPackageName}/next/config`)});`,
         `await import(${JSON.stringify(`${syncorePublishedPackageName}/svelte`)});`,

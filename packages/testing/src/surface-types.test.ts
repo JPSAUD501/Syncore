@@ -77,6 +77,7 @@ describe("syncorejs public type surface", () => {
     type NodeModule = typeof import("syncorejs/node");
     type NodeIpcModule = typeof import("syncorejs/node/ipc");
     type NodeIpcReactModule = typeof import("syncorejs/node/ipc/react");
+    type TestingModule = typeof import("syncorejs/testing");
     type ExpoModule = typeof import("syncorejs/expo");
     type ExpoReactModule = typeof import("syncorejs/expo/react");
     type SvelteModule = typeof import("syncorejs/svelte");
@@ -88,6 +89,7 @@ describe("syncorejs public type surface", () => {
     expectTypeOf<NodeIpcModule["createRendererSyncoreClient"]>().toBeFunction();
     expectTypeOf<NodeIpcModule["createElectronSyncoreApp"]>().toBeFunction();
     expectTypeOf<NodeIpcReactModule["SyncoreElectronProvider"]>().toBeFunction();
+    expectTypeOf<TestingModule["createTestSyncore"]>().toBeFunction();
     expectTypeOf<ExpoModule["createExpoSyncoreRuntime"]>().toBeFunction();
     expectTypeOf<ExpoModule["createExpoSyncoreBootstrap"]>().toBeFunction();
     expectTypeOf<ExpoReactModule["SyncoreExpoProvider"]>().toBeFunction();

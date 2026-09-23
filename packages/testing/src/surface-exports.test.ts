@@ -23,6 +23,7 @@ const expectedPublicSubpaths = [
   "./node",
   "./node/ipc",
   "./node/ipc/react",
+  "./testing",
   "./next",
   "./next/config"
 ] as const;
@@ -37,6 +38,7 @@ const runtimeImportableSubpaths = [
   "syncorejs/node",
   "syncorejs/node/ipc",
   "syncorejs/node/ipc/react",
+  "syncorejs/testing",
   "syncorejs/next",
   "syncorejs/next/config"
 ] as const;
@@ -66,6 +68,7 @@ describe("syncorejs public surface", () => {
       nodeModule,
       nodeIpcModule,
       nodeIpcReactModule,
+      testingModule,
       nextModule,
       nextConfigModule
     ] = await Promise.all(runtimeImportableSubpaths.map((entry) => import(entry)));
@@ -82,6 +85,7 @@ describe("syncorejs public surface", () => {
     expect(nodeIpcModule.createRendererSyncoreClient).toBeTypeOf("function");
     expect(nodeIpcModule.createElectronSyncoreApp).toBeTypeOf("function");
     expect(nodeIpcReactModule.SyncoreElectronProvider).toBeTypeOf("function");
+    expect(testingModule.createTestSyncore).toBeTypeOf("function");
     expect(nextModule.createNextSyncoreClient).toBeTypeOf("function");
     expect(nextConfigModule.withSyncoreNext).toBeTypeOf("function");
 
