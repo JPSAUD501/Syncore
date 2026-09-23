@@ -1,8 +1,8 @@
 ---
-"@syncore/core": minor
-"@syncore/platform-node": minor
+"@syncore/core": patch
+"@syncore/platform-node": patch
 "@syncore/cli": patch
-"syncorejs": minor
+"syncorejs": patch
 ---
 
 Faster startup, a test harness, and scheduler controls.
