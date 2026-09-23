@@ -1,19 +1,19 @@
 {
   "name": "@syncore/testing",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "dependencies": {
-    "@syncore/core": "^0.2.0",
+    "@syncore/core": "^0.3.0",
     "@syncore/internal": "^0.1.0",
-    "@syncore/next": "^0.1.1",
-    "@syncore/platform-expo": "^0.1.1",
-    "@syncore/platform-node": "^0.2.0",
-    "@syncore/platform-web": "^0.1.1",
-    "@syncore/react": "^0.1.1",
-    "@syncore/schema": "^0.2.0",
-    "@syncore/svelte": "^0.1.1",
-    "syncorejs": "^0.3.0"
+    "@syncore/next": "^0.1.2",
+    "@syncore/platform-expo": "^0.1.2",
+    "@syncore/platform-node": "^0.2.3",
+    "@syncore/platform-web": "^0.1.2",
+    "@syncore/react": "^0.1.2",
+    "@syncore/schema": "^0.3.0",
+    "@syncore/svelte": "^0.1.2",
+    "syncorejs": "^0.4.0"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.2.5",
