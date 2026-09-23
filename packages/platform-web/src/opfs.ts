@@ -275,7 +275,14 @@ export class SyncoreOpfsPersistence implements SyncoreWebPersistence {
     }
 
     const bytes = await readFileBytes(handle);
-    return JSON.parse(new TextDecoder().decode(bytes)) as StoredFileMetadata;
+    // A write interrupted between creating the file and committing it (for
+    // example by a page reload) leaves it empty. The metadata only holds the
+    // content type, so treat it as missing instead of failing every read.
+    try {
+      return JSON.parse(new TextDecoder().decode(bytes)) as StoredFileMetadata;
+    } catch {
+      return null;
+    }
   }
 
   private async getRootDirectory(): Promise<FileSystemDirectoryHandle> {
