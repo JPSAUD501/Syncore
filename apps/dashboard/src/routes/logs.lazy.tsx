@@ -561,6 +561,7 @@ function buildFunctionSearch(
 function getTraceArgs(trace: ExecutionTrace | null): Record<string, unknown> | null {
   if (
     trace?.argsPreview?.kind === "value" &&
+    !trace.argsPreview.truncated &&
     trace.argsPreview.value &&
     typeof trace.argsPreview.value === "object" &&
     !Array.isArray(trace.argsPreview.value)

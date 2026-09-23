@@ -247,6 +247,33 @@ export type InferTableInput<TTable extends AnyTableDefinition> = Infer<
   TTable["validator"]
 >;
 
+/** `TDocument` without the `_id` and `_creationTime` system fields. */
+export type WithoutSystemFields<TDocument> = Expand<
+  Omit<TDocument, keyof TableDocumentSystemFields>
+>;
+
+/**
+ * Returns a shallow copy of `document` without `_id` and `_creationTime`.
+ *
+ * Use it to turn a document you read back into a value you can insert, copy
+ * into another table, or return from a function whose `returns` validator
+ * describes only the table fields.
+ *
+ * ```ts
+ * const task = await ctx.db.get("tasks", id);
+ * await ctx.db.insert("archivedTasks", withoutSystemFields(task));
+ * ```
+ */
+export function withoutSystemFields<TDocument extends object>(
+  document: TDocument
+): WithoutSystemFields<TDocument> {
+  const { _id, _creationTime, ...rest } = document as TDocument &
+    Partial<TableDocumentSystemFields>;
+  void _id;
+  void _creationTime;
+  return rest as WithoutSystemFields<TDocument>;
+}
+
 export type TableFieldPaths<TTable> =
   TTable extends TableDefinition<infer TValidator, unknown, unknown>
     ? FieldPaths<TValidator>

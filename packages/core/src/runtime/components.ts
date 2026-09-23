@@ -6,6 +6,7 @@ import {
   type Validator
 } from "@syncore/schema";
 import type { SyncoreDevtoolsEvent } from "@syncore/devtools-protocol";
+import { withValidationContext } from "./internal/engines/shared.js";
 import {
   type FunctionReference,
   type FunctionReferenceFor,
@@ -361,9 +362,12 @@ function resolveInstalledComponent(
     }
   }
 
-  if (component.config) {
-    component.config.parse(install.config);
-  }
+  const config = component.config
+    ? withValidationContext(
+        `Invalid config for component ${JSON.stringify(component.name)} at ${JSON.stringify(componentPath)}`,
+        () => component.config!.parse(install.config, "config")
+      )
+    : install.config;
 
   const bindings = { ...(install.bindings ?? {}) };
   for (const dependency of component.dependencies ?? []) {
@@ -386,7 +390,7 @@ function resolveInstalledComponent(
     source: install.source,
     name: component.name,
     version: component.version,
-    config: install.config,
+    config,
     grantedCapabilities,
     requestedCapabilities,
     bindings,

@@ -2097,7 +2097,7 @@ async function importIntoClientTarget(
     const results: Array<{ table: string; importedCount: number }> = [];
     for (const batch of batches) {
       let importedCount = 0;
-      for (const row of batch.rows) {
+      for (const [rowIndex, row] of batch.rows.entries()) {
         const payload = { ...row };
         delete payload._id;
         delete payload._creationTime;
@@ -2109,7 +2109,7 @@ async function importIntoClientTarget(
         if (result.kind !== "data.mutate.result" || !result.success) {
           const message =
             result.kind === "data.mutate.result"
-              ? (result.error ?? `Failed to import into ${batch.table}.`)
+              ? `Row ${rowIndex + 1} of ${batch.table}: ${result.error ?? `Failed to import into ${batch.table}.`}`
               : `Unexpected response while importing into ${batch.table}.`;
           context.fail(message, 1, result);
         }

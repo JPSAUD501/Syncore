@@ -1,3 +1,4 @@
+export * from "./errors.js";
 export * from "./validators.js";
 export * from "./definition.js";
 export * from "./planner.js";

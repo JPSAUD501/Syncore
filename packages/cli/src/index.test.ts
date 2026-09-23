@@ -957,6 +957,41 @@ export default defineSchema({
     expect(importedTask.text).toBe("Ship Syncore");
   }, 90_000);
 
+  test("import names the line of a document with an unknown field", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    await runCli(cwd, ["migrate", "generate", "initial"]);
+    await runCli(cwd, ["migrate", "apply"]);
+
+    const sourcePath = path.join(cwd, "tasks.jsonl");
+    await writeFile(
+      sourcePath,
+      [
+        JSON.stringify({ text: "ok", done: false }),
+        "",
+        JSON.stringify({ text: "bad", done: false, priority: 1 })
+      ].join("\n")
+    );
+    const result = await runCli(cwd, [
+      "import",
+      "--table",
+      "tasks",
+      "--target",
+      "project",
+      "--json",
+      sourcePath
+    ]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      'Invalid document on line 3 of'
+    );
+    expect(result.stdout + result.stderr).toContain(
+      "document.priority is not an allowed field (expected one of: text, done)."
+    );
+  }, 60_000);
+
   test("--runtime requires --target", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);

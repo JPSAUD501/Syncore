@@ -1,4 +1,45 @@
+import { SyncoreValidationError } from "./errors.js";
+
 type Expand<T> = { [TKey in keyof T]: T[TKey] } & {};
+
+/**
+ * What an object validator does with fields its shape does not declare.
+ *
+ * - `"strict"` (default) — reject them with an `unknown_field` error.
+ * - `"strip"` — drop them silently.
+ *
+ * Reads from the database strip unless told otherwise, so removing a field
+ * from a table schema never makes existing rows unreadable.
+ */
+export type UnknownKeysPolicy = "strict" | "strip";
+
+/**
+ * Per-call validation options. A call-level `unknownKeys` applies to the whole
+ * subtree and overrides each object validator's own policy.
+ */
+export interface ValidationOptions {
+  readonly unknownKeys?: UnknownKeysPolicy;
+}
+
+/** Options accepted by {@link ValidatorBuilderApi.object | s.object}. */
+export interface ObjectValidatorOptions {
+  /**
+   * Defaults to `"strict"`. Use `"strip"` to silently drop undeclared fields
+   * (the behaviour before syncorejs 0.4).
+   */
+  readonly unknownKeys?: UnknownKeysPolicy;
+}
+
+const STRIP: ValidationOptions = { unknownKeys: "strip" };
+const STRICT: ValidationOptions = { unknownKeys: "strict" };
+
+function invalid(
+  message: string,
+  code: SyncoreValidationError["code"],
+  path: string
+): SyncoreValidationError {
+  return new SyncoreValidationError(message, code, path);
+}
 
 export type ValidatorKind =
   | "string"
@@ -44,9 +85,17 @@ export interface Validator<
 > {
   readonly kind: ValidatorKind;
   readonly fieldPaths?: TFieldPaths;
-  parse(value: unknown, path?: string): TValue;
-  serialize?(value: TValue, path?: string): TStorage;
-  deserialize?(value: unknown, path?: string): TValue;
+  parse(value: unknown, path?: string, options?: ValidationOptions): TValue;
+  serialize?(
+    value: TValue,
+    path?: string,
+    options?: ValidationOptions
+  ): TStorage;
+  deserialize?(
+    value: unknown,
+    path?: string,
+    options?: ValidationOptions
+  ): TValue;
   describe?(): ValidatorDescription;
 }
 
@@ -110,13 +159,44 @@ type RequiredKeys<TShape extends ObjectValidatorShape> = Exclude<
   OptionalKeys<TShape>
 >;
 
-type InferObject<TShape extends ObjectValidatorShape> = Expand<
+/** The parsed value of an object shape: optional fields become `key?: T`. */
+export type InferObject<TShape extends ObjectValidatorShape> = Expand<
   {
     [TKey in OptionalKeys<TShape>]?: Exclude<Infer<TShape[TKey]>, undefined>;
   } & {
     [TKey in RequiredKeys<TShape>]: Infer<TShape[TKey]>;
   }
 >;
+
+/**
+ * The value a caller may pass for an object shape. Like {@link InferObject},
+ * but optional fields also accept an explicit `undefined`
+ * (`key?: T | undefined`), which matters under `exactOptionalPropertyTypes`.
+ */
+export type InferObjectInput<TShape extends ObjectValidatorShape> = Expand<
+  {
+    [TKey in OptionalKeys<TShape>]?: Infer<TShape[TKey]>;
+  } & {
+    [TKey in RequiredKeys<TShape>]: Infer<TShape[TKey]>;
+  }
+>;
+
+/** Makes every field of a shape optional (the shape behind `.partial()`). */
+export type PartialShape<TShape extends ObjectValidatorShape> = {
+  [TKey in keyof TShape]: TShape[TKey] extends OptionalValidator<
+    unknown,
+    unknown,
+    string
+  >
+    ? TShape[TKey]
+    : TShape[TKey] extends Validator<
+          infer TValue,
+          infer TStorage,
+          infer TFieldPaths extends string
+        >
+      ? OptionalValidator<TValue, TStorage, TFieldPaths>
+      : never;
+};
 
 type InferStoredObject<TShape extends ObjectValidatorShape> = Expand<
   {
@@ -149,14 +229,26 @@ abstract class BaseValidator<
 
   constructor(public readonly kind: ValidatorKind) {}
 
-  abstract parse(value: unknown, path?: string): TValue;
+  abstract parse(
+    value: unknown,
+    path?: string,
+    options?: ValidationOptions
+  ): TValue;
 
-  serialize(value: TValue, path = "value"): TStorage {
-    return this.parse(value, path) as unknown as TStorage;
+  serialize(
+    value: TValue,
+    path = "value",
+    options?: ValidationOptions
+  ): TStorage {
+    return this.parse(value, path, options) as unknown as TStorage;
   }
 
-  deserialize(value: unknown, path = "value"): TValue {
-    return this.parse(value, path);
+  deserialize(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): TValue {
+    return this.parse(value, path, options ?? STRIP);
   }
 
   abstract describe(): ValidatorDescription;
@@ -169,7 +261,7 @@ export class StringValidator extends BaseValidator<string> {
 
   parse(value: unknown, path = "value"): string {
     if (typeof value !== "string") {
-      throw new Error(`${path} must be a string.`);
+      throw invalid(`${path} must be a string.`, "invalid_type", path);
     }
     return value;
   }
@@ -186,7 +278,7 @@ export class NumberValidator extends BaseValidator<number> {
 
   parse(value: unknown, path = "value"): number {
     if (typeof value !== "number" || Number.isNaN(value)) {
-      throw new Error(`${path} must be a number.`);
+      throw invalid(`${path} must be a number.`, "invalid_type", path);
     }
     return value;
   }
@@ -203,7 +295,7 @@ export class BooleanValidator extends BaseValidator<boolean> {
 
   parse(value: unknown, path = "value"): boolean {
     if (typeof value !== "boolean") {
-      throw new Error(`${path} must be a boolean.`);
+      throw invalid(`${path} must be a boolean.`, "invalid_type", path);
     }
     return value;
   }
@@ -220,7 +312,7 @@ export class NullValidator extends BaseValidator<null> {
 
   parse(value: unknown, path = "value"): null {
     if (value !== null) {
-      throw new Error(`${path} must be null.`);
+      throw invalid(`${path} must be null.`, "invalid_type", path);
     }
     return null;
   }
@@ -253,7 +345,7 @@ export class LiteralValidator<
 
   parse(value: unknown, path = "value"): TValue {
     if (value !== this.literalValue) {
-      throw new Error(`${path} must equal ${String(this.literalValue)}.`);
+      throw invalid(`${path} must equal ${String(this.literalValue)}.`, "invalid_value", path);
     }
     return this.literalValue;
   }
@@ -275,8 +367,10 @@ export class EnumValidator<
 
   parse(value: unknown, path = "value"): TValues[number] {
     if (typeof value !== "string" || !this.values.includes(value)) {
-      throw new Error(
-        `${path} must be one of ${this.values.map((item) => JSON.stringify(item)).join(", ")}.`
+      throw invalid(
+        `${path} must be one of ${this.values.map((item) => JSON.stringify(item)).join(", ")}.`,
+        "invalid_value",
+        path
       );
     }
     return value;
@@ -299,28 +393,40 @@ export class ArrayValidator<
     super("array");
   }
 
-  parse(value: unknown, path = "value"): TItem[] {
+  parse(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): TItem[] {
     if (!Array.isArray(value)) {
-      throw new Error(`${path} must be an array.`);
+      throw invalid(`${path} must be an array.`, "invalid_type", path);
     }
     return value.map((item, index) =>
-      this.itemValidator.parse(item, `${path}[${index}]`)
+      this.itemValidator.parse(item, `${path}[${index}]`, options)
     );
   }
 
-  override serialize(value: TItem[], path = "value"): TItemStorage[] {
-    const parsed = this.parse(value, path);
+  override serialize(
+    value: TItem[],
+    path = "value",
+    options?: ValidationOptions
+  ): TItemStorage[] {
+    const parsed = this.parse(value, path, options);
     return parsed.map((item, index) =>
-      serializeValue(this.itemValidator, item, `${path}[${index}]`)
+      serializeValue(this.itemValidator, item, `${path}[${index}]`, options)
     );
   }
 
-  override deserialize(value: unknown, path = "value"): TItem[] {
+  override deserialize(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): TItem[] {
     if (!Array.isArray(value)) {
-      throw new Error(`${path} must be an array.`);
+      throw invalid(`${path} must be an array.`, "invalid_type", path);
     }
     return value.map((item, index) =>
-      deserializeValue(this.itemValidator, item, `${path}[${index}]`)
+      deserializeValue(this.itemValidator, item, `${path}[${index}]`, options)
     );
   }
 
@@ -339,23 +445,34 @@ export class ObjectValidator<
   InferStoredObject<TShape>,
   ShapeFieldPaths<TShape>
 > {
-  constructor(public readonly shape: TShape) {
+  /** What this validator does with undeclared fields (default `"strict"`). */
+  readonly unknownKeys: UnknownKeysPolicy;
+
+  constructor(
+    public readonly shape: TShape,
+    options: ObjectValidatorOptions = {}
+  ) {
     super("object");
+    this.unknownKeys = options.unknownKeys ?? "strict";
   }
 
-  parse(value: unknown, path = "value"): InferObject<TShape> {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new Error(`${path} must be an object.`);
-    }
-
-    const source = value as Record<string, unknown>;
+  parse(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): InferObject<TShape> {
+    const source = this.readSource(
+      value,
+      path,
+      options?.unknownKeys ?? this.unknownKeys
+    );
     const parsed: Record<string, unknown> = {};
 
     for (const [key, validator] of Object.entries(this.shape)) {
       if (validator.kind === "optional" && source[key] === undefined) {
         continue;
       }
-      parsed[key] = validator.parse(source[key], `${path}.${key}`);
+      parsed[key] = parseField(validator, source[key], `${path}.${key}`, options);
     }
 
     return parsed as InferObject<TShape>;
@@ -363,9 +480,10 @@ export class ObjectValidator<
 
   override serialize(
     value: InferObject<TShape>,
-    path = "value"
+    path = "value",
+    options?: ValidationOptions
   ): InferStoredObject<TShape> {
-    const parsed = this.parse(value, path) as Record<string, unknown>;
+    const parsed = this.parse(value, path, options) as Record<string, unknown>;
     const serialized: Record<string, unknown> = {};
 
     for (const [key, validator] of Object.entries(this.shape)) {
@@ -375,29 +493,147 @@ export class ObjectValidator<
       serialized[key] = serializeValue(
         validator,
         parsed[key],
-        `${path}.${key}`
+        `${path}.${key}`,
+        options
       );
     }
 
     return serialized as InferStoredObject<TShape>;
   }
 
-  override deserialize(value: unknown, path = "value"): InferObject<TShape> {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new Error(`${path} must be an object.`);
-    }
-
-    const source = value as Record<string, unknown>;
+  /**
+   * Reads a stored value. Undeclared fields are dropped rather than rejected
+   * (unless `options` asks for `"strict"`), so a field removed from the schema
+   * does not make existing rows unreadable. `options` is passed down unchanged
+   * so nested unions can still prefer the member that matches exactly.
+   */
+  override deserialize(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): InferObject<TShape> {
+    const source = this.readSource(
+      value,
+      path,
+      options?.unknownKeys ?? "strip"
+    );
     const parsed: Record<string, unknown> = {};
 
     for (const [key, validator] of Object.entries(this.shape)) {
       if (validator.kind === "optional" && source[key] === undefined) {
         continue;
       }
-      parsed[key] = deserializeValue(validator, source[key], `${path}.${key}`);
+      parsed[key] = deserializeValue(
+        validator,
+        source[key],
+        `${path}.${key}`,
+        options
+      );
     }
 
     return parsed as InferObject<TShape>;
+  }
+
+  /**
+   * Returns a copy with extra fields; a field that already exists is replaced.
+   *
+   * ```ts
+   * const taskDoc = tasks.validator.extend({ _id: s.id("tasks"), _creationTime: s.number() });
+   * ```
+   */
+  extend<TExtra extends ObjectValidatorShape>(
+    extra: TExtra
+  ): ObjectValidator<Expand<Omit<TShape, keyof TExtra> & TExtra>> {
+    return new ObjectValidator(
+      { ...this.shape, ...extra } as Expand<Omit<TShape, keyof TExtra> & TExtra>,
+      { unknownKeys: this.unknownKeys }
+    );
+  }
+
+  /** Returns a copy with only the given fields. */
+  pick<TKey extends keyof TShape & string>(
+    ...keys: TKey[]
+  ): ObjectValidator<Expand<Pick<TShape, TKey>>> {
+    const picked: Record<string, Validator<unknown, unknown, string>> = {};
+    for (const key of keys) {
+      picked[key] = this.requireField(key, "pick");
+    }
+    return new ObjectValidator(picked as Expand<Pick<TShape, TKey>>, {
+      unknownKeys: this.unknownKeys
+    });
+  }
+
+  /**
+   * Returns a copy without the given fields.
+   *
+   * ```ts
+   * const settingsArgs = settings.validator.omit("key");
+   * ```
+   */
+  omit<TKey extends keyof TShape & string>(
+    ...keys: TKey[]
+  ): ObjectValidator<Expand<Omit<TShape, TKey>>> {
+    for (const key of keys) {
+      this.requireField(key, "omit");
+    }
+    const omitted = new Set<string>(keys);
+    const kept = Object.fromEntries(
+      Object.entries(this.shape).filter(([key]) => !omitted.has(key))
+    );
+    return new ObjectValidator(kept as Expand<Omit<TShape, TKey>>, {
+      unknownKeys: this.unknownKeys
+    });
+  }
+
+  /**
+   * Returns a copy where every field is optional, e.g. for patch arguments.
+   *
+   * ```ts
+   * const patchArgs = settings.validator.omit("key").partial();
+   * ```
+   */
+  partial(): ObjectValidator<PartialShape<TShape>> {
+    const partial = Object.fromEntries(
+      Object.entries(this.shape).map(([key, validator]) => [
+        key,
+        validator.kind === "optional"
+          ? validator
+          : new OptionalValidator(validator)
+      ])
+    );
+    return new ObjectValidator(partial as PartialShape<TShape>, {
+      unknownKeys: this.unknownKeys
+    });
+  }
+
+  private requireField(
+    key: string,
+    operation: "pick" | "omit"
+  ): Validator<unknown, unknown, string> {
+    const validator = Object.prototype.hasOwnProperty.call(this.shape, key)
+      ? this.shape[key]
+      : undefined;
+    if (!validator) {
+      throw new Error(
+        `Cannot ${operation} "${key}": the object has no such field (fields: ${Object.keys(this.shape).join(", ")}).`
+      );
+    }
+    return validator;
+  }
+
+  private readSource(
+    value: unknown,
+    path: string,
+    policy: UnknownKeysPolicy
+  ): Record<string, unknown> {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw invalid(`${path} must be an object.`, "invalid_type", path);
+    }
+    const source = value as Record<string, unknown>;
+    if (policy === "strict") {
+      assertNoUnknownKeys(source, this.shape, path);
+    }
+    return source;
   }
 
   describe(): ValidatorDescription {
@@ -430,7 +666,7 @@ export class IdValidator<
 
   parse(value: unknown, path = "value"): string {
     if (typeof value !== "string" || value.length === 0) {
-      throw new Error(`${path} must be a non-empty id string.`);
+      throw invalid(`${path} must be a non-empty id string.`, "invalid_type", path);
     }
     return value;
   }
@@ -456,31 +692,37 @@ export class OptionalValidator<
     super("optional");
   }
 
-  parse(value: unknown, path = "value"): TValue | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-    return this.inner.parse(value, path);
-  }
-
-  override serialize(
-    value: TValue | undefined,
-    path = "value"
-  ): TStorage | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-    return serializeValue(this.inner, value, path);
-  }
-
-  override deserialize(
+  parse(
     value: unknown,
-    path = "value"
+    path = "value",
+    options?: ValidationOptions
   ): TValue | undefined {
     if (value === undefined) {
       return undefined;
     }
-    return deserializeValue(this.inner, value, path);
+    return this.inner.parse(value, path, options);
+  }
+
+  override serialize(
+    value: TValue | undefined,
+    path = "value",
+    options?: ValidationOptions
+  ): TStorage | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    return serializeValue(this.inner, value, path, options);
+  }
+
+  override deserialize(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): TValue | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    return deserializeValue(this.inner, value, path, options);
   }
 
   describe(): ValidatorDescription {
@@ -505,46 +747,62 @@ export class RecordValidator<
     super("record");
   }
 
-  parse(value: unknown, path = "value"): Record<TKey, TValue> {
+  parse(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): Record<TKey, TValue> {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new Error(`${path} must be an object.`);
+      throw invalid(`${path} must be an object.`, "invalid_type", path);
     }
     const source = value as Record<string, unknown>;
     const parsed: Record<string, TValue> = {};
     for (const [key, item] of Object.entries(source)) {
-      const parsedKey = this.keyValidator.parse(key, `${path}.{key}`);
-      parsed[parsedKey] = this.valueValidator.parse(item, `${path}.${key}`);
+      const parsedKey = this.keyValidator.parse(key, `${path}.${key}`);
+      parsed[parsedKey] = this.valueValidator.parse(
+        item,
+        `${path}.${key}`,
+        options
+      );
     }
     return parsed;
   }
 
   override serialize(
     value: Record<TKey, TValue>,
-    path = "value"
+    path = "value",
+    options?: ValidationOptions
   ): Record<TKey, TStorage> {
-    const parsed = this.parse(value, path);
+    const parsed = this.parse(value, path, options);
     const serialized: Record<string, TStorage> = {};
     for (const [key, item] of Object.entries(parsed)) {
-      serialized[key] = serializeValue(this.valueValidator, item, `${path}.${key}`);
+      serialized[key] = serializeValue(
+        this.valueValidator,
+        item,
+        `${path}.${key}`,
+        options
+      );
     }
     return serialized;
   }
 
   override deserialize(
     value: unknown,
-    path = "value"
+    path = "value",
+    options?: ValidationOptions
   ): Record<TKey, TValue> {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new Error(`${path} must be an object.`);
+      throw invalid(`${path} must be an object.`, "invalid_type", path);
     }
     const source = value as Record<string, unknown>;
     const parsed: Record<string, TValue> = {};
     for (const [key, item] of Object.entries(source)) {
-      const parsedKey = this.keyValidator.parse(key, `${path}.{key}`);
+      const parsedKey = this.keyValidator.parse(key, `${path}.${key}`);
       parsed[parsedKey] = deserializeValue(
         this.valueValidator,
         item,
-        `${path}.${key}`
+        `${path}.${key}`,
+        options
       );
     }
     return parsed;
@@ -570,56 +828,81 @@ export class UnionValidator<
     super("union");
   }
 
-  parse(value: unknown, path = "value"): Infer<TMembers[number]> {
+  parse(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): Infer<TMembers[number]> {
+    const failures: unknown[] = [];
     for (const member of this.members) {
       try {
-        return member.parse(value, path) as Infer<TMembers[number]>;
-      } catch {
-        continue;
+        return member.parse(value, path, options) as Infer<TMembers[number]>;
+      } catch (error) {
+        failures.push(error);
       }
     }
-    throw new Error(`${path} did not match any union member.`);
+    throw unionError(path, failures);
   }
 
   override serialize(
     value: Infer<TMembers[number]>,
-    path = "value"
+    path = "value",
+    options?: ValidationOptions
   ): InferStorage<TMembers[number]> {
+    const failures: unknown[] = [];
     for (const member of this.members) {
+      let parsed: unknown;
       try {
-        const parsed = member.parse(value, path);
-        return serializeValue(
-          member as Validator<
-            Infer<TMembers[number]>,
-            InferStorage<TMembers[number]>,
-            string
-          >,
-          parsed,
-          path
-        ) as InferStorage<TMembers[number]>;
-      } catch {
+        parsed = member.parse(value, path, options);
+      } catch (error) {
+        failures.push(error);
         continue;
       }
+      return serializeValue(
+        member as Validator<
+          Infer<TMembers[number]>,
+          InferStorage<TMembers[number]>,
+          string
+        >,
+        parsed as Infer<TMembers[number]>,
+        path,
+        options
+      ) as InferStorage<TMembers[number]>;
     }
-    throw new Error(`${path} did not match any union member.`);
+    throw unionError(path, failures);
   }
 
+  /**
+   * Without explicit `options`, tries every member strictly before retrying
+   * them leniently, so `union(object({ a }), object({ a, b }))` reads a stored
+   * `{ a, b }` as the second member instead of dropping `b`.
+   */
   override deserialize(
     value: unknown,
-    path = "value"
+    path = "value",
+    options?: ValidationOptions
   ): Infer<TMembers[number]> {
-    for (const member of this.members) {
-      try {
-        return deserializeValue(
-          member as Validator<Infer<TMembers[number]>, InferStorage<TMembers[number]>, string>,
-          value,
-          path
-        );
-      } catch {
-        continue;
+    const passes = options ? [options] : [STRICT, STRIP];
+    const failures: unknown[] = [];
+    for (const pass of passes) {
+      for (const member of this.members) {
+        try {
+          return deserializeValue(
+            member as Validator<
+              Infer<TMembers[number]>,
+              InferStorage<TMembers[number]>,
+              string
+            >,
+            value,
+            path,
+            pass
+          );
+        } catch (error) {
+          failures.push(error);
+        }
       }
     }
-    throw new Error(`${path} did not match any union member.`);
+    throw unionError(path, failures);
   }
 
   describe(): ValidatorDescription {
@@ -651,28 +934,42 @@ export class CodecValidator<
     super("codec");
   }
 
-  parse(value: unknown, path = "value"): TValue {
-    return this.valueValidator.parse(value, path);
+  parse(value: unknown, path = "value", options?: ValidationOptions): TValue {
+    return this.valueValidator.parse(value, path, options);
   }
 
   override serialize(
     value: TValue,
-    path = "value"
+    path = "value",
+    options?: ValidationOptions
   ): InferStorage<TStorageFieldValidator> {
-    const parsed = this.valueValidator.parse(value, path);
+    const parsed = this.valueValidator.parse(value, path, options);
     const serialized = this.codec.serialize(parsed);
     return serializeValue(
       this.storageValidator,
-      this.storageValidator.parse(serialized, path),
-      path
+      this.storageValidator.parse(serialized, path, options),
+      path,
+      options
     ) as InferStorage<TStorageFieldValidator>;
   }
 
-  override deserialize(value: unknown, path = "value"): TValue {
-    const parsedStored = deserializeValue(this.storageValidator, value, path);
+  override deserialize(
+    value: unknown,
+    path = "value",
+    options?: ValidationOptions
+  ): TValue {
+    const parsedStored = deserializeValue(
+      this.storageValidator,
+      value,
+      path,
+      options
+    );
+    // The decoded value is checked leniently too: it comes from storage, not
+    // from a caller.
     return this.valueValidator.parse(
       this.codec.deserialize(parsedStored),
-      path
+      path,
+      options ?? STRIP
     );
   }
 
@@ -773,13 +1070,18 @@ export interface ValidatorBuilderApi {
    * Keys whose validators are `s.optional(...)` become optional properties in
    * the inferred type.
    *
+   * Fields not declared in `shape` are rejected with a
+   * {@link SyncoreValidationError} (`code: "unknown_field"`). Pass
+   * `{ unknownKeys: "strip" }` to drop them silently instead.
+   *
    * ```ts
    * const v = s.object({ x: s.number(), y: s.number() });
    * // Validator<{ x: number; y: number }>
    * ```
    */
   object<TShape extends ObjectValidatorShape>(
-    shape: TShape
+    shape: TShape,
+    options?: ObjectValidatorOptions
   ): ObjectValidator<TShape>;
   /**
    * Validates that the value is a non-empty string that represents a document
@@ -931,8 +1233,10 @@ export const s: ValidatorBuilderApi = {
     itemValidator: TValidator
   ) =>
     new ArrayValidator(itemValidator) as ArrayValidator<TItem, TItemStorage, TValidator>,
-  object: <TShape extends ObjectValidatorShape>(shape: TShape) =>
-    new ObjectValidator(shape),
+  object: <TShape extends ObjectValidatorShape>(
+    shape: TShape,
+    options?: ObjectValidatorOptions
+  ) => new ObjectValidator(shape, options),
   id: <TTableName extends string>(tableName: TTableName) =>
     new IdValidator(tableName),
   optional: <TValue, TStorage, TFieldPaths extends string>(
@@ -1009,10 +1313,11 @@ export function ensureObjectValidator(
 export function serializeValue<TValue, TStorage, TFieldPaths extends string>(
   validator: Validator<TValue, TStorage, TFieldPaths>,
   value: TValue,
-  path = "value"
+  path = "value",
+  options?: ValidationOptions
 ): TStorage {
   if (validator.serialize) {
-    return validator.serialize(value, path);
+    return validator.serialize(value, path, options);
   }
   return value as unknown as TStorage;
 }
@@ -1024,12 +1329,111 @@ export function deserializeValue<
 >(
   validator: Validator<TValue, TStorage, TFieldPaths>,
   value: unknown,
-  path = "value"
+  path = "value",
+  options?: ValidationOptions
 ): TValue {
   if (validator.deserialize) {
-    return validator.deserialize(value, path);
+    return validator.deserialize(value, path, options);
   }
-  return validator.parse(value, path);
+  return validator.parse(value, path, options ?? STRIP);
+}
+
+function assertNoUnknownKeys(
+  source: Record<string, unknown>,
+  shape: ObjectValidatorShape,
+  path: string
+): void {
+  // A key holding `undefined` counts as absent: structured-clone transports
+  // keep such keys where JSON drops them.
+  const unknownKeys = Object.keys(source).filter(
+    (key) =>
+      source[key] !== undefined &&
+      !Object.prototype.hasOwnProperty.call(shape, key)
+  );
+  if (unknownKeys.length === 0) {
+    return;
+  }
+  const declared = Object.keys(shape);
+  const expected =
+    declared.length === 0
+      ? "the object has no fields"
+      : `expected one of: ${declared.join(", ")}`;
+  const issues = unknownKeys.map(
+    (key) =>
+      new SyncoreValidationError(
+        `${path}.${key} is not an allowed field (${expected}).`,
+        "unknown_field",
+        `${path}.${key}`
+      )
+  );
+  if (issues.length === 1) {
+    throw issues[0];
+  }
+  throw new SyncoreValidationError(
+    `${path} has fields that are not allowed: ${unknownKeys.join(", ")} (${expected}).`,
+    "unknown_field",
+    path,
+    issues
+  );
+}
+
+function parseField(
+  validator: Validator<unknown, unknown, string>,
+  value: unknown,
+  fieldPath: string,
+  options: ValidationOptions | undefined
+): unknown {
+  try {
+    return validator.parse(value, fieldPath, options);
+  } catch (error) {
+    if (
+      value === undefined &&
+      error instanceof SyncoreValidationError &&
+      error.path === fieldPath
+    ) {
+      throw new SyncoreValidationError(
+        `${fieldPath} is required.`,
+        "missing_field",
+        fieldPath
+      );
+    }
+    throw error;
+  }
+}
+
+function pathDepth(path: string): number {
+  return (path.match(/[.[]/g) ?? []).length;
+}
+
+/** How far into the value an error got; grouped errors count their issues. */
+function errorDepth(error: SyncoreValidationError): number {
+  return Math.max(
+    pathDepth(error.path),
+    ...(error.issues ?? []).map((issue) => errorDepth(issue))
+  );
+}
+
+function unionError(path: string, failures: readonly unknown[]): Error {
+  const issues = failures.filter(
+    (failure): failure is SyncoreValidationError =>
+      failure instanceof SyncoreValidationError
+  );
+  const rootDepth = pathDepth(path);
+  const deepest = Math.max(rootDepth, ...issues.map(errorDepth));
+  const deepestIssues = issues.filter(
+    (issue) => errorDepth(issue) === deepest
+  );
+  // When exactly one member got past the top level, its error names the real
+  // problem, e.g. the unknown field inside `s.nullable(s.object(...))`.
+  if (deepest > rootDepth && deepestIssues.length === 1) {
+    return deepestIssues[0]!;
+  }
+  return new SyncoreValidationError(
+    `${path} did not match any union member.`,
+    "union_mismatch",
+    path,
+    issues
+  );
 }
 
 export function describeValidator(

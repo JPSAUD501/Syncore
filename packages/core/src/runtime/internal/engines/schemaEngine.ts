@@ -25,6 +25,7 @@ import {
   resolveSearchIndexTableName,
   searchIndexKey,
   toSearchValue,
+  withValidationContext,
   type DatabaseRow
 } from "./shared.js";
 import { quoteIdentifier, stableStringify } from "@syncore/internal";
@@ -197,9 +198,12 @@ export class SchemaEngine<
   validateDocument(tableName: string, value: JsonObject): JsonObject {
     const table = this.getTableDefinition(tableName);
     const validator: StructuredValidator = table.validator;
-    const parsed = validator.parse(value);
+    const serialized = withValidationContext(
+      `Invalid document for ${describeTable(tableName, table)}`,
+      () => serializeValue(validator, validator.parse(value, "document"), "document")
+    );
     return this.ensureRecordDocument(
-      serializeValue(validator, parsed),
+      serialized,
       "Validated Syncore document payload must serialize to a JSON object."
     );
   }
@@ -355,4 +359,14 @@ export class SchemaEngine<
     }
     return null;
   }
+}
+
+function describeTable(
+  tableName: string,
+  table: StructuredTableDefinition
+): string {
+  const { tableName: localName, componentPath } = table.options;
+  return componentPath
+    ? `table "${localName ?? tableName}" in component "${componentPath}"`
+    : `table "${tableName}"`;
 }
