@@ -452,6 +452,107 @@ describe("syncore CLI", () => {
     );
   });
 
+  test("snapshots written by syncorejs < 0.3 are upgraded, keeping pending changes", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    await runCli(cwd, ["migrate", "generate", "initial"]);
+
+    const snapshotPath = path.join(
+      cwd,
+      "syncore",
+      "migrations",
+      "_schema_snapshot.json"
+    );
+    const { tables } = JSON.parse(await readFile(snapshotPath, "utf8")) as {
+      tables: unknown[];
+    };
+    const legacyBase = { formatVersion: 3, plannerVersion: 2, tables };
+    await writeFile(
+      snapshotPath,
+      JSON.stringify({ ...legacyBase, hash: JSON.stringify(legacyBase) })
+    );
+    const schemaPath = path.join(cwd, "syncore", "schema.ts");
+    await writeFile(
+      schemaPath,
+      (await readFile(schemaPath, "utf8")).replace(
+        "text: s.string()",
+        "text: s.string(),\n    notes: s.optional(s.string())"
+      )
+    );
+
+    type StatusPayload = {
+      data: { legacySnapshotUpgraded: boolean; changes: unknown[] };
+    };
+    const status = await runCli(cwd, ["migrate", "status", "--json"]);
+    expect(status.exitCode).toBe(0);
+    const statusPayload = JSON.parse(status.stdout) as StatusPayload;
+    expect(statusPayload.data.legacySnapshotUpgraded).toBe(true);
+    expect(statusPayload.data.changes.length).toBeGreaterThan(0);
+
+    const doctor = await runCli(cwd, ["doctor", "--json"]);
+    const doctorPayload = JSON.parse(doctor.stdout) as {
+      data: { drift: { state: string }; autoFixesAvailable: boolean };
+    };
+    expect(doctorPayload.data.drift.state).toBe("snapshot-legacy");
+    expect(doctorPayload.data.autoFixesAvailable).toBe(true);
+
+    const fix = await runCli(cwd, ["doctor", "--fix", "--json"]);
+    expect(fix.exitCode).toBe(0);
+    const fixPayload = JSON.parse(fix.stdout) as {
+      data: { appliedFixes?: string[] };
+    };
+    expect(
+      fixPayload.data.appliedFixes?.some((entry) => entry.includes("Upgraded"))
+    ).toBe(true);
+    const upgraded = JSON.parse(await readFile(snapshotPath, "utf8")) as {
+      formatVersion: number;
+      tables: unknown[];
+    };
+    expect(upgraded.formatVersion).toBe(4);
+    expect(upgraded.tables).toEqual(tables);
+
+    const after = JSON.parse(
+      (await runCli(cwd, ["migrate", "status", "--json"])).stdout
+    ) as StatusPayload;
+    expect(after.data.legacySnapshotUpgraded).toBe(false);
+    expect(after.data.changes).toEqual(statusPayload.data.changes);
+  }, 90_000);
+
+  test("unreadable snapshots fail with a validation error and next steps", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    const migrationsDirectory = path.join(cwd, "syncore", "migrations");
+    await mkdir(migrationsDirectory, { recursive: true });
+    await writeFile(
+      path.join(migrationsDirectory, "_schema_snapshot.json"),
+      "{ not json"
+    );
+
+    const status = await runCli(cwd, ["migrate", "status", "--json"]);
+    expect(status.exitCode).toBe(1);
+    const statusPayload = JSON.parse(status.stdout) as {
+      error: {
+        message: string;
+        category: string;
+        nextSteps?: string[];
+        details?: { reason?: string };
+      };
+    };
+    expect(statusPayload.error.category).toBe("validation");
+    expect(statusPayload.error.message).toContain("is not valid JSON");
+    expect(statusPayload.error.details?.reason).toBe("invalid-json");
+    expect(statusPayload.error.nextSteps?.length).toBeGreaterThan(0);
+
+    const doctor = await runCli(cwd, ["doctor", "--json"]);
+    const doctorPayload = JSON.parse(doctor.stdout) as {
+      data: { status: string; drift: { state: string } };
+    };
+    expect(doctorPayload.data.drift.state).toBe("snapshot-invalid");
+    expect(doctorPayload.data.status).toBe("schema-snapshot-invalid");
+  }, 90_000);
+
   test("doctor --fix regenerates generated files without touching the database", async () => {
     const cwd = await createTempProjectDirectory();
     await writeWorkspaceTsconfig(cwd);
@@ -855,6 +956,41 @@ export default defineSchema({
     database.close();
     expect(importedTask.text).toBe("Ship Syncore");
   }, 90_000);
+
+  test("import names the line of a document with an unknown field", async () => {
+    const cwd = await createTempProjectDirectory();
+    await writeWorkspaceTsconfig(cwd);
+    await runCli(cwd, ["init", "--template", "node", "--yes"]);
+    await runCli(cwd, ["migrate", "generate", "initial"]);
+    await runCli(cwd, ["migrate", "apply"]);
+
+    const sourcePath = path.join(cwd, "tasks.jsonl");
+    await writeFile(
+      sourcePath,
+      [
+        JSON.stringify({ text: "ok", done: false }),
+        "",
+        JSON.stringify({ text: "bad", done: false, priority: 1 })
+      ].join("\n")
+    );
+    const result = await runCli(cwd, [
+      "import",
+      "--table",
+      "tasks",
+      "--target",
+      "project",
+      "--json",
+      sourcePath
+    ]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      'Invalid document on line 3 of'
+    );
+    expect(result.stdout + result.stderr).toContain(
+      "document.priority is not an allowed field (expected one of: text, done)."
+    );
+  }, 60_000);
 
   test("--runtime requires --target", async () => {
     const cwd = await createTempProjectDirectory();

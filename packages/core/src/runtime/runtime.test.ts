@@ -15,8 +15,14 @@ import type {
   SchedulerJob,
   SyncoreDevtoolsEvent
 } from "@syncore/devtools-protocol";
-import { defineSchema, defineTable, s } from "../../../schema/src/index.js";
-import { cronJobs, mutation, query } from "./functions.js";
+import {
+  defineSchema,
+  defineTable,
+  isSyncoreValidationError,
+  s,
+  type SyncoreValidationError
+} from "../../../schema/src/index.js";
+import { action, cronJobs, mutation, query } from "./functions.js";
 import {
   createFunctionReference,
   type ImpactScope,
@@ -25,6 +31,7 @@ import {
   type SyncoreExternalChangeSignal,
   type QueryCtx,
   type MutationCtx,
+  type RegisteredSyncoreFunction,
   type StorageObject,
   type StorageWriteInput,
   SyncoreRuntime,
@@ -325,6 +332,51 @@ describe("SyncoreRuntime schema + scheduler", () => {
       storage: new TestStorageAdapter(storagePath)
     });
 
+    await expect(secondRuntime.start()).rejects.toThrow(
+      /requires a manual migration/i
+    );
+    await secondRuntime.stop();
+  });
+
+  it("detects destructive changes against schema state stored by syncorejs < 0.3", async () => {
+    const databasePath = path.join(rootDirectory, "legacy-state.db");
+    const storagePath = path.join(rootDirectory, "storage");
+    const functions = {};
+
+    const firstRuntime = new SyncoreRuntime({
+      schema: defineSchema({
+        tasks: defineTable({ text: s.string() }).index("by_text", ["text"])
+      }),
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath)
+    });
+    await firstRuntime.start();
+    await firstRuntime.stop();
+
+    const database = new DatabaseSync(databasePath);
+    const row = database
+      .prepare(
+        `SELECT schema_json FROM "_syncore_schema_state" WHERE id = 'current'`
+      )
+      .get() as { schema_json: string };
+    const { tables } = JSON.parse(row.schema_json) as { tables: unknown[] };
+    const legacyBase = { formatVersion: 3, plannerVersion: 2, tables };
+    database
+      .prepare(
+        `UPDATE "_syncore_schema_state" SET schema_json = ? WHERE id = 'current'`
+      )
+      .run(
+        JSON.stringify({ ...legacyBase, hash: JSON.stringify(legacyBase) })
+      );
+    database.close();
+
+    const secondRuntime = new SyncoreRuntime({
+      schema: defineSchema({ tasks: defineTable({ text: s.string() }) }),
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(storagePath)
+    });
     await expect(secondRuntime.start()).rejects.toThrow(
       /requires a manual migration/i
     );
@@ -1661,3 +1713,677 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+
+describe("SyncoreRuntime strict validation", () => {
+  let rootDirectory: string;
+
+  beforeEach(async () => {
+    rootDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-strict-"));
+  });
+
+  afterEach(async () => {
+    await rm(rootDirectory, { recursive: true, force: true });
+  });
+
+  const schema = defineSchema({
+    settings: defineTable({
+      theme: s.string(),
+      zoom: s.optional(s.number())
+    })
+  });
+  const settingsFields = schema.tables.settings.validator;
+
+  const functions = {
+    "settings/create": mutation({
+      args: settingsFields,
+      returns: s.string(),
+      handler: async (ctx, args) =>
+        (ctx as MutationCtx).db.insert("settings", args as { theme: string })
+    }),
+    "settings/insertRaw": mutation({
+      args: { value: s.any() },
+      returns: s.string(),
+      handler: async (ctx, args) =>
+        (ctx as MutationCtx).db.insert(
+          "settings",
+          (args as { value: { theme: string } }).value
+        )
+    }),
+    "settings/replaceWith": mutation({
+      args: { id: s.id("settings"), value: s.any() },
+      returns: s.null(),
+      handler: async (ctx, args) => {
+        const typed = args as { id: string; value: { theme: string } };
+        await (ctx as MutationCtx).db.replace("settings", typed.id, typed.value);
+        return null;
+      }
+    }),
+    "settings/patchWith": mutation({
+      args: { id: s.id("settings"), value: s.any() },
+      returns: s.null(),
+      handler: async (ctx, args) => {
+        const typed = args as { id: string; value: { theme: string } };
+        await (ctx as MutationCtx).db.patch("settings", typed.id, typed.value);
+        return null;
+      }
+    }),
+    "settings/get": query({
+      args: { id: s.id("settings") },
+      returns: s.any(),
+      handler: async (ctx, args) =>
+        (ctx as QueryCtx).db.get("settings", (args as { id: string }).id)
+    }),
+    "settings/getStrict": query({
+      args: { id: s.id("settings") },
+      returns: s.nullable(settingsFields),
+      // Deliberately returns the whole document, system fields included.
+      handler: async (ctx, args) =>
+        (await (ctx as QueryCtx).db.get(
+          "settings",
+          (args as { id: string }).id
+        )) as { theme: string } | null
+    })
+  };
+
+  function mutationRef(name: string) {
+    return createFunctionReference<"mutation", Record<string, unknown>, unknown>(
+      "mutation",
+      name
+    );
+  }
+
+  function queryRef(name: string) {
+    return createFunctionReference<"query", Record<string, unknown>, unknown>(
+      "query",
+      name
+    );
+  }
+
+  async function startRuntime(databasePath = path.join(rootDirectory, "db.sqlite")) {
+    const runtime = new SyncoreRuntime({
+      schema,
+      functions,
+      driver: new TestSqliteDriver(databasePath),
+      storage: new TestStorageAdapter(path.join(rootDirectory, "storage"))
+    });
+    await runtime.start();
+    return runtime;
+  }
+
+  it("rejects an undeclared argument and names the function and field", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      const error = await client
+        .mutation(mutationRef("settings/create"), {
+          theme: "dark",
+          zeroDataRetention: true
+        })
+        .then(
+          () => null,
+          (caught: unknown) => caught
+        );
+      expect(isSyncoreValidationError(error)).toBe(true);
+      expect((error as SyncoreValidationError).code).toBe("unknown_field");
+      expect((error as SyncoreValidationError).path).toBe(
+        "args.zeroDataRetention"
+      );
+      expect((error as Error).message).toBe(
+        'Invalid arguments for mutation "settings/create": args.zeroDataRetention is not an allowed field (expected one of: theme, zoom).'
+      );
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("rejects undeclared fields and system fields on insert", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      await expect(
+        client.mutation(mutationRef("settings/insertRaw"), {
+          value: { theme: "dark", extra: 1 }
+        })
+      ).rejects.toThrow(
+        'Invalid document for table "settings": document.extra is not an allowed field (expected one of: theme, zoom).'
+      );
+      await expect(
+        client.mutation(mutationRef("settings/insertRaw"), {
+          value: { theme: "dark", _id: "copied" }
+        })
+      ).rejects.toThrow(/_id is set by Syncore.*withoutSystemFields/);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("accepts unchanged system fields on replace and patch, rejects changed ones", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      const id = (await client.mutation(mutationRef("settings/create"), {
+        theme: "light"
+      })) as string;
+      const doc = (await client.query(queryRef("settings/get"), { id })) as {
+        _id: string;
+        _creationTime: number;
+        theme: string;
+      };
+
+      await client.mutation(mutationRef("settings/replaceWith"), {
+        id,
+        value: { ...doc, theme: "dark" }
+      });
+      await client.mutation(mutationRef("settings/patchWith"), {
+        id,
+        value: { _id: id, zoom: 2 }
+      });
+      expect(await client.query(queryRef("settings/get"), { id })).toEqual({
+        ...doc,
+        theme: "dark",
+        zoom: 2
+      });
+
+      await expect(
+        client.mutation(mutationRef("settings/replaceWith"), {
+          id,
+          value: { ...doc, _id: "other" }
+        })
+      ).rejects.toThrow(/_id is set by Syncore and cannot be changed/);
+      await expect(
+        client.mutation(mutationRef("settings/patchWith"), {
+          id,
+          value: { _creationTime: 1 }
+        })
+      ).rejects.toThrow(/_creationTime is set by Syncore and cannot be changed/);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("validates return values strictly, including system fields", async () => {
+    const runtime = await startRuntime();
+    try {
+      const client = runtime.createClient();
+      const id = (await client.mutation(mutationRef("settings/create"), {
+        theme: "light"
+      })) as string;
+      await expect(
+        client.query(queryRef("settings/getStrict"), { id })
+      ).rejects.toThrow(
+        /^Invalid return value from query "settings\/getStrict": returns has fields that are not allowed: (_id, _creationTime|_creationTime, _id)/
+      );
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("reads rows with removed fields and drops them on the next write", async () => {
+    const databasePath = path.join(rootDirectory, "stale.sqlite");
+    const runtime = await startRuntime(databasePath);
+    const client = runtime.createClient();
+    const id = (await client.mutation(mutationRef("settings/create"), {
+      theme: "light"
+    })) as string;
+    await runtime.stop();
+
+    const database = new DatabaseSync(databasePath);
+    database
+      .prepare(`UPDATE "settings" SET _json = ? WHERE _id = ?`)
+      .run(JSON.stringify({ theme: "light", removedField: true }), id);
+    database.close();
+
+    const reopened = await startRuntime(databasePath);
+    try {
+      const reopenedClient = reopened.createClient();
+      expect(
+        await reopenedClient.query(queryRef("settings/get"), { id })
+      ).toMatchObject({ theme: "light" });
+      await reopenedClient.mutation(mutationRef("settings/patchWith"), {
+        id,
+        value: { zoom: 1 }
+      });
+    } finally {
+      await reopened.stop();
+    }
+
+    const check = new DatabaseSync(databasePath);
+    const row = check
+      .prepare(`SELECT _json FROM "settings" WHERE _id = ?`)
+      .get(id) as { _json: string };
+    check.close();
+    expect(JSON.parse(row._json)).toEqual({ theme: "light", zoom: 1 });
+  });
+
+  it("refreshes recurring jobs and keeps failing ones on schedule", async () => {
+    const databasePath = path.join(rootDirectory, "crons.sqlite");
+    const storagePath = path.join(rootDirectory, "storage");
+    const createRuntime = (args: Record<string, unknown>) =>
+      new SyncoreRuntime({
+        schema,
+        functions,
+        driver: new TestSqliteDriver(databasePath),
+        storage: new TestStorageAdapter(storagePath),
+        scheduler: {
+          pollIntervalMs: 10,
+          recurringJobs: cronJobs().interval(
+            "seed",
+            { minutes: 5 },
+            createFunctionReference("mutation", "settings/create"),
+            args
+          ).jobs
+        }
+      });
+    const readJob = () => {
+      const database = new DatabaseSync(databasePath);
+      try {
+        return database
+          .prepare(
+            `SELECT args_json, status, run_at, last_run_at FROM "_scheduled_functions" WHERE id = 'recurring:seed'`
+          )
+          .get() as {
+          args_json: string;
+          status: string;
+          run_at: number;
+          last_run_at: number | null;
+        };
+      } finally {
+        database.close();
+      }
+    };
+
+    const first = createRuntime({ theme: "old" });
+    await first.start();
+    await first.stop();
+    expect(JSON.parse(readJob().args_json)).toEqual({ theme: "old" });
+
+    const second = createRuntime({ theme: "new", legacy: true });
+    await second.start();
+    await second.stop();
+    expect(JSON.parse(readJob().args_json)).toEqual({
+      theme: "new",
+      legacy: true
+    });
+
+    const database = new DatabaseSync(databasePath);
+    database
+      .prepare(`UPDATE "_scheduled_functions" SET run_at = 0 WHERE id = 'recurring:seed'`)
+      .run();
+    database.close();
+
+    const third = createRuntime({ theme: "new", legacy: true });
+    await third.start();
+    try {
+      await waitFor(
+        () => readJob().last_run_at !== null,
+        "The recurring job did not run."
+      );
+    } finally {
+      await third.stop();
+    }
+    const job = readJob();
+    expect(job.status).toBe("scheduled");
+    expect(job.run_at).toBeGreaterThan(Date.now());
+  });
+});
+
+class RecordingSqliteDriver extends TestSqliteDriver {
+  readonly statements: string[] = [];
+  transactions = 0;
+  failOn: RegExp | undefined;
+  private depth = 0;
+
+  private record(sql: string): void {
+    if (this.failOn?.test(sql)) {
+      throw new Error(`Simulated failure for: ${sql.trim().split("\n")[0]}`);
+    }
+    this.statements.push(sql.trim());
+  }
+
+  override async exec(sql: string): Promise<void> {
+    this.record(sql);
+    return super.exec(sql);
+  }
+
+  override async run(sql: string, params?: unknown[]) {
+    this.record(sql);
+    return super.run(sql, params);
+  }
+
+  override async get<T>(sql: string, params?: unknown[]) {
+    this.record(sql);
+    return super.get<T>(sql, params);
+  }
+
+  override async all<T>(sql: string, params?: unknown[]) {
+    this.record(sql);
+    return super.all<T>(sql, params);
+  }
+
+  override async withTransaction<T>(callback: () => Promise<T>): Promise<T> {
+    if (this.depth === 0) {
+      this.transactions += 1;
+    }
+    this.depth += 1;
+    try {
+      return await super.withTransaction(callback);
+    } finally {
+      this.depth -= 1;
+    }
+  }
+
+  writes(): string[] {
+    return this.statements.filter(
+      (sql) => !/^(SELECT|PRAGMA table_info)/i.test(sql)
+    );
+  }
+}
+
+describe("SyncoreRuntime boot", () => {
+  let rootDirectory: string;
+
+  beforeEach(async () => {
+    rootDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-boot-"));
+  });
+
+  afterEach(async () => {
+    await rm(rootDirectory, { recursive: true, force: true });
+  });
+
+  const bootSchema = defineSchema({
+    tasks: defineTable({
+      text: s.string(),
+      done: s.boolean()
+    })
+      .index("by_done", ["done"])
+      .searchIndex("search_text", { searchField: "text" })
+  });
+
+  const createTask = createFunctionReference<"mutation", { text: string }, string>(
+    "mutation",
+    "tasks/create"
+  );
+
+  const bootFunctions = {
+    "tasks/search": query({
+      args: { text: s.string() },
+      handler: async (ctx, args) =>
+        (ctx as QueryCtx<typeof bootSchema>).db
+          .query("tasks")
+          .withSearchIndex("search_text", (search) =>
+            search.search("text", (args as { text: string }).text)
+          )
+          .collect()
+    }),
+    "tasks/create": mutation({
+      args: { text: s.string() },
+      handler: async (ctx, args) =>
+        (ctx as MutationCtx<typeof bootSchema>).db.insert("tasks", {
+          text: (args as { text: string }).text,
+          done: false
+        })
+    })
+  };
+
+  function createBootRuntime(driver: SyncoreSqlDriver) {
+    return new SyncoreRuntime({
+      schema: bootSchema,
+      functions: bootFunctions,
+      driver,
+      storage: new TestStorageAdapter(path.join(rootDirectory, "storage"))
+    });
+  }
+
+  it("prepares a new database in one transaction", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    const runtime = createBootRuntime(driver);
+
+    await runtime.start();
+    await runtime.stop();
+
+    expect(driver.transactions).toBe(1);
+    expect(driver.writes().some((sql) => sql.startsWith("CREATE TABLE"))).toBe(
+      true
+    );
+  });
+
+  it("does not write anything when booting an up-to-date database", async () => {
+    const databasePath = path.join(rootDirectory, "a.db");
+    const first = createBootRuntime(new TestSqliteDriver(databasePath));
+    await first.start();
+    await first.stop();
+
+    const driver = new RecordingSqliteDriver(databasePath);
+    const second = createBootRuntime(driver);
+    await second.start();
+    await second.stop();
+
+    expect(driver.transactions).toBe(1);
+    expect(
+      driver
+        .writes()
+        .filter((sql) => !/^CREATE (TABLE|INDEX) IF NOT EXISTS/i.test(sql))
+    ).toEqual([]);
+  });
+
+  it("prepares once when start and direct access race", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    const runtime = createBootRuntime(driver);
+
+    await Promise.all([
+      runtime.prepareForDirectAccess(),
+      runtime.getAdmin().prepareForDirectAccess(),
+      runtime.start()
+    ]);
+    await runtime.stop();
+
+    expect(driver.transactions).toBe(1);
+  });
+
+  it("leaves nothing behind when boot fails, and can be retried", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    driver.failOn = /CREATE TABLE IF NOT EXISTS "tasks"/;
+    const runtime = createBootRuntime(driver);
+
+    await expect(runtime.start()).rejects.toThrow("Simulated failure");
+    expect(
+      runtime.createClient().watchRuntimeStatus().localQueryResult()
+    ).toMatchObject({ kind: "error" });
+    expect(
+      await driver.all<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+      )
+    ).toEqual([]);
+
+    driver.failOn = undefined;
+    await runtime.start();
+    try {
+      await expect(
+        runtime.createClient().mutation(createTask, { text: "after retry" })
+      ).resolves.toEqual(expect.any(String));
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("falls back to LIKE search when FTS5 is unavailable", async () => {
+    const driver = new RecordingSqliteDriver(path.join(rootDirectory, "a.db"));
+    driver.failOn = /USING fts5/i;
+    const runtime = createBootRuntime(driver);
+
+    await runtime.start();
+    try {
+      const client = runtime.createClient();
+      await client.mutation(createTask, { text: "buy oat milk" });
+      await client.mutation(createTask, { text: "walk the dog" });
+      const results = await client.query(
+        createFunctionReference<
+          "query",
+          { text: string },
+          Array<{ text: string }>
+        >("query", "tasks/search"),
+        { text: "milk" }
+      );
+      expect(results.map((task) => task.text)).toEqual(["buy oat milk"]);
+    } finally {
+      await runtime.stop();
+    }
+  });
+});
+
+describe("SyncoreRuntime scheduled job runs", () => {
+  let rootDirectory: string;
+
+  beforeEach(async () => {
+    rootDirectory = await mkdtemp(path.join(os.tmpdir(), "syncore-jobs-"));
+  });
+
+  afterEach(async () => {
+    await rm(rootDirectory, { recursive: true, force: true });
+  });
+
+  const jobsSchema = defineSchema({
+    tasks: defineTable({ text: s.string() })
+  });
+
+  const listTasks = createFunctionReference<
+    "query",
+    Record<never, never>,
+    Array<{ text: string }>
+  >("query", "tasks/list");
+
+  const scheduleCreate = mutation({
+    args: { text: s.string() },
+    returns: s.null(),
+    handler: async (ctx, args) => {
+      await (ctx as MutationCtx).scheduler.runAfter(
+        0,
+        createFunctionReference("mutation", "tasks/create"),
+        { text: (args as { text: string }).text }
+      );
+      return null;
+    }
+  });
+
+  function createJobsRuntime(
+    extraFunctions: Record<string, RegisteredSyncoreFunction> = {},
+    autoRun?: boolean
+  ) {
+    return new SyncoreRuntime({
+      schema: jobsSchema,
+      functions: {
+        "tasks/create": mutation({
+          args: { text: s.string() },
+          handler: async (ctx, args) =>
+            (ctx as MutationCtx<typeof jobsSchema>).db.insert("tasks", {
+              text: (args as { text: string }).text
+            })
+        }),
+        "tasks/list": query({
+          args: {},
+          handler: async (ctx) =>
+            (ctx as QueryCtx<typeof jobsSchema>).db.query("tasks").collect()
+        }),
+        "tasks/scheduleCreate": scheduleCreate,
+        ...extraFunctions
+      },
+      driver: new TestSqliteDriver(path.join(rootDirectory, "jobs.db")),
+      storage: new TestStorageAdapter(path.join(rootDirectory, "storage")),
+      scheduler: {
+        pollIntervalMs: 10,
+        ...(autoRun === undefined ? {} : { autoRun })
+      }
+    });
+  }
+
+  it("does not poll when autoRun is false", async () => {
+    const runtime = createJobsRuntime({}, false);
+    await runtime.start();
+    try {
+      const client = runtime.createClient();
+      await client.mutation(
+        createFunctionReference("mutation", "tasks/scheduleCreate"),
+        { text: "scheduled" }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(await client.query(listTasks)).toEqual([]);
+
+      expect(await runtime.getAdmin().runScheduledJobs()).toEqual({
+        executed: 1,
+        failed: 0
+      });
+      expect(await client.query(listTasks)).toMatchObject([
+        { text: "scheduled" }
+      ]);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("keeps polling by default", async () => {
+    const runtime = createJobsRuntime();
+    await runtime.start();
+    try {
+      const client = runtime.createClient();
+      await client.mutation(
+        createFunctionReference("mutation", "tasks/scheduleCreate"),
+        { text: "polled" }
+      );
+      await expect
+        .poll(() => client.query(listTasks))
+        .toMatchObject([{ text: "polled" }]);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("never runs the same job twice when runs overlap", async () => {
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runtime = createJobsRuntime(
+      {
+        "jobs/slow": action({
+          args: {},
+          handler: async () => {
+            calls += 1;
+            await blocked;
+            return null;
+          }
+        }),
+        "jobs/schedule": mutation({
+          args: {},
+          returns: s.null(),
+          handler: async (ctx) => {
+            await (ctx as MutationCtx).scheduler.runAfter(
+              0,
+              createFunctionReference("action", "jobs/slow"),
+              {}
+            );
+            return null;
+          }
+        })
+      },
+      false
+    );
+    await runtime.start();
+    try {
+      await runtime
+        .createClient()
+        .mutation(createFunctionReference("mutation", "jobs/schedule"));
+      const admin = runtime.getAdmin();
+      const first = admin.runScheduledJobs();
+      const second = admin.runScheduledJobs();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      release();
+
+      expect(await first).toEqual({ executed: 1, failed: 0 });
+      expect(await second).toEqual({ executed: 0, failed: 0 });
+      expect(calls).toBe(1);
+    } finally {
+      await runtime.stop();
+    }
+  });
+});

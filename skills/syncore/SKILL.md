@@ -279,6 +279,7 @@ Pick the narrowest reference set that matches the task:
 - CLI surface, codegen, and product contract: [references/cli-codegen.md](references/cli-codegen.md)
 - Runtime wiring across platforms: [references/platform-adapters.md](references/platform-adapters.md)
 - Scheduling and file storage: [references/scheduler-storage.md](references/scheduler-storage.md)
+- Testing functions with `createTestSyncore`: [references/testing.md](references/testing.md)
 - Component model, authoring, and installation:
   - [references/components.md](references/components.md)
   - [references/component-authoring.md](references/component-authoring.md)
@@ -325,6 +326,7 @@ Choose an order based on the task:
 - Need the monorepo workflow or release rules: read `references/development.md`
 - Need file layout, source-of-truth rules, or generated-file guardrails: read `references/best-practices.md`
 - Need function authoring patterns or schema-builder guidance: read `references/functions.md`
+- Need to test functions, seed data or run scheduled jobs in a test: read `references/testing.md`
 - Need migration sequencing or drift safety: read `references/schema-migrations.md`
 - Need help designing `syncore/schema.ts` or choosing between `s.*` builders: read `references/schema-migrations.md` first, then `references/functions.md`
 - Need React loading-state or `skip` semantics: read `references/react-realtime.md`

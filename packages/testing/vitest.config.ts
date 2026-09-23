@@ -73,6 +73,16 @@ export default defineConfig({
         )
       },
       {
+        find: "@syncore/platform-node/testing",
+        replacement: path.resolve(
+          import.meta.dirname,
+          "..",
+          "platform-node",
+          "src",
+          "testing.ts"
+        )
+      },
+      {
         find: "@syncore/platform-node/ipc",
         replacement: path.resolve(
           import.meta.dirname,
@@ -130,6 +140,16 @@ export default defineConfig({
           "syncore",
           "src",
           "expo-react.tsx"
+        )
+      },
+      {
+        find: "syncorejs/testing",
+        replacement: path.resolve(
+          import.meta.dirname,
+          "..",
+          "syncore",
+          "src",
+          "testing.ts"
         )
       },
       {

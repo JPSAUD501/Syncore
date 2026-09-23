@@ -5,6 +5,8 @@ import type {
 } from "../../functions.js";
 import type {
   JsonObject,
+  RunScheduledJobsOptions,
+  RunScheduledJobsResult,
   SyncoreSqlDriver,
   UpdateScheduledJobOptions
 } from "../../runtime.js";
@@ -39,6 +41,7 @@ type SchedulerEngineDeps = {
 
 export class SchedulerEngine {
   private timer: ReturnType<typeof setInterval> | undefined;
+  private inFlight: Promise<RunScheduledJobsResult> | undefined;
 
   constructor(private readonly deps: SchedulerEngineDeps) {}
 
@@ -68,7 +71,11 @@ export class SchedulerEngine {
       return;
     }
     this.timer = setInterval(() => {
-      void this.processDueJobs();
+      // A slow job must not start a second pass over the same rows.
+      if (this.inFlight) {
+        return;
+      }
+      void this.runDueJobs().catch(() => undefined);
     }, this.deps.pollIntervalMs);
   }
 
@@ -78,6 +85,32 @@ export class SchedulerEngine {
     }
     clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  /**
+   * Runs the jobs that are due, one pass at a time: a call made while a pass
+   * is in progress waits for it and then starts its own.
+   */
+  async runDueJobs(
+    options: RunScheduledJobsOptions = {}
+  ): Promise<RunScheduledJobsResult> {
+    while (this.inFlight) {
+      await this.inFlight.catch(() => undefined);
+    }
+    const pass = this.processDueJobs(options);
+    this.inFlight = pass;
+    try {
+      return await pass;
+    } finally {
+      this.inFlight = undefined;
+    }
+  }
+
+  /** Resolves once the pass in progress, if any, has finished. */
+  async whenIdle(): Promise<void> {
+    while (this.inFlight) {
+      await this.inFlight.catch(() => undefined);
+    }
   }
 
   async scheduleJob(
@@ -178,6 +211,7 @@ export class SchedulerEngine {
         [id]
       );
       if (existing) {
+        await this.refreshRecurringJob(job, existing);
         continue;
       }
       const nextRunAt = computeNextRun(job.schedule, Date.now());
@@ -206,16 +240,86 @@ export class SchedulerEngine {
     }
   }
 
+  /**
+   * Brings a stored recurring job in line with its current definition, so
+   * changing a cron's args, target or schedule takes effect on the next start.
+   * Cancelled jobs are left alone; jobs frozen as `failed` by older versions
+   * are rescheduled.
+   */
+  private async refreshRecurringJob(
+    job: RecurringJobDefinition,
+    existing: ScheduledJobRow
+  ): Promise<void> {
+    if (existing.status === "cancelled") {
+      return;
+    }
+    const next = {
+      function_name: job.function.name,
+      function_kind: job.function.kind,
+      args_json: stableStringify(job.args),
+      schedule_json: stableStringify(job.schedule),
+      timezone:
+        "timezone" in job.schedule ? (job.schedule.timezone ?? null) : null,
+      misfire_policy: job.misfirePolicy.type,
+      window_ms:
+        job.misfirePolicy.type === "windowed" ? job.misfirePolicy.windowMs : null
+    };
+    const scheduleChanged = existing.schedule_json !== next.schedule_json;
+    const revive = existing.status !== "scheduled";
+    const unchanged =
+      !scheduleChanged &&
+      !revive &&
+      (Object.keys(next) as Array<keyof typeof next>).every(
+        (key) => existing[key] === next[key]
+      );
+    if (unchanged) {
+      return;
+    }
+    const now = Date.now();
+    const runAt =
+      scheduleChanged || revive
+        ? computeNextRun(job.schedule, now)
+        : existing.run_at;
+    await this.deps.driver.run(
+      `UPDATE "_scheduled_functions"
+       SET function_name = ?, function_kind = ?, args_json = ?, schedule_json = ?, timezone = ?, misfire_policy = ?, window_ms = ?, status = 'scheduled', run_at = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        next.function_name,
+        next.function_kind,
+        next.args_json,
+        next.schedule_json,
+        next.timezone,
+        next.misfire_policy,
+        next.window_ms,
+        runAt,
+        now,
+        existing.id
+      ]
+    );
+    this.notifySchedulerJobsChanged();
+  }
+
   private notifySchedulerJobsChanged(): void {
     this.deps.devtools.notifyScopes(["scheduler.jobs"]);
   }
 
-  private async processDueJobs(): Promise<void> {
+  private async processDueJobs(
+    options: RunScheduledJobsOptions
+  ): Promise<RunScheduledJobsResult> {
     const now = Date.now();
-    const dueJobs = await this.deps.driver.all<ScheduledJobRow>(
-      `SELECT * FROM "_scheduled_functions" WHERE status = 'scheduled' AND run_at <= ? ORDER BY run_at ASC`,
-      [now]
-    );
+    const includeRecurring = options.includeRecurring ?? true;
+    const dueJobs = (
+      options.includeFuture
+        ? await this.deps.driver.all<ScheduledJobRow>(
+            `SELECT * FROM "_scheduled_functions" WHERE status = 'scheduled' ORDER BY run_at ASC`
+          )
+        : await this.deps.driver.all<ScheduledJobRow>(
+            `SELECT * FROM "_scheduled_functions" WHERE status = 'scheduled' AND run_at <= ? ORDER BY run_at ASC`,
+            [now]
+          )
+    ).filter((job) => includeRecurring || !job.recurring_name);
+    let failed = 0;
     const executedJobIds: string[] = [];
     const jobExecutions: Array<{
       jobId: string;
@@ -268,17 +372,16 @@ export class SchedulerEngine {
         });
         await this.advanceOrFinalizeJob(job, "completed", now);
       } catch (error) {
+        failed += 1;
         jobExecutions.push({
           jobId: job.id,
           functionName: job.function_name,
           functionType: job.function_kind === "mutation" ? "mutation" : "action",
           error: error instanceof Error ? error.message : String(error)
         });
-        await this.deps.driver.run(
-          `UPDATE "_scheduled_functions" SET status = 'failed', updated_at = ? WHERE id = ?`,
-          [Date.now(), job.id]
-        );
-        this.notifySchedulerJobsChanged();
+        // A failing recurring job still moves on to its next run instead of
+        // stopping for good.
+        await this.advanceOrFinalizeJob(job, "failed", now);
         this.deps.devtools.emit({
           type: "log",
           runtimeId: this.deps.runtimeId,
@@ -302,6 +405,7 @@ export class SchedulerEngine {
       });
       this.notifySchedulerJobsChanged();
     }
+    return { executed: executedJobIds.length, failed };
   }
 
   private async advanceOrFinalizeJob(

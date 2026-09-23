@@ -121,17 +121,19 @@ export default defineSchema({
 ## Queries
 
 ```ts
+import schema from "../schema";
 import { query, s } from "../_generated/server";
+
+// Documents read from the database carry _id and _creationTime, so a
+// `returns` validator for them must declare both.
+const taskDoc = schema.tables.tasks.validator.extend({
+  _id: s.id("tasks"),
+  _creationTime: s.number()
+});
 
 export const list = query({
   args: {},
-  returns: s.array(
-    s.object({
-      _id: s.string(),
-      text: s.string(),
-      done: s.boolean()
-    })
-  ),
+  returns: s.array(taskDoc),
   handler: async (ctx) =>
     ctx.db.query("tasks").withIndex("by_done").order("desc").collect()
 });
@@ -140,6 +142,40 @@ export const list = query({
 Define indexes in schema before depending on `withIndex(...)` or
 `withSearchIndex(...)`. These builders are typed from the schema, so index names,
 search index names, and indexed field paths should line up without casts.
+
+## Unknown Fields
+
+Object validators reject fields they do not declare. This applies to function
+`args`, `returns`, and every `ctx.db.insert/patch/replace`, and the error names
+the field and the function or table:
+
+```text
+Invalid arguments for mutation "settings/update": args.zeroDataRetention is not an allowed field (expected one of: theme, zoom).
+```
+
+- Catch these errors with `isSyncoreValidationError(error)` and read `error.code`
+  (`"unknown_field"`, `"missing_field"`, `"invalid_type"`, ...) and `error.path`.
+- Derive validators from the table instead of repeating the shape, so a new
+  column cannot be forgotten in one place:
+
+  ```ts
+  const settingsFields = schema.tables.settings.validator.omit("key");
+
+  export const update = mutation({
+    args: settingsFields.partial(),
+    returns: s.null(),
+    handler: async (ctx, patch) => { /* ... */ }
+  });
+  ```
+
+  `extend`, `pick`, `omit` and `partial` all return new validators.
+- `_id` and `_creationTime` are set by Syncore. `insert` rejects them; `patch` and
+  `replace` accept them only when they equal the stored values. Use
+  `withoutSystemFields(doc)` to copy a document you read.
+- Reads never fail because of stored fields that are no longer in the schema:
+  they are dropped on read and removed on the next write of that document.
+- To drop undeclared fields silently instead (the behaviour before 0.4), opt out
+  per object: `s.object(shape, { unknownKeys: "strip" })`.
 
 ## Mutations
 

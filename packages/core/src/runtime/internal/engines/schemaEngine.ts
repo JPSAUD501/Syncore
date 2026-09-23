@@ -25,6 +25,7 @@ import {
   resolveSearchIndexTableName,
   searchIndexKey,
   toSearchValue,
+  withValidationContext,
   type DatabaseRow
 } from "./shared.js";
 import { quoteIdentifier, stableStringify } from "@syncore/internal";
@@ -67,12 +68,13 @@ export class SchemaEngine<
         updated_at INTEGER NOT NULL
       );
     `);
-    try {
+    const columns = await this.deps.driver.all<{ name: string }>(
+      `PRAGMA table_info("_syncore_schema_state")`
+    );
+    if (!columns.some((column) => column.name === "schema_json")) {
       await this.deps.driver.exec(
         `ALTER TABLE "_syncore_schema_state" ADD COLUMN schema_json TEXT NOT NULL DEFAULT '{}'`
       );
-    } catch {
-      // Column already exists.
     }
   }
 
@@ -87,9 +89,18 @@ export class SchemaEngine<
     let previousSnapshot = null;
     if (stateRow?.schema_json && stateRow.schema_json !== "{}") {
       try {
+        // Also upgrades state written by syncorejs < 0.3, so destructive
+        // changes are still detected on the first start after upgrading.
         previousSnapshot = parseSchemaSnapshot(stateRow.schema_json);
-      } catch {
+      } catch (error) {
         previousSnapshot = null;
+        this.deps.devtools.emit({
+          type: "log",
+          runtimeId: this.deps.runtimeId,
+          level: "warn",
+          message: `Syncore could not read the stored schema state, so destructive schema changes were not checked on this start: ${error instanceof Error ? error.message : String(error)}`,
+          timestamp: Date.now()
+        });
       }
     }
     const plan = diffSchemaSnapshots(previousSnapshot, nextSnapshot);
@@ -115,7 +126,13 @@ export class SchemaEngine<
     for (const statement of plan.statements) {
       const searchKey = this.findSearchIndexKeyForStatement(statement);
       try {
-        await this.deps.driver.exec(statement);
+        // FTS5 may be missing; a savepoint keeps that failure from breaking
+        // the surrounding boot transaction.
+        await (searchKey
+          ? this.deps.driver.withSavepoint("syncore_fts", () =>
+              this.deps.driver.exec(statement)
+            )
+          : this.deps.driver.exec(statement));
       } catch (error) {
         if (searchKey) {
           this.disabledSearchIndexes.add(searchKey);
@@ -142,20 +159,39 @@ export class SchemaEngine<
       );
     }
 
-    await this.deps.driver.run(
-      `INSERT INTO "_syncore_schema_state" (id, schema_hash, schema_json, updated_at)
-       VALUES ('current', ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET schema_hash = excluded.schema_hash, schema_json = excluded.schema_json, updated_at = excluded.updated_at`,
-      [nextSnapshot.hash, stableStringify(nextSnapshot), Date.now()]
-    );
+    if (stateRow?.schema_hash !== nextSnapshot.hash) {
+      await this.deps.driver.run(
+        `INSERT INTO "_syncore_schema_state" (id, schema_hash, schema_json, updated_at)
+         VALUES ('current', ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET schema_hash = excluded.schema_hash, schema_json = excluded.schema_json, updated_at = excluded.updated_at`,
+        [nextSnapshot.hash, stableStringify(nextSnapshot), Date.now()]
+      );
+    }
 
+    const existingTables = new Set(
+      (
+        await this.deps.driver.all<{ name: string }>(
+          `SELECT name FROM sqlite_master WHERE type = 'table'`
+        )
+      ).map((row) => row.name)
+    );
     for (const tableName of this.deps.schema.tableNames()) {
       const table = this.getTableDefinition(tableName);
       for (const searchIndex of table.searchIndexes) {
         const key = searchIndexKey(tableName, searchIndex.name);
+        if (
+          existingTables.has(
+            resolveSearchIndexTableName(tableName, searchIndex.name)
+          )
+        ) {
+          this.disabledSearchIndexes.delete(key);
+          continue;
+        }
         try {
-          await this.deps.driver.exec(
-            renderCreateSearchIndexStatement(tableName, searchIndex)
+          await this.deps.driver.withSavepoint("syncore_fts", () =>
+            this.deps.driver.exec(
+              renderCreateSearchIndexStatement(tableName, searchIndex)
+            )
           );
           this.disabledSearchIndexes.delete(key);
         } catch {
@@ -188,9 +224,12 @@ export class SchemaEngine<
   validateDocument(tableName: string, value: JsonObject): JsonObject {
     const table = this.getTableDefinition(tableName);
     const validator: StructuredValidator = table.validator;
-    const parsed = validator.parse(value);
+    const serialized = withValidationContext(
+      `Invalid document for ${describeTable(tableName, table)}`,
+      () => serializeValue(validator, validator.parse(value, "document"), "document")
+    );
     return this.ensureRecordDocument(
-      serializeValue(validator, parsed),
+      serialized,
       "Validated Syncore document payload must serialize to a JSON object."
     );
   }
@@ -346,4 +385,14 @@ export class SchemaEngine<
     }
     return null;
   }
+}
+
+function describeTable(
+  tableName: string,
+  table: StructuredTableDefinition
+): string {
+  const { tableName: localName, componentPath } = table.options;
+  return componentPath
+    ? `table "${localName ?? tableName}" in component "${componentPath}"`
+    : `table "${tableName}"`;
 }

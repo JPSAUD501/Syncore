@@ -24,13 +24,13 @@ export class ArrayValidator<TItem, TItemStorage, TItemValidator extends Validato
     // (undocumented)
     describe(): ValidatorDescription;
     // (undocumented)
-    deserialize(value: unknown, path?: string): TItem[];
+    deserialize(value: unknown, path?: string, options?: ValidationOptions): TItem[];
     // (undocumented)
     readonly itemValidator: TItemValidator;
     // (undocumented)
-    parse(value: unknown, path?: string): TItem[];
+    parse(value: unknown, path?: string, options?: ValidationOptions): TItem[];
     // (undocumented)
-    serialize(value: TItem[], path?: string): TItemStorage[];
+    serialize(value: TItem[], path?: string, options?: ValidationOptions): TItemStorage[];
 }
 
 // @public (undocumented)
@@ -51,11 +51,11 @@ export class CodecValidator<TValue, TStored, TStorageFieldValidator extends Vali
     // (undocumented)
     describe(): ValidatorDescription;
     // (undocumented)
-    deserialize(value: unknown, path?: string): TValue;
+    deserialize(value: unknown, path?: string, options?: ValidationOptions): TValue;
     // (undocumented)
-    parse(value: unknown, path?: string): TValue;
+    parse(value: unknown, path?: string, options?: ValidationOptions): TValue;
     // (undocumented)
-    serialize(value: TValue, path?: string): InferStorage<TStorageFieldValidator>;
+    serialize(value: TValue, path?: string, options?: ValidationOptions): InferStorage<TStorageFieldValidator>;
     // (undocumented)
     readonly storageValidator: TStorageFieldValidator;
     // (undocumented)
@@ -78,7 +78,7 @@ export function defineTable<TValidator extends Validator<Record<string, unknown>
 export function describeValidator(validator: Validator<unknown, unknown, string>): ValidatorDescription;
 
 // @public (undocumented)
-export function deserializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: unknown, path?: string): TValue;
+export function deserializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: unknown, path?: string, options?: ValidationOptions): TValue;
 
 // @public (undocumented)
 export function diffSchemaSnapshots(previousSnapshot: SchemaSnapshot | null | undefined, nextSnapshot: SchemaSnapshot): SchemaMigrationPlan;
@@ -145,11 +145,24 @@ export type Infer<TValidator> = TValidator extends Validator<infer TValue, unkno
 // @public (undocumented)
 export type InferDocument<TTable extends AnyTableDefinition> = Infer<TTable["validator"]> & TableDocumentSystemFields;
 
+// Warning: (ae-forgotten-export) The symbol "Expand_2" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "OptionalKeys" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "RequiredKeys" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type InferObject<TShape extends ObjectValidatorShape> = Expand_2<{ [TKey in OptionalKeys<TShape>]?: Exclude<Infer<TShape[TKey]>, undefined> } & { [TKey in RequiredKeys<TShape>]: Infer<TShape[TKey]> }>;
+
+// @public
+export type InferObjectInput<TShape extends ObjectValidatorShape> = Expand_2<{ [TKey in OptionalKeys<TShape>]?: Infer<TShape[TKey]> } & { [TKey in RequiredKeys<TShape>]: Infer<TShape[TKey]> }>;
+
 // @public (undocumented)
 export type InferStorage<TValidator> = TValidator extends Validator<unknown, infer TStorage, string> ? TStorage : never;
 
 // @public (undocumented)
 export type InferTableInput<TTable extends AnyTableDefinition> = Infer<TTable["validator"]>;
+
+// @public
+export function isSyncoreValidationError(error: unknown): error is SyncoreValidationError;
 
 // @public (undocumented)
 export function isValidator(value: Validator<unknown, unknown, string> | ValidatorMap): value is Validator<unknown, unknown, string>;
@@ -186,23 +199,31 @@ export class NumberValidator extends BaseValidator<number> {
     parse(value: unknown, path?: string): number;
 }
 
-// Warning: (ae-forgotten-export) The symbol "InferObject" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "InferStoredObject" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "ShapeFieldPaths" needs to be exported by the entry point index.d.ts
 //
 // @public (undocumented)
 export class ObjectValidator<TShape extends ObjectValidatorShape> extends BaseValidator<InferObject<TShape>, InferStoredObject<TShape>, ShapeFieldPaths<TShape>> {
-    constructor(shape: TShape);
+    constructor(shape: TShape, options?: ObjectValidatorOptions);
     // (undocumented)
     describe(): ValidatorDescription;
+    deserialize(value: unknown, path?: string, options?: ValidationOptions): InferObject<TShape>;
+    extend<TExtra extends ObjectValidatorShape>(extra: TExtra): ObjectValidator<Expand_2<Omit<TShape, keyof TExtra> & TExtra>>;
+    omit<TKey extends keyof TShape & string>(...keys: TKey[]): ObjectValidator<Expand_2<Omit<TShape, TKey>>>;
     // (undocumented)
-    deserialize(value: unknown, path?: string): InferObject<TShape>;
+    parse(value: unknown, path?: string, options?: ValidationOptions): InferObject<TShape>;
+    partial(): ObjectValidator<PartialShape<TShape>>;
+    pick<TKey extends keyof TShape & string>(...keys: TKey[]): ObjectValidator<Expand_2<Pick<TShape, TKey>>>;
     // (undocumented)
-    parse(value: unknown, path?: string): InferObject<TShape>;
-    // (undocumented)
-    serialize(value: InferObject<TShape>, path?: string): InferStoredObject<TShape>;
+    serialize(value: InferObject<TShape>, path?: string, options?: ValidationOptions): InferStoredObject<TShape>;
     // (undocumented)
     readonly shape: TShape;
+    readonly unknownKeys: UnknownKeysPolicy;
+}
+
+// @public
+export interface ObjectValidatorOptions {
+    readonly unknownKeys?: UnknownKeysPolicy;
 }
 
 // @public (undocumented)
@@ -217,17 +238,33 @@ export class OptionalValidator<TValue, TStorage = TValue, TFieldPaths extends st
     // (undocumented)
     describe(): ValidatorDescription;
     // (undocumented)
-    deserialize(value: unknown, path?: string): TValue | undefined;
+    deserialize(value: unknown, path?: string, options?: ValidationOptions): TValue | undefined;
     // (undocumented)
     readonly inner: Validator<TValue, TStorage, TFieldPaths>;
     // (undocumented)
-    parse(value: unknown, path?: string): TValue | undefined;
+    parse(value: unknown, path?: string, options?: ValidationOptions): TValue | undefined;
     // (undocumented)
-    serialize(value: TValue | undefined, path?: string): TStorage | undefined;
+    serialize(value: TValue | undefined, path?: string, options?: ValidationOptions): TStorage | undefined;
 }
 
-// @public (undocumented)
+// @public
 export function parseSchemaSnapshot(source: string): SchemaSnapshot;
+
+// @public
+export type PartialShape<TShape extends ObjectValidatorShape> = { [TKey in keyof TShape]: TShape[TKey] extends OptionalValidator<unknown, unknown, string> ? TShape[TKey] : TShape[TKey] extends Validator<infer TValue, infer TStorage, infer TFieldPaths extends string> ? OptionalValidator<TValue, TStorage, TFieldPaths> : never };
+
+// @public
+export function readSchemaSnapshot(source: string): ReadSchemaSnapshotResult;
+
+// @public
+export interface ReadSchemaSnapshotResult {
+    // (undocumented)
+    snapshot: SchemaSnapshot;
+    upgradedFrom: {
+        formatVersion: number;
+        plannerVersion: number;
+    } | null;
+}
 
 // @public (undocumented)
 export class RecordValidator<TKey extends string, TValue, TStorage, TKeyValidator extends Validator<TKey, string, string>, TValueValidator extends Validator<TValue, TStorage, string>> extends BaseValidator<Record<TKey, TValue>, Record<TKey, TStorage>, never> {
@@ -235,13 +272,13 @@ export class RecordValidator<TKey extends string, TValue, TStorage, TKeyValidato
     // (undocumented)
     describe(): ValidatorDescription;
     // (undocumented)
-    deserialize(value: unknown, path?: string): Record<TKey, TValue>;
+    deserialize(value: unknown, path?: string, options?: ValidationOptions): Record<TKey, TValue>;
     // (undocumented)
     readonly keyValidator: TKeyValidator;
     // (undocumented)
-    parse(value: unknown, path?: string): Record<TKey, TValue>;
+    parse(value: unknown, path?: string, options?: ValidationOptions): Record<TKey, TValue>;
     // (undocumented)
-    serialize(value: Record<TKey, TValue>, path?: string): Record<TKey, TStorage>;
+    serialize(value: Record<TKey, TValue>, path?: string, options?: ValidationOptions): Record<TKey, TStorage>;
     // (undocumented)
     readonly valueValidator: TValueValidator;
 }
@@ -384,6 +421,22 @@ export interface SchemaSnapshot {
     tables: TableSnapshot[];
 }
 
+// @public
+export class SchemaSnapshotFormatError extends Error {
+    constructor(message: string, reason: SchemaSnapshotFormatErrorReason, formatVersion?: unknown | undefined, plannerVersion?: unknown | undefined);
+    // (undocumented)
+    readonly formatVersion?: unknown | undefined;
+    // (undocumented)
+    readonly name = "SchemaSnapshotFormatError";
+    // (undocumented)
+    readonly plannerVersion?: unknown | undefined;
+    // (undocumented)
+    readonly reason: SchemaSnapshotFormatErrorReason;
+}
+
+// @public
+export type SchemaSnapshotFormatErrorReason = "invalid-json" | "malformed" | "legacy" | "newer";
+
 // @public (undocumented)
 export interface SearchIndexDefinition {
     // (undocumented)
@@ -398,7 +451,7 @@ export interface SearchIndexDefinition {
 export function searchIndexTableName(tableName: string, indexName: string): string;
 
 // @public (undocumented)
-export function serializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: TValue, path?: string): TStorage;
+export function serializeValue<TValue, TStorage, TFieldPaths extends string>(validator: Validator<TValue, TStorage, TFieldPaths>, value: TValue, path?: string, options?: ValidationOptions): TStorage;
 
 // @public
 export function stableStringify(value: unknown): string;
@@ -428,6 +481,22 @@ export interface SyncoreSchemaDefinition {
     // (undocumented)
     [tableName: string]: AnyTableDefinition;
 }
+
+// @public
+export class SyncoreValidationError extends Error {
+    constructor(message: string, code: SyncoreValidationErrorCode, path: string, issues?: readonly SyncoreValidationError[] | undefined);
+    // (undocumented)
+    readonly code: SyncoreValidationErrorCode;
+    // (undocumented)
+    readonly issues?: readonly SyncoreValidationError[] | undefined;
+    // (undocumented)
+    readonly name = "SyncoreValidationError";
+    // (undocumented)
+    readonly path: string;
+}
+
+// @public
+export type SyncoreValidationErrorCode = "invalid_type" | "missing_field" | "unknown_field" | "invalid_value" | "union_mismatch" | "system_field";
 
 // @public
 export class TableDefinition<TValidator extends Validator<Record<string, unknown>, Record<string, unknown>, string>, TIndexes = Record<never, never>, TSearchIndexes = Record<never, never>> {
@@ -564,14 +633,25 @@ export class UnionValidator<TMembers extends readonly Validator<unknown, unknown
     constructor(members: TMembers);
     // (undocumented)
     describe(): ValidatorDescription;
-    // (undocumented)
-    deserialize(value: unknown, path?: string): Infer<TMembers[number]>;
+    deserialize(value: unknown, path?: string, options?: ValidationOptions): Infer<TMembers[number]>;
     // (undocumented)
     readonly members: TMembers;
     // (undocumented)
-    parse(value: unknown, path?: string): Infer<TMembers[number]>;
+    parse(value: unknown, path?: string, options?: ValidationOptions): Infer<TMembers[number]>;
     // (undocumented)
-    serialize(value: Infer<TMembers[number]>, path?: string): InferStorage<TMembers[number]>;
+    serialize(value: Infer<TMembers[number]>, path?: string, options?: ValidationOptions): InferStorage<TMembers[number]>;
+}
+
+// @public
+export type UnknownKeysPolicy = "strict" | "strip";
+
+// @public
+export function upgradeSchemaSnapshot(value: unknown): ReadSchemaSnapshotResult;
+
+// @public
+export interface ValidationOptions {
+    // (undocumented)
+    readonly unknownKeys?: UnknownKeysPolicy;
 }
 
 // @public
@@ -579,15 +659,15 @@ export interface Validator<TValue = unknown, TStorage = TValue, TFieldPaths exte
     // (undocumented)
     describe?(): ValidatorDescription;
     // (undocumented)
-    deserialize?(value: unknown, path?: string): TValue;
+    deserialize?(value: unknown, path?: string, options?: ValidationOptions): TValue;
     // (undocumented)
     readonly fieldPaths?: TFieldPaths;
     // (undocumented)
     readonly kind: ValidatorKind;
     // (undocumented)
-    parse(value: unknown, path?: string): TValue;
+    parse(value: unknown, path?: string, options?: ValidationOptions): TValue;
     // (undocumented)
-    serialize?(value: TValue, path?: string): TStorage;
+    serialize?(value: TValue, path?: string, options?: ValidationOptions): TStorage;
 }
 
 // @public
@@ -606,7 +686,7 @@ export interface ValidatorBuilderApi {
     null(): NullValidator;
     nullable<TValue, TStorage, TFieldPaths extends string>(inner: Validator<TValue, TStorage, TFieldPaths>): UnionValidator<readonly [Validator<TValue, TStorage, TFieldPaths>, NullValidator]>;
     number(): NumberValidator;
-    object<TShape extends ObjectValidatorShape>(shape: TShape): ObjectValidator<TShape>;
+    object<TShape extends ObjectValidatorShape>(shape: TShape, options?: ObjectValidatorOptions): ObjectValidator<TShape>;
     optional<TValue, TStorage, TFieldPaths extends string>(inner: Validator<TValue, TStorage, TFieldPaths>): OptionalValidator<TValue, TStorage, TFieldPaths>;
     record<TKey extends string, TValue, TStorage, TKeyValidator extends Validator<TKey, string, string>, TValueValidator extends Validator<TValue, TStorage, string>>(keyValidator: TKeyValidator, valueValidator: TValueValidator): RecordValidator<TKey, TValue, TStorage, TKeyValidator, TValueValidator>;
     string(): StringValidator;
@@ -663,6 +743,12 @@ export type ValidatorKind = "string" | "number" | "boolean" | "literal" | "enum"
 
 // @public (undocumented)
 export type ValidatorMap = Record<string, Validator<unknown, unknown, string>>;
+
+// @public
+export type WithoutSystemFields<TDocument> = Expand<Omit<TDocument, keyof TableDocumentSystemFields>>;
+
+// @public
+export function withoutSystemFields<TDocument extends object>(document: TDocument): WithoutSystemFields<TDocument>;
 
 // (No @packageDocumentation comment for this package)
 

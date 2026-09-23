@@ -31,11 +31,19 @@ export async function ensureSystemMetaTable(
 export async function loadSystemFormats(
   driver: SyncoreSqlDriver
 ): Promise<SystemFormatRegistry> {
+  return (await loadStoredSystemFormats(driver)).loaded;
+}
+
+async function loadStoredSystemFormats(driver: SyncoreSqlDriver): Promise<{
+  loaded: SystemFormatRegistry;
+  stored: Set<keyof SystemFormatRegistry>;
+}> {
   await ensureSystemMetaTable(driver);
   const rows = await driver.all<{ key: string; value: string }>(
     `SELECT key, value FROM "${META_TABLE_NAME}"`
   );
   const loaded = { ...CURRENT_SYSTEM_FORMATS };
+  const stored = new Set<keyof SystemFormatRegistry>();
 
   for (const row of rows) {
     if (!isSystemFormatKey(row.key)) {
@@ -46,15 +54,16 @@ export async function loadSystemFormats(
       throw new Error(`Invalid Syncore system format value for "${row.key}".`);
     }
     loaded[row.key] = parsed;
+    stored.add(row.key);
   }
 
-  return loaded;
+  return { loaded, stored };
 }
 
 export async function ensureSupportedSystemFormats(
   driver: SyncoreSqlDriver
 ): Promise<SystemFormatRegistry> {
-  const loaded = await loadSystemFormats(driver);
+  const { loaded, stored } = await loadStoredSystemFormats(driver);
 
   for (const key of systemFormatKeys()) {
     if (loaded[key] > CURRENT_SYSTEM_FORMATS[key]) {
@@ -66,11 +75,8 @@ export async function ensureSupportedSystemFormats(
 
   const now = Date.now();
   for (const key of systemFormatKeys()) {
-    if (loaded[key] === CURRENT_SYSTEM_FORMATS[key]) {
-      await driver.run(
-        `INSERT OR REPLACE INTO "${META_TABLE_NAME}" (key, value, updated_at) VALUES (?, ?, ?)`,
-        [key, String(loaded[key]), now]
-      );
+    // Only write what is missing or outdated, so a warm start writes nothing.
+    if (stored.has(key) && loaded[key] === CURRENT_SYSTEM_FORMATS[key]) {
       continue;
     }
     await driver.run(

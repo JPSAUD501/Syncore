@@ -59,6 +59,7 @@ import {
   fieldExpression,
   normalizeOptionalArgs,
   omitSystemFields,
+  withValidationContext,
   quoteIdentifier,
   resolveSearchIndexTableName,
   splitSchedulerArgs,
@@ -71,7 +72,7 @@ import {
   type RuntimeExecutionState
 } from "./shared.js";
 import { generateId } from "../../id.js";
-import type { Validator } from "@syncore/schema";
+import { SyncoreValidationError, type Validator } from "@syncore/schema";
 import {
   TransactionCoordinator,
   createEmptyExecutionResult
@@ -359,7 +360,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
     const dependencyCollector = new Set<DependencyKey>();
     const executionId = meta.executionId ?? generateId();
     const startedAt = Date.now();
-    const result = await this.invokeFunction<TResult>(definition, args, {
+    const result = await this.invokeFunction<TResult>(reference.name, definition, args, {
       executionId,
       mutationDepth: 0,
       changedTables: new Set<string>(),
@@ -408,7 +409,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
     const startedAt = Date.now();
     const execution = await this.deps.transactionCoordinator.runInTransaction(
       async (transactionState) =>
-        this.invokeFunction<TResult>(definition, args, {
+        this.invokeFunction<TResult>(reference.name, definition, args, {
           executionId,
           mutationDepth: 1,
           changedTables: transactionState.changedTables,
@@ -468,7 +469,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
     const state = this.deps.transactionCoordinator.createState();
 
     try {
-      const result = await this.invokeFunction<TResult>(definition, args, {
+      const result = await this.invokeFunction<TResult>(reference.name, definition, args, {
         executionId,
         mutationDepth: 0,
         changedTables: state.changedTables,
@@ -636,7 +637,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
       "query"
     );
     const dependencyCollector = new Set<DependencyKey>();
-    await this.invokeFunction(definition, args, {
+    await this.invokeFunction(functionName, definition, args, {
       executionId: generateId(),
       mutationDepth: 0,
       changedTables: new Set<string>(),
@@ -747,19 +748,28 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
   }
 
   private async invokeFunction<TResult>(
+    functionName: string,
     definition: RegisteredSyncoreFunction,
     rawArgs: JsonObject,
     state: RuntimeExecutionState
   ): Promise<TResult> {
-    const args = definition.argsValidator.parse(rawArgs) as JsonObject;
+    const label = `${definition.kind} "${functionName}"`;
+    const args = withValidationContext(
+      `Invalid arguments for ${label}`,
+      () => definition.argsValidator.parse(rawArgs, "args") as JsonObject
+    );
     const ctx = this.createContext(definition.kind, {
       ...state,
       componentMetadata:
         definition.__syncoreComponent ?? state.componentMetadata
     });
     const result = (await definition.handler(ctx, args)) as TResult;
-    if (definition.returnsValidator) {
-      return definition.returnsValidator.parse(result) as TResult;
+    const returnsValidator = definition.returnsValidator;
+    if (returnsValidator) {
+      return withValidationContext(
+        `Invalid return value from ${label}`,
+        () => returnsValidator.parse(result, "returns") as TResult
+      );
     }
     return result;
   }
@@ -816,6 +826,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
             `sp_${generateId().replace(/-/g, "_")}`,
             () =>
               this.invokeFunction<TResult>(
+                resolvedReference.name,
                 this.resolveFunction(
                   resolvedReference,
                   "mutation",
@@ -911,6 +922,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
           tableName,
           state.componentMetadata
         );
+        assertNoSystemFields(scopedTableName, value as JsonObject);
         const validated = this.deps.schema.validateDocument(
           scopedTableName,
           value as JsonObject
@@ -956,7 +968,15 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
             `Document "${id}" does not exist in "${scopedTableName}".`
           );
         }
-        const merged: JsonObject = { ...omitSystemFields(current), ...value };
+        const merged: JsonObject = {
+          ...omitSystemFields(current),
+          ...dropMatchingSystemFields(
+            "patch",
+            scopedTableName,
+            value as JsonObject,
+            current as JsonObject
+          )
+        };
         for (const key of Object.keys(merged)) {
           if (merged[key] === undefined) {
             delete merged[key];
@@ -1000,11 +1020,21 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
           tableName,
           state.componentMetadata
         );
+        const current = await reader.get(tableName, id);
+        if (!current) {
+          throw new Error(
+            `Document "${id}" does not exist in "${scopedTableName}".`
+          );
+        }
         const validated = this.deps.schema.validateDocument(
           scopedTableName,
-          value as JsonObject
+          dropMatchingSystemFields(
+            "replace",
+            scopedTableName,
+            value as JsonObject,
+            current as JsonObject
+          )
         );
-        const current = await reader.get(tableName, id);
         await this.deps.driver.run(
           `UPDATE ${quoteIdentifier(scopedTableName)} SET _json = ? WHERE _id = ?`,
           [stableStringify(validated), id]
@@ -1025,7 +1055,7 @@ export class ExecutionEngine<TSchema extends SyncoreDataModel> {
           id,
           operation: "replace",
           fields: Object.keys(validated),
-          ...(current ? { beforePreview: createDevtoolsPreview(current) } : {}),
+          beforePreview: createDevtoolsPreview(current),
           afterPreview: createDevtoolsPreview(
             this.deps.schema.deserializeDocument(scopedTableName, row)
           )
@@ -1285,4 +1315,48 @@ function collectChangedScopes(
     scopes.add(`storage:${change.storageId}` as ImpactScope);
   }
   return scopes;
+}
+
+const SYSTEM_FIELDS = ["_id", "_creationTime"] as const;
+
+function assertNoSystemFields(tableName: string, value: JsonObject): void {
+  const present = SYSTEM_FIELDS.filter((field) => value[field] !== undefined);
+  if (present.length === 0) {
+    return;
+  }
+  throw new SyncoreValidationError(
+    `Cannot insert into "${tableName}": ${present.join(" and ")} ${present.length === 1 ? "is" : "are"} set by Syncore. ` +
+      "To copy an existing document, pass withoutSystemFields(doc).",
+    "system_field",
+    `document.${present[0]}`
+  );
+}
+
+/**
+ * `patch`/`replace` accept `_id` and `_creationTime` only when they equal the
+ * stored values, so `ctx.db.replace(id, { ...doc, title })` keeps working.
+ * Anything else would silently be ignored, so it is rejected instead.
+ */
+function dropMatchingSystemFields(
+  operation: "patch" | "replace",
+  tableName: string,
+  value: JsonObject,
+  current: JsonObject
+): JsonObject {
+  const rest = { ...value };
+  for (const field of SYSTEM_FIELDS) {
+    if (rest[field] === undefined) {
+      delete rest[field];
+      continue;
+    }
+    if (rest[field] !== current[field]) {
+      throw new SyncoreValidationError(
+        `Cannot ${operation} "${tableName}" document "${String(current._id)}": ${field} is set by Syncore and cannot be changed.`,
+        "system_field",
+        `document.${field}`
+      );
+    }
+    delete rest[field];
+  }
+  return rest;
 }

@@ -56,6 +56,7 @@ export class RuntimeKernel<TSchema extends SyncoreDataModel> {
   readonly runtimeStatus: RuntimeStatusController;
   readonly admin: SyncoreRuntimeAdmin<TSchema>;
   private prepared = false;
+  private preparing: Promise<void> | undefined;
   private started = false;
 
   constructor(
@@ -222,6 +223,10 @@ export class RuntimeKernel<TSchema extends SyncoreDataModel> {
       updateScheduledJob: async (update: UpdateScheduledJobOptions) => {
         await this.prepareForDirectAccess();
         return this.schedulerEngine.updateScheduledJob(update);
+      },
+      runScheduledJobs: async (runOptions) => {
+        await this.prepareForDirectAccess();
+        return this.schedulerEngine.runDueJobs(runOptions);
       }
     };
     options.devtools?.attachRuntime?.(runtime);
@@ -236,11 +241,23 @@ export class RuntimeKernel<TSchema extends SyncoreDataModel> {
       reason: "booting",
       capabilities: this.runtimeCapabilities
     });
-    await this.prepareForDirectAccess();
+    try {
+      await this.prepareForDirectAccess();
+    } catch (error) {
+      this.runtimeStatus.setStatus({
+        kind: "error",
+        reason: "runtime-unavailable",
+        capabilities: this.runtimeCapabilities,
+        ...(error instanceof Error ? { error } : {})
+      });
+      throw error;
+    }
     try {
       await this.runComponentHooks("onStart");
       this.reactivityEngine.start();
-      this.schedulerEngine.startPolling();
+      if (this.options.scheduler?.autoRun ?? true) {
+        this.schedulerEngine.startPolling();
+      }
       this.started = true;
       this.runtimeStatus.setStatus({
         kind: "ready",
@@ -267,22 +284,46 @@ export class RuntimeKernel<TSchema extends SyncoreDataModel> {
     }
   }
 
-  async prepareForDirectAccess(): Promise<void> {
+  /**
+   * Creates system tables, applies the schema and syncs recurring jobs. Runs
+   * once, however many callers ask concurrently; a failed attempt can be
+   * retried.
+   */
+  prepareForDirectAccess(): Promise<void> {
     if (this.prepared) {
-      return;
+      return Promise.resolve();
     }
-    await ensureSupportedSystemFormats(this.options.driver);
-    await this.schemaEngine.prepare();
-    await this.storageEngine.prepare();
-    await this.schedulerEngine.prepare();
+    this.preparing ??= this.prepare().then(
+      () => {
+        this.prepared = true;
+      },
+      (error: unknown) => {
+        this.preparing = undefined;
+        throw error;
+      }
+    );
+    return this.preparing;
+  }
+
+  private async prepare(): Promise<void> {
+    // One transaction: a single commit instead of one per statement, and a
+    // failed boot (e.g. a destructive schema change) leaves nothing behind.
+    await this.options.driver.withTransaction(async () => {
+      await ensureSupportedSystemFormats(this.options.driver);
+      await this.schemaEngine.prepare();
+      await this.storageEngine.prepare();
+      await this.schedulerEngine.prepare();
+      await this.schemaEngine.applySchema();
+      await this.schedulerEngine.syncRecurringJobs();
+    });
+    // Touches the storage adapter (files), so it runs after the commit.
     await this.storageEngine.reconcile();
-    await this.schemaEngine.applySchema();
-    await this.schedulerEngine.syncRecurringJobs();
-    this.prepared = true;
   }
 
   async stop(): Promise<void> {
     this.schedulerEngine.stopPolling();
+    // Let a job that is running finish before the driver closes under it.
+    await this.schedulerEngine.whenIdle();
     let stopError: unknown;
     if (this.started) {
       try {

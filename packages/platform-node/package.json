@@ -20,6 +20,11 @@
       "types": "./dist/ipc-react.d.mts",
       "import": "./dist/ipc-react.mjs",
       "default": "./dist/ipc-react.mjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs",
+      "default": "./dist/testing.mjs"
     }
   },
   "scripts": {

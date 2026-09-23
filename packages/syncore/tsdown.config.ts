@@ -16,6 +16,7 @@ export default defineConfig({
     "src/node.ts",
     "src/node-ipc.ts",
     "src/node-ipc-react.tsx",
+    "src/testing.ts",
     "src/next.ts",
     "src/next-config.ts"
   ],
@@ -45,6 +46,7 @@ export default defineConfig({
       "@syncore/platform-node",
       "@syncore/platform-node/ipc",
       "@syncore/platform-node/ipc/react",
+      "@syncore/platform-node/testing",
       "@syncore/platform-web",
       "@syncore/platform-web/react",
       "@syncore/react",

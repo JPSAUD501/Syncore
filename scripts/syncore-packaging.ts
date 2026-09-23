@@ -66,6 +66,7 @@ export const runtimeReplacements = new Map<string, string>([
   ["@syncore/platform-node", "./_vendor/platform-node/index.mjs"],
   ["@syncore/platform-node/ipc", "./_vendor/platform-node/ipc.mjs"],
   ["@syncore/platform-node/ipc/react", "./_vendor/platform-node/ipc-react.mjs"],
+  ["@syncore/platform-node/testing", "./_vendor/platform-node/testing.mjs"],
   ["@syncore/platform-expo", "./_vendor/platform-expo/index.js"],
   ["@syncore/platform-expo/react", "./_vendor/platform-expo/react.js"],
   ["@syncore/next", "./_vendor/next/index.js"],
@@ -88,6 +89,7 @@ export const typeReplacements = new Map<string, string>([
     "@syncore/platform-node/ipc/react",
     "./_vendor/platform-node/ipc-react.d.mts"
   ],
+  ["@syncore/platform-node/testing", "./_vendor/platform-node/testing.d.mts"],
   ["@syncore/platform-expo", "./_vendor/platform-expo/index.d.ts"],
   ["@syncore/platform-expo/react", "./_vendor/platform-expo/react.d.ts"],
   ["@syncore/next", "./_vendor/next/index.d.ts"],

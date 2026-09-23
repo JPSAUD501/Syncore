@@ -28,6 +28,7 @@ const configFiles = [
   "packages/platform-node/api-extractor.json",
   "packages/platform-node/api-extractor.ipc.json",
   "packages/platform-node/api-extractor.ipc-react.json",
+  "packages/platform-node/api-extractor.testing.json",
   "packages/platform-expo/api-extractor.json",
   "packages/platform-web/api-extractor.json",
   "packages/next/api-extractor.json",
