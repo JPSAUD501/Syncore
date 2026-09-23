@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -33,7 +33,37 @@ const watchedPaths = [
   "scripts/vendor-syncore-internals.ts"
 ];
 
-async function main() {
+/**
+ * Builds the summary of an automatic patch release. It lists the commits that
+ * touched the published package, so the release notes say what shipped
+ * instead of a generic line.
+ */
+export function buildAutoChangesetSummary(options: {
+  subjects: string[];
+  since: string | undefined;
+  changedFileCount: number;
+}): string {
+  const subjects = [
+    ...new Set(
+      options.subjects
+        .map((subject) => subject.trim())
+        .filter((subject) => subject && !isReleaseCommit(subject))
+    )
+  ];
+  if (subjects.length === 0) {
+    return `Patch release for ${options.changedFileCount} changed file(s) in the published syncorejs package.`;
+  }
+  const heading = options.since
+    ? `Changes since ${options.since}:`
+    : "Changes in this release:";
+  return [heading, "", ...subjects.map((subject) => `- ${subject}`)].join("\n");
+}
+
+function isReleaseCommit(subject: string): boolean {
+  return /^chore(\(release\))?:\s*(version packages|release)\b/i.test(subject);
+}
+
+async function main(): Promise<void> {
   if (await hasPendingChangeset()) {
     console.log("Pending changeset detected. Skipping syncorejs auto-changeset.");
     return;
@@ -55,12 +85,18 @@ async function main() {
     return;
   }
 
+  const since = await readLatestReleaseTag();
+  const subjects = await readCommitSubjects(since ?? diffBase);
   const content = [
     "---",
     `"${syncorePublishedPackageName}": patch`,
     "---",
     "",
-    "Auto-generated patch release for published Syncore package changes.",
+    buildAutoChangesetSummary({
+      subjects,
+      since,
+      changedFileCount: changedFiles.length
+    }),
     ""
   ].join("\n");
   await mkdir(changesetDir, { recursive: true });
@@ -71,7 +107,7 @@ async function main() {
   );
 }
 
-async function hasPendingChangeset() {
+async function hasPendingChangeset(): Promise<boolean> {
   let entries;
   try {
     entries = await readdir(changesetDir, { withFileTypes: true });
@@ -90,30 +126,30 @@ async function hasPendingChangeset() {
   );
 }
 
-function isMissingFileError(error) {
-  return Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
+function isMissingFileError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
   );
 }
 
-async function readLocalVersion() {
+async function readLocalVersion(): Promise<string> {
   const packageJson = JSON.parse(
     await readFile(syncorePackageJsonPath, "utf8")
-  );
+  ) as { version: string };
   return packageJson.version;
 }
 
-async function readPublishedVersion() {
+async function readPublishedVersion(): Promise<string | undefined> {
   try {
     const { stdout } = await exec(
       "npm",
       ["view", syncorePublishedPackageName, "version", "--json"],
       workspaceRoot
     );
-    const version = JSON.parse(stdout.trim());
+    const version: unknown = JSON.parse(stdout.trim());
     return typeof version === "string" ? version : undefined;
   } catch (error) {
     console.warn(
@@ -121,6 +157,11 @@ async function readPublishedVersion() {
     );
   }
 
+  const latestTag = await readLatestReleaseTag();
+  return latestTag?.replace(`${syncorePublishedPackageName}@`, "");
+}
+
+async function readLatestReleaseTag(): Promise<string | undefined> {
   try {
     const { stdout } = await exec(
       "git",
@@ -132,14 +173,10 @@ async function readPublishedVersion() {
       ],
       workspaceRoot
     );
-    const latestTag = stdout
+    return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
       .find(Boolean);
-    if (!latestTag) {
-      return undefined;
-    }
-    return latestTag.replace(`${syncorePublishedPackageName}@`, "");
   } catch (error) {
     console.warn(
       `Failed to read local ${syncorePublishedPackageName} tags: ${formatError(error)}`
@@ -148,18 +185,35 @@ async function readPublishedVersion() {
   }
 }
 
-async function resolveDiffBase() {
+async function readCommitSubjects(since: string): Promise<string[]> {
+  try {
+    const { stdout } = await exec(
+      "git",
+      [
+        "log",
+        "--no-merges",
+        "--format=%s",
+        `${since}..HEAD`,
+        "--",
+        ...watchedPaths
+      ],
+      workspaceRoot
+    );
+    return stdout.split(/\r?\n/);
+  } catch (error) {
+    console.warn(`Failed to read commit subjects: ${formatError(error)}`);
+    return [];
+  }
+}
+
+async function resolveDiffBase(): Promise<string> {
   const before = process.env.GITHUB_EVENT_BEFORE?.trim();
   if (before && !/^0+$/.test(before)) {
     return before;
   }
 
   try {
-    const { stdout } = await exec(
-      "git",
-      ["rev-parse", "HEAD^"],
-      workspaceRoot
-    );
+    const { stdout } = await exec("git", ["rev-parse", "HEAD^"], workspaceRoot);
     return stdout.trim();
   } catch {
     const { stdout } = await exec(
@@ -171,7 +225,7 @@ async function resolveDiffBase() {
   }
 }
 
-async function readChangedFiles(diffBase) {
+async function readChangedFiles(diffBase: string): Promise<string[]> {
   const { stdout } = await exec(
     "git",
     ["diff", "--name-only", `${diffBase}..HEAD`, "--", ...watchedPaths],
@@ -183,7 +237,7 @@ async function readChangedFiles(diffBase) {
     .filter(Boolean);
 }
 
-async function exec(command, args, cwd) {
+async function exec(command: string, args: string[], cwd: string) {
   const executable = resolveExecutable(command);
   const executableArgs =
     process.platform === "win32" && command === "npm"
@@ -196,18 +250,20 @@ async function exec(command, args, cwd) {
   });
 }
 
-function resolveExecutable(command) {
+function resolveExecutable(command: string): string {
   if (process.platform === "win32" && command === "npm") {
     return process.env.ComSpec ?? "cmd.exe";
   }
   return command;
 }
 
-function formatError(error) {
+function formatError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
   return String(error);
 }
 
-void main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  void main();
+}

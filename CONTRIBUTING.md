@@ -131,6 +131,18 @@ If a change intentionally updates the public API, include both:
 - a changeset
 - the updated API report files when applicable
 
+Changesets become the release notes, so write them for people using
+`syncorejs`:
+
+- describe what changed from the user's side, in at least 8 words; a bare
+  "Improvements" or "Fixes" is rejected,
+- use `patch` for fixes and additive features,
+- use `minor` (breaking while `syncorejs` is 0.x) or `major` only with a
+  "Breaking changes" or "Migration" section that says what users must change.
+
+`npm run changeset:check` validates pending changesets, and CI runs it on every
+pull request. See [.changeset/README.md](.changeset/README.md) for examples.
+
 ## Pull Request Guidelines
 
 Keep PRs reviewable:

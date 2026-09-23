@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Changeset check
+        run: npm run changeset:check
+
       - name: API check
         run: |
           npm run api:update
