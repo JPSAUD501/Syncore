@@ -112,7 +112,97 @@ describe("platform-web OPFS persistence", () => {
     await persistence.deleteFile("notes", "file-1");
     expect(await persistence.getFile("notes", "file-1")).toBeNull();
   });
+
+  it("reads a file whose metadata write was interrupted", async () => {
+    const persistence = await createWebPersistence({
+      mode: "opfs",
+      opfsRootDirectoryName: "syncore-opfs-interrupted"
+    });
+    await persistence.putFile(
+      "notes",
+      "file-1",
+      new TextEncoder().encode("hello opfs"),
+      "text/plain"
+    );
+    const notes = await getMockDirectory([
+      "syncore-opfs-interrupted",
+      "files",
+      "notes"
+    ]);
+    notes.writeFile("file-1.meta.json", new Uint8Array());
+
+    const file = await persistence.getFile("notes", "file-1");
+    expect(new TextDecoder().decode(file?.bytes)).toBe("hello opfs");
+    expect(file?.contentType).toBeNull();
+  });
+
+  it("boots a runtime after a reload interrupted its metadata writes", async () => {
+    const schema = defineSchema({
+      todos: defineTable({ title: s.string() })
+    });
+    const options = {
+      databaseName: "todos",
+      persistenceMode: "opfs" as const,
+      opfsRootDirectoryName: "syncore-opfs-reload",
+      schema,
+      functions: {
+        "todos/count": query({
+          args: {},
+          returns: s.number(),
+          handler: async (ctx) =>
+            (await (ctx as QueryCtx).db.query("todos").collect()).length
+        })
+      },
+      locateFile: () => wasmFilePath
+    };
+
+    const firstRuntime = await createWebSyncoreRuntime(options);
+    await firstRuntime.start();
+    await firstRuntime.stop();
+
+    // The page reloaded while the first runtime was writing its metadata:
+    // the files exist but were never committed.
+    const files = await getMockDirectory(["syncore-opfs-reload", "files"]);
+    let truncated = 0;
+    for (const directory of files.directoryHandles()) {
+      for (const name of directory.fileNames()) {
+        if (name.endsWith(".meta.json")) {
+          directory.writeFile(name, new Uint8Array());
+          truncated += 1;
+        }
+      }
+    }
+    expect(truncated).toBeGreaterThan(0);
+
+    const secondRuntime = await createWebSyncoreRuntime(options);
+    await secondRuntime.start();
+    try {
+      await expect(
+        secondRuntime
+          .createClient()
+          .query(createFunctionReference<"query", Record<never, never>, number>(
+            "query",
+            "todos/count"
+          ))
+      ).resolves.toBe(0);
+    } finally {
+      await secondRuntime.stop();
+    }
+  });
 });
+
+async function getMockDirectory(
+  pathSegments: string[]
+): Promise<MockDirectoryHandle> {
+  let directory = (await navigator.storage.getDirectory()) as unknown as
+    | MockDirectoryHandle;
+  for (const segment of pathSegments) {
+    directory = (await directory.getDirectoryHandle(
+      segment
+    )) as unknown as MockDirectoryHandle;
+  }
+  return directory;
+}
 
 function installMockOpfs(): void {
   const navigatorValue = originalNavigatorWithStorage(
@@ -191,6 +281,14 @@ class MockDirectoryHandle {
 
   writeFile(name: string, bytes: Uint8Array): void {
     this.files.set(name, bytes);
+  }
+
+  fileNames(): string[] {
+    return [...this.files.keys()];
+  }
+
+  directoryHandles(): MockDirectoryHandle[] {
+    return [...this.directories.values()];
   }
 }
 
